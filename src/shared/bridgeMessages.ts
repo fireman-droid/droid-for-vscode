@@ -1,4 +1,5 @@
 import type { ModelsOpenMessage } from './protocol/modelManagerProtocol';
+import type { SystemPromptRequest, SystemPromptResponse } from './protocol/systemPromptProtocol';
 import type { IdeState, HostIdeMessage, IdeReconnectMessage, IdeRefreshMessage } from './protocol/ideProtocol';
 import type { ManagementOpenMessage } from './protocol/managementProtocol';
 import type { ReviewPanelOpen } from './protocol/reviewPanelProtocol';
@@ -208,9 +209,10 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v48 reports confirmed native IDE connection and disconnection.
 // v49 includes pending interactions in authoritative conversation snapshots.
 // v50 adds a session-scoped retry for the runtime model catalog.
-export const BRIDGE_PROTOCOL_VERSION = 51 as const;
+export const BRIDGE_PROTOCOL_VERSION = 52 as const;
 
 export type WebviewToHostMessage =
+  | SystemPromptRequest
   | IdeReconnectMessage
   | IdeRefreshMessage
   | ReviewPanelOpen
@@ -366,6 +368,7 @@ export interface HostSnapshotMessage {
 }
 
 export type HostToWebviewMessage =
+  | SystemPromptResponse
   | HostIdeMessage
   | HostSnapshotMessage
   | HostConnectionMessage

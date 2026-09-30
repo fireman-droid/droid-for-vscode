@@ -7,6 +7,9 @@ import { manageMarketplaces, managePlugins } from './plugins';
 import { manageMcp, signInMcp } from './mcp';
 import { manageDefaults } from './defaults';
 import { manageSkills } from './skills';
+import { manageWorktrees } from './worktrees';
+import { forceArchiveSession } from './forceArchive';
+import { saveHistoryNote } from './historyNote';
 import { DaemonTerminalManager } from '../terminal/DaemonTerminalManager';
 import { manageTerminals, requestDroidUpdate } from './runtimeMaintenance';
 import { choose, ManagementError, type ManagementContext } from './managementUi';
@@ -34,6 +37,7 @@ export class DroidManagement implements vscode.Disposable {
     const sessionId = state.sessionId;
     const generation = state.runtimeGeneration;
     const cwd = state.activeRuntimeCwd;
+    let refreshSessions = false;
     const assertCurrent = (write = false) => {
       abort.signal.throwIfAborted();
       if (this.disposed || this.controller.sessionState.sessionId !== sessionId ||
@@ -60,9 +64,14 @@ export class DroidManagement implements vscode.Disposable {
         { label: 'MCP tools and sign-in', description: 'Tool controls, browser sign-in and saved credentials', section: 'mcp' as const },
         { label: 'Droid defaults', description: 'Models, subagents, compaction, worktrees and opt-in cloud sync', section: 'defaults' as const },
         { label: 'Droid session terminals', description: 'Create, open for direct input, or close daemon-owned shells', section: 'terminals' as const },
+        { label: 'Managed worktrees', description: 'Inspect paths, changes and session occupancy before cleanup', section: 'worktrees' as const },
+        { label: 'Force archive another session…', description: 'Hide a session without stopping its agent', section: 'archive' as const },
+        { label: 'Save a history-only note…', description: 'Process mode only; does not send to the model', section: 'history-note' as const },
         { label: 'Update Droid', description: 'Request a shared daemon update, with confirmation', section: 'updates' as const },
       ]))?.section;
       if (!target) return;
+      if (target === 'history-note') { await saveHistoryNote(this.controller, assertCurrent); return; }
+      refreshSessions = target === 'archive' || target === 'worktrees';
       if ((target === 'skills' || target === 'mcp' || target === 'terminals') && !this.daemonMode)
         throw new ManagementError('These management operations require daemon runtime mode. Existing Process Skills and MCP controls remain available in the chat menu.');
       const context: ManagementContext = {
@@ -74,6 +83,8 @@ export class DroidManagement implements vscode.Disposable {
       else if (target === 'marketplaces') await manageMarketplaces(context);
       else if (target === 'defaults') await manageDefaults(context);
       else if (target === 'terminals') await manageTerminals(context, this.terminals);
+      else if (target === 'worktrees') await manageWorktrees(context);
+      else if (target === 'archive') await forceArchiveSession(context);
       else if (target === 'updates') await requestDroidUpdate(context);
       else if (serverName !== undefined) await signInMcp(context, serverName);
       else await manageMcp(context);
@@ -90,6 +101,7 @@ export class DroidManagement implements vscode.Disposable {
         this.controller.handleMessage({ type: 'mcp.refresh', sessionId });
         this.controller.handleMessage({ type: 'skills.refresh', sessionId });
         this.controller.handleMessage({ type: 'commands.refresh', sessionId });
+        if (refreshSessions) this.controller.handleMessage({ type: 'sessions.refresh' });
       }
     }
   }

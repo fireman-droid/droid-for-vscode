@@ -163,6 +163,7 @@ export interface MissionFeatureSnapshot {
   readonly status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   /** Host-derived capability, never a worker/session identifier. */
   readonly workerViewAvailable?: true;
+  readonly workerStatus?: 'running' | 'paused' | 'finished' | 'failed' | 'unknown';
 }
 
 export interface MissionSetupCatalogItem {
@@ -636,7 +637,7 @@ function parseFeature(value: unknown): MissionFeatureSnapshot | undefined {
     !hasExactKeys(
       value,
       ['id', 'order', 'title', 'status'],
-      ['description', 'milestone', 'workerViewAvailable'],
+      ['description', 'milestone', 'workerViewAvailable', 'workerStatus'],
     ) ||
     !isMissionId(value.id) ||
     !isRevision(value.order) ||
@@ -647,7 +648,9 @@ function parseFeature(value: unknown): MissionFeatureSnapshot | undefined {
       !isPresentationText(value.milestone, MAX_MISSION_FEATURE_TEXT_LENGTH)) ||
     typeof value.status !== 'string' ||
     !FEATURE_STATUS_SET.has(value.status) ||
-    (value.workerViewAvailable !== undefined && value.workerViewAvailable !== true)
+    (value.workerViewAvailable !== undefined && value.workerViewAvailable !== true) ||
+    (value.workerStatus !== undefined && (value.workerViewAvailable !== true ||
+      typeof value.workerStatus !== 'string' || !['running', 'paused', 'finished', 'failed', 'unknown'].includes(value.workerStatus)))
   ) {
     return undefined;
   }
@@ -659,6 +662,7 @@ function parseFeature(value: unknown): MissionFeatureSnapshot | undefined {
     ...(value.milestone === undefined ? {} : { milestone: value.milestone }),
     status: value.status as MissionFeatureSnapshot['status'],
     ...(value.workerViewAvailable === true ? { workerViewAvailable: true } : {}),
+    ...(value.workerStatus === undefined ? {} : { workerStatus: value.workerStatus as MissionFeatureSnapshot['workerStatus'] }),
   };
 }
 

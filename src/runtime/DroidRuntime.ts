@@ -1,5 +1,7 @@
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import type { RewindDetailFields } from '../shared/protocol/rewindDetails';
+import type { RuntimeTurnOutcome } from './turnOutcome';
+export type { RuntimeTurnOutcome } from './turnOutcome';
 
 export const RUNTIME_INTERACTION_MODES = ['auto', 'spec', 'mission'] as const;
 export type RuntimeInteractionMode = (typeof RUNTIME_INTERACTION_MODES)[number];
@@ -96,6 +98,12 @@ export interface RuntimeModelCatalogItem {
   readonly id: string;
   readonly displayName: string;
   readonly supportedReasoningEfforts: readonly RuntimeReasoningEffort[];
+  readonly defaultReasoningEffort: RuntimeReasoningEffort;
+  readonly isCustom: boolean;
+  readonly supportsImages: boolean;
+  readonly supportsImageGeneration: boolean;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
 }
 
 export interface RuntimeMissionSettings {
@@ -111,6 +119,7 @@ export type RuntimeSessionTarget =
   | {
       readonly kind: 'new';
       readonly cwd: string;
+      readonly systemPrompt?: import('../shared/protocol/systemPromptProtocol').SessionSystemPrompt;
       /**
        * Asks the daemon to create (or reuse) a git worktree rooted at
        * `cwd` and run the session there. Daemon runtime mode only; the
@@ -342,6 +351,9 @@ export interface RuntimeForkResult {
 }
 
 export interface DroidRuntime {
+  /** Persists a display-only note without starting an agent or adding model context. */
+  appendHistoryMessage?(text: string): Promise<{ readonly messageId: string }>;
+  supportsHistoryAppend?(): boolean;
   initialize(target: RuntimeSessionTarget | string): Promise<RuntimeAvailability>;
   /**
    * Actual working directory of the active session as reported by the
@@ -376,6 +388,8 @@ export interface DroidRuntime {
    * daemon-side in-flight turn has finished.
    */
   readSessionWorkingState?(): Promise<RuntimeSessionWorkingState>;
+  /** Read one known backend submission's durable outcome; never submits another prompt. */
+  readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
   /**
    * Interrupts the session's backend-side turn even when this runtime
    * has no locally streaming turn. `interrupt()` deliberately no-ops

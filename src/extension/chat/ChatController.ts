@@ -126,6 +126,7 @@ export class ChatController {
   readIdeState() { return readControllerIde(this); }
   daemonCustomModels?: () => Promise<CustomModelsGateway>;
   modelDiscovery?: CustomModelDiscoveryGateway;
+  systemPromptStore?: import('./capabilities/systemPrompt').SystemPromptStore;
   providerRegistry?: ProviderRegistry;
   promptProviderApiKey?: () => Thenable<string | undefined>;
   /** Hidden-fork side chat; null when no sidecar factory is wired. */
@@ -430,6 +431,17 @@ export class ChatController {
     );
   }
   private handleBtwAsk(sessionId: string, text: string, options: BtwAskOptions): void {
+    if (sessionId !== this.sessionState.sessionId) return;
+    const modelId = options.modelId ?? this.metadata.settings.value?.modelId;
+    const model = this.metadata.modelCatalog.items.find((item) => item.id === modelId);
+    if (this.metadata.modelCatalog.status !== 'ready' || model === undefined || model.disabled ||
+        (options.images?.length && !model.supportsImages)) {
+      this.emitSessionDiagnostic('settings-update-unsupported', model?.disabled
+        ? model.disabledReason! : model && options.images?.length && !model.supportsImages
+          ? 'This model does not support images. Remove the images or choose another model.'
+          : 'Load the model catalog and choose an available model before sending a side question.');
+      return;
+    }
     this.withBtwSession(
       sessionId,
       (sideChat, cwd) => void sideChat.handleAsk(cwd, sessionId, text, options),

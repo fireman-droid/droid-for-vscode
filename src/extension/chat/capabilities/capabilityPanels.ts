@@ -584,7 +584,6 @@ export function projectModelCatalog(catalog: RuntimeModelCatalog): ModelCatalogS
       ids.has(item.id) ||
       !isSafeDisplayName(item.displayName) ||
       !Array.isArray(item.supportedReasoningEfforts) ||
-      item.supportedReasoningEfforts.length === 0 ||
       item.supportedReasoningEfforts.length > SESSION_REASONING_EFFORTS.length
     ) {
       throw new Error('Invalid runtime model catalog item.');
@@ -594,7 +593,13 @@ export function projectModelCatalog(catalog: RuntimeModelCatalog): ModelCatalogS
       efforts.size !== item.supportedReasoningEfforts.length ||
       item.supportedReasoningEfforts.some(
         (effort) => !isEnumValue(effort, SESSION_REASONING_EFFORTS),
-      )
+      ) ||
+      !isEnumValue(item.defaultReasoningEffort, SESSION_REASONING_EFFORTS) ||
+      (efforts.size > 0 && !efforts.has(item.defaultReasoningEffort)) ||
+      typeof item.isCustom !== 'boolean' || typeof item.supportsImages !== 'boolean' ||
+      typeof item.supportsImageGeneration !== 'boolean' || typeof item.disabled !== 'boolean' ||
+      (item.disabled ? typeof item.disabledReason !== 'string' || !item.disabledReason.trim() ||
+        item.disabledReason.length > 512 : item.disabledReason !== undefined)
     ) {
       throw new Error('Invalid runtime model reasoning efforts.');
     }
@@ -603,6 +608,12 @@ export function projectModelCatalog(catalog: RuntimeModelCatalog): ModelCatalogS
       id: item.id,
       displayName: item.displayName,
       supportedReasoningEfforts: [...item.supportedReasoningEfforts],
+      defaultReasoningEffort: item.defaultReasoningEffort,
+      isCustom: item.isCustom,
+      supportsImages: item.supportsImages,
+      supportsImageGeneration: item.supportsImageGeneration,
+      disabled: item.disabled,
+      ...(item.disabledReason === undefined ? {} : { disabledReason: item.disabledReason }),
     };
   });
   return { status: 'ready', items };

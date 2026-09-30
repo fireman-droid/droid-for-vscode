@@ -26,6 +26,12 @@ export function handleRuntimeEvent(
   }
   if (ctl.effects.handleMissionRuntimeEvent(event)) return;
   switch (event.type) {
+    case 'turn-identity': {
+      if (ctl.turnState.turn?.turnId !== turnId) return;
+      ctl.turnState.turn.backendTurnId = event.backendTurnId;
+      ctl.effects.scheduleRecoveryCheckpoint();
+      return;
+    }
     case 'text-delta': {
       const turn = ctl.turnState.turn;
       if (turn === null) {

@@ -8,7 +8,7 @@ import {
   ReasoningEffort,
   ToolConfirmationOutcome,
   ToolConfirmationType,
-  type AvailableModelConfig,
+  type ModelInfo,
   type ClientAskUserHandler,
   type ClientPermissionHandler,
   type DroidStreamEvent,
@@ -945,31 +945,6 @@ describe('FactoryDroidRuntime', () => {
       reason: 'unsupported',
     });
   });
-  it('projects only BYOK models from the real startup catalog', async () => {
-    const session = createMockSession(async function* () {});
-    session.availableModels = [
-      availableModel('model-sol', 'Model Sol', [
-        ReasoningEffort.Low,
-        ReasoningEffort.Medium,
-        ReasoningEffort.High,
-      ]),
-      availableModel('custom:model-pro', 'Model Pro', [ReasoningEffort.None]),
-    ];
-    const runtime = createRuntime(async () => session);
-    await runtime.initialize('C:\\workspace');
-
-    await expect(runtime.readModelCatalog()).resolves.toEqual({
-      status: 'available',
-      items: [
-        {
-          id: 'custom:model-pro',
-          displayName: 'Model Pro',
-          supportedReasoningEfforts: ['none'],
-        },
-      ],
-    });
-  });
-
   it('fails closed when the captured model catalog is invalid', async () => {
     const session = createMockSession(async function* () {});
     session.availableModels = [
@@ -1787,6 +1762,23 @@ describe('FactoryDroidRuntime', () => {
 });
 
 describe('createLocalDroidSession', () => {
+  it('queries the public model API lazily and retries without replacing the active process', async () => {
+    const session = createMockSession(async function* () {});
+    const transport = createMockTransport();
+    const models = [availableModel('builtin', 'Builtin', [ReasoningEffort.High])];
+    const listModels = vi.fn(async () => models).mockRejectedValueOnce(new Error('catalog unavailable'));
+    const createSession = vi.fn(async () => session);
+    const created = await createLocalDroidSession({
+      target: { kind: 'new', cwd: 'C:/workspace' }, interactionHandler: cancellingRuntimeInteractionHandler,
+    }, { createTransport: () => transport, createSession, resumeSession: vi.fn(), listModels });
+    expect(listModels).not.toHaveBeenCalled();
+    await expect(created.readAvailableModels?.()).rejects.toThrow('catalog unavailable');
+    await expect(created.readAvailableModels?.()).resolves.toEqual(models);
+    expect(listModels).toHaveBeenLastCalledWith({ cwd: 'C:/workspace', includeDisabled: true });
+    expect(createSession).toHaveBeenCalledOnce();
+    expect(transport.close).not.toHaveBeenCalled();
+  });
+
   it('connects a cwd-scoped transport before creating the SDK session', async () => {
     const calls: string[] = [];
     const session = createMockSession(async function* () {});
@@ -1823,6 +1815,7 @@ describe('createLocalDroidSession', () => {
         createTransport,
         createSession,
         resumeSession: vi.fn(),
+        listModels: vi.fn(async () => []),
       },
     );
     expect(created.id).toBe(session.id);
@@ -1849,6 +1842,7 @@ describe('createLocalDroidSession', () => {
           createTransport,
           createSession,
           resumeSession: vi.fn(),
+        listModels: vi.fn(async () => []),
         },
       ),
     ).rejects.toThrow('Worktree sessions require the daemon runtime mode.');
@@ -1877,6 +1871,7 @@ describe('createLocalDroidSession', () => {
         createTransport,
         createSession,
         resumeSession: vi.fn(),
+        listModels: vi.fn(async () => []),
       },
     );
 
@@ -1916,6 +1911,7 @@ describe('createLocalDroidSession', () => {
           return session;
         },
         resumeSession: vi.fn(),
+        listModels: vi.fn(async () => []),
       },
     );
 
@@ -2020,7 +2016,7 @@ describe('createLocalDroidSession', () => {
         },
         interactionHandler,
       },
-      { createTransport, createSession, resumeSession },
+      { createTransport, createSession, resumeSession, listModels: vi.fn(async () => []) },
     );
     expect(resumed.id).toBe(session.id);
     expect(resumed).not.toBe(session);
@@ -2101,6 +2097,7 @@ describe('createLocalDroidSession', () => {
           createTransport: () => transport,
           createSession,
           resumeSession: vi.fn(),
+        listModels: vi.fn(async () => []),
         },
       ),
     ).rejects.toBe(failure);
@@ -2148,7 +2145,7 @@ describe('createLocalDroidSession', () => {
       await expect(
         createLocalDroidSession(
           { target, interactionHandler: cancellingRuntimeInteractionHandler },
-          { createTransport: () => transport, createSession, resumeSession },
+          { createTransport: () => transport, createSession, resumeSession, listModels: vi.fn(async () => []) },
         ),
       ).rejects.toBe(failure);
       expect(transport.close).toHaveBeenCalledOnce();
@@ -2181,7 +2178,7 @@ function createMockSession(
 ) {
   return {
     id: 'session-1',
-    availableModels: undefined as readonly AvailableModelConfig[] | undefined,
+    availableModels: undefined as readonly ModelInfo[] | undefined,
     settings: {
       modelId: 'model-1',
       reasoningEffort: ReasoningEffort.High,
@@ -2214,7 +2211,7 @@ function availableModel(
   id: string,
   displayName: string,
   supportedReasoningEfforts: readonly ReasoningEffort[],
-): AvailableModelConfig {
+): ModelInfo {
   return {
     id,
     displayName,

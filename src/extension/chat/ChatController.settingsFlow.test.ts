@@ -118,11 +118,13 @@ describe('ChatController', () => {
           id: 'model-1',
           displayName: 'Model One',
           supportedReasoningEfforts: ['high'],
+          defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
         {
           id: 'model-2',
           displayName: 'Model Two',
           supportedReasoningEfforts: ['low', 'medium'],
+          defaultReasoningEffort: 'low', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
       ],
     });
@@ -217,11 +219,13 @@ describe('ChatController', () => {
           id: 'model-1',
           displayName: 'Model One',
           supportedReasoningEfforts: ['high'],
+          defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
         {
           id: 'model-2',
           displayName: 'Model Two',
           supportedReasoningEfforts: ['low', 'medium'],
+          defaultReasoningEffort: 'low', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
       ],
     });
@@ -368,7 +372,9 @@ describe('ChatController', () => {
       interactionHandler = handler;
       return createRuntime.mock.calls.length === 1 ? planning : implementation;
     });
-    const { controller, messages } = createController(createRuntime);
+    const { controller, messages } = createController(createRuntime, undefined, undefined, undefined, {
+      loadHistory: vi.fn(async () => ({ status: 'available' as const, state: { transcript: [], historyStatus: 'complete' as const, truncated: false } })),
+    });
     ready(controller);
     await waitForConnected(messages);
 
@@ -648,7 +654,7 @@ describe('ChatController', () => {
             remaining: 60,
             limit: 100,
           },
-          message: expect.stringContaining('DroidVisX Logs'),
+          message: expect.stringContaining('Droid Logs'),
         },
       });
     });

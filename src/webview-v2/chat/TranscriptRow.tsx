@@ -19,6 +19,10 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
   if (item.kind === 'thinking') return <ThinkingRow item={item} messageId={messageId} grouped={grouped} streaming={streaming} />;
   if (item.kind === 'tool') return <ToolRow item={item} messageId={messageId} grouped={grouped} hideConfirmedOperations={hideConfirmedOperations} onInteract={onInteract} />;
   if (item.kind === 'diagnostic') {
+    if (item.code === 'history-note') return <section role="note" className="my-2 rounded-md border border-border p-3 text-xs">
+      <p className="mb-2 text-muted-foreground">Saved note · Not sent to the model</p>
+      <p className="whitespace-pre-wrap">{item.message}</p>
+    </section>;
     if (item.code === 'session-compacted') {
       const count = /(\d+) earlier message/.exec(item.message)?.[1];
       return <div role="status" title={item.message} className="my-4 flex items-center gap-3 text-[10.5px] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">

@@ -1,4 +1,4 @@
-import { type AvailableModelConfig } from '@factory/droid-sdk/node';
+import { type ModelInfo } from '@factory/droid-sdk/node';
 import {
   type RuntimeCompactResult,
   type RuntimeForkResult,
@@ -16,7 +16,7 @@ export interface ReplacementContext {
   readonly active: boolean;
   adoptSession(
     session: FactoryDroidSession,
-    models?: readonly AvailableModelConfig[],
+    models?: readonly ModelInfo[],
   ): void;
 }
 

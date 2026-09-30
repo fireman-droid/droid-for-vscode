@@ -31,6 +31,22 @@ function fixture() {
   };
 }
 describe('Droid model verification lifecycle', () => {
+  it('reads the official custom catalog and retains the disabled reason', async () => {
+    const list = vi.fn(async () => [
+      { id: 'builtin', isCustom: false },
+      { id: 'custom:active', displayName: 'Active', isCustom: true, modelProvider: 'anthropic' },
+      { id: 'custom:blocked', displayName: 'Blocked', isCustom: true, modelProvider: 'generic-chat-completion-api', disabled: true, disabledReason: 'Account policy' },
+    ]);
+    const daemon = { models: { list } } as unknown as DaemonApi;
+    const gateway = createModelManagementGateway(async () => daemon);
+    await expect(gateway.loaded()).resolves.toEqual([
+      { id: 'custom:active', displayName: 'Active', provider: 'anthropic', disabledReason: null },
+      { id: 'custom:blocked', displayName: 'Blocked', provider: 'generic-chat-completion-api', disabledReason: 'Account policy' },
+    ]);
+    expect(list).toHaveBeenCalledExactlyOnceWith({ includeDisabled: true });
+    list.mockRejectedValueOnce(new Error('catalog failed'));
+    await expect(gateway.loaded()).rejects.toThrow('catalog failed');
+  });
   it('uses a fresh directory, rejects permissions, and cleans up after a completed reply', async () => {
     const { gateway, create, session, archive, updateSettings } = fixture();
     const result = await gateway.verify('actual-id', new AbortController().signal);

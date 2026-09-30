@@ -33,6 +33,20 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
 
+### SDK 0.9.1 设置与恢复
+
+模型元数据由 Runtime 的正式 `listModels` 目录投影到共享契约，禁用检查保留在 Host
+应用边界，Webview 只负责显示与交互。系统提示使用独立请求／确认消息和 Host 用户配置
+存储，工厂仅给新建目标注入 `systemPrompt`，恢复／分叉不注入。
+
+daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
+该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
+查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+
+历史记录追加使用 SDK 公开低层 Process 客户端，在 Host 空闲操作锁内关闭、追加并恢复
+原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开
+追加接口，不使用私有 SDK 字段或直接修改 CLI 历史。
+
 ### 编辑器补全的独立路径
 
 `src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion

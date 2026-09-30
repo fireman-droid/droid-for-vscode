@@ -164,6 +164,21 @@ export async function consumeTurn(
         }
       }
       handleRuntimeEvent(ctl, sessionId, turnId, event);
+      if (event.type === 'turn-identity') {
+        // The generator has not submitted yet. Persist the daemon id before it
+        // can advance so an immediate Host restart can recover this exact turn.
+        const saved = await ctl.effects.flushRecoveryCheckpointOrReport();
+        if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+        if (!saved) {
+          failTurn(ctl, sessionId, turnId, 'recovery-checkpoint-failed');
+          return;
+        }
+        if ((ctl.turnState.turn?.status as TurnStatus | undefined) === 'stopping') {
+          terminalEventSeen = true;
+          completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
+          break;
+        }
+      }
     }
   } catch (error) {
     if (

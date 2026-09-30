@@ -3,13 +3,49 @@ import { StreamStateTracker, type DaemonSessionController, type SessionSettings 
 import { describe, expect, it, vi } from 'vitest';
 import { FactoryDroidRuntime } from './FactoryDroidRuntime';
 import { RecoveredDaemonTurn } from './daemon/recoveredTurn';
-import { DaemonStreamRecoveryError } from './daemon/sessionStream';
+import { DaemonStreamRecoveryError, DaemonTurnStream } from './daemon/sessionStream';
 import { cancellingRuntimeInteractionHandler } from './events/runtimeInteractions';
 import type { RuntimeEvent } from './runtimeEvents';
 import type { FactoryDroidSession } from './session/sessionTypes';
 import { RuntimeTurnRecoveryError } from './turnRecovery';
 
 describe('runtime transport handoff', () => {
+  it('publishes the exact backend identity before submitting it once to the daemon', async () => {
+    const controller = Object.assign(new EventEmitter(), {
+      addUserMessage: vi.fn(async (_id: string, input: { messageId: string }) => {
+        controller.emit('sessionNotification', { sessionId: 'session', notification: {
+          type: 'agent_turn_completed', turnId: input.messageId, reason: 'completed',
+          tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, thinkingTokens: 0 },
+        } });
+      }),
+      interruptSession: vi.fn(async () => {}),
+    });
+    const session = {
+      id: 'session', settings: {} as SessionSettings,
+      stream: vi.fn<FactoryDroidSession['stream']>(function (_text, options) {
+        return new DaemonTurnStream(controller as unknown as DaemonSessionController, 'session', options ?? {}, () => {}).messages(_text);
+      }),
+      readTurnOutcome: vi.fn(async () => null),
+      interrupt: vi.fn(async () => {}), close: vi.fn(async () => {}),
+      updateSettings: vi.fn<FactoryDroidSession['updateSettings']>(),
+      getContextStats: vi.fn<FactoryDroidSession['getContextStats']>(),
+    };
+    const runtime = new FactoryDroidRuntime({ createSdkSession: async () => session,
+      interactionHandler: cancellingRuntimeInteractionHandler });
+    await runtime.initialize('C:/workspace');
+    const stream = runtime.sendTurn('Submit exactly once')[Symbol.asyncIterator]();
+    const identity = (await stream.next()).value;
+    expect(identity).toMatchObject({ type: 'turn-identity', backendTurnId: expect.any(String) });
+    expect(controller.addUserMessage).not.toHaveBeenCalled();
+    expect((await stream.next()).value).toMatchObject({ type: 'turn-complete', outcome: 'success' });
+    await stream.next();
+    expect(controller.addUserMessage).toHaveBeenCalledExactlyOnceWith('session', expect.objectContaining({
+      messageId: identity?.type === 'turn-identity' ? identity.backendTurnId : null,
+    }));
+    expect(controller.interruptSession).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
   it('preserves the existing submission and exposes its later real completion without resend or failure', async () => {
     const controller = new EventEmitter();
     const released = vi.fn();

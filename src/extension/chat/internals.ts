@@ -32,6 +32,8 @@ import type { WorkspaceContext } from './hostTypes';
 
 export interface CurrentTurn {
   readonly turnId: string;
+  /** Exact daemon submission id, retained separately from the UI turn identity. */
+  backendTurnId?: string;
   status: TurnStatus;
   compacting?: boolean;
   error?: string;

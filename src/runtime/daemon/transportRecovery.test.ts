@@ -21,7 +21,8 @@ function fixture() {
     interactionMode: DroidInteractionMode.Auto, reasoningEffort: ReasoningEffort.Low } as SessionSettings;
   const messages: { id: string }[] = [];
   const snapshot = () => ({ settings, cwd: 'C:/test', session: { messages } });
-  const state = { clear: vi.fn(), getSessionManager: vi.fn(() => null), markSessionLoading: vi.fn(), removeSession: vi.fn() };
+  const state = { clear: vi.fn(), getSessionManager: vi.fn(() => null), markSessionLoading: vi.fn(), removeSession: vi.fn(),
+    getSessionLoadOptions: vi.fn(() => ({ disableBuiltinSkills: true })) };
   const controller = Object.assign(new EventEmitter(), {
     loadSession: vi.fn(async (_options: object) => snapshot()),
     initializeSession: vi.fn(async (_options: object) => ({ settings })),
@@ -57,6 +58,23 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe('daemon transport recovery', () => {
+  it('queries a persisted outcome with exact identity and retained load options without sending or interrupting', async () => {
+    const f = fixture();
+    const session = await f.api.sessions.resume('session');
+    f.controller.loadSession.mockResolvedValueOnce({ ...f.snapshot(), agentTurnOutcome: {
+      type: 'agent_turn_outcome', turnId: 'submitted', reason: 'cancelled', resultKind: 'text',
+    } } as ReturnType<typeof f.snapshot>);
+    await expect(session.readTurnOutcome!('submitted')).resolves.toMatchObject({
+      backendTurnId: 'submitted', completion: { outcome: 'interrupted' },
+    });
+    expect(f.controller.loadSession).toHaveBeenLastCalledWith({
+      sessionId: 'session', disableBuiltinSkills: true, agentTurnOutcomeTurnId: 'submitted',
+    });
+    expect(f.controller.addUserMessage).not.toHaveBeenCalled();
+    expect(f.controller.interruptSession).not.toHaveBeenCalled();
+    f.api.disconnect();
+  });
+
   it('does not interrupt an active turn for an unrelated controller error', async () => {
     const f = fixture();
     const session = await f.api.sessions.resume('session');

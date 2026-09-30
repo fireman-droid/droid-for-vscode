@@ -1,6 +1,6 @@
 import {
   type AutonomyLevel,
-  type AvailableModelConfig,
+  type ModelInfo,
   type Base64ImageSource,
   type DocumentSource,
   type DroidInteractionMode,
@@ -67,7 +67,7 @@ export function projectSessionSettings(
 }
 
 export function projectModelCatalog(
-  models: readonly AvailableModelConfig[],
+  models: readonly ModelInfo[],
 ): RuntimeModelCatalogItem[] {
   if (!Array.isArray(models) || models.length > MAX_RUNTIME_MODEL_CATALOG_ITEMS) {
     throw new Error('Invalid model catalog.');
@@ -84,7 +84,6 @@ export function projectModelCatalog(
     const efforts = model.supportedReasoningEfforts;
     if (
       !Array.isArray(efforts) ||
-      efforts.length === 0 ||
       efforts.length > RUNTIME_REASONING_EFFORTS.length
     ) {
       throw new Error('Invalid model reasoning efforts.');
@@ -98,18 +97,31 @@ export function projectModelCatalog(
     ) {
       throw new Error('Invalid model reasoning efforts.');
     }
+    const defaultEffort = projectEnum(model.defaultReasoningEffort, RUNTIME_REASONING_EFFORTS);
+    if (defaultEffort === undefined || (efforts.length > 0 && !efforts.includes(model.defaultReasoningEffort)) ||
+        typeof model.isCustom !== 'boolean' ||
+        (model.disabled !== undefined && typeof model.disabled !== 'boolean') ||
+        (model.noImageSupport !== undefined && typeof model.noImageSupport !== 'boolean') ||
+        (model.supportsImageGeneration !== undefined && typeof model.supportsImageGeneration !== 'boolean') ||
+        (model.disabled === true && (typeof model.disabledReason !== 'string' || !model.disabledReason.trim()))) {
+      throw new Error('Invalid model capabilities.');
+    }
     ids.add(model.id);
     return {
+      id: model.id,
+      displayName: model.displayName,
+      supportedReasoningEfforts: projectedEfforts as RuntimeModelCatalogItem['supportedReasoningEfforts'],
+      defaultReasoningEffort: defaultEffort,
       isCustom: model.isCustom,
-      item: {
-        id: model.id,
-        displayName: model.displayName,
-        supportedReasoningEfforts:
-          projectedEfforts as RuntimeModelCatalogItem['supportedReasoningEfforts'],
-      },
+      supportsImages: model.noImageSupport !== true,
+      supportsImageGeneration: model.supportsImageGeneration === true,
+      disabled: model.disabled === true,
+      ...(model.disabled === true ? {
+        disabledReason: model.disabledReason.replace(/[\u0000-\u001f\u007f-\u009f]/gu, ' ').trim().slice(0, 512),
+      } : {}),
     };
   });
-  return projected.filter(({ isCustom }) => isCustom).map(({ item }) => item);
+  return projected;
 }
 
 export function projectSettingsUpdate(

@@ -9,6 +9,7 @@ import type {
 } from '../../../runtime/runtimeEvents';
 import { normalizeMissionEvent } from '../../../runtime/events/normalizeMissionEvent';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
+import { missionWorkerStatus } from './workerPresentation';
 
 type MissionRuntimeEvent = Extract<RuntimeEvent, { type: `mission-${string}` }>;
 
@@ -340,7 +341,7 @@ export class MissionSnapshotReducer {
     feature: MissionRuntimeFeature,
     order: number,
   ): MissionFeatureSnapshot {
-    const hasWorker = this.workerSessionIdForFeature(feature.id) !== null;
+    const workerId = this.workerSessionIdForFeature(feature.id);
     const title = feature.description.replace(/\s+/g, ' ').slice(0, 512);
     return {
       id: feature.id,
@@ -350,7 +351,9 @@ export class MissionSnapshotReducer {
       ...(feature.milestone === undefined
         ? {}
         : { milestone: feature.milestone.slice(0, 512) }),
-      ...(hasWorker ? { workerViewAvailable: true } : {}),
+      ...(workerId === null ? {} : { workerViewAvailable: true,
+        workerStatus: missionWorkerStatus(workerId, this.workers.get(workerId)?.active === true,
+          this.lifecycle, feature, this.progress) }),
     };
   }
 

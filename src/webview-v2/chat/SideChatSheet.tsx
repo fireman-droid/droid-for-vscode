@@ -20,11 +20,18 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
   const unavailable = state.status === 'error' || state.status === 'unsupported';
   const picker = useRef<HTMLInputElement>(null);
   const models = modelCatalog?.items ?? [];
+  const selected = models.find((model) => model.id === selectedModel);
+  const modelNotice = modelCatalog && modelCatalog.status !== 'ready'
+    ? modelCatalog.status === 'loading' ? 'Loading available models…' : modelCatalog.message
+    : modelCatalog && !selected ? 'Choose an available model before sending a side question.'
+    : selected?.disabled ? selected.disabledReason
+    : selected?.supportsImages === false && images.images.length > 0
+      ? 'This model does not support images. Remove the images or choose another model.' : null;
   const modelLabel = models.find((model) => model.id === selectedModel)?.displayName ?? selectedModel ?? 'Model';
   const missingModel = selectedModel !== undefined && !models.some((model) => model.id === selectedModel);
   return <SideChatView {...props} state={{ ...state, status: state.status === 'forking' ? 'preparing' : state.status }} maxTextLength={MAX_BTW_TEXT_LENGTH}
-    notice={images.reading ? 'Preparing images…' : images.notice ?? props.notice}
-    hasAttachments={images.images.length > 0} sendDisabled={images.reading > 0 || sending}
+    notice={images.reading ? 'Preparing images…' : modelNotice ?? images.notice ?? props.notice}
+    hasAttachments={images.images.length > 0} sendDisabled={images.reading > 0 || sending || Boolean(modelNotice)}
     onPaste={images.onPaste} onDrop={images.onDrop} onDragOver={images.onDragOver}
     attachments={<BtwImages images={images.images} previews={images.previews} onRemove={images.remove} />}
     renderImages={(items) => <BtwImages images={items} previews={images.previews} />}
@@ -32,14 +39,19 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
       <input hidden type="file" ref={picker} accept={IMAGE_MEDIA_TYPES.join(',')} multiple onChange={(event) => {
         images.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '';
       }} />
-      <Button variant="ghost" size="icon-sm" disabled={unavailable} title="Attach images" aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
+      <Button variant="ghost" size="icon-sm" disabled={unavailable || selected?.disabled || selected?.supportsImages === false} title={selected?.supportsImages === false ? 'This model does not support images' : 'Attach images'} aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
       <Select value={selectedModel ?? ''} onValueChange={onModelChange} disabled={unavailable || !models.length}>
         <SelectTrigger aria-label="Side conversation model" title={`Model for side questions: ${modelLabel}`} className="ml-auto h-7 min-w-0 max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs">
-          <SelectValue placeholder="Model" />
+          <SelectValue placeholder="Model">{modelLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent side="top" align="end" className="max-h-80 w-[240px] max-w-[min(360px,calc(100vw-24px))]">
-          {missingModel ? <SelectItem value={selectedModel!}>{selectedModel}</SelectItem> : null}
-          {models.map((model) => <SelectItem key={model.id} value={model.id}>{model.displayName}</SelectItem>)}
+          {missingModel ? <SelectItem value={selectedModel!} disabled>{selectedModel}</SelectItem> : null}
+          {models.map((model) => <SelectItem key={model.id} value={model.id} disabled={model.disabled}>
+            <span>{model.displayName}</span>
+            <span className="block max-w-64 whitespace-normal text-xs text-muted-foreground">
+              {model.disabledReason ?? (model.supportsImages ? 'Images supported' : 'Text only')}
+            </span>
+          </SelectItem>)}
         </SelectContent>
       </Select>
     </>} />;

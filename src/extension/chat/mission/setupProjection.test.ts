@@ -45,7 +45,10 @@ describe('Mission Control setup projection', () => {
             reasoningEffort: 'high',
           },
         },
-        modelCatalog: { status: 'ready', items: [] },
+        modelCatalog: { status: 'ready', items: [
+          { id: 'active', displayName: 'Active', supportedReasoningEfforts: ['high'], disabled: false, supportsImages: true },
+          { id: 'blocked', displayName: 'Blocked', supportedReasoningEfforts: ['high'], disabled: true, disabledReason: 'Account policy' },
+        ] },
         settingsUpdate: null,
       },
       catalogState: { refreshInProgress: false },
@@ -69,6 +72,8 @@ describe('Mission Control setup projection', () => {
       availability: 'ready',
       reason: null,
     });
+    expect(controller.missionGateway.setupCapabilitiesFor).toHaveBeenLastCalledWith('D:\\workspace',
+      capabilities.currentChat, { status: 'ready', items: [{ id: 'active', displayName: 'Active', supportedReasoningEfforts: ['high'] }] });
     controllerListeners[0]?.();
     expect(onChange).not.toHaveBeenCalled();
 

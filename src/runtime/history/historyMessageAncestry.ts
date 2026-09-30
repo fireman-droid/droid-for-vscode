@@ -17,7 +17,7 @@ export function historyMessageAncestry(
       messageId: message.id,
       parentId: identity(message.parentId) ? message.parentId : null,
       projectedTurnId: sessionMessageTurnId(sessionId, message.id),
-      startsTurn: message.role === 'user' || message.role === 'system',
+      startsTurn: message.visibility !== 'user_only' && (message.role === 'user' || message.role === 'system'),
     });
   }
   return ancestry;

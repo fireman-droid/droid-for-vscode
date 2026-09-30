@@ -1,5 +1,5 @@
 import {
-  type AvailableModelConfig,
+  type ModelInfo,
   type Base64ImageSource,
   type DocumentSource,
   type DroidSessionUpdateSettingsOptions,
@@ -15,14 +15,16 @@ import {
   type FactoryDroidSessionRewindParams,
 } from './replacementTypes';
 import { type RuntimeInteractionHandler } from '../events/runtimeInteractions';
+import type { RuntimeTurnOutcome } from '../turnOutcome';
 
 export interface FactoryDroidSession {
   readonly id: string;
+  appendHistoryMessage?(text: string): Promise<import('../process/appendProcessHistory').ProcessHistoryNoteResult>;
   listCommands?(): Promise<readonly RuntimeCommand[]>;
   readonly settings: Readonly<SessionSettings>;
-  readonly availableModels?: readonly AvailableModelConfig[];
+  readonly availableModels?: readonly ModelInfo[];
   /** Reads a fresh catalog without restarting or replacing the active session. */
-  readAvailableModels?(): Promise<readonly AvailableModelConfig[] | undefined>;
+  readAvailableModels?(): Promise<readonly ModelInfo[] | undefined>;
   /**
    * Actual session working directory when the backend reports one.
    * Daemon sessions expose it (worktree sessions run in the worktree
@@ -36,6 +38,8 @@ export interface FactoryDroidSession {
       abortSignal?: AbortSignal;
       images?: Base64ImageSource[];
       files?: DocumentSource[];
+      /** Runtime-generated id passed unchanged to the daemon's addUserMessage. */
+      backendTurnId?: string;
     },
   ): AsyncIterable<DroidStreamEvent>;
   interrupt(): Promise<void>;
@@ -46,6 +50,7 @@ export interface FactoryDroidSession {
    * omit it (their turns cannot outlive the window).
    */
   readWorkingState?(): Promise<string | null>;
+  readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
   readMissionSnapshot?(): unknown;
   subscribeMissionSnapshot?(listener: (snapshot: unknown) => void): () => void;
   updateSettings(params: DroidSessionUpdateSettingsOptions): Promise<unknown>;

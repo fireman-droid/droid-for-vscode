@@ -27,6 +27,19 @@ function fixture() {
 }
 
 describe('authoritative Mission recovery', () => {
+  it('keeps the recovered Mission attached after a worker exits without a handoff', () => {
+    const { ctl, recover, update } = fixture();
+    update({ ...initial, state: 'paused', progressLog: [{ type: 'worker_failed',
+      timestamp: '2026-09-30T00:00:00Z', spawnId: 'spawn-a', workerSessionId: 'worker-a',
+      reason: 'Worker exited without a handoff.', failureReason: 'worker_exited_without_handoff', exitCode: 0 }],
+      workerStates: { 'worker-a': { startedAt: '2026-09-30T00:00:00Z', completedAt: '2026-09-30T00:00:01Z', exitCode: 0 } } });
+    recover();
+    expect(ctl.missionState.missionRuntime!.snapshot()).toMatchObject({
+      availability: 'attached', lifecycle: 'paused', controls: { canResume: true, canStopCurrentFeature: false },
+    });
+    expect(ctl.missionState.missionRuntime!.activeWorkerSessionId()).toBeNull();
+  });
+
   it('restores full features and follows progress between turns without catalog queries', () => {
     const { ctl, recover, update } = fixture();
     recover();

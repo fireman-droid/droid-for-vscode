@@ -2,6 +2,8 @@ import type { DaemonApi } from '../runtime/daemon/api';
 import * as vscode from 'vscode';
 
 import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
+import { createLocalDroidSession } from '../runtime/process/createLocalDroidSession';
+import { SystemPromptStore, withSystemPromptDefaults } from './chat/capabilities/systemPrompt';
 import { createBtwSidecar } from '../runtime/btw/BtwSidecar';
 import { createDaemonBtwSidecar } from '../runtime/btw/DaemonBtwSidecar';
 import { FactorySessionCatalog } from '../runtime/catalog/FactorySessionCatalog';
@@ -332,7 +334,9 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   });
   const reviewCoordinator = reviewFeature.coordinator;
+  const systemPromptStore = new SystemPromptStore(context.globalState);
   const missionGateway = new MissionGateway({
+    getSystemPrompt: () => systemPromptStore.sessionPrompt(),
     getDroid: getDaemonDroid,
     getAttachedSessionId: () => controller?.sessionState.sessionId ?? undefined,
     preferences: new MissionPreferenceStore(persistence),
@@ -370,7 +374,10 @@ export function activate(context: vscode.ExtensionContext): void {
               },
             }
           : {}),
-        ...(daemonSessions === null ? {} : { createSdkSession: daemonSessions.factory }),
+        createSdkSession: withSystemPromptDefaults(
+          daemonSessions?.factory ?? ((options) => createLocalDroidSession({ ...options, observability: diagnostics.observability })),
+          systemPromptStore,
+        ),
       }),
     () => ({
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
@@ -480,6 +487,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
   controller.daemonCustomModels = async () => (await daemonSidecar.droid()).customModels;
   controller.modelDiscovery = createHttpCustomModelDiscovery();
+  controller.systemPromptStore = systemPromptStore;
   controller.providerRegistry = new ProviderRegistry(
     context.globalState,
     context.secrets,

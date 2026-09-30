@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { RuntimeTurnRecoveryError } from '../../runtime/turnRecovery';
+import { projectDurableTurnOutcome, type DaemonTurnOutcome } from '../../runtime/turnOutcome';
 import type { RuntimeEvent } from '../../runtime/runtimeEvents';
 import {
   catalogEntry, createCatalog, createController, createMockRuntime, deferred, ready, send,
@@ -24,6 +25,7 @@ async function recoveredTurn() {
     throw new RuntimeTurnRecoveryError('saved-prompt', () => completion, release);
   });
   runtime.readSessionWorkingState = vi.fn(async () => working);
+  runtime.readTurnOutcome = vi.fn(async () => null);
   runtime.interruptSession = vi.fn(async () => { working = 'idle'; });
   const history: SessionHistoryLoader = { loadHistory: vi.fn<SessionHistoryLoader['loadHistory']>(async () => ({
     status: 'available',
@@ -72,11 +74,27 @@ it('keeps an admitted prompt on its original UI turn while history catches up wi
 it('retains uncertainty when restored history has no matching terminal result', async () => {
   const result = await recoveredTurn();
   result.finish();
-  await vi.waitFor(() => expect(turnStates(result.messages).at(-1)?.status).toBe('completed'));
+  await vi.waitFor(() => expect(turnStates(result.messages).at(-1)?.status).toBe('failed'));
   expect(result.messages).toContainEqual(expect.objectContaining({
-    type: 'runtime.diagnostic', code: 'transport-recovered-outcome-unconfirmed', turnId: 'original-ui-turn',
+    type: 'turn.error', code: 'recovered-turn-outcome-unconfirmed', turnId: 'original-ui-turn',
   }));
+  expect(result.runtime.readTurnOutcome).toHaveBeenCalledWith('saved-prompt');
   expect(result.runtime.sendTurn).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['completed', 'completed'], ['cancelled', 'interrupted'], ['error', 'failed'],
+] as const)('recovers persisted %s without a live completion event or a second submission', async (reason, status) => {
+  const result = await recoveredTurn();
+  vi.mocked(result.runtime.readTurnOutcome!).mockResolvedValue(projectDurableTurnOutcome(
+    'session-1', 'saved-prompt', { type: 'agent_turn_outcome', turnId: 'saved-prompt', reason: reason as DaemonTurnOutcome['reason'], resultKind: 'text' },
+  ));
+  result.finish();
+  await vi.waitFor(() => expect(turnStates(result.messages).at(-1)?.status).toBe(status));
+  expect(result.runtime.readTurnOutcome).toHaveBeenCalledWith('saved-prompt');
+  expect(result.runtime.sendTurn).toHaveBeenCalledOnce();
+  expect(result.runtime.interrupt).not.toHaveBeenCalled();
+  expect(result.release).toHaveBeenCalled();
 });
 
 it('uses the real failed result after reconnect instead of inferring success from idle', async () => {

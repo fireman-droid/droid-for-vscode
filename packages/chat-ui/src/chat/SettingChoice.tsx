@@ -2,7 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 export function SettingChoice<Value extends string>({ label, value, options, disabled, placeholder, onChange }: {
   readonly label: string;
   readonly value: string;
-  readonly options: readonly { value: Value; label: string }[];
+  readonly options: readonly { value: Value; label: string; disabled?: boolean; description?: string }[];
   readonly disabled: boolean;
   readonly placeholder?: string;
   readonly onChange: (value: Value) => void;
@@ -15,8 +15,10 @@ export function SettingChoice<Value extends string>({ label, value, options, dis
       <SelectTrigger aria-label={label}>
         <SelectValue placeholder={placeholder}>{value === '' ? undefined : options.find((item) => item.value === value)?.label ?? value}</SelectValue>
       </SelectTrigger>
-      <SelectContent>{options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+      <SelectContent>{options.map((option) => <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+        <span>{option.label}</span>
+        {option.description ? <span className="block max-w-72 whitespace-normal text-xs text-muted-foreground">{option.description}</span> : null}
+      </SelectItem>)}</SelectContent>
     </Select>
   </div>;
 }
-

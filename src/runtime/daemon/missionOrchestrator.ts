@@ -7,6 +7,7 @@ import type { RuntimeInteractionCallbacks } from '../events/runtimeInteractions'
 export interface MissionOrchestratorCreateOptions {
   readonly droid: DaemonApi;
   readonly cwd: string;
+  readonly systemPrompt?: import('../../shared/protocol/systemPromptProtocol').SessionSystemPrompt;
   readonly modelId: string;
   readonly reasoningEffort: MissionReasoningEffort;
   /**
@@ -37,6 +38,7 @@ export async function createMissionOrchestrator(
   return options.droid.sessions.create({
     ...options.callbacks,
     cwd: options.cwd,
+    ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
     modelId: options.modelId,
     reasoningEffort: options.reasoningEffort as never,
     tags: [

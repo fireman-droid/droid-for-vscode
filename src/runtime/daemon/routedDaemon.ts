@@ -136,6 +136,8 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       },
     },
     settings: resource('settings', noId),
+    models: resource('models', noId),
+    worktrees: resource('worktrees', noId),
     customModels: resource('customModels', noId),
     updates: resource('updates', noId),
     automations: resource('automations', noId),

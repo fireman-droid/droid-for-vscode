@@ -85,7 +85,7 @@ export function createDaemonResources(
           })),
         };
       }),
-    archive: (id) => call(() => controller.archiveSession(id)),
+    archive: (id, options) => call(() => controller.archiveSession(id, options)),
     unarchive: (id) => call(() => controller.unarchiveSession(id)),
     updateSettings: (id, settings) =>
       call(() => controller.updateSessionSettings(id, settings)),
@@ -95,6 +95,12 @@ export function createDaemonResources(
     killWorker: (id, workerId) => call(() => controller.killWorkerSession(id, workerId)),
   };
   const resources: Omit<DaemonApi, 'sessions' | 'notifications' | 'disconnect'> = {
+    models: { list: (options) => call(() => controller.listModels(options)) },
+    worktrees: {
+      list: (params) => call(() => controller.listManagedWorktrees(params)),
+      inspectDeletion: (params) => call(() => controller.inspectWorktreeDeletion(params)),
+      cleanup: (params) => call(() => controller.cleanupWorktree(params)),
+    },
     settings: {
       getDefaults: () => call(() => controller.getDefaultSettings()),
       updateDefaults: (params) => call(() => controller.updateSessionDefaults(params)),

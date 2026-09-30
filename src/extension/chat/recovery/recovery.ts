@@ -21,6 +21,7 @@ import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn } from './recoveredHistoryForCurrentTurn';
+import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
 
 export /**
  * Poll cadence for a daemon-side turn recovered after a reload. The
@@ -143,14 +144,13 @@ export function reconcileDaemonTurn(
       return;
     }
     if (!live) {
-      ctl.interactions.endTurn(sessionId, turnId);
       if (
         existingRecoveryTurn !== null &&
         (existingRecoveryTurn.status === 'submitting' ||
           existingRecoveryTurn.status === 'streaming' ||
           existingRecoveryTurn.status === 'stopping')
       ) {
-        await finishRecoveredTurn(
+        const settled = await finishRecoveredTurn(
           ctl,
           runtime,
           generation,
@@ -160,8 +160,12 @@ export function reconcileDaemonTurn(
           turnId,
           state === 'idle',
         );
-      } else if (state === 'idle') {
-        ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
+        if (settled === 'waiting') await pollRecoveredTurn(
+          ctl, runtime, generation, ctl.turnState.turnGeneration, sessionId, cwd, turnId,
+        );
+      } else {
+        ctl.interactions.endTurn(sessionId, turnId);
+        if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
     }
@@ -232,7 +236,7 @@ async function readInitialRecoveredWorkingState(
     if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return null;
     let state: RuntimeSessionWorkingState;
     try {
-      state = await runtime.readSessionWorkingState!();
+      state = preservePendingRecoveredState(ctl, sessionId, await runtime.readSessionWorkingState!());
     } catch {
       state = 'unknown';
     }
@@ -275,7 +279,7 @@ export async function pollRecoveredTurn(
     }
     let state: RuntimeSessionWorkingState;
     try {
-      state = await runtime.readSessionWorkingState!();
+      state = preservePendingRecoveredState(ctl, sessionId, await runtime.readSessionWorkingState!());
     } catch {
       state = 'unknown';
     }
@@ -301,7 +305,7 @@ export async function pollRecoveredTurn(
     }
     unknownReads = 0;
     if (state === 'idle') {
-      await finishRecoveredTurn(
+      const settled = await finishRecoveredTurn(
         ctl,
         runtime,
         runtimeGeneration,
@@ -311,7 +315,8 @@ export async function pollRecoveredTurn(
         turnId,
         true,
       );
-      return;
+      if (settled !== 'waiting') return;
+      continue;
     }
     pollsSinceHistoryRefresh += 1;
     if (pollsSinceHistoryRefresh >= RECOVERED_TURN_HISTORY_REFRESH_POLLS) {
@@ -395,7 +400,18 @@ export async function finishRecoveredTurn(
   cwd: string,
   turnId: string,
   confirmedIdle: boolean,
-): Promise<void> {
+): Promise<'waiting' | void> {
+  const recovering = ctl.turnState.turn;
+  if (recovering === null || recovering.turnId !== turnId) return;
+  const outcome = await readRecoveredTurnOutcome(runtime, recovering);
+  if (!ctl.effects.isCurrentTurn(runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+  // Loading the exact outcome can restore a pending approval that the registry
+  // did not report. Keep that request answerable and resume polling afterwards.
+  if (outcome.status !== 'confirmed' && recovering.status !== 'stopping' &&
+      preservePendingRecoveredState(ctl, sessionId, 'idle') === 'waiting-for-user') {
+    ctl.interactions.replayPending();
+    return 'waiting';
+  }
   const loaded = await loadBoundedRecoveryHistory(ctl, cwd, sessionId);
   if (
     !ctl.effects.isCurrentTurn(
@@ -435,8 +451,11 @@ export async function finishRecoveredTurn(
   }
   const transportRecovery = ctl.turnState.turn?.transportRecovery;
   transportRecovery?.dispose();
-  if (transportRecovery?.completion && !interrupted) {
-    ctl.effects.handleTurnComplete(sessionId, turnId, transportRecovery.completion);
+  if (outcome.status === 'confirmed' && !interrupted) {
+    ctl.effects.handleTurnComplete(sessionId, turnId, outcome.completion);
+  } else if (outcome.status === 'unconfirmed' && !interrupted) {
+    ctl.effects.failTurn(sessionId, turnId, 'recovered-turn-outcome-unconfirmed',
+      'The conversation was restored, but this reply’s final result could not be confirmed.');
   } else {
     if (transportRecovery && !interrupted) ctl.emit({
       type: 'runtime.diagnostic', sessionId, turnId, severity: 'info',
@@ -597,6 +616,7 @@ export async function persistActivationRecoveryCheckpoint(
   transcript: HostTranscriptState,
   turn: {
     readonly turnId: string;
+    readonly backendTurnId?: string;
     readonly status: TurnStatus;
     readonly error?: string;
   } | null,
@@ -655,6 +675,7 @@ export async function persistActivationRecoveryCheckpoint(
 
 function displayTurn(ctl: RecoveryPort): {
   readonly turnId: string;
+  readonly backendTurnId?: string;
   readonly status: TurnStatus;
   readonly error?: string;
 } | null {
@@ -662,6 +683,7 @@ function displayTurn(ctl: RecoveryPort): {
     ? null
     : {
         turnId: ctl.turnState.turn.turnId,
+        ...(ctl.turnState.turn.backendTurnId === undefined ? {} : { backendTurnId: ctl.turnState.turn.backendTurnId }),
         status: ctl.turnState.turn.status,
         ...(ctl.turnState.turn.error === undefined
           ? {}

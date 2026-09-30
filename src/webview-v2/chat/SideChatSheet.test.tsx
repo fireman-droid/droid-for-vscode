@@ -85,3 +85,23 @@ it('does not dismiss BTW when Escape belongs to the main chat or an IME composit
   view.unmount();
   expect(document.activeElement).toBe(mainInput);
 });
+
+it('blocks side questions for unavailable models and images for text-only models', async () => {
+  const user = userEvent.setup(), onAsk = vi.fn();
+  const model = { id: 'model-1', displayName: 'Text model', supportedReasoningEfforts: ['high'] as const,
+    defaultReasoningEffort: 'high' as const, isCustom: false, supportsImages: false, supportsImageGeneration: false,
+    disabled: true, disabledReason: 'Account policy' };
+  const props = { state: { ...EMPTY_SESSION_BTW_STATE, status: 'ready' as const }, draft: 'Question', quote: null,
+    width: 320, images, onModelChange: vi.fn(), onDraftChange: vi.fn(), onQuoteClear: vi.fn(), onAsk,
+    onStop: vi.fn(), onDismiss: vi.fn(), onWidthChange: vi.fn(), selectedModel: 'model-1' };
+  const { rerender } = render(<SideChatSheet {...props} modelCatalog={{ status: 'ready', items: [model] }} />);
+  expect(screen.getByText('Account policy')).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Send side question' }));
+  expect(onAsk).not.toHaveBeenCalled();
+  rerender(<SideChatSheet {...props} images={{ ...images, images: [{ id: 'image-1', name: 'image.png', mediaType: 'image/png', dataBase64: 'YQ==' }] }}
+    modelCatalog={{ status: 'ready', items: [{ ...model, disabled: false, disabledReason: undefined }] }} />);
+  expect(screen.getByText('This model does not support images. Remove the images or choose another model.')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Attach images to side question' }).hasAttribute('disabled')).toBe(true);
+  await user.click(screen.getByRole('button', { name: 'Send side question' }));
+  expect(onAsk).not.toHaveBeenCalled();
+});

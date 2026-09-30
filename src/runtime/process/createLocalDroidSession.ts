@@ -1,13 +1,13 @@
 import {
   ProcessTransport,
   createSession,
+  listModels,
   resumeSession,
   type DroidObservability,
   type StringFramedDroidClientTransport,
 } from '@factory/droid-sdk/node';
 import { createCapturedSessionView } from '../session/capturedSessionView';
 import { type RuntimeSessionTarget } from '../DroidRuntime';
-import { createModelCatalogCaptureTransport } from './modelCatalogCaptureTransport';
 import {
   createProvisionalProcessTransport,
   type ProcessSessionTransport,
@@ -18,14 +18,17 @@ import {
   type RuntimeInteractionHandler,
 } from '../events/runtimeInteractions';
 import type { FactoryDroidSession } from '../session/sessionTypes';
+import { appendProcessHistory } from './appendProcessHistory';
 
 export interface LocalSessionDependencies {
+  listModels: typeof listModels;
   createTransport(options: {
     cwd: string;
     observability?: DroidObservability;
   }): ProcessSessionTransport;
   createSession(options: {
     cwd: string;
+    systemPrompt?: import('../../shared/protocol/systemPromptProtocol').SessionSystemPrompt;
     transport: StringFramedDroidClientTransport;
     observability?: DroidObservability;
     permissionHandler: RuntimeInteractionCallbacks['permissionHandler'];
@@ -43,6 +46,7 @@ export interface LocalSessionDependencies {
 }
 
 export const localSessionDependencies: LocalSessionDependencies = {
+  listModels,
   createTransport: (options) => new ProcessTransport(options),
   createSession,
   resumeSession,
@@ -78,23 +82,22 @@ export async function createLocalDroidSession(
     await transport.connect();
 
     const interactionCallbacks = createRuntimeInteractionCallbacks(interactionHandler);
-    const catalogCapture = createModelCatalogCaptureTransport(transport);
     const session =
       target.kind === 'resume'
         ? await dependencies.resumeSession(target.sessionId, {
-            transport: catalogCapture.transport,
+            transport,
             ...observabilityOptions,
             ...interactionCallbacks,
           })
         : await dependencies.createSession({
             cwd: target.cwd,
-            transport: catalogCapture.transport,
+            ...(target.systemPrompt === undefined ? {} : { systemPrompt: target.systemPrompt }),
+            transport,
             ...observabilityOptions,
             ...interactionCallbacks,
           });
 
-    const availableModels = catalogCapture.readAvailableModels();
-    return createCapturedSessionView(session, availableModels);
+    return captureProcessSession(session);
   } catch (error) {
     try {
       await transport.close();
@@ -102,5 +105,29 @@ export async function createLocalDroidSession(
       // Preserve the connection or session-establishment failure.
     }
     throw error;
+  }
+
+  function captureProcessSession(session: FactoryDroidSession): FactoryDroidSession {
+    const view = createCapturedSessionView(session);
+    view.appendHistoryMessage = (text) => appendProcessHistory({ session, cwd: session.cwd ?? target.cwd, text,
+      resume: () => createLocalDroidSession({ target: { kind: 'resume', cwd: session.cwd ?? target.cwd, sessionId: session.id },
+        interactionHandler, observability }, dependencies) });
+    view.readAvailableModels = () => dependencies.listModels({
+      cwd: session.cwd ?? target.cwd,
+      includeDisabled: true,
+      ...observabilityOptions,
+    });
+    // SDK replacements are fresh handles. Bind Process capabilities to that
+    // handle, so a later note releases and resumes the replacement session.
+    if (session.compact) view.compact = async (params) => {
+      const result = await session.compact!(params);
+      return { ...result, session: captureProcessSession(result.session) };
+    };
+    if (session.fork) view.fork = async (params) => captureProcessSession(await session.fork!(params));
+    if (session.rewind) view.rewind = async (params) => {
+      const result = await session.rewind!(params);
+      return { ...result, session: captureProcessSession(result.session) };
+    };
+    return view;
   }
 }

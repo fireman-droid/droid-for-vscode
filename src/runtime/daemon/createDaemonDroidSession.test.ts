@@ -23,38 +23,27 @@ import {
 } from './createDaemonDroidSession';
 
 describe('createDaemonDroidSession', () => {
-  it.each(['new', 'resume'] as const)('starts the %s worker and model catalog concurrently', async (kind) => {
+  it.each(['new', 'resume'] as const)('starts the %s worker without blocking on model discovery', async (kind) => {
     const mock = createDroidMock();
-    let finishCatalog!: (value: Awaited<ReturnType<typeof mock.settings.getDefaults>>) => void;
-    let finishWorker!: (value: typeof mock.created) => void;
-    mock.settings.getDefaults.mockImplementation(() => new Promise(resolve => { finishCatalog = resolve; }));
-    const worker = new Promise<typeof mock.created>(resolve => { finishWorker = resolve; });
-    if (kind === 'new') mock.sessions.create.mockImplementation(() => worker);
-    else mock.sessions.resume.mockImplementation(() => worker);
-    let settled = false;
-    const pending = createDaemonDroidSession({
+    mock.models.list.mockRejectedValue(new Error('catalog unavailable'));
+    const session = await createDaemonDroidSession({
       target: kind === 'new' ? { kind, cwd: 'C:/workspace' } : { kind, cwd: 'C:/workspace', sessionId: 'session-1' },
       interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
-    }).then(value => { settled = true; return value; });
-    await vi.waitFor(() => expect(mock.sessions[kind === 'new' ? 'create' : 'resume']).toHaveBeenCalledOnce());
-    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
-    expect(settled).toBe(false);
-    finishCatalog({});
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    finishWorker(mock.created);
-    expect((await pending).id).toBe('session-1');
+    });
+    expect(session.id).toBe('session-1');
+    expect(mock.models.list).not.toHaveBeenCalled();
+    await expect(session.readAvailableModels?.()).rejects.toThrow('catalog unavailable');
+    expect(mock.sessions[kind === 'new' ? 'create' : 'resume']).toHaveBeenCalledOnce();
   });
 
-  it('preserves a worker startup failure when the concurrent catalog also fails', async () => {
+  it('preserves a worker startup failure without querying the model catalog', async () => {
     const mock = createDroidMock();
-    mock.settings.getDefaults.mockRejectedValue(new Error('catalog unavailable'));
     mock.sessions.resume.mockRejectedValue(new Error('worker failed'));
     await expect(createDaemonDroidSession({
       target: { kind: 'resume', cwd: 'C:/workspace', sessionId: 'session-1' },
       interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
     })).rejects.toThrow('worker failed');
-    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
+    expect(mock.models.list).not.toHaveBeenCalled();
   });
   it('creates a cwd-scoped daemon session with interaction handlers', async () => {
     const mock = createDroidMock();
@@ -77,82 +66,67 @@ describe('createDaemonDroidSession', () => {
     expect(session.authenticateMcpServer).toBeUndefined();
   });
 
-  it('exposes the defaults model catalog, dropping disabled rows', async () => {
+  it('loads the public catalog including disabled rows on demand', async () => {
     const mock = createDroidMock();
-
     const session = await createDaemonDroidSession({
-      target: { kind: 'new', cwd: 'C:\\workspace' },
-      interactionHandler: cancellingRuntimeInteractionHandler,
-      getDroid: async () => mock.droid,
+      target: { kind: 'new', cwd: 'C:/workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
     });
-
-    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
-    expect(session.availableModels?.map(({ id }) => id)).toEqual([
-      'model-1',
-      'custom:Probe-0',
-    ]);
-  });
-
-  it('leaves the catalog undefined when defaults omit it or fail', async () => {
-    const withoutModels = createDroidMock();
-    withoutModels.settings.getDefaults.mockResolvedValue({});
-    const missing = await createDaemonDroidSession({
-      target: { kind: 'new', cwd: 'C:\\workspace' },
-      interactionHandler: cancellingRuntimeInteractionHandler,
-      getDroid: async () => withoutModels.droid,
-    });
-    expect(missing.availableModels).toBeUndefined();
-
-    // A defaults read failure degrades the catalog only; the session
-    // itself is still created.
-    const failing = createDroidMock();
-    failing.settings.getDefaults.mockRejectedValue(new Error('defaults unavailable'));
-    const session = await createDaemonDroidSession({
-      target: { kind: 'new', cwd: 'C:\\workspace' },
-      interactionHandler: cancellingRuntimeInteractionHandler,
-      getDroid: async () => failing.droid,
-    });
-    expect(session.id).toBe('session-1');
     expect(session.availableModels).toBeUndefined();
+    expect((await session.readAvailableModels?.())?.map(({ id }) => id)).toEqual([
+      'model-1', 'custom:Probe-0', 'model-gone',
+    ]);
+    expect(mock.models.list).toHaveBeenCalledExactlyOnceWith({ includeDisabled: true });
+    expect(mock.settings.getDefaults).not.toHaveBeenCalled();
   });
 
-  it('serves the BYOK model catalog through the runtime', async () => {
+  it('reports catalog errors separately and allows an explicit retry', async () => {
+    const mock = createDroidMock();
+    mock.models.list.mockRejectedValueOnce(new Error('private upstream response'));
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
+    });
+    await expect(runtime.initialize('C:/workspace')).resolves.toMatchObject({ status: 'available' });
+    await expect(runtime.readModelCatalog()).rejects.toThrow('Droid model catalog could not be loaded.');
+    await expect(runtime.readModelCatalog()).resolves.toMatchObject({ status: 'available' });
+    expect(mock.sessions.create).toHaveBeenCalledOnce();
+  });
+
+  it('serves builtin, custom and disabled model capabilities through the runtime', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
       createSdkSession: createDaemonSessionFactory(async () => mock.droid),
     });
-    await runtime.initialize('C:\\workspace');
-
-    // Only rows the SDK marks isCustom surface in the picker; the
-    // built-in row gates reasoning-effort validation host-side.
+    await runtime.initialize('C:/workspace');
     await expect(runtime.readModelCatalog()).resolves.toEqual({
       status: 'available',
       items: [
-        {
-          id: 'custom:Probe-0',
-          displayName: 'Probe Model',
-          supportedReasoningEfforts: ['off', 'high'],
-        },
+        { id: 'model-1', displayName: 'Model 1', supportedReasoningEfforts: ['off', 'high'],
+          defaultReasoningEffort: 'high', isCustom: false, supportsImages: true, supportsImageGeneration: false, disabled: false },
+        { id: 'custom:Probe-0', displayName: 'Probe Model', supportedReasoningEfforts: ['off', 'high'],
+          defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false },
+        { id: 'model-gone', displayName: 'Retired Model', supportedReasoningEfforts: ['off', 'high'],
+          defaultReasoningEffort: 'high', isCustom: false, supportsImages: true, supportsImageGeneration: false,
+          disabled: true, disabledReason: 'no longer offered' },
       ],
     });
   });
 
-  it('keeps the catalog on replacement sessions without re-reading defaults', async () => {
+  it('keeps a loaded catalog and its refresh reader on replacement sessions', async () => {
     const mock = createDroidMock();
     const session = await createDaemonDroidSession({
-      target: { kind: 'new', cwd: 'C:\\workspace' },
-      interactionHandler: cancellingRuntimeInteractionHandler,
-      getDroid: async () => mock.droid,
+      target: { kind: 'new', cwd: 'C:/workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid,
     });
-
+    const catalog = await session.readAvailableModels?.();
     const replaced = await session.compact?.({});
-
-    expect(mock.settings.getDefaults).toHaveBeenCalledOnce();
-    expect(replaced?.session.availableModels?.map(({ id }) => id)).toEqual([
-      'model-1',
-      'custom:Probe-0',
-    ]);
+    expect(replaced?.session.availableModels).toEqual(catalog);
+    expect(mock.models.list).toHaveBeenCalledOnce();
+    await replaced?.session.readAvailableModels?.();
+    expect(mock.models.list).toHaveBeenCalledTimes(2);
+    expect(mock.settings.getDefaults).not.toHaveBeenCalled();
   });
 
   it('passes worktree: true to daemon create only when the target asks for it', async () => {
@@ -868,8 +842,9 @@ describe('createDaemonDroidSession', () => {
         return;
       }
 
-      if (failure === 'lease-conflict') {
-        await expect(replace()).rejects.toThrow('open in another window (pid 4242)');
+      if (operation === 'rewind') {
+        await expect(replace()).rejects.toMatchObject({ name: 'RewindAttachmentError', newSessionId: 'session-2', messageId: 'message-9',
+          cause: failure === 'lease-conflict' ? expect.objectContaining({ message: expect.stringContaining('open in another window (pid 4242)') }) : primary });
       } else {
         await expect(replace()).rejects.toBe(primary);
       }
@@ -1155,42 +1130,27 @@ function createDroidMock(streamImplementation?: () => AsyncGenerator<DroidStream
     addServer: vi.fn(async () => ({ success: true })),
     removeServer: vi.fn(async () => ({ success: true })),
   };
-  const settings = {
-    getDefaults: vi.fn(
-      async (): Promise<{ availableModels?: unknown[] }> => ({
-        availableModels: [
-          catalogModel({
-            id: 'model-1',
-            displayName: 'Model 1',
-            isCustom: false,
-          }),
-          catalogModel({
-            id: 'custom:Probe-0',
-            displayName: 'Probe Model',
-            isCustom: true,
-          }),
-          catalogModel({
-            id: 'model-gone',
-            displayName: 'Retired Model',
-            isCustom: false,
-            disabled: true,
-            disabledReason: 'no longer offered',
-          }),
-        ],
-      }),
-    ),
-  };
+  const catalog = [
+    catalogModel({ id: 'model-1', displayName: 'Model 1', isCustom: false }),
+    catalogModel({ id: 'custom:Probe-0', displayName: 'Probe Model', isCustom: true }),
+    catalogModel({ id: 'model-gone', displayName: 'Retired Model', isCustom: false,
+      disabled: true, disabledReason: 'no longer offered' }),
+  ];
+  const settings = { getDefaults: vi.fn(async () => ({ availableModels: catalog })) };
+  const models = { list: vi.fn(async (_options?: { includeDisabled?: boolean }) => catalog) };
   return {
     created,
     sessions,
     skills,
     mcp,
     settings,
+    models,
     droid: {
       sessions,
       skills,
       mcp,
       settings,
+      models,
     } as unknown as DaemonApi,
   };
 }

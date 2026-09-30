@@ -1,10 +1,10 @@
-import { type AvailableModelConfig } from '@factory/droid-sdk/node';
+import { type ModelInfo } from '@factory/droid-sdk/node';
 
 import { type FactoryDroidSession } from './sessionTypes';
 
 export function createCapturedSessionView(
   session: FactoryDroidSession,
-  availableModels?: readonly AvailableModelConfig[],
+  availableModels?: readonly ModelInfo[],
 ): FactoryDroidSession {
   const catalog = availableModels ?? session.availableModels;
   const view: FactoryDroidSession = {
@@ -42,11 +42,17 @@ function copyOptionalSessionMethods(
   view: FactoryDroidSession,
   session: FactoryDroidSession,
 ): void {
+  if (typeof session.appendHistoryMessage === 'function') {
+    view.appendHistoryMessage = (text) => session.appendHistoryMessage!(text);
+  }
   if (typeof session.readAvailableModels === 'function') {
     view.readAvailableModels = () => session.readAvailableModels!();
   }
   if (typeof session.readWorkingState === 'function') {
     view.readWorkingState = () => session.readWorkingState!();
+  }
+  if (typeof session.readTurnOutcome === 'function') {
+    view.readTurnOutcome = (backendTurnId) => session.readTurnOutcome!(backendTurnId);
   }
   if (typeof session.readMissionSnapshot === 'function') {
     view.readMissionSnapshot = () => session.readMissionSnapshot!();

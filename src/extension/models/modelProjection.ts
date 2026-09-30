@@ -92,8 +92,7 @@ export function findLoadedModel(
   if (match.disabledReason !== null)
     return {
       runtimeId: null,
-      loadMessage:
-        'Droid has disabled this model. Check its configuration and account policy.',
+      loadMessage: match.disabledReason,
     };
   if (match.provider !== row.provider)
     return {

@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { handleSystemPrompt } from './capabilities/systemPrompt';
 import { emitIdeState, reconnectControllerIde } from './ideIntegration';
 import {
   handleAttachmentAddImage,
@@ -90,6 +91,10 @@ export function dispatchChatMessage(
   message: Exclude<WebviewToHostMessage, { type: 'btw.prepare' | 'btw.ask' }>,
 ): void {
   switch (message.type) {
+    case 'systemPrompt.read':
+    case 'systemPrompt.save':
+      void handleSystemPrompt(controller, message);
+      return;
     case 'ide.refresh':
       if (message.sessionId === controller.sessionState.sessionId) emitIdeState(controller);
       return;

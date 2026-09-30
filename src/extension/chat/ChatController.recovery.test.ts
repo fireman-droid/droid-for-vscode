@@ -818,9 +818,9 @@ describe('ChatController', () => {
     );
   });
 
-  it('re-emits a permission replayed during a daemon resume and keeps it answerable', async () => {
+  it.each(['waiting-for-user', 'idle'] as const)('keeps a replayed permission answerable when the registry reports %s', async initialState => {
     const recovery = await seededRecoveryStore('saved-session');
-    let workingState: RuntimeSessionWorkingState = 'waiting-for-user';
+    let workingState: RuntimeSessionWorkingState = initialState;
     let permission: Promise<RuntimePermissionResult> | null = null;
     const history: SessionHistoryLoader = {
       loadHistory: vi

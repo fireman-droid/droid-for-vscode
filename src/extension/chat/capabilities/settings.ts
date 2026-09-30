@@ -54,9 +54,14 @@ export function handleSettingUpdate(
     return;
   }
   if (!isSettingUpdateSupported(ctl, message)) {
+    const selectedId = message.field === 'modelId' || message.field === 'specModeModelId'
+      ? message.value : message.field === 'specModeReasoningEffort'
+        ? ctl.metadata.settings.value?.specModeModelId ?? ctl.metadata.settings.value?.modelId
+        : ctl.metadata.settings.value?.modelId;
+    const model = ctl.metadata.modelCatalog.items.find((item) => item.id === selectedId);
     ctl.emitSessionDiagnostic(
       'settings-update-unsupported',
-      SETTINGS_UPDATE_UNSUPPORTED_MESSAGE,
+      model?.disabled ? model.disabledReason! : SETTINGS_UPDATE_UNSUPPORTED_MESSAGE,
     );
     return;
   }
@@ -139,7 +144,7 @@ export function isSettingUpdateSupported(
     return false;
   }
   if (message.field === 'modelId' || message.field === 'specModeModelId') {
-    return ctl.metadata.modelCatalog.items.some(({ id }) => id === message.value);
+    return ctl.metadata.modelCatalog.items.some(({ id, disabled }) => id === message.value && !disabled);
   }
   // Reasoning effort must be supported by the model it applies to:
   // the spec drafting model for spec efforts (falling back to the
@@ -151,6 +156,7 @@ export function isSettingUpdateSupported(
   const model = ctl.metadata.modelCatalog.items.find(({ id }) => id === targetModelId);
   return (
     model !== undefined &&
+    !model.disabled &&
     message.value !== null &&
     model.supportedReasoningEfforts.includes(message.value)
   );

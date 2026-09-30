@@ -196,6 +196,12 @@ export interface ModelCatalogItem {
   readonly id: string;
   readonly displayName: string;
   readonly supportedReasoningEfforts: readonly SessionReasoningEffort[];
+  readonly defaultReasoningEffort: SessionReasoningEffort;
+  readonly isCustom: boolean;
+  readonly supportsImages: boolean;
+  readonly supportsImageGeneration: boolean;
+  readonly disabled: boolean;
+  readonly disabledReason?: string;
 }
 
 export type ModelCatalogState =

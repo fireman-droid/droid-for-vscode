@@ -16,6 +16,7 @@ import type {
 } from './api';
 import { DaemonTurnStream } from './sessionStream';
 import type { RecoveredDaemonTurn } from './recoveredTurn';
+import { projectDurableTurnOutcome, type RuntimeTurnOutcome } from '../turnOutcome';
 
 export class RetainedDaemonSession implements DaemonSessionHandle {
   private snapshot: SessionSettings | undefined;
@@ -45,6 +46,19 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
 
   get cwd(): string | undefined {
     return this.cwdSnapshot;
+  }
+
+  async readTurnOutcome(backendTurnId: string): Promise<RuntimeTurnOutcome | null> {
+    this.assertAttached();
+    await this.waitUntilReady();
+    this.assertAttached();
+    const result = await this.controller.loadSession({
+      ...this.controller.getSessionStateManager().getSessionLoadOptions(this.id),
+      sessionId: this.id, agentTurnOutcomeTurnId: backendTurnId,
+    });
+    this.assertAttached();
+    this.initialize(result.settings, result.cwd);
+    return projectDurableTurnOutcome(this.id, backendTurnId, result.agentTurnOutcome);
   }
 
   initialize(settings: SessionSettings, cwd: string | undefined): void {

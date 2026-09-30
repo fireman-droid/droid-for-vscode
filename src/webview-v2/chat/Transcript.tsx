@@ -19,6 +19,7 @@ import { createOperationSummarySelector } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 import { useTranscriptReceipt } from './useTranscriptReceipt';
+import { MissionWorkers } from './MissionWorkers';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 export const LiveTranscript = memo(function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
@@ -141,7 +142,9 @@ export function Transcript({
       {historyNotice ? <p role="note" className="mb-2 text-xs text-muted-foreground">{historyNotice}</p> : null}
       {items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
     </>}
-    trailingContent={<>{interaction}{running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
+    trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
+      result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
+      {interaction}{running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
       <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
       <span>{state.turn?.compacting ? 'Compacting conversation…' : waitingForSubagents
         ? `Waiting for ${activeTools.length === 1 ? 'subagent' : `${activeTools.length} subagents`}…`

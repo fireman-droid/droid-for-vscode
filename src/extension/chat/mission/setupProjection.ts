@@ -71,7 +71,7 @@ export function readMissionControlSetupAuthority(
       status: ctl.metadata.modelCatalog.status,
       items:
         ctl.metadata.modelCatalog.status === 'ready'
-          ? ctl.metadata.modelCatalog.items
+          ? ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(({ id, displayName, supportedReasoningEfforts }) => ({ id, displayName, supportedReasoningEfforts }))
           : [],
     },
   );
@@ -129,7 +129,7 @@ export function emitMissionSetupCapabilities(ctl: SetupProjectionPort): void {
     ctl.metadata.modelCatalog.status === 'ready'
       ? {
           status: 'ready',
-          items: ctl.metadata.modelCatalog.items,
+          items: ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(({ id, displayName, supportedReasoningEfforts }) => ({ id, displayName, supportedReasoningEfforts })),
         }
       : {
           status: ctl.metadata.modelCatalog.status,

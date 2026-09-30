@@ -1,6 +1,6 @@
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 
-export const MANAGEMENT_SECTIONS = ['skills', 'plugins', 'marketplaces', 'mcp', 'defaults', 'terminals', 'updates'] as const;
+export const MANAGEMENT_SECTIONS = ['skills', 'plugins', 'marketplaces', 'mcp', 'defaults', 'terminals', 'updates', 'worktrees', 'archive', 'history-note'] as const;
 export type ManagementSection = typeof MANAGEMENT_SECTIONS[number];
 export interface ManagementOpenMessage {
   readonly type: 'capabilities.manage';

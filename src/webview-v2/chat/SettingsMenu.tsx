@@ -11,6 +11,7 @@ import { ContextPanel } from './ContextPanel';
 import { McpPanel } from './McpPanel';
 import { PluginsPanel, SkillsPanel } from './CapabilityPanels';
 import { Input } from '../ui/input';
+import { SystemPromptDialog } from './SystemPromptDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
 import { rankNameMatches } from './composer/settingsSearch';
 import { useAttachmentActions } from './attachments/useAttachmentActions';
@@ -53,6 +54,7 @@ export function SettingsMenu({ state, port, blocked, page, onPageChange, onCompa
   const actions = useCapabilityActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status });
   const attachments = useAttachmentActions(port, state.sessionId, state.connection.status);
   const [query, setQuery] = useState('');
+  const [systemPromptOpen, setSystemPromptOpen] = useState(false);
   const open = page !== null && pages.includes(page);
   const disabled = blocked || state.sessionId === null || state.connection.status !== 'connected';
   const settingsDisabled = disabled || state.interactions.length > 0 || state.settings.value === null || state.settings.status === 'updating';
@@ -69,8 +71,11 @@ export function SettingsMenu({ state, port, blocked, page, onPageChange, onCompa
     { name: 'Model and reasoning', page: 'model' }, { name: 'Context', page: 'context' },
     { name: 'Skills', page: 'skills' }, { name: 'MCP servers', page: 'mcp' }, { name: 'Plugins', page: 'plugins' },
     { name: 'Droid terminals', page: 'runtime' }, { name: 'Update Droid', page: 'runtime' },
+    { name: 'Managed worktrees', page: 'runtime' }, { name: 'Force archive another session', page: 'runtime' },
+    { name: 'Save a history-only note', page: 'runtime' },
   ].filter((item) => item.name.toLocaleLowerCase().includes(normalized));
-  const attachMatches = [
+  const actionMatches = [
+    { name: 'System prompt for new sessions', run: () => setSystemPromptOpen(true) },
     { name: 'Attach files', run: attachments.handleAttachFiles },
     { name: 'Attach active editor', run: attachments.handleAttachEditor },
     { name: 'Attach selection', run: attachments.handleAttachSelection },
@@ -87,6 +92,7 @@ export function SettingsMenu({ state, port, blocked, page, onPageChange, onCompa
     else if (page === 'context') actions.handleContextRefresh();
   }, [page, actions.handleSkillsRefresh, actions.handleMcpRefresh, actions.handlePluginsRefresh, actions.handleContextRefresh]);
   return (
+    <><SystemPromptDialog open={systemPromptOpen} onOpenChange={setSystemPromptOpen} port={port} />
     <Popover open={open} onOpenChange={(value) => onPageChange(value ? 'settings' : null)}>
       <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Session settings" disabled={disabled}><Settings /></Button></PopoverTrigger>
       <PopoverContent side="top" className="w-80 space-y-3">
@@ -94,9 +100,9 @@ export function SettingsMenu({ state, port, blocked, page, onPageChange, onCompa
         {searching ? <div role="region" aria-label="Matching actions" className="max-h-80 overflow-auto">
           {[...staticMatches, ...skillMatches.map((item) => ({ name: `${item.name} · Skill`, page: 'skills' })), ...serverMatches.map((item) => ({ name: `${item.name} · MCP`, page: 'mcp' }))].map((item) =>
             <Button key={item.name} variant="ghost" className="h-auto w-full justify-start whitespace-normal py-2 text-left" onClick={() => go(item.page)}>{item.name}</Button>)}
-          {attachMatches.map((item) => <Button key={item.name} variant="ghost" className="w-full justify-start" disabled={disabled || state.interactions.length > 0}
+          {actionMatches.map((item) => <Button key={item.name} variant="ghost" className="w-full justify-start" disabled={disabled || state.interactions.length > 0}
             onClick={() => { onPageChange(null); item.run(); }}>{item.name}</Button>)}
-          {staticMatches.length + attachMatches.length + skillMatches.length + serverMatches.length === 0 ? <p className="text-xs text-muted-foreground">No matching actions.</p> : null}
+          {staticMatches.length + actionMatches.length + skillMatches.length + serverMatches.length === 0 ? <p className="text-xs text-muted-foreground">No matching actions.</p> : null}
         </div> : <>
         <Tabs value={page === 'model' ? 'settings' : page ?? 'settings'} onValueChange={onPageChange}>
           <TabsList aria-label="Settings sections" className="flex-wrap">{pages.filter((name) => name !== 'model').map((name) => (
@@ -124,14 +130,21 @@ export function SettingsMenu({ state, port, blocked, page, onPageChange, onCompa
             onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'terminals' }); }}>Droid session terminals…</Button>
           <Button variant="outline" className="w-full justify-start" disabled={disabled}
             onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'updates' }); }}>Droid updates…</Button>
+          <Button variant="outline" className="w-full justify-start" disabled={disabled}
+            onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'worktrees' }); }}>Managed worktrees…</Button>
+          <Button variant="outline" className="w-full justify-start" disabled={disabled}
+            onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'archive' }); }}>Force archive another session…</Button>
+          <Button variant="outline" className="w-full justify-start" disabled={disabled}
+            onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'history-note' }); }}>Save a history-only note…</Button>
           <p className="text-muted-foreground">Session terminals require daemon mode. They are separate from the read-only tool-output mirror.</p>
         </section> : null}
         {page === 'settings' ? <Button variant="outline" size="sm" disabled={disabled}
           onClick={() => { onPageChange(null); port.postMessage({ type: 'capabilities.manage', section: 'defaults' }); }}>Droid defaults & advanced settings…</Button> : null}
+        {page === 'settings' ? <Button variant="outline" size="sm" onClick={() => { onPageChange(null); setSystemPromptOpen(true); }}>System prompt for new sessions…</Button> : null}
           </TabsContent>
         </Tabs>
         </>}
       </PopoverContent>
-    </Popover>
+    </Popover></>
   );
 }

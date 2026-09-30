@@ -116,6 +116,7 @@ export class ParentFollowup {
     ctl.turnState.turnGeneration += 1;
     ctl.turnState.turn = {
       turnId: active.turnId, status: 'streaming', activity: createTurnActivityState(), recovery: true,
+      ...(backendId === null ? {} : { backendTurnId: backendId }),
       transportRecovery: {
         messageId: backendId ?? active.turnId,
         get completion() { return active.completion; },

@@ -102,11 +102,13 @@ function baseSnapshot(
           id: MODEL_ID,
           displayName: 'GPT-5.6',
           supportedReasoningEfforts: ['low', 'medium', 'high'],
+          defaultReasoningEffort: 'low', isCustom: false, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
         {
           id: 'factory/claude-opus-4-6',
           displayName: 'Claude Opus 4.6',
           supportedReasoningEfforts: ['low', 'medium', 'high'],
+          defaultReasoningEffort: 'low', isCustom: false, supportsImages: true, supportsImageGeneration: false, disabled: false,
         },
       ],
     },

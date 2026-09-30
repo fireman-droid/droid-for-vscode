@@ -102,7 +102,8 @@ export function sameSessionTarget(
     left.kind === right.kind &&
     left.cwd === right.cwd &&
     (left.kind === 'new'
-      ? right.kind === 'new' && (left.worktree === true) === (right.worktree === true)
+      ? right.kind === 'new' && (left.worktree === true) === (right.worktree === true) &&
+        JSON.stringify(left.systemPrompt) === JSON.stringify(right.systemPrompt)
       : right.kind === 'resume' && left.sessionId === right.sessionId)
   );
 }

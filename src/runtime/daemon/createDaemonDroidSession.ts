@@ -2,7 +2,7 @@ import type { DaemonApi, DaemonSessionHandle } from './api';
 import {
   ContextStatsAccuracy,
   SettingsLevel,
-  type AvailableModelConfig,
+  type ModelInfo,
   type SessionSettings,
   type UpdateSessionSettingsOptions,
 } from '@factory/droid-sdk';
@@ -31,9 +31,7 @@ import {
  * Raw notifications use the same public controller as the retained session.
  * Browser MCP OAuth remains unavailable until its complete flow is enabled.
  *
- * The model catalog comes from `settings.getDefaults()`, whose
- * `availableModels` carries the same full metadata process mode
- * captures from initialize/load responses. Catalog reads happen separately
+ * The model catalog comes from the public `models.list()` API. Reads happen separately
  * from session startup, so a failed read can be retried on the same session.
  */
 export function createDaemonSessionFactory(
@@ -132,6 +130,7 @@ export async function createDaemonDroidSession(options: {
 
   const session = await droid.sessions.create({
     cwd: options.target.cwd,
+    ...(options.target.systemPrompt === undefined ? {} : { systemPrompt: options.target.systemPrompt }),
     // Native daemon channel: create (or reuse) a git worktree and run
     // the session there. Branch and directory naming are daemon-owned;
     // the actual working directory comes back as `session.cwd`.
@@ -264,11 +263,8 @@ function recordReplacementCleanupFailure(
  */
 async function readDaemonAvailableModels(
   droid: DaemonApi,
-): Promise<readonly AvailableModelConfig[] | undefined> {
-  const models = (await droid.settings.getDefaults()).availableModels;
-  // Rows the daemon marks disabled are not selectable; drop them
-  // rather than surfacing dead picker entries.
-  return models?.filter((model) => model.disabled !== true);
+): Promise<readonly ModelInfo[]> {
+  return droid.models.list({ includeDisabled: true });
 }
 
 const noopLease: SessionLeaseHooks = {
@@ -311,7 +307,7 @@ export function adaptConnectedDaemonSession(
   session: DaemonSessionHandle,
   callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
-  availableModels?: readonly AvailableModelConfig[],
+  availableModels?: readonly ModelInfo[],
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSession {
   const outcome = lease.acquire(session.id);
@@ -333,7 +329,7 @@ function adaptDaemonSession(
   session: DaemonSessionHandle,
   callbacks: RuntimeInteractionCallbacks,
   lease: SessionLeaseHooks,
-  availableModels?: readonly AvailableModelConfig[],
+  availableModels?: readonly ModelInfo[],
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
@@ -450,6 +446,9 @@ function adaptDaemonSession(
     onNotification: (listener) => session.onNotification(listener),
     readMissionSnapshot: () => session.readMissionSnapshot(),
     subscribeMissionSnapshot: (listener) => session.subscribeMissionSnapshot(listener),
+    ...(session.readTurnOutcome === undefined ? {} : {
+      readTurnOutcome: (backendTurnId: string) => session.readTurnOutcome!(backendTurnId),
+    }),
     listCommands: async () => projectCommandRows(await droid.commands.list(session.id)),
     get id() {
       return session.id;

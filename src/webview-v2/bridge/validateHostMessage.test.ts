@@ -1004,7 +1004,7 @@ describe('readHostMessage', () => {
         items: [
           {
             ...readyModelCatalog().items[0],
-            supportedReasoningEfforts: ['high', 'high'],
+            supportedReasoningEfforts: ['high', 'high'], defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
           },
         ],
       },
@@ -1019,7 +1019,7 @@ describe('readHostMessage', () => {
           {
             id: ' model-a',
             displayName: 'Model A',
-            supportedReasoningEfforts: ['high'],
+            supportedReasoningEfforts: ['high'], defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
           },
         ],
       },
@@ -1034,7 +1034,7 @@ describe('readHostMessage', () => {
           {
             id: 'model-a',
             displayName: 'Model\u0000A',
-            supportedReasoningEfforts: ['high'],
+            supportedReasoningEfforts: ['high'], defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
           },
         ],
       },
@@ -1539,7 +1539,7 @@ describe('readHostMessage', () => {
           {
             id: 'model-a',
             displayName: 'Model A',
-            supportedReasoningEfforts: [],
+            supportedReasoningEfforts: ['high'], defaultReasoningEffort: 'none', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
           },
         ],
       },
@@ -1726,7 +1726,7 @@ describe('readHostMessage', () => {
         {
           id: 'model-a',
           displayName: 'Model A',
-          supportedReasoningEfforts: ['high'],
+          supportedReasoningEfforts: ['high'], defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
           [Symbol('extra')]: true,
         },
       ],
@@ -4610,7 +4610,7 @@ function readyModelCatalog() {
       {
         id: 'factory/gpt-5.6-sol',
         displayName: 'GPT-5.6 Sol',
-        supportedReasoningEfforts: ['medium', 'high'] as const,
+        supportedReasoningEfforts: ['medium', 'high'] as const, defaultReasoningEffort: 'medium', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false,
       },
     ],
   };

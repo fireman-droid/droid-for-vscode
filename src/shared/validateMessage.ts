@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from './bridgeMessages';
+import { parseSystemPromptRequest } from './protocol/systemPromptProtocol';
 import { parseIdeRequest } from './protocol/ideProtocol';
 import { parseManagementOpen } from './protocol/managementProtocol';
 import { parseFileReadDiffMessage, parseFileOpenTurnDiffMessage } from './protocol/inlineDiffProtocol';
@@ -119,6 +120,8 @@ const parseSubagentMessage: WebviewMessageParser = (value) =>
   parseSubagentWebviewMessage(value) ?? undefined;
 
 const WEBVIEW_MESSAGE_PARSERS = {
+  'systemPrompt.read': parseSystemPromptRequest,
+  'systemPrompt.save': parseSystemPromptRequest,
   'ide.reconnect': parseIdeRequest,
   'ide.refresh': parseIdeRequest,
   'capabilities.manage': parseManagementOpen,

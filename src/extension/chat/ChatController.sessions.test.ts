@@ -567,7 +567,7 @@ describe('ChatController', () => {
     const stub = createBtwSidecarStub(['An ', 'answer.']);
     const factory = vi.fn<BtwSidecarFactory>(async () => stub.sidecar);
     const { controller, messages } = createController(
-      () => createMockRuntime(),
+      () => createModelReadyRuntime(),
       undefined,
       createCatalog([catalogEntry('session-1')]),
       undefined,
@@ -642,7 +642,7 @@ describe('ChatController', () => {
   it('discards the btw fork when the session binding changes', async () => {
     const stub = createBtwSidecarStub();
     const { controller, messages } = createController(
-      () => createMockRuntime(),
+      () => createModelReadyRuntime(),
       undefined,
       createCatalog([catalogEntry('session-1')]),
       undefined,
@@ -1263,3 +1263,12 @@ describe('ChatController', () => {
     expect(JSON.stringify(messages)).not.toContain('payload-must-not-leak');
   });
 });
+
+function createModelReadyRuntime() {
+  const runtime = createMockRuntime();
+  runtime.readModelCatalog.mockResolvedValue({ status: 'available', items: [{
+    id: 'model-1', displayName: 'Model One', supportedReasoningEfforts: ['high'],
+    defaultReasoningEffort: 'high', isCustom: false, supportsImages: true, supportsImageGeneration: false, disabled: false,
+  }] });
+  return runtime;
+}

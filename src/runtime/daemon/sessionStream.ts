@@ -41,7 +41,7 @@ export class DaemonTurnStream {
   private interrupted = false;
   private transportSuspended = false;
   private recoveredCompletion: DroidResultMessage | undefined;
-  private readonly turnId = randomUUID();
+  private readonly turnId: string;
   private readonly tracker: StreamStateTracker;
   private readonly donePromise: Promise<void>;
   private resolveDone!: () => void;
@@ -54,6 +54,7 @@ export class DaemonTurnStream {
     private readonly waitUntilReady: () => Promise<void> = async () => {},
     private readonly retainRecovery: (recovery: RecoveredDaemonTurn) => () => void = () => () => {},
   ) {
+    this.turnId = options.backendTurnId ?? randomUUID();
     this.tracker = new StreamStateTracker({
       sessionId,
       startedAt: Date.now(),

@@ -194,6 +194,11 @@ export type RuntimeEvent =
       operationDiff?: OperationDiff;
     }
   | {
+      /** Exact id supplied to the daemon for this submission; not the Host UI turn id. */
+      type: 'turn-identity';
+      backendTurnId: string;
+    }
+  | {
       type: 'user-message';
       messageId: string;
     }

@@ -51,6 +51,7 @@ import { appendHistoryTurnChanges } from './historyTurnChanges';
 import { sessionMessageTurnId } from '../../shared/transcript/sessionMessageIdentity';
 import { historyMessageAncestry } from './historyMessageAncestry';
 import { isMessageTimestamp } from '../../shared/protocol/messageTimestamp';
+import { HISTORY_NOTE_ID_PREFIX, MAX_HISTORY_NOTE_LENGTH } from '../../shared/protocol/historyNote';
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
@@ -233,6 +234,17 @@ function projectMessage(
     return;
   }
   if (!isVisibleMessage(projection, value)) {
+    return;
+  }
+
+  if (value.visibility === 'user_only' && typeof value.id === 'string' && value.id.startsWith(HISTORY_NOTE_ID_PREFIX) &&
+    Array.isArray(value.content)) {
+    const rawText = value.content.filter((block) => isStrictRecord(block) && block.type === 'text' && typeof block.text === 'string')
+      .map((block) => block.text as string).join('\n');
+    const text = rawText.slice(0, MAX_HISTORY_NOTE_LENGTH);
+    if (text.length < rawText.length) projection.partial = true;
+    if (text) appendTranscriptItem(projection, { id: stableTranscriptId('diagnostic', 'history-note', value.id),
+      kind: 'diagnostic', turnId: null, severity: 'info', code: 'history-note', message: text });
     return;
   }
 

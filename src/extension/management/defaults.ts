@@ -7,7 +7,7 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
   for (;;) {
     context.assertCurrent();
     const defaults = await context.droid.settings.getDefaults();
-    const selection = await choose('Droid defaults for new sessions', [
+    const selection = await choose('Droid user defaults and runtime settings', [
       { label: 'Default model', value: 'modelId' as const, description: defaults.modelId ?? 'Droid default' },
       { label: 'Default reasoning', value: 'reasoningEffort' as const, description: defaults.reasoningEffort ?? 'Model default' },
       { label: 'Default mode', value: 'interactionMode' as const, description: defaults.interactionMode ?? 'Droid default' },
@@ -15,6 +15,12 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
       { label: 'Cloud session sync', value: 'cloudSessionSync' as const, description: defaults.cloudSessionSync === undefined ? 'Droid default' : defaults.cloudSessionSync ? 'On' : 'Off' },
       { label: 'Run new sessions in worktrees', value: 'runInWorktree' as const, description: defaults.runInWorktree === undefined ? 'Droid default' : defaults.runInWorktree ? 'On' : 'Off' },
       { label: 'Default worktree directory', value: 'worktreeDirectory' as const },
+      { label: 'Anthropic 1-hour prompt cache', value: 'enableOneHourAnthropicCaching' as const,
+        description: defaults.enableOneHourAnthropicCaching === undefined ? 'Droid default' : defaults.enableOneHourAnthropicCaching ? 'On' : 'Off',
+        detail: 'User-wide setting for supported Anthropic requests; provider cache support and pricing apply.' },
+      { label: 'Ephemeral worktree retention limit', value: 'worktreeAutoDeleteLimit' as const,
+        description: defaults.worktreeAutoDeleteLimit === undefined ? 'Droid default' : String(defaults.worktreeAutoDeleteLimit),
+        detail: 'User-wide automatic cleanup budget. Persistent worktrees are excluded; existing ephemeral checkouts may be reclaimed.' },
       { label: 'Advanced defaults…', value: 'advanced' as const, description: 'Spec, compaction, subagent tiers, Mission and worktree settings' },
     ]);
     if (!selection) return;
@@ -44,6 +50,15 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
     } else if (selection.value === 'worktreeDirectory') {
       const folder = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: false, title: 'Default worktree parent directory' });
       if (folder?.[0]) patch = { worktreeDirectory: folder[0].fsPath };
+    } else if (selection.value === 'worktreeAutoDeleteLimit') {
+      const value = await vscode.window.showInputBox({
+        title: 'Ephemeral worktree retention limit', value: String(defaults.worktreeAutoDeleteLimit ?? ''),
+        prompt: 'Positive whole number; leave empty to restore Droid’s default. Applies to automatic cleanup of user-wide ephemeral worktrees.',
+        ignoreFocusOut: true,
+        validateInput: (raw) => raw.trim() === '' || /^[1-9]\d*$/.test(raw.trim()) && Number.isSafeInteger(Number(raw))
+          ? undefined : 'Enter a positive whole number or leave empty for the Droid default.',
+      });
+      if (value !== undefined) patch = parseDefaultSettingsPatch({ worktreeAutoDeleteLimit: value.trim() === '' ? null : Number(value) }) ?? undefined;
     } else {
       const value = await choose(selection.label, [{ label: 'Enable', value: true }, { label: 'Disable', value: false }]);
       if (value) patch = { [selection.value]: value.value };
@@ -51,7 +66,7 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
     if (!patch) continue;
     const warning = patch.cloudSessionSync === true
       ? 'Enable cloud session sync? Droid may upload session data to Factory, subject to your account and organization policy.'
-      : `Change Droid defaults: ${Object.keys(patch).join(', ')}? These defaults affect new sessions; the active chat is not switched.`;
+      : defaultSettingsConfirmation(patch);
     if (!await confirm(context, warning)) continue;
     const fresh = await context.droid.settings.getDefaults();
     context.assertCurrent(true);
@@ -70,8 +85,15 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
     }
     requireSuccess(await context.droid.settings.updateDefaults(patch), 'the defaults update');
     context.assertCurrent();
-    await changed('Droid confirmed the default settings update. Existing sessions keep their own settings.');
+    await changed('Droid confirmed the user settings update. Session model defaults apply to new sessions; runtime cache and cleanup settings follow Droid’s user-wide configuration. The active chat model was not switched.');
   }
+}
+
+function defaultSettingsConfirmation(patch: DefaultSettingsPatch): string {
+  const notes: string[] = [];
+  if ('enableOneHourAnthropicCaching' in patch) notes.push('Anthropic prompt caching is a user-wide setting for supported requests; cache availability and pricing are controlled by the provider. It does not switch the current model.');
+  if ('worktreeAutoDeleteLimit' in patch) notes.push('The ephemeral worktree limit controls Droid’s user-wide automatic cleanup budget, including existing ephemeral worktrees. Persistent worktrees are excluded. Lowering the limit can allow Droid to reclaim older checkouts.');
+  return `Change Droid settings: ${Object.keys(patch).join(', ')}?\n${notes.length ? notes.join('\n') : 'Session defaults affect new sessions; the active chat is not switched.'}`;
 }
 
 function readPatch(value: string): DefaultSettingsPatch | null {

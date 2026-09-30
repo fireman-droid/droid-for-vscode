@@ -56,15 +56,16 @@ export function createModelManagementGateway(
   return {
     list: async () => (await getDaemon()).customModels.list(),
     loaded: async () => {
-      const defaults = await (await getDaemon()).settings.getDefaults();
-      return (defaults.availableModels ?? [])
+      const models = await (await getDaemon()).models.list({ includeDisabled: true });
+      return models
         .filter((model) => model.isCustom)
         .map((model) => ({
           id: model.id,
           displayName: model.displayName,
           provider: model.modelProvider,
-          disabledReason:
-            'disabledReason' in model ? (model.disabledReason ?? null) : null,
+          disabledReason: model.disabled === true
+            ? model.disabledReason.replace(/[\u0000-\u001f\u007f-\u009f]/gu, ' ').trim().slice(0, 512)
+            : null,
         }));
     },
     save: async (input) => {

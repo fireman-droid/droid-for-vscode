@@ -1,4 +1,5 @@
 import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { parseSystemPromptResponse } from '../../shared/protocol/systemPromptProtocol';
 import { parseHostIde } from '../../shared/protocol/ideProtocol';
 import { parseFileDiffMessage, parseFileDiffInvalidateMessage } from '../../shared/protocol/inlineDiffProtocol';
 import {
@@ -76,6 +77,7 @@ const parseCustomModelsMessage: HostMessageParser = (value) =>
   parseCustomModelsHostMessage(value) ?? undefined;
 
 const HOST_MESSAGE_PARSERS = {
+  'systemPrompt.state': parseSystemPromptResponse,
   'host.ide': parseHostIde,
   'host.snapshot': parseHostSnapshot,
   'host.connection': parseHostConnection,

@@ -8,12 +8,12 @@ import { startParentFollowupSync } from './parentFollowupHistory';
 const controllers: ChatController[] = [];
 afterEach(async () => { for (const ctl of controllers.splice(0)) await ctl.dispose(); vi.useRealTimers(); });
 
-async function harness() {
+async function harness(terminalStatus: 'completed' | 'cancelled' | 'failed' = 'completed') {
   let running = true;
   let parentRunning = false;
   const summary = { type: 'scout', description: 'Long research', status: 'running' as const };
   const loadInvocations = vi.fn(async () => [{ parentToolUseId: 'task-1', childSessionId: 'child-1',
-    summary: { ...summary, status: running ? 'running' as const : 'completed' as const } }]);
+    summary: { ...summary, status: running ? 'running' as const : terminalStatus } }]);
   const history: SessionHistoryLoader = {
     loadHistory: vi.fn<SessionHistoryLoader['loadHistory']>(async () => ({ status: 'available', state: { historyStatus: 'complete', truncated: false,
       transcript: [{ kind: 'assistant', id: 'answer', turnId: 'auto', text: 'Long research finished' }] } })),
@@ -33,6 +33,15 @@ async function harness() {
 }
 
 describe('background delegation watch lifetime', () => {
+  it.each(['completed', 'cancelled', 'failed'] as const)('retains a %s child summary with no output or error text', async status => {
+    const h = await harness(status);
+    h.settleChild();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.messages).toContainEqual(expect.objectContaining({ type: 'subagent.update',
+      toolUseId: 'task-1', subagent: expect.objectContaining({ status }) }));
+    expect(h.controller.sessionState.runtime?.sendTurn).not.toHaveBeenCalled();
+  });
+
   it('keeps one serialized ledger poll beyond ten minutes and settles the actual child', async () => {
     const h = await harness();
     await vi.advanceTimersByTimeAsync(11 * 60_000);

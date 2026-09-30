@@ -118,7 +118,7 @@ export function ModelPopover({
             <ReasoningEditor
               model={selected}
               current={scopedReasoning}
-              disabled={disabled}
+              disabled={disabled || selected.disabled}
               {...(isSpecView ? { defaultOptionLabel: 'Model default' } : {})}
               onSelect={selectEffort}
             />
@@ -154,7 +154,7 @@ export function ModelPopover({
               </div>
             ) : null}
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
-              Search BYOK models
+              Search models
             </label>
             <div className="dvx-model-search-shell">
               <Search aria-hidden="true" />
@@ -172,7 +172,7 @@ export function ModelPopover({
             <div
               className="dvx-model-list"
               role="list"
-              aria-label={isSpecView ? 'Spec drafting models' : 'BYOK models'}
+              aria-label={isSpecView ? 'Spec drafting models' : 'Available models'}
             >
               {isSpecView ? (
                 <>
@@ -211,6 +211,7 @@ export function ModelPopover({
                           disabled={
                             disabled ||
                             selected === undefined ||
+                            selected.disabled ||
                             selected.supportedReasoningEfforts.length === 0
                           }
                           onClick={() => setEditingReasoning(true)}
@@ -239,7 +240,7 @@ export function ModelPopover({
                       className="dvx-model-choice"
                       aria-label={`${model.displayName}, ${model.id}`}
                       title={model.id}
-                      disabled={disabled}
+                      disabled={disabled || model.disabled}
                       onClick={() => {
                         if (isSelected) {
                           return;
@@ -262,6 +263,11 @@ export function ModelPopover({
                             : formatReasoningLabel(scopedReasoning)}
                         </span>
                       ) : null}
+                      <span className="basis-full text-[11px] leading-4 text-muted-foreground">
+                        {model.isCustom ? 'Custom' : 'Built-in'} · {model.supportsImages ? 'Images' : 'Text only'}
+                        {model.supportsImageGeneration ? ' · Image generation' : ''}
+                      </span>
+                      {model.disabled ? <span className="basis-full break-words text-[11px] leading-4">{model.disabledReason}</span> : null}
                     </Button>
                     {isSelected ? (
                       <>
@@ -270,7 +276,7 @@ export function ModelPopover({
                           className="dvx-model-edit"
                           aria-label={`Edit reasoning for ${modelLabel}`}
                           disabled={
-                            disabled || model.supportedReasoningEfforts.length === 0
+                            disabled || model.disabled || model.supportedReasoningEfforts.length === 0
                           }
                           onClick={() => setEditingReasoning(true)}
                         >
@@ -285,8 +291,8 @@ export function ModelPopover({
               {filtered.length === 0 ? (
                 <p className="dvx-popover-message">
                   {modelCatalog.items.length === 0
-                    ? 'No BYOK models available.'
-                    : 'No matching BYOK models.'}
+                    ? 'No models available.'
+                    : 'No matching models.'}
                 </p>
               ) : null}
             </div>
@@ -390,7 +396,7 @@ function ReasoningEditor({
             key={effort}
             className="dvx-option-row dvx-reasoning-option"
           >
-            <span className="dvx-reasoning-label">{formatReasoningLabel(effort)}</span>
+            <span className="dvx-reasoning-label">{formatReasoningLabel(effort)}{effort === model.defaultReasoningEffort ? ' (default)' : ''}</span>
             <RadioGroupItem value={effort} aria-label={formatReasoningLabel(effort)} />
           </label>
         ))}

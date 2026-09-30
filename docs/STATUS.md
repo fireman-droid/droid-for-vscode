@@ -5,6 +5,41 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## SDK 0.9.1 能力接入
+
+- Process 与 daemon 改用正式模型目录，保留内置／自定义模型、禁用原因、默认推理档位、
+  图片输入／生成能力。主聊天、Spec、侧聊与模型管理使用同一目录，禁用模型由 UI 和 Host
+  双向拒绝；目录读取失败可在当前会话重试，不靠重启会话刷新。
+- 聊天设置新增系统提示弹窗，可保留 Droid 默认、追加指令或替换系统提示。配置保存在
+  当前 VS Code 用户配置档，只用于新建聊天、Worktree 会话和 Mission；恢复／分叉沿用
+  会话原提示。保存以 Host 确认为准，失败保留草稿，界面不展示尚未确认的成功状态。
+- daemon 在发送前保存真实后端回合 ID；断线／重载后通过 SDK 持久回合结果核对完成、
+  取消和失败，未知 ID 不推测成功，不重发用户消息。恢复期间的 Ask／权限请求即便
+  注册表暂为 idle 仍保持可答，旧 checkpoint 没有后端 ID 时保留旧兼容恢复路径。
+- Mission 主聊天新增“查看子代理”入口，任务执行中可直接打开真实 worker 的持续更新
+  查看器，无须先进入 Mission 详情页。普通 Task 子代理入口保留；Mission 显示来自
+  后端的任务及 worker 状态，不能仅凭 feature 为 in_progress 就显示 worker 正在运行。
+  入口经过现有 feature／revision／worker 身份核验，过期或不可用时显示反馈并允许刷新。
+- Runtime 设置新增 Worktree 管理及强制归档入口。清理前展示路径、分支、变更、
+  本地提交与会话占用并要求确认；当前工作区、运行中／等待输入的会话目录不能删除，
+  确认后重新核对状态，保留本地与远程分支。强制归档只隐藏会话，不停止其执行。
+- Droid defaults 可配置 Anthropic 一小时缓存和临时 Worktree 自动清理上限，写入后
+  经 SDK 确认；清理上限可能影响已有临时 Worktree，界面说明其范围。
+- “Save a history-only note” 仅 Process 模式可用；通过公开 `DroidClient.appendMessages`
+  保存 `user_only` 记录，不启动模型、不进入模型上下文。历史呈现为只读记录，不能作为
+  用户提问编辑重发。daemon SDK 尚未开放此接口，入口明确说明限制，不写历史文件绕过。
+- 隔离模型验收使用临时空工作区和合成内容，共 5 次请求：首个内置模型执行失败；
+  使用已配置 Luna 后 4 次成功，验证追加／替换系统提示、恢复／分叉保留原提示，以及
+  关闭重开后按原 ID 读取持久完成结果、未知 ID 返回空。未操作用户窗口或发送业务源码。
+- Process 追加记录另做无模型隔离 CLI 验收，重载同一会话确认记录恰一条、正文一致、
+  可见性为 user_only；合成会话通过官方归档接口清理。系统提示、模型目录、持久结果、
+  交互恢复、管理确认与追加历史的定向测试通过；新增 Mission 聊天入口只做构建／类型
+  检查，运行中点击和视觉效果仍需安装后在 VS Code 中人工验收。
+- 最终 `pnpm run package:vsix` 包含的 `typecheck`、`lint:budgets`、共享 UI 与生产构建
+  全部通过；`pnpm run verify:vsix` 通过 165 条目和扩展入口校验。统一包已全局安装到
+  Microsoft VS Code，清单确认 SDK 0.9.1，162 个安装载荷与 VSIX SHA-256 一致。
+  安装 CLI 的 `url.parse` 弃用提示未阻断安装。Reload Window 后加载本次代码。
+
 ## Mission 会话重连兼容性
 
 - SDK 固定为官方 `@factory/droid-sdk@0.9.1`，支持 CLI 已产生的

@@ -32,10 +32,10 @@ describe('handleMissionStart', () => {
     const ctl = {
       getWorkspaceContext: () => ({ cwd: 'D:/repo', trusted: true }),
       missionGateway: {
-        start: () =>
+        start: vi.fn(() =>
           new Promise((resolve) => {
             resolveStart = resolve;
-          }),
+          })),
       },
       sessionState: {
         connection: { status: 'connected' },
@@ -44,7 +44,7 @@ describe('handleMissionStart', () => {
         runtimeGeneration: 1,
         disposed: false,
       },
-      metadata: { modelCatalog: { status: 'ready', items: [] } },
+      metadata: { modelCatalog: { status: 'ready', items: [{ id: 'model-a', disabled: true }] } },
       turnState: { turn: null },
       interactions: { hasPending: () => false },
       missionState: { missionStartInProgress: false },
@@ -59,6 +59,7 @@ describe('handleMissionStart', () => {
     };
 
     handleMissionStart(ctl as never, message);
+    expect(ctl.missionGateway.start).toHaveBeenCalledWith(expect.objectContaining({ catalog: [] }));
     resolveStart({
       status: 'ready',
       sessionId: 'mission-1',

@@ -25,7 +25,7 @@ describe('automatic parent follow-up projection', () => {
   it('adopts a passive turn before its first delta and completes without sending a prompt', async () => {
     const h = await harness(); h.start();
     h.event({ type: 'text-delta', text: 'The child found six events.' });
-    expect(h.controller.turnState.turn).toMatchObject({ status: 'streaming', recovery: true });
+    expect(h.controller.turnState.turn).toMatchObject({ status: 'streaming', recovery: true, backendTurnId: 'automatic-1' });
     expect(h.messages.at(-1)).toMatchObject({ type: 'assistant.delta', delta: 'The child found six events.' });
     h.event(successfulTurn());
     expect(h.controller.turnState.turn?.status).toBe('completed');

@@ -70,6 +70,7 @@ function reduceHostMessage(
         : advance(state, event.sequence);
 
     case 'customModels.state':
+    case 'systemPrompt.state':
 
     case 'customModels.discovery':
 

@@ -78,11 +78,13 @@ export async function applyModelToChat(
   }, signal);
   const refreshed = readModelApplyState(ctl);
   if (!refreshed.canApply) throw new ModelManagerError(refreshed.message);
-  if (!ctl.metadata.modelCatalog.items.some((item) => item.id === runtimeId)) {
+  const model = ctl.metadata.modelCatalog.items.find((item) => item.id === runtimeId);
+  if (model === undefined) {
     throw new ModelManagerError(
       'This model is saved but is not loaded in the chat catalog.',
     );
   }
+  if (model.disabled) throw new ModelManagerError(model.disabledReason!);
   handleSettingUpdate(ctl, {
     type: 'session.setting.update',
     sessionId,

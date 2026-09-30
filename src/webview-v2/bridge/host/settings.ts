@@ -313,10 +313,16 @@ export function parseModelCatalog(value: unknown): ModelCatalogState | undefined
 export function parseModelCatalogItem(value: unknown): ModelCatalogItem | undefined {
   if (
     !isStrictRecord(value) ||
-    !hasExactKeys(value, ['id', 'displayName', 'supportedReasoningEfforts']) ||
+    !hasExactKeys(value, ['id', 'displayName', 'supportedReasoningEfforts', 'defaultReasoningEffort',
+      'isCustom', 'supportsImages', 'supportsImageGeneration', 'disabled'], ['disabledReason']) ||
     !isSafeModelId(value.id) ||
     !isSafeDisplayName(value.displayName) ||
-    !isExactArray(value.supportedReasoningEfforts, 1, SESSION_REASONING_EFFORTS.length)
+    !isExactArray(value.supportedReasoningEfforts, 0, SESSION_REASONING_EFFORTS.length) ||
+    !isSessionReasoningEffort(value.defaultReasoningEffort) ||
+    typeof value.isCustom !== 'boolean' || typeof value.supportsImages !== 'boolean' ||
+    typeof value.supportsImageGeneration !== 'boolean' || typeof value.disabled !== 'boolean' ||
+    (value.disabled ? !isBoundedString(value.disabledReason, 512) || !value.disabledReason.trim() :
+      value.disabledReason !== undefined)
   ) {
     return undefined;
   }
@@ -329,9 +335,16 @@ export function parseModelCatalogItem(value: unknown): ModelCatalogItem | undefi
     seen.add(effort);
     efforts.push(effort);
   }
+  if (efforts.length > 0 && !seen.has(value.defaultReasoningEffort)) return undefined;
   return {
     id: value.id,
     displayName: value.displayName,
     supportedReasoningEfforts: efforts,
+    defaultReasoningEffort: value.defaultReasoningEffort,
+    isCustom: value.isCustom,
+    supportsImages: value.supportsImages,
+    supportsImageGeneration: value.supportsImageGeneration,
+    disabled: value.disabled,
+    ...(value.disabledReason === undefined ? {} : { disabledReason: value.disabledReason as string }),
   };
 }

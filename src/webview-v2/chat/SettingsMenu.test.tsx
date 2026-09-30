@@ -18,8 +18,8 @@ const confirmed: ConfirmedSessionSettings = {
 const catalog: ModelCatalogState = {
   status: 'ready',
   items: [
-    { id: 'session-model', displayName: 'Session model', supportedReasoningEfforts: ['low', 'medium'] },
-    { id: 'draft-model', displayName: 'Draft model', supportedReasoningEfforts: ['high'] },
+    { id: 'session-model', displayName: 'Session model', supportedReasoningEfforts: ['low', 'medium'], defaultReasoningEffort: 'low', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false },
+    { id: 'draft-model', displayName: 'Draft model', supportedReasoningEfforts: ['high'], defaultReasoningEffort: 'high', isCustom: true, supportsImages: true, supportsImageGeneration: false, disabled: false },
   ],
 };
 

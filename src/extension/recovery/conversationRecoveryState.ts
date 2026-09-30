@@ -34,6 +34,7 @@ export interface ConversationDisplaySnapshot {
   readonly transcript: HostTranscriptState;
   readonly turn: {
     readonly turnId: string;
+    readonly backendTurnId?: string;
     readonly status: TurnStatus;
     readonly error?: string;
   } | null;

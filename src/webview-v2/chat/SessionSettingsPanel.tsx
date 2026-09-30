@@ -48,7 +48,8 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
         label={spec ? 'Spec model' : 'Model'}
         value={spec ? confirmed.specModeModelId ?? '' : confirmed.modelId}
         placeholder="Same as session"
-        options={models.map((model) => ({ label: model.displayName, value: model.id }))}
+        options={models.map((model) => ({ label: model.displayName, value: model.id, disabled: model.disabled,
+          description: model.disabledReason ?? `${model.isCustom ? 'Custom' : 'Built-in'} · ${model.supportsImages ? 'Images' : 'Text only'}${model.supportsImageGeneration ? ' · Image generation' : ''}` }))}
         disabled={disabled || catalog.status !== 'ready'}
         onChange={(value) => onUpdate(spec ? { field: 'specModeModelId', value } : { field: 'modelId', value })}
       />
@@ -57,14 +58,15 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
         value={spec ? confirmed.specModeReasoningEffort ?? '' : confirmed.reasoningEffort}
         placeholder="Model default"
         options={choices(selected?.supportedReasoningEfforts ?? [])}
-        disabled={disabled || catalog.status !== 'ready' || !selected?.supportedReasoningEfforts.length}
+        disabled={disabled || catalog.status !== 'ready' || selected?.disabled || !selected?.supportedReasoningEfforts.length}
         onChange={(value) => onUpdate(spec ? { field: 'specModeReasoningEffort', value } : { field: 'reasoningEffort', value })}
       />
       {spec ? <div className="flex flex-wrap gap-1">
         <Button variant="outline" size="sm" disabled={disabled || confirmed.specModeModelId == null} onClick={() => onUpdate({ field: 'specModeModelId', value: null })}>Use session model</Button>
         <Button variant="outline" size="sm" disabled={disabled || confirmed.specModeReasoningEffort == null} onClick={() => onUpdate({ field: 'specModeReasoningEffort', value: null })}>Use model default</Button>
       </div> : null}
-      {catalog.status === 'ready' && models.length === 0 ? <p role="status" className="text-xs text-muted-foreground">{catalog.items.length === 0 ? 'No BYOK models available.' : 'No matching models.'}</p> : null}
+      {selected?.disabled ? <p role="status" className="text-xs text-muted-foreground">{selected.disabledReason}</p> : null}
+      {catalog.status === 'ready' && models.length === 0 ? <p role="status" className="text-xs text-muted-foreground">{catalog.items.length === 0 ? 'No models available.' : 'No matching models.'}</p> : null}
       {catalog.status !== 'ready' ? <p role={catalog.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">{catalog.status === 'loading' ? 'Loading available models…' : catalog.message}</p> : null}
       <Button variant="ghost" size="sm" onClick={() => { setSpec(!spec); setQuery(''); }}>{spec ? 'Back to session settings' : 'Spec drafting…'}</Button>
       {settings.status === 'updating' ? <p role="status" className="text-xs text-muted-foreground">Waiting for Droid to confirm settings…</p> : null}

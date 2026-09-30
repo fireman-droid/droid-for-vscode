@@ -1,8 +1,10 @@
 import {
   SDK_VERSION,
-  type AvailableModelConfig,
+  type ModelInfo,
   type DroidObservability,
 } from '@factory/droid-sdk/node';
+import { randomUUID } from 'node:crypto';
+import type { RuntimeTurnOutcome } from './turnOutcome';
 import { projectGitDiff } from './capabilities/gitBranchDiff';
 import {
   addMcpServer,
@@ -257,9 +259,12 @@ export class FactoryDroidRuntime implements DroidRuntime {
     });
 
     try {
+      const backendTurnId = typeof session.readTurnOutcome === 'function' ? randomUUID() : undefined;
+      if (backendTurnId !== undefined) yield { type: 'turn-identity', backendTurnId };
       for await (const sdkEvent of session.stream(text, {
         includePartialMessages: true,
         abortSignal: cancellation.signal,
+        ...(backendTurnId === undefined ? {} : { backendTurnId }),
         ...projectStreamAttachments(attachments),
       })) {
         if (this.disposed || this.activeTurn !== turn) {
@@ -455,12 +460,30 @@ export class FactoryDroidRuntime implements DroidRuntime {
     });
   }
 
+  readTurnOutcome(backendTurnId: string): Promise<RuntimeTurnOutcome | null> {
+    const session = this.requireSession();
+    return session.readTurnOutcome?.(backendTurnId) ?? Promise.resolve(null);
+  }
+
   supportsBackgroundTurns(): boolean {
     return (
       !this.disposed &&
       this.session !== null &&
       typeof this.session.readWorkingState === 'function'
     );
+  }
+
+  supportsHistoryAppend(): boolean { return !this.disposed && typeof this.session?.appendHistoryMessage === 'function'; }
+
+  async appendHistoryMessage(text: string): Promise<{ messageId: string }> {
+    const session = this.requireSession();
+    if (this.activeTurn !== null) throw new Error('Finish the current turn before saving a history note.');
+    if (!session.appendHistoryMessage) throw new Error('This backend does not expose history-only append.');
+    const outcome = await session.appendHistoryMessage(text);
+    this.adoptSession(outcome.session, session.availableModels);
+    if (outcome.error) throw outcome.error;
+    if (!outcome.messageId) throw new Error('Droid did not confirm the saved history note.');
+    return { messageId: outcome.messageId };
   }
 
   rewind(params: RuntimeRewindParams): Promise<RuntimeRewindResult> {
@@ -614,10 +637,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
 
   private adoptSession(
     nextSession: FactoryDroidSession,
-    availableModels?: readonly AvailableModelConfig[],
+    availableModels?: readonly ModelInfo[],
   ): void {
     this.disarmSubagentWatch();
+    const readModels = this.session?.readAvailableModels?.bind(this.session);
     this.session = createCapturedSessionView(nextSession, availableModels);
+    // Process replacements expose a fresh SDK session; keep its independent
+    // catalog reader without retaining or restarting the old worker.
+    this.session.readAvailableModels ??= readModels;
     this.missionSnapshots.attach(this.session);
     if (this.sessionTarget !== null) {
       this.sessionTarget = {

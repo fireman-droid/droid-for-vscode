@@ -38,7 +38,7 @@ export function handleMissionStart(
       workspaceId: ownerCwd,
       cwd: ownerCwd,
       message,
-      catalog: catalog.items,
+      catalog: catalog.items.filter((model) => !model.disabled),
     })
     .then(async (result) => {
       const ownerIsCurrent = () =>

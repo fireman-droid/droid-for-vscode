@@ -67,6 +67,7 @@ export type MissionGatewayResult =
     };
 
 export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
+  readonly getSystemPrompt?: () => import('../../../shared/protocol/systemPromptProtocol').SessionSystemPrompt | undefined;
   readonly getDroid: () => Promise<DaemonApi>;
   readonly preferences: MissionPreferenceStore;
   readonly prepareInteractions: () => {
@@ -194,6 +195,7 @@ export class MissionGateway {
       session = await createMissionOrchestrator({
         droid,
         cwd: input.cwd,
+        systemPrompt: this.options.getSystemPrompt?.(),
         modelId: input.message.orchestrator.modelId,
         reasoningEffort: input.message.orchestrator
           .reasoningEffort as MissionReasoningEffort,

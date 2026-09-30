@@ -348,19 +348,22 @@ function parseImageArtifact(value: unknown): ConversationImageArtifact | undefin
 function parseDisplayTurn(
   value: unknown,
 ): NonNullable<ConversationDisplaySnapshot['turn']> | undefined {
-  if (!isStrictRecord(value) || !hasExactKeys(value, ['turnId', 'status'], ['error'])) {
+  if (!isStrictRecord(value) || !hasExactKeys(value, ['turnId', 'status'], ['error', 'backendTurnId'])) {
     return undefined;
   }
   const turnId = dataValue(value, 'turnId');
   const status = dataValue(value, 'status');
   const error = dataValue(value, 'error');
+  const backendTurnId = dataValue(value, 'backendTurnId');
   return !isId(turnId) ||
+    (backendTurnId !== undefined && !isId(backendTurnId)) ||
     !isOneOf(status, TURN_STATUSES) ||
     (error !== undefined && typeof error !== 'string')
     ? undefined
     : {
         turnId,
         status,
+        ...(backendTurnId === undefined ? {} : { backendTurnId }),
         ...(error === undefined ? {} : { error }),
       };
 }

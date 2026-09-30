@@ -7,6 +7,7 @@ import type {
   FactoryDroidEvents,
   ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
+import type { RuntimeTurnOutcome } from '../turnOutcome';
 
 export type DaemonNotification = Parameters<FactoryDroidEvents['sessionNotification']>[0];
 export type DaemonTerminalEvent =
@@ -23,6 +24,7 @@ export type DaemonStreamOptions = Omit<
   'includePartialMessages'
 > & {
   includePartialMessages?: boolean;
+  backendTurnId?: string;
 };
 
 export interface DaemonSessionHandle extends ConnectedDroidSession {
@@ -30,6 +32,7 @@ export interface DaemonSessionHandle extends ConnectedDroidSession {
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;
   readMissionSnapshot(): unknown;
   subscribeMissionSnapshot(listener: (snapshot: unknown) => void): () => void;
+  readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
 }
 
 /** Only the resources used by this extension, on one Runtime-owned connection. */
@@ -64,6 +67,12 @@ export interface DaemonApi {
     ): Promise<DaemonSessionHandle>;
   };
   readonly settings: ConnectedDroid['settings'];
+  readonly models: ConnectedDroid['models'];
+  readonly worktrees: {
+    list: DaemonSessionController['listManagedWorktrees'];
+    inspectDeletion: DaemonSessionController['inspectWorktreeDeletion'];
+    cleanup: DaemonSessionController['cleanupWorktree'];
+  };
   readonly terminals: ConnectedDroid['terminals'];
   readonly updates: ConnectedDroid['updates'];
   readonly automations: ConnectedDroid['automations'];
