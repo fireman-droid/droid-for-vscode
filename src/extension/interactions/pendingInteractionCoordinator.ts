@@ -20,6 +20,8 @@ import {
   type RuntimePermissionRequest,
   type RuntimePermissionResult,
 } from '../../runtime/events/runtimeInteractions';
+import type { RuntimeAutonomyLevel } from '../../runtime/DroidRuntime';
+import { planApprovalOptions } from './planApprovalOptions';
 
 export { MAX_PENDING_INTERACTIONS } from '../../shared/protocol/interactions';
 
@@ -66,6 +68,7 @@ export class PendingInteractionCoordinator {
   constructor(
     private readonly onRequest: (projection: PendingInteractionProjection) => void,
     private readonly onClosed: (projection: ClosedInteractionProjection) => void,
+    private readonly readAutonomy?: (sessionId: string) => RuntimeAutonomyLevel | undefined,
   ) {}
 
   createRuntimeHandler(): RuntimeInteractionHandler {
@@ -127,7 +130,10 @@ export class PendingInteractionCoordinator {
       return cancellingRuntimeInteractionHandler.requestPermission(runtimeRequest);
     }
 
-    const request = projectPermissionRequest(requestId, runtimeRequest);
+    const request = projectPermissionRequest(requestId, {
+      ...runtimeRequest,
+      options: planApprovalOptions(runtimeRequest, this.readAutonomy?.(context.sessionId)),
+    });
     return new Promise<RuntimePermissionResult>((resolve) => {
       const entry: PendingInteraction = {
         kind: 'permission',

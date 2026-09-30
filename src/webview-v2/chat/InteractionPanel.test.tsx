@@ -8,6 +8,23 @@ import { InteractionPanel } from './InteractionPanel';
 afterEach(cleanup);
 
 describe('V2 request responses', () => {
+  it('submits the Host-preferred autonomy outcome from the default Approve plan button', async () => {
+    const request: PendingInteraction = {
+      sessionId: 'session', turnId: 'turn', request: {
+        kind: 'permission', requestId: 'plan',
+        tools: [{ toolUseId: 'plan', toolName: 'ExitSpecMode', confirmationKind: 'exit_spec_mode', title: 'Plan' }],
+        options: [
+          { label: 'Continue with high autonomy', value: 'proceed_auto_run_high', requiresEditedSpec: false },
+          { label: 'Continue with approvals', value: 'proceed_once', requiresEditedSpec: false },
+        ],
+      },
+    };
+    const actions = { onAnswer: vi.fn(), onPermission: vi.fn(), onOpenPlan: vi.fn() };
+    render(<InteractionPanel requests={[request]} actions={actions} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Approve plan' }));
+    expect(actions.onPermission).toHaveBeenCalledExactlyOnceWith(request, 'proceed_auto_run_high', undefined);
+  });
+
   it('renders a plan as Markdown and preserves the chosen secondary approval identity', async () => {
     const user = userEvent.setup();
     const request: PendingInteraction = {

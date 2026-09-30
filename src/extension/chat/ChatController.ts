@@ -221,6 +221,8 @@ export class ChatController {
           ...(result === undefined ? {} : { result }),
         });
       },
+      (sessionId) => sessionId === this.sessionState.sessionId
+        ? this.metadata.settings.value?.autonomyLevel : undefined,
     );
   }
   subscribe(listener: ChatControllerListener): DisposableSubscription {

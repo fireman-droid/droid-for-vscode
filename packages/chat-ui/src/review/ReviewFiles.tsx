@@ -5,7 +5,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/selection';
-import { Slider, ToggleGroup, ToggleGroupItem } from '../ui/controls';
+import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
+import { ResizeHandle } from '../ui/resize-handle';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useVirtualList } from '../ui/useVirtualList';
 type FileRow = { readonly key: string; readonly directory: string; readonly file?: ReviewFile };
@@ -22,7 +23,22 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
   const [tree, setTree] = useState(false);
   const [unreviewed, setUnreviewed] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [width, setWidth] = useState<number | undefined>();
+  const [width, setWidth] = useState(224);
+  const [maxWidth, setMaxWidth] = useState(440);
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const container = panel.current?.parentElement;
+    if (!container) return;
+    const narrow = window.matchMedia('(max-width: 700px)');
+    const measure = () => setMaxWidth(Math.min(440, Math.floor(container.clientWidth * (narrow.matches ? .8 : .45))));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    narrow.addEventListener('change', measure);
+    return () => { observer.disconnect(); narrow.removeEventListener('change', measure); };
+  }, []);
+  const minWidth = Math.min(200, maxWidth);
+  const visibleWidth = Math.min(maxWidth, Math.max(minWidth, width));
   const query = useDeferredValue(filter.toLowerCase());
   const previousFilter = useRef({ query, unreviewed, tree });
   const filtered = useMemo(() => files.filter((file) =>
@@ -78,17 +94,14 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     ref: virtual ? list.virtualizer.measureElement : undefined,
     style: { display: 'flow-root', ...(virtual ? { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` } : {}) } as CSSProperties,
   });
-  return <aside className="review-files" aria-label="Changed files" style={width ? { width } : undefined}>
+  return <aside ref={panel} className="review-files" aria-label="Changed files" style={{ width: visibleWidth }}>
     <div className="review-files-tools">
       <div className="review-file-search"><Search aria-hidden="true" />
         <Input className="h-7 pl-7 text-xs" type="search" aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(event) => setFilter(event.target.value)} />
       </div>
-      <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="File filters and width" data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
+      <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="File filters" data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
         <PopoverContent className="review-file-options" data-motion="anchored" align="start" sideOffset={6}>
           <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />Unreviewed only</label>
-          <div className="review-file-width-control"><span>Sidebar width</span>
-            <Slider className="review-file-width" aria-label="File sidebar width" min={200} max={440} step={10} value={[width ?? 224]} onValueChange={([value]) => setWidth(value)} />
-          </div>
         </PopoverContent>
       </Popover>
       <ToggleGroup type="single" className="review-file-layout" aria-label="File layout" value={tree ? 'tree' : 'list'} onValueChange={(value) => { if (value) setTree(value === 'tree'); }}>
@@ -131,5 +144,6 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => { setFilter(''); setUnreviewed(false); }}>Clear filters</Button> : null}
       </p> : null}
     </div>
+    <ResizeHandle value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label="Resize file sidebar" onValueChange={setWidth} />
   </aside>;
 });

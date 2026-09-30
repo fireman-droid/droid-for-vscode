@@ -21,7 +21,7 @@
   .review-range-counts b { color: var(--diff-remove-ink); font-weight: 400; }
   .review-progress { color: var(--muted-ink); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .review-body { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-  .review-files { display: flex; flex-direction: column; flex-shrink: 0; width: 224px; min-width: 200px; max-width: min(440px, 45vw); min-height: 0; overflow: hidden; resize: horizontal; border-right: 1px solid var(--panel-edge); background: var(--review-sidebar); }
+  .review-files { position: relative; display: flex; flex-direction: column; flex-shrink: 0; min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--panel-edge); background: var(--review-sidebar); }
   .review-files-tools { display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 4px 8px; }
   .review-files-tools > button { flex-shrink: 0; width: 24px; height: 28px; }
   .review-files-tools > button[data-active='true'] { color: var(--link-ink); background: var(--control-surface-active); }
@@ -35,11 +35,9 @@
   .review-file-search { position: relative; flex: 1; min-width: 0; }
   .review-file-search > svg { position: absolute; top: 50%; left: 8px; width: 12px; height: 12px; transform: translateY(-50%); color: var(--muted-ink); pointer-events: none; }
   .review-file-search input { width: 100%; height: 28px; min-height: 28px; padding-left: 26px; background: var(--review-canvas); font-size: 11px; border-radius: 4px; }
-  .review-file-options { width: 240px; }
+  .review-file-options { width: 200px; }
   .review-unreviewed { display: flex; align-items: center; gap: 8px; padding: 8px; color: var(--muted-ink); font-size: 12px; }
   .review-unreviewed:has([data-state='checked']) { color: var(--ink); }
-  .review-file-width-control { display: flex; flex-direction: column; gap: 12px; padding: 12px 8px; border-top: 1px solid var(--panel-edge); color: var(--muted-ink); font-size: 11px; }
-  .review-file-width-control .review-file-width { width: 100%; height: 16px; }
   .review-file-list { flex: 1; min-width: 0; min-height: 0; padding-bottom: 12px; overflow: auto; overflow-x: hidden; overscroll-behavior: contain; }
   .review-directory { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 32px; padding: 6px 10px; color: var(--muted-ink); text-align: left; font-size: 11px; }
   .review-directory svg { width: 13px; height: 13px; flex-shrink: 0; }
@@ -87,7 +85,7 @@
     .review-topbar { flex-wrap: wrap; gap: 4px; }
     .review-scope-trigger { width: 132px; }
     .review-range-counts { display: none; }
-    .review-files { position: absolute; inset: 0 auto 0 0; z-index: 3; width: 224px; min-width: 200px; max-width: 80vw; box-shadow: 8px 0 20px #0002; }
+    .review-files { position: absolute; inset: 0 auto 0 0; z-index: 3; box-shadow: 8px 0 20px #0002; }
   }
   @container (max-width: 640px) {
     .review-current-path { flex-basis: calc(100% - 30px); margin-right: 0; }

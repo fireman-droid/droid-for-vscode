@@ -77,10 +77,14 @@ describe('PlanDocumentController', () => {
     vi.useRealTimers();
   });
 
-  it('opens one Markdown document, syncs edits, and approves through proceed_edit', async () => {
+  it.each(['proceed_once', 'proceed_auto_run_medium'])(
+    'opens one Markdown document and submits its edits when the default approval is %s', async (approval) => {
     const states: unknown[] = [];
     const controller = new PlanDocumentController((state) => states.push(state));
-    controller.track('session-1', 'turn-1', request);
+    controller.track('session-1', 'turn-1', { ...request, options: [
+      { label: 'Approve', value: approval, requiresEditedSpec: false },
+      ...request.options.filter((option) => option.value !== approval),
+    ] });
     controller.open({ ...openMessage(), turnId: 'stale-turn' });
     expect(mocks.openTextDocument).not.toHaveBeenCalled();
     controller.open(openMessage());
@@ -110,7 +114,7 @@ describe('PlanDocumentController', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         requestId: 'plan-1',
-        selectedOption: 'proceed_once',
+        selectedOption: approval,
       }),
     ).toEqual({
       type: 'permission.respond',
