@@ -55,6 +55,7 @@ export function presentActivity({
   readonly waiting: ProcessWaiting | null;
 }) {
   const summary = summarizeActivityGroup(members);
+  const summaryLabel = [summary.countsLabel, ...summary.resultFacts].filter(Boolean).join(' · ');
   const wait =
     incomplete === null && messageRunning && tail && waiting?.turnId === turnId
       ? waiting
@@ -77,7 +78,7 @@ export function presentActivity({
       ? activeTool ? resolveToolAction(active?.toolName ?? '', activeTool.action) : 'Thinking'
       : 'Processing';
   } else {
-    action = summary.toolCount === 0 ? 'Thought' : summary.countsLabel;
+    action = summary.toolCount === 0 ? 'Thought' : summaryLabel;
   }
   const facts: string[] = [];
   const failed = summary.failedCount > 0 || (tail && incomplete === 'error');
@@ -99,7 +100,7 @@ export function presentActivity({
   return {
     running,
     action,
-    summary: summary.countsLabel,
+    summary: summaryLabel,
     target:
       running && wait === null && summary.runningCount > 0
         ? (activeTool?.target ?? null)

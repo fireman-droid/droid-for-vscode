@@ -1,3 +1,4 @@
+import { recordedFileDiffs } from './recordedFileDiffs';
 import { diffBytes, readTurnDiffContents } from '../changes/inlineDiff';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import type { ActiveScope } from './reviewCoordinatorSupport';
@@ -11,7 +12,7 @@ import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { describeDiffBytes } from '../changes/diffDiagnostics';
 import { applySdkPatch } from './reviewSdkPatch';
 import { recordedOperationVersion } from './reviewOperationScope';
-import type { ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
+import type { ReviewContext, ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
 import { recordedFileContent } from './recordedFileContent';
 
 export interface ReviewContentSource {
@@ -75,7 +76,7 @@ export async function reviewFileVersion(source: ReviewContentSource, scope: Acti
   catch (error) { current = isNotFound(error) ? null : Buffer.from('unavailable'); }
   return digest([scope.baseline, path, current === null ? '<deleted>' : current]);
 }
-export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: number) {
+export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: ReviewContext) {
   if (scope.recordedOperations) {
     if (!scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
     const matching = scope.recordedOperations.filter((entry) => entry.path === path &&
@@ -90,6 +91,13 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
         ...(submittedContent === undefined ? {} : { submittedContent }),
         ...(outcome === undefined ? {} : { outcome }), ...(message === undefined ? {} : { message }) });
       units += size;
+    }
+    if (context === 'all') {
+      const fullPatches = await recordedFileDiffs(source, scope, path, matching, 512_000 - units, recordedOperations.length);
+      for (let index = 0; index < recordedOperations.length; index++) {
+        const fullPatch = fullPatches.get(index);
+        if (fullPatch !== undefined) recordedOperations[index] = { ...recordedOperations[index]!, fullPatch };
+      }
     }
     const content = scope.operationUndoBlocked ? undefined : recordedFileContent(matching);
     return { version: recordedOperationVersion(matching),
@@ -110,7 +118,10 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
       ...describeDiffBytes(contents.before, contents.after) } });
   const version = scope.sdkPatches === undefined ? digest([scope.baseline, path, contents.before, contents.after]) :
     await reviewFileVersion(source, scope, path, true);
-  const full = await diffBytes(contents.before, contents.after, context);
+  const lines = context === 'all'
+    ? Math.max(contents.before.toString('utf8').split('\n').length, contents.after.toString('utf8').split('\n').length)
+    : context;
+  const full = await diffBytes(contents.before, contents.after, lines);
   return boundedPatch(version, full);
 }
 function boundedPatch(version: string, full: string) {

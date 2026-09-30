@@ -1,3 +1,4 @@
+import type { ReviewContext } from '../../shared/protocol/reviewPanelProtocol';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 
@@ -175,7 +176,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         );
     });
   }
-  async readFile(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: number }) {
+  async readFile(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: ReviewContext }) {
     await this.operation;
     const scope = this.requireScope(message);
     if (!scope) throw new Error('The review scope changed. Refresh the review.');

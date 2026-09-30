@@ -220,8 +220,8 @@ export async function replaceRuntime(
   }
 
   // Read persisted history alongside the native session handshake. Activation
-  // owns their common commit boundary; neither branch publishes a ready session
-  // alone, and both funnel failures into their return values.
+  // owns their common ready/checkpoint boundary; history may appear read-only
+  // while the native handshake continues.
   const [transcript, activation] = await Promise.all([
     prepareHistory(ctl, target, generation, phases),
     createInitializedRuntime(ctl, target, generation, phases),
@@ -312,9 +312,9 @@ export async function activateInitialRuntime(
   if (activation.status === 'failed') {
     if (failedResumeId) {
       ctl.sessionState.conversationId =
-        ctl.recoveryStore.resolveConversationId(failedResumeId) ?? null;
+        ctl.recoveryStore.resolveConversationId(failedResumeId) ?? failedResumeId;
       ctl.sessionState.sessionId = failedResumeId;
-      ctl.recoveryState.transcript = createHostTranscriptState('unavailable');
+      ctl.recoveryState.transcript = transcript;
       ctl.catalogState.sessions = ctl.effects.withActiveSession(
         ctl.catalogState.sessions,
       );

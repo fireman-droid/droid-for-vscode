@@ -33,6 +33,66 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
 
+### 编辑器补全的独立路径
+
+`src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
+Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
+文档/光标/关联上下文版本，也负责接续语言服务的候选文本。CompletionHistory 复用 Kilo 的
+匹配策略，保留 20 条/30 秒历史；CompletionRequests 分离调用者取消与网络取消，
+兼容请求在 100ms 交接窗口内可保留，并在新调用收集上下文时持有租约；已被输入的
+结果前缀会剔除，不匹配则按当前上下文重新请求。防抖以近期延迟限幅，错误分类退避。
+`completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
+返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
+显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
+
+普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
+ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
+getSnippets 排序裁剪、模型模板。启用补全时立即建立浏览/编辑跟踪，不等首次 FIM 请求。
+原生定义和近期修改补充与 Kilo 片段合并，按来源优先级去重后再套用模型模板与总预算。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
+复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
+LSP 查询跟随请求取消，从首次查询起共享 150ms 等待预算；超时来源不阻塞已就绪的其他片段，
+记录 context.timeout，下一次请求可重试，其他错误仍向调用边界传播。导入缓存每次核对语法树中的
+完整导入语句与位置，只改主体时复用；外部定义、配置或忽略规则变化清理依赖缓存，迟到结果不能
+写回新一代缓存。读取到的新关联文件加入现有 watcher。
+解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
+静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
+
+`CompletionContextService` 为 FIM 收集原生定义、近期编辑和打开文件（最多 6 文件/400ms），
+另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
+浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
+`CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
+Codestral 在文件中间和末尾均使用多文件模板保留关联定义；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
+避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
+Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
+
+`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、Ollama generate
+或 SiliconFlow 的 prefix/suffix FIM 扩展。Runtime 不引用 VS Code；共享 transport 提供
+取消、12 秒超时、大小限制与固定错误。当前完整响应收齐后再返回灰字。
+Host 从 SecretStorage 即时读取完整 endpoint 的 key；仅官方 Mercury FIM/Edit 两个地址共用，
+配置只接受用户级值。本地无认证服务不附认证头，不进入 Droid 聊天 Session。
+
+Kilo 源码固定为 `7d977bce994af36f0edf752cb53e3aefc7aeb214`，位于 autocomplete/kilo。
+新接入的 Continue 子树保留 Apache-2.0 声明，Kilo 自身为 MIT；llamaTokenizer 保留原作者
+belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分发。CLI 文件系统适配器
+未引入生产包。普通补全的后处理接入上游模型、重复与语言过滤，Droid 额外保留明确的
+围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
+
+NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
+启用补全期间持续记录编辑；FIM/Next Edit 切换只清待接受建议，停用时销毁跟踪器并清空编辑历史。
+Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式；预算优先保留完整编辑区域、
+光标及最新可容纳的完整 diff，再分配较旧历史、浏览片段和邻近完整代码行，不截断 diff，
+请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
+NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
+SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。
+普通文件按配置选择 FIM 或 Next Edit；Notebook 在官方 Mercury 模式切换为其 FIM endpoint。
+自动/手动与 snooze 时间戳同时约束 Provider 和连续预测；定时器只刷新状态，不自动插入代码。
+补全不经过 Webview/Bridge，也不进入聊天队列。聊天 daemon 仍在聊天视图首次解析时预热。
+
+### 历史内部会话过滤
+
+`src/runtime/editorAssistance/sessionIdentity.ts` 仅保留旧 `droid-editor-assistance` 标签识别，
+供历史、归档和搜索过滤使用；不再注册编辑器辅助入口或创建这类请求。
+
 ### 第一次阅读按这个顺序
 
 1. [extension.ts](../src/extension/extension.ts)：扩展启动时创建哪些服务，以及谁负责释放它们。
@@ -192,6 +252,10 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 | BTW 未发送文字、引用、图片和显式模型 | `chat/btw/useBtwPanel.ts` 与其 `useBtwImages` | 当前 session 的统一 owner；面板只接受受控值和回调，关闭仅隐藏，切会话清理 |
 | 密钥、OAuth 回调和原生终端输入 | Host/SDK | 原生入口处理，不经聊天 Bridge 或诊断正文 |
 
+历史用户图片携带所属 SDK `userMessageId`，不从内容块前后位置推断所属消息。
+`shared/transcript/userImageOwners.ts` 统一阅读展示、编辑附件和重发截断的归属判断，
+保留尚无 SDK 归属的实时回显与旧快照排列；显式归属缺失时不挪到邻近消息。
+
 表中描述主要负责路径，并非所有字段已经由私有方法独占修改：`chat/ideIntegration.ts`
 仍会更新连接/操作锁，`chat/mission/controller.ts` 仍会接管 Mission 的 Runtime 与会话身份。
 这些协调路径也必须核对身份和资源顺序，不能从状态文件位置推断只有一个写入者。
@@ -309,9 +373,18 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - 主输入与历史编辑共用 `chat/useAttachmentIngress.ts`；开始读取即同步增加准备计数，
   提交入口查询 `isPreparing()`，界面渲染数值只负责展示。切会话/取消使旧读取失效，
   不能以一次渲染前的数字判断当前附件已经就绪；BTW 使用同样的同步查询原则。
+- Review Bridge 的 context 支持 all；普通比较从已有完整版本生成全上下文补丁。
+  recordedFileDiffs 只用保存的 before/after 树核对同一会话的完整操作链，还原结果与
+  after 不符则保留原补丁；不会引入工作区当前文件替代历史基线。全文只随 Review 请求
+  有界传递，不写入聊天历史。改动锚点独立于延迟渲染块，未渲染区也保留跳转位置。
 - 公共 `review/DiffView.tsx` 继续分块呈现完整补丁，Unified 隐藏测宽只取最长可打印
   ASCII 行；Unicode/tab 行保留原生排版测量，不靠字符数推断不同字形宽度。
-- 工具结果按实际调用上下文有界投影；淘汰保留来源/原因，不等于执行失败或整段历史
+- 工具展示定义集中在 shared/transcript/toolCatalog.ts；Runtime 的 toolDetail 与
+  toolResultPreview 分别从实际输入提取目标、从完整结果提取预览及诊断摘要，实时和
+  history/toolResultHistory 共用。Bridge 沿 resultPreview 传递经验证的可选摘要，
+  Webview 复用既有 Activity 组件与分类定义，不另建工具名单。未知工具走通用文本预览；
+  执行命令、文件修改、计划、权限和委派继续由各自专属展示负责。
+- 工具结果按实际调用上下文有界投影；淘汰保留来源/原因及已有计数摘要，不等于执行失败或整段历史
   丢失。片段可从 Droid 历史重建，不以扩展全文缓存补造，未知敏感内容不能声称全已检测。
 
 ## Runtime 与 IDE 兼容点
@@ -338,8 +411,11 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   在该 daemon 生命周期内一起冻结，登记移除才清文件。依赖 CLI 私有行为，升级必须复核。
 - `persistedSessionMessages.ts` 只读已核实的 version-2 JSONL，以固定边界/文件身份
   验证并复用 SDK 转换。未知格式/不稳定读取回退 daemon 分页/Process，不改原文件。
-  `asyncHistoryProjection.ts` 让出长投影执行；目录 `SessionCatalogReader` 复用 Worker，
-  不增结果缓存。巨大单消息/整体 JSON 解析仍有同步成本，不能承诺固定延迟上界。
+  `asyncHistoryProjection.ts` 让出长投影执行；持久历史 `SessionHistoryReader` 在复用 Worker 中
+  读取、解析、修复并投影，只回传受限展示数据与分段耗时；目录 `SessionCatalogReader` 复用 Worker，
+  不增结果缓存。持久日志中的同步工作在历史 Worker 执行；不支持格式的 API 回退仍有
+  单消息解析成本，不能承诺固定延迟上界。历史先以只读状态展示，连接握手与恢复
+  检查点完成后才 ready；页面等待遮罩只覆盖尚未收到目标历史的阶段。
 - Context meter 的系统提示调整取自已核对 CLI，SDK 未提供同等公共常量；
   最近调用用量与字符估算分开，压缩只有明确 SDK 阶段才显示，自动压缩仍属于 Droid。
 - Rewind 已写文件而 attach 失败时只重试接管后继，避免二次恢复；待接管标记仅在
@@ -361,8 +437,8 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   取消不冒充已发送写入的回滚，不直接重写 settings.json。
 - 公共 UI 包只接受 props、回调和插槽；ESM/声明构建拒绝父仓库、Node、VS Code 与
   Factory 依赖。宿主注入剪贴板、Mermaid 与 Auto 主题；纯展示层不拥有业务状态机。
-- `esbuild.mjs` 构建 Host/目录 Worker，调用 `buildWebviewV2.mjs --production` 生成
-  五个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
+- `esbuild.mjs` 构建 Host/目录及历史 Worker，调用 `buildWebviewV2.mjs --production` 生成
+  Chat、Models、Mission、Viewer、Review 五个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
   保留脚本 nonce、零网络、延迟 Mermaid；Markdown Worker 仅增加 `worker-src blob:`。
 - `packages/chat-ui/scripts/thirdPartyNotices.mjs` 按实际构建依赖收集许可证，
   包内固定版本副本不能自动沿用到升级版本；法律注释、MIT、第三方条款及图标随包。

@@ -252,15 +252,7 @@ export class ChatController {
   handleWorkspaceContextChanged(): void {
     handleWorkspaceContextChanged(this);
   }
-  /**
-   * Editor-side entry for `droidvisx.addSelectionToChat`: stages a
-   * selection the command captured at invoke time, through the same
-   * pipeline as the webview `+` menu (mutual exclusion, staging
-   * limit, dedupe, and diagnostic semantics included). Returns false
-   * while no connected session can accept it yet, so the command
-   * keeps the capture and retries until the cold-starting view
-   * connects (QA v0.3 P1-1).
-   */
+  /** Stages an already captured selection when a connected chat can accept attachments. */
   stageCapturedEditorSelection(outcome: AttachmentCaptureOutcome): boolean {
     if (this.sessionState.disposed || this.sessionState.sessionId === null) {
       return false;

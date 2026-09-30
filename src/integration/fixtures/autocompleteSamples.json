@@ -1,0 +1,182 @@
+[
+  {
+    "id": "go-expression",
+    "language": "go",
+    "prefix": "package main\nimport \"fmt\"\n// invoice adds a fixed fee to the per-unit subtotal.\nfunc invoice(units, unitPrice, fee int) int {\n  return units * ",
+    "suffix": "\n}\nfunc main() {\n  if got := invoice(7, 13, 5); got != 96 { panic(fmt.Sprintf(\"want 96, got %d\", got)) }\n  if got := invoice(2, 11, 3); got != 25 { panic(fmt.Sprintf(\"want 25, got %d\", got)) }\n  fmt.Println(\"PASS go-expression 96 25\")\n}\n",
+    "references": [],
+    "expectedInsertion": "unitPrice + fee",
+    "entryFilepath": "main.go",
+    "expectedValues": [
+      96,
+      25
+    ]
+  },
+  {
+    "id": "go-function-body",
+    "language": "go",
+    "prefix": "package main\nimport \"fmt\"\n// weightedScore multiplies each value by its one-based index and sums the products.\nfunc weightedScore(values []int) int {\n  total := 0\n",
+    "suffix": "  return total\n}\nfunc main() {\n  if got := weightedScore([]int{3, 7, 11}); got != 50 { panic(fmt.Sprintf(\"want 50, got %d\", got)) }\n  if got := weightedScore([]int{-2, 5}); got != 8 { panic(fmt.Sprintf(\"want 8, got %d\", got)) }\n  if got := weightedScore(nil); got != 0 { panic(fmt.Sprintf(\"want 0, got %d\", got)) }\n  fmt.Println(\"PASS go-function-body 50 8 0\")\n}\n",
+    "references": [],
+    "expectedInsertion": "  for index, value := range values {\n    total += (index + 1) * value\n  }\n",
+    "entryFilepath": "main.go",
+    "expectedValues": [
+      50,
+      8,
+      0
+    ]
+  },
+  {
+    "id": "go-eof",
+    "language": "go",
+    "prefix": "package main\n// digitSum returns the sum of the decimal digits, ignoring a negative sign.\nfunc digitSum(value int) int {\n",
+    "suffix": "",
+    "references": [],
+    "expectedInsertion": "  if value < 0 { value = -value }\n  total := 0\n  for value > 0 {\n    total += value % 10\n    value /= 10\n  }\n  return total\n}\n",
+    "entryFilepath": "main.go",
+    "expectedValues": [
+      20,
+      15,
+      0
+    ],
+    "verificationSource": "package main\nimport \"fmt\"\nfunc main() {\n  if got := digitSum(-9407); got != 20 { panic(fmt.Sprintf(\"want 20, got %d\", got)) }\n  if got := digitSum(12345); got != 15 { panic(fmt.Sprintf(\"want 15, got %d\", got)) }\n  if got := digitSum(0); got != 0 { panic(fmt.Sprintf(\"want 0, got %d\", got)) }\n  fmt.Println(\"PASS go-eof 20 15 0\")\n}\n",
+    "verificationFilepath": "verification.go"
+  },
+  {
+    "id": "go-cross-file",
+    "language": "go",
+    "prefix": "package main\nimport \"fmt\"\nfunc main() {\n  // Quote shipping for 1250 grams to the remote zone, with insurance enabled.\n  actual := Quote(",
+    "suffix": ")\n  if actual != 145 { panic(fmt.Sprintf(\"want 145, got %d\", actual)) }\n  fmt.Println(\"PASS go-cross-file 145\")\n}\n",
+    "references": [
+      {
+        "filepath": "shipping.go",
+        "content": "package main\ntype Zone int\nconst (\n  LocalZone Zone = 1\n  RemoteZone Zone = 2\n)\nfunc Quote(weightGrams int, zone Zone, insured bool) int {\n  cost := 35 + ((weightGrams + 499) / 500) * 17 + int(zone) * 14\n  if insured { cost += 31 }\n  return cost\n}\n"
+      }
+    ],
+    "expectedInsertion": "1250, RemoteZone, true",
+    "entryFilepath": "main.go",
+    "expectedValues": [
+      145
+    ]
+  },
+  {
+    "id": "java-expression",
+    "language": "java",
+    "prefix": "public class CompletionSample {\n  // Enlarge both dimensions by a border on each side, then return the area.\n  static int borderedArea(int width, int height, int border) {\n    return (",
+    "suffix": ");\n  }\n  public static void main(String[] args) {\n    if (borderedArea(7, 5, 2) != 99) throw new AssertionError(\"expected area 99\");\n    if (borderedArea(8, 3, 1) != 50) throw new AssertionError(\"expected area 50\");\n    System.out.println(\"PASS java-expression 99 50\");\n  }\n}\n",
+    "references": [],
+    "expectedInsertion": "width + 2 * border) * (height + 2 * border",
+    "entryFilepath": "CompletionSample.java",
+    "expectedValues": [
+      99,
+      50
+    ]
+  },
+  {
+    "id": "java-function-body",
+    "language": "java",
+    "prefix": "public class CompletionSample {\n  // Sum values multiplied by their one-based array position.\n  static int weightedScore(int[] values) {\n    int total = 0;\n",
+    "suffix": "    return total;\n  }\n  public static void main(String[] args) {\n    if (weightedScore(new int[]{4, 6, 9}) != 43) throw new AssertionError(\"expected score 43\");\n    if (weightedScore(new int[]{7, -2, 5}) != 18) throw new AssertionError(\"expected score 18\");\n    if (weightedScore(new int[]{}) != 0) throw new AssertionError(\"expected score 0\");\n    System.out.println(\"PASS java-function-body 43 18 0\");\n  }\n}\n",
+    "references": [],
+    "expectedInsertion": "    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n",
+    "entryFilepath": "CompletionSample.java",
+    "expectedValues": [
+      43,
+      18,
+      0
+    ]
+  },
+  {
+    "id": "java-eof",
+    "language": "java",
+    "prefix": "public class CompletionSample {\n  // Sum squares of every integer from 1 through n, inclusive.\n  static int sumSquares(int n) {\n",
+    "suffix": "",
+    "references": [],
+    "expectedInsertion": "    int total = 0;\n    for (int i = 1; i <= n; i++) total += i * i;\n    return total;\n  }\n}\n",
+    "entryFilepath": "CompletionSample.java",
+    "expectedValues": [
+      91,
+      14,
+      0
+    ],
+    "verificationSource": "public class Verification {\n  public static void main(String[] args) {\n    if (CompletionSample.sumSquares(6) != 91) throw new AssertionError(\"expected 91\");\n    if (CompletionSample.sumSquares(3) != 14) throw new AssertionError(\"expected 14\");\n    if (CompletionSample.sumSquares(0) != 0) throw new AssertionError(\"expected 0\");\n    System.out.println(\"PASS java-eof 91 14 0\");\n  }\n}\n",
+    "verificationFilepath": "Verification.java"
+  },
+  {
+    "id": "java-cross-file",
+    "language": "java",
+    "prefix": "public class CompletionSample {\n  public static void main(String[] args) {\n    // Price nine units at 47 cents each with a 12.5 percent discount.\n    int actual = PriceRules.discountedTotal(",
+    "suffix": ");\n    if (actual != 371) throw new AssertionError(\"expected 371, got \" + actual);\n    System.out.println(\"PASS java-cross-file 371\");\n  }\n}\n",
+    "references": [
+      {
+        "filepath": "PriceRules.java",
+        "content": "public final class PriceRules {\n  // Discount is expressed in basis points; the discount amount rounds down.\n  static int discountedTotal(int units, int centsPerUnit, int discountBasisPoints) {\n    int gross = units * centsPerUnit;\n    return gross - gross * discountBasisPoints / 10000;\n  }\n}\n"
+      }
+    ],
+    "expectedInsertion": "9, 47, 1250",
+    "entryFilepath": "CompletionSample.java",
+    "expectedValues": [
+      371
+    ]
+  },
+  {
+    "id": "typescript-expression",
+    "language": "typescript",
+    "prefix": "// Multiply the unit price by quantity, then subtract the fixed order discount.\nfunction total(price: number, quantity: number, discount: number): number {\n  return price * ",
+    "suffix": ";\n}\nif (total(19, 4, 7) !== 69) throw new Error('expected total 69');\nif (total(31, 3, 4) !== 89) throw new Error('expected total 89');\nconsole.log('PASS typescript-expression 69 89');\n",
+    "references": [],
+    "expectedInsertion": "quantity - discount",
+    "entryFilepath": "main.ts",
+    "expectedValues": [
+      69,
+      89
+    ]
+  },
+  {
+    "id": "typescript-function-body",
+    "language": "typescript",
+    "prefix": "// Sum elements at zero-based even positions: 0, 2, 4, and so on.\nfunction sumEveryOther(values: number[]): number {\n  let sum = 0;\n",
+    "suffix": "  return sum;\n}\nif (sumEveryOther([9, 4, 7, 2, 5]) !== 21) throw new Error('expected sum 21');\nif (sumEveryOther([8, -1, 3, 99]) !== 11) throw new Error('expected sum 11');\nif (sumEveryOther([]) !== 0) throw new Error('expected sum 0');\nconsole.log('PASS typescript-function-body 21 11 0');\n",
+    "references": [],
+    "expectedInsertion": "  for (let i = 0; i < values.length; i += 2) {\n    sum += values[i];\n  }\n",
+    "entryFilepath": "main.ts",
+    "expectedValues": [
+      21,
+      11,
+      0
+    ]
+  },
+  {
+    "id": "typescript-eof",
+    "language": "typescript",
+    "prefix": "// Return the digit sum of an integer, ignoring its sign.\nexport function digitSum(value: number): number {\n",
+    "suffix": "",
+    "references": [],
+    "expectedInsertion": "  value = Math.abs(value);\n  let result = 0;\n  while (value > 0) {\n    result += value % 10;\n    value = Math.floor(value / 10);\n  }\n  return result;\n}\n",
+    "entryFilepath": "main.ts",
+    "expectedValues": [
+      22,
+      20,
+      0
+    ],
+    "verificationSource": "import { digitSum } from './main';\nif (digitSum(-8059) !== 22) throw new Error('expected digit sum 22');\nif (digitSum(2468) !== 20) throw new Error('expected digit sum 20');\nif (digitSum(0) !== 0) throw new Error('expected digit sum 0');\nconsole.log('PASS typescript-eof 22 20 0');\n",
+    "verificationFilepath": "verification.ts"
+  },
+  {
+    "id": "typescript-cross-file",
+    "language": "typescript",
+    "prefix": "import { quote } from './rates';\n// Quote eight items, a 129-cent base fee and 39 cents per item, with 20 percent off.\nconst actual = quote(",
+    "suffix": ");\nif (actual !== 353) throw new Error('expected quote 353, got ' + actual);\nconsole.log('PASS typescript-cross-file 353');\n",
+    "references": [
+      {
+        "filepath": "rates.ts",
+        "content": "export interface Rate {\n  baseCents: number;\n  perItemCents: number;\n  discountPercent: number;\n}\nexport function quote(itemCount: number, rate: Rate): number {\n  return Math.round((rate.baseCents + itemCount * rate.perItemCents) * (100 - rate.discountPercent) / 100);\n}\n"
+      }
+    ],
+    "expectedInsertion": "8, { baseCents: 129, perItemCents: 39, discountPercent: 20 }",
+    "entryFilepath": "main.ts",
+    "expectedValues": [
+      353
+    ]
+  }
+]

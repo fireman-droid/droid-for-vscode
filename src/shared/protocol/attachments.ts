@@ -157,6 +157,8 @@ export interface ImageTranscriptItem {
   readonly kind: 'image';
   readonly turnId: string;
   readonly origin: ImageOrigin;
+  /** SDK user message owning this image, independent of content block order. */
+  readonly userMessageId?: string;
   readonly mediaType: ImageMediaType;
   readonly data: string;
   /** True for images the assistant generated (shows a badge). */

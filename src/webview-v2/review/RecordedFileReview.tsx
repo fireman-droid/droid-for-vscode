@@ -27,7 +27,7 @@ function OperationStats({ entry }: { readonly entry: ReviewRecordedEntry }) {
     return { additions, deletions };
   }, [entry.patch]);
   if (entry.submittedContent !== undefined) return <span className="review-operation-detail">Full file · {entry.submittedContent.split('\n').length} lines</span>;
-  if (!hasOperationTextChanges(entry.patch)) return <span className="review-operation-detail">No saved text</span>;
+  if (!hasOperationTextChanges(entry.fullPatch ?? entry.patch)) return <span className="review-operation-detail">No saved text</span>;
   return <span className="review-file-stats"><i>+{counts.additions}</i><b>−{counts.deletions}</b></span>;
 }
 function SavedEdit({ entry, index, path, split, showHeader = false }: {
@@ -36,30 +36,32 @@ function SavedEdit({ entry, index, path, split, showHeader = false }: {
   return <section className="review-recorded-patch">
     {showHeader ? <header><span className="review-operation-number">Edit {index + 1}</span><strong>{operationName(entry)}</strong><OperationStats entry={entry} /></header> : null}
     {entry.message ? <p className="review-recorded-note">{entry.message}</p> : null}
-    {entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
-      : hasOperationTextChanges(entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} />
+    {entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} />
+      : entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
+      : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} />
       : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>No saved text for this operation</strong><p>The operation result is retained; its code changes are unavailable.</p></div></div>}
   </section>;
 }
 
 /** Displays saved evidence without treating it as a net workspace diff. */
-export function RecordedFileReview({ entries, content, path, split, onSplit, onHunk, toolbarTarget }: {
+export function RecordedFileReview({ entries, content, fullContext = true, path, split, onSplit, onHunk, toolbarTarget }: {
+  readonly fullContext?: boolean;
   readonly entries: readonly ReviewRecordedEntry[]; readonly content?: ReviewRecordedContent; readonly path: string;
   readonly split: boolean; readonly onSplit: (split: boolean) => void; readonly onHunk: (direction: number) => void;
   readonly toolbarTarget: HTMLElement | null;
 }) {
-  const [view, setView] = useState('file');
+  const [view, setView] = useState('edits');
   const [editKey, setEditKey] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const records = useMemo(() => entries.map((entry, index) => ({ entry, key: `${entry.toolUseId}:${index}` })), [entries]);
-  const latestPatch = records.reduce((latest, { entry }, index) => entry.source === 'tool-result' && entry.outcome === 'applied' && hasOperationTextChanges(entry.patch) ? index : latest, -1);
+  const latestPatch = records.reduce((latest, { entry }, index) => entry.source === 'tool-result' && entry.outcome === 'applied' && hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? index : latest, -1);
   const defaultIndex = latestPatch >= 0 ? latestPatch : records.length - 1;
   const selectedIndex = editKey === null ? defaultIndex : records.findIndex(({ key }) => key === editKey);
   const index = selectedIndex < 0 ? defaultIndex : selectedIndex;
   const selected = records[index];
   const activeView = content ? view : 'edits';
   const allEdits = editKey === 'all' && records.length > 1;
-  const hasPatch = activeView === 'edits' && (allEdits ? entries.some((entry) => hasOperationTextChanges(entry.patch)) : !!selected && hasOperationTextChanges(selected.entry.patch));
+  const hasPatch = activeView === 'edits' && (allEdits ? entries.some((entry) => hasOperationTextChanges(entry.fullPatch ?? entry.patch)) : !!selected && hasOperationTextChanges(selected.entry.fullPatch ?? selected.entry.patch));
   const selectEdit = (next: number) => { setEditKey(records[next]!.key); setView('edits'); };
   useLayoutEffect(() => {
     root.current?.closest('.review-code-scroll')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -79,7 +81,7 @@ export function RecordedFileReview({ entries, content, path, split, onSplit, onH
         <p className="review-history-heading">Edit history · {records.length}</p>
         {records.map(({ entry, key }, recordIndex) => <DropdownMenuItem key={key} className="review-history-item" data-selected={activeView === 'edits' && !allEdits && index === recordIndex} onSelect={() => selectEdit(recordIndex)}>
           <span className="review-operation-number">{recordIndex + 1}</span>
-          <span className="review-history-description"><strong>{operationName(entry)}</strong><small>{outcomeLabel(entry)} · {entry.submittedContent !== undefined ? 'Saved file' : hasOperationTextChanges(entry.patch) ? 'Saved patch' : 'No saved text'}</small></span>
+          <span className="review-history-description"><strong>{operationName(entry)}</strong><small>{outcomeLabel(entry)} · {entry.submittedContent !== undefined ? 'Saved file' : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? 'Saved patch' : 'No saved text'}</small></span>
           {activeView === 'edits' && !allEdits && index === recordIndex ? <Check aria-label="Selected edit" /> : null}
         </DropdownMenuItem>)}
         {records.length > 1 ? <DropdownMenuItem onSelect={() => { setEditKey('all'); setView('edits'); }}>Show all edits in order</DropdownMenuItem> : null}
@@ -97,9 +99,9 @@ export function RecordedFileReview({ entries, content, path, split, onSplit, onH
   return <div className="review-recorded" ref={root}>
     {toolbarTarget ? createPortal(toolbar, toolbarTarget) : null}
     <div className="review-recorded-summary"><Info aria-hidden /><div>
-      <p>{activeView === 'file' && content ? `Saved file${content.appliedEdits ? ` · ${content.appliedEdits} later edits included` : ''}. Original baseline unavailable; may differ from your workspace.`
+      <p>{activeView === 'file' && content ? `Saved file${content.appliedEdits ? ` · ${content.appliedEdits} later edits included` : ''}. May differ from your current workspace.`
         : allEdits ? 'Saved operations in order · these are separate edits, not a combined diff.'
-          : selected ? `Edit ${index + 1} · ${operationName(selected.entry)} · ${outcomeLabel(selected.entry)}. Saved evidence, not a combined diff.` : 'No saved operations.'}</p>
+          : selected ? `Edit ${index + 1} · ${operationName(selected.entry)} · ${outcomeLabel(selected.entry)}. ${selected.entry.fullPatch !== undefined ? 'Full file comparison from saved versions.' : fullContext ? 'Saved excerpt · full file versions unavailable.' : 'Saved change excerpt.'}` : 'No saved operations.'}</p>
       {activeView === 'file' && content && content.remainingOperations > 0 ? <p className="review-recorded-warning">Partial version · {content.remainingOperations} later operations are not included. Check Edits or History.</p> : null}
     </div></div>
     {activeView === 'file' && content ? <RecordedSource content={content.content} path={path} />

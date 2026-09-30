@@ -1,4 +1,5 @@
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
+import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 
 export interface UserMessageDescriptor {
   readonly kind: 'user';
@@ -57,31 +58,28 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
     }
     group.items.push(item);
   };
-  let pendingUserImages: Extract<SessionTranscriptItem, { kind: 'image' }>[] = [];
-  const flushPendingUserImages = (): void => {
-    for (const image of pendingUserImages) appendToGroup(image);
-    pendingUserImages = [];
-  };
+  const owners = userImageOwners(transcript);
+  const images = new Map<string, Extract<SessionTranscriptItem, { kind: 'image' }>[]>();
+  for (const item of transcript) {
+    const owner = owners.get(item.id);
+    if (item.kind === 'image' && owner !== undefined) {
+      const group = images.get(owner) ?? [];
+      group.push(item);
+      images.set(owner, group);
+    }
+  }
   for (const item of transcript) {
     // Workspace snapshots include manual edits; they belong to Review, not an AI reply.
     if (item.kind === 'changes') continue;
     if (item.kind === 'user') {
-      descriptors.push({ kind: 'user', item, images: pendingUserImages });
-      pendingUserImages = [];
+      descriptors.push({ kind: 'user', item, images: images.get(item.id) ?? [] });
       continue;
     }
-    if (item.kind === 'image' && item.origin === 'user') {
-      const last = descriptors[descriptors.length - 1];
-      if (last?.kind === 'user') last.images.push(item);
-      else pendingUserImages.push(item);
-      continue;
-    }
-    flushPendingUserImages();
+    if (item.kind === 'image' && owners.has(item.id)) continue;
     // Todo snapshots have a single plan line under their creating prompt.
     if (!includePlanSnapshots && item.kind === 'tool' && item.detailKind === 'plan') continue;
     appendToGroup(item);
   }
-  flushPendingUserImages();
 
   if (previous) {
     const byId = new Map(previous.descriptors.map((descriptor) => [descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, descriptor]));

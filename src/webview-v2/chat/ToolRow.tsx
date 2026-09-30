@@ -1,12 +1,13 @@
 import { useContext } from 'react';
-import { ExternalLink, FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles } from 'lucide-react';
+import { ExternalLink, FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles, Wrench } from 'lucide-react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
-import { RESULT_TOOLS } from '../../shared/transcript/toolResultPreview';
+import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
+import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
 import { resolveToolAction } from '../../shared/transcript/toolActivity';
 import { isPreviewableFilePath } from '../../shared/validation/guards';
 import { classifyExploreTool } from './transcript/activityGrouping';
 import { useProcessDisclosure } from './transcript/processPresentation';
-import { canPreviewToolDiff, EXPLORE_ACTIONS, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
+import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
 import { formatDuration, formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
@@ -29,7 +30,8 @@ function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
   if (category === 'search') return <FileSearch />;
   if (category === 'fetch') return <Globe2 />;
   if (category === 'skill') return <Sparkles />;
-  return <ListChecks />;
+  if (category === 'diagnostics' || category === 'task-check') return <ListChecks />;
+  return <Wrench />;
 }
 
 export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperations = false, onInteract }: { readonly item: ToolTranscriptItem; readonly messageId: string; readonly grouped?: boolean; readonly hideConfirmedOperations?: boolean; readonly onInteract?: () => void }) {
@@ -40,21 +42,25 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const running = item.status === 'running';
   const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && running);
   const category = classifyExploreTool(item.toolName);
-  const exploration = (category !== null || item.filePath !== undefined) && item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
+  const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
   const errorMessage = item.errorMessage?.replace(/^([ \t]*Error:[ \t]*)(?:Error:[ \t]*)+/i, '$1');
   const target = item.filePath ?? item.target ?? item.resultPreview?.source?.path;
   const remoteResult = item.toolName === 'WebSearch' || item.toolName === 'github___get_file_contents';
-  const action = exploration && category && target && !remoteResult ? EXPLORE_ACTIONS[category] : resolveToolAction(item.toolName, item.action);
-  const currentFile = item.filePath ?? (available?.source.tool === 'Read' ? available.source.path : undefined);
+  const action = exploration && category && target && !remoteResult ? CATEGORY_PRESENTATION[category].action : resolveToolAction(item.toolName, item.action);
+  const resultSource = item.resultPreview?.source;
+  const resultPresentation = resultSource ? toolPresentation(resultSource.tool) : undefined;
+  const currentFile = item.filePath ?? (resultSource && resultSource.path !== '.' &&
+    (resultPresentation?.target === 'file' || resultPresentation?.preview === 'diagnostics') ? resultSource.path : undefined);
   const unavailable = item.resultPreview?.availability === 'unavailable' ? RESULT_UNAVAILABLE_COPY[item.resultPreview.reason]
-    : !item.resultPreview && item.status === 'completed' && !errorMessage && RESULT_TOOLS.some((name) => name === item.toolName) ? RESULT_UNAVAILABLE_COPY['not-saved'] : null;
+    : !item.resultPreview && item.status === 'completed' && !errorMessage && resultPreviewPolicy(item.toolName) !== 'none' ? RESULT_UNAVAILABLE_COPY['not-saved'] : null;
   const diff = item.operationDiff !== undefined || (inlineDiff !== null && canPreviewToolDiff(item.toolName, item.status, item.filePath, item.turnId));
   const output = command !== undefined && item.status === 'failed' && errorMessage
     ? item.outputTail ? `${item.outputTail}\n${errorMessage.split(/\r?\n/, 1)[0]}` : errorMessage
     : item.outputTail;
   const hasDetails = command !== undefined || available !== null || unavailable !== null || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
+  const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
   const status = [state, item.durationMs === undefined ? '' : formatDuration(item.durationMs)].filter(Boolean).join(' · ');
   const title = `${action}${target ? ` · ${target}` : ''}`;
   const activityActions = <>
@@ -82,22 +88,23 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="text-destructive">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if (grouped && exploration) return <div className="space-y-1" title={unavailable?.detail}>
+  if (grouped && exploration) return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
-      status={status || undefined} actions={activityActions}>
+      status={status || undefined} description={resultSummary || undefined} actions={activityActions}>
       {activityDetail}
     </ActivityItem>
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
     {item.subagent ? <SubagentRow item={item} /> : null}
   </div>;
-  return <div className="space-y-1" title={unavailable?.detail}>
+  return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
       <div className="flex min-w-0 select-none items-center gap-1">
         {hasDetails ? <ToolHeader title={title} status={status} /> : <div className="flex min-w-0 flex-1 items-center gap-2 py-1 text-xs text-muted-foreground"><span className="min-w-0 flex-1 truncate" title={title}>{title}</span><span className="shrink-0">{status}</span></div>}
         {fileActions}
       </div>
+      {resultSummary ? <p className="truncate pl-4 text-[11px] text-muted-foreground" title={resultSummary}>{resultSummary}</p> : null}
       <ToolContent className="space-y-1 pb-1">
         {available ? <ActivityResult preview={available} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}

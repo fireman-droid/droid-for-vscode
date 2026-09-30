@@ -50,6 +50,7 @@ export interface ActiveScope {
     previousPath?: string;
     patch: string;
     submittedContent?: string;
+    contentRestricted?: true;
     kind: OperationDiffFile['kind'];
     outcome?: OperationDiffFile['outcome'];
     message?: string;

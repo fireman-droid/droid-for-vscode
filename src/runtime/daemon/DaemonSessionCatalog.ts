@@ -5,6 +5,10 @@ import process from 'node:process';
 import { hasSubagentSessionTag, type SessionTag } from '@factory/droid-sdk';
 
 import { sanitizeSessionTitle } from '../../shared/validation/guards';
+import { isEditorAssistanceSession } from '../editorAssistance/sessionIdentity';
+import { locatePersistedSessionFile } from '../history/persistedSessionMessages';
+import { readBoundedSessionSettings } from '../catalog/FactorySessionCatalog';
+import { defaultSessionsDirectory } from '../catalog/sessionFavorites';
 import {
   isSafeSessionIdentifier,
   MAX_SESSION_CATALOG_TITLE_LENGTH,
@@ -139,10 +143,13 @@ export class DaemonSessionCatalog {
       contextChars: DAEMON_SEARCH_SNIPPET_LIMIT,
     });
     const matches: SessionSearchMatch[] = [];
-    for (const row of result.sessions) {
+    for (const row of result.sessions.slice(0, DAEMON_SEARCH_SESSION_LIMIT)) {
       if (!isSafeSessionIdentifier(row.id)) {
         continue;
       }
+      // Search does not expose session tags; use its bounded hit ids to read
+      // the same settings sidecar as the regular catalog.
+      if (await isPersistedEditorAssistanceSession(row.id)) continue;
       matches.push({
         id: row.id,
         title: sanitizeSessionTitle(row.title ?? '', MAX_SESSION_CATALOG_TITLE_LENGTH),
@@ -154,6 +161,19 @@ export class DaemonSessionCatalog {
       }
     }
     return matches;
+  }
+}
+
+async function isPersistedEditorAssistanceSession(sessionId: string): Promise<boolean> {
+  if (/[\\/:]/.test(sessionId)) return false;
+  try {
+    const file = await locatePersistedSessionFile(defaultSessionsDirectory(), sessionId);
+    if (!file) return false;
+    const settings = await readBoundedSessionSettings(file.replace(/\.jsonl$/, '.settings.json'));
+    return isEditorAssistanceSession(settings?.tags);
+  } catch {
+    // Missing local metadata must not make ordinary search results disappear.
+    return false;
   }
 }
 
@@ -173,6 +193,7 @@ function hasWorkerSessionMetadata(
     parentSessionId !== undefined ||
     parentToolUseId !== undefined ||
     hasSubagentSessionTag(tags) ||
+    isEditorAssistanceSession(tags) ||
     // Agent-team `droid exec` sessions stay out of the drawer (they
     // belong to the team panel; resuming one risks a double-write
     // against the external CLI process, 探索 #31).

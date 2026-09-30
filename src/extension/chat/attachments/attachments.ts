@@ -200,16 +200,7 @@ export function handleAttachmentCapture(
   );
 }
 
-/**
- * Stages a selection the `droidvisx.addSelectionToChat` command read
- * at invoke time. The read happens before a cold-starting session
- * exists (QA v0.3 P1-1: the capture must survive however long the
- * connect takes), so this consumes a ready-made outcome instead of
- * reading the editor like `handleAttachmentCapture`. Returns false
- * while the session cannot accept attachments yet — the caller keeps
- * the capture and retries; empty and failed reads are consumed as the
- * same in-session diagnostics the webview `+` menu produces.
- */
+/** Stages a saved selection through the same checks and diagnostics as chat attachments. */
 export function stageCapturedSelectionOutcome(
   ctl: AttachmentsPort,
   sessionId: string,

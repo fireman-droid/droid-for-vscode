@@ -12,10 +12,6 @@ export const RESULT_UNAVAILABLE_COPY: Record<ResultUnavailableReason, { label: s
   untrusted: { label: 'No preview', detail: 'The result source could not be verified.' },
 };
 
-export const EXPLORE_ACTIONS = {
-  file: 'Read', search: 'Search', folder: 'List', fetch: 'Fetch', 'task-check': 'Check task', skill: 'Skill',
-} as const;
-
 export function canPreviewToolDiff(toolName: string, status: string, filePath: string | null | undefined, turnId: string | null): boolean {
   return filePath != null && turnId !== null && status === 'completed' &&
     ['applypatch', 'create', 'edit', 'write'].includes(toolName.toLowerCase());

@@ -39,7 +39,8 @@
 
 @layer utilities {
   .dvx-question-plan-card { min-width: 0; overflow: hidden; border: 1px solid var(--chat-edge, var(--panel-edge)); border-radius: 12px; background: light-dark(color-mix(in srgb, var(--ink) 3%, var(--surface)), color-mix(in srgb, #000 12%, var(--surface))); }
-  .dvx-question-plan-card > :is(.v2-user-message, .v2-user-edit-card) { border: 0; border-bottom: 1px solid var(--chat-edge, var(--panel-edge)); border-radius: 0; background: var(--chat-message-surface, var(--field-surface)); }
+  /* Keep hidden edge colors stable when the pinned card changes between planned and plain messages. */
+  .dvx-question-plan-card > :is(.v2-user-message, .v2-user-edit-card) { border-width: 0 0 1px; border-color: var(--chat-edge, var(--panel-edge)); border-radius: 0; background: var(--chat-message-surface, var(--field-surface)); }
   .dvx-question-plan-card > .v2-user-message { padding: 12px 14px; }
   .dvx-question-plan-card > .dvx-plan { margin: 0; padding: 2px 5px; }
 }

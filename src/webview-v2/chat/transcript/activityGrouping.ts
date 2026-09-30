@@ -1,35 +1,13 @@
-import { resolveToolAction, toolNameCandidates } from '../../../shared/transcript/toolActivity';
+import { CATEGORY_PRESENTATION, toolPresentation, type ExploreCategory } from '../../../shared/transcript/toolCatalog';
+export type { ExploreCategory } from '../../../shared/transcript/toolCatalog';
+import { resolveToolAction } from '../../../shared/transcript/toolActivity';
 import type { ToolResultPreview } from '../../../shared/transcript/toolResultPreview';
 
 export const ACTIVITY_GROUP_KEY = 'group-explore' as const;
 const GROUP_PATH: readonly [typeof ACTIVITY_GROUP_KEY] = [ACTIVITY_GROUP_KEY];
 
-export type ExploreCategory =
-  | 'file'
-  | 'search'
-  | 'folder'
-  | 'fetch'
-  | 'task-check'
-  | 'skill';
-
-const TOOL_CATEGORIES: Readonly<Record<string, ExploreCategory>> = {
-  fetchurl: 'fetch',
-  glob: 'search',
-  grep: 'search',
-  ls: 'folder',
-  read: 'file',
-  skill: 'skill',
-  taskoutput: 'task-check',
-  websearch: 'search',
-};
-
 export function classifyExploreTool(toolName: string): ExploreCategory | null {
-  if (toolName === 'github___get_file_contents') return 'fetch';
-  for (const candidate of toolNameCandidates(toolName)) {
-    const category = TOOL_CATEGORIES[candidate];
-    if (category !== undefined) return category;
-  }
-  return null;
+  return toolPresentation(toolName)?.category ?? null;
 }
 
 export interface GroupCandidatePart {
@@ -57,6 +35,7 @@ export interface GroupSummary {
   readonly resultTruncatedCount: number;
   readonly unavailableCount: number;
   readonly countsLabel: string;
+  readonly resultFacts: readonly string[];
   readonly failedCount: number;
   readonly stoppedCount: number;
   readonly truncated: boolean;
@@ -105,15 +84,6 @@ export function activeActivityIndex(parts: readonly GroupCandidatePart[]): numbe
   return parts.length - 1;
 }
 
-const CATEGORY_NOUNS: Readonly<Record<ExploreCategory, readonly [string, string]>> = {
-  file: ['read', 'reads'],
-  search: ['search', 'searches'],
-  folder: ['listing', 'listings'],
-  fetch: ['fetch', 'fetches'],
-  'task-check': ['task check', 'task checks'],
-  skill: ['skill', 'skills'],
-};
-
 export function summarizeActivityGroup(
   parts: readonly GroupCandidatePart[],
 ): GroupSummary {
@@ -125,7 +95,10 @@ export function summarizeActivityGroup(
   let failedCount = 0;
   let stoppedCount = 0;
   let truncated = false;
-  const otherActions = new Map<string, number>();
+  const diagnosticFiles = new Set<string>();
+  let diagnosticResults = 0;
+  let checksWithDiagnostics = 0;
+  const otherActions = new Map<string, { toolName: string; action: string; count: number }>();
   const counts: Record<ExploreCategory, number> = {
     file: 0,
     search: 0,
@@ -133,6 +106,7 @@ export function summarizeActivityGroup(
     fetch: 0,
     'task-check': 0,
     skill: 0,
+    diagnostics: 0,
   };
   for (const part of parts) {
     const metadata = readMemberMetadata(part);
@@ -153,21 +127,43 @@ export function summarizeActivityGroup(
     if (metadata.resultPreview?.availability === 'unavailable') unavailableCount += 1;
     const category = classifyExploreTool(part.toolName ?? '');
     if (category !== null) counts[category] += 1;
-    else {
+    if (category === 'diagnostics') {
+      const preview = metadata.resultPreview;
+      const source = preview?.source;
+      if (source && source.path !== '.') diagnosticFiles.add(source.path);
+      if (status === 'completed' && preview?.summary?.kind === 'diagnostics') {
+        diagnosticResults += 1;
+        if (preview.summary.totalCount > 0) checksWithDiagnostics += 1;
+      }
+    }
+    if (category === null) {
       const action = resolveToolAction(part.toolName ?? '', metadata.action);
-      otherActions.set(action, (otherActions.get(action) ?? 0) + 1);
+      const toolName = part.toolName ?? '';
+      const key = toolName + '\u0000' + action;
+      otherActions.set(key, { toolName, action, count: (otherActions.get(key)?.count ?? 0) + 1 });
     }
   }
   const segments: string[] = [];
-  for (const category of Object.keys(CATEGORY_NOUNS) as ExploreCategory[]) {
+  for (const category of Object.keys(CATEGORY_PRESENTATION) as ExploreCategory[]) {
     const count = counts[category];
     if (count > 0) {
-      const nouns = CATEGORY_NOUNS[category];
+      const nouns = CATEGORY_PRESENTATION[category].nouns;
       segments.push(`${count} ${count === 1 ? nouns[0] : nouns[1]}`);
     }
   }
-  for (const [action, count] of otherActions) {
-    segments.push(count > 1 ? `${action} × ${count}` : action);
+  if (diagnosticFiles.size > 0) segments.push(diagnosticFiles.size + (diagnosticFiles.size === 1 ? ' file' : ' files'));
+  const resultFacts: string[] = [];
+  if (checksWithDiagnostics > 0) resultFacts.push(checksWithDiagnostics + (checksWithDiagnostics === 1 ? ' check reported diagnostics' : ' checks reported diagnostics'));
+  else if (diagnosticResults > 0 && diagnosticResults === counts.diagnostics) resultFacts.push('No diagnostics reported');
+  if (diagnosticResults > 0 && diagnosticResults < counts.diagnostics) resultFacts.push(diagnosticResults + '/' + counts.diagnostics + ' results summarized');
+  const owners = new Map<string, Set<string>>();
+  for (const { action, toolName } of otherActions.values()) {
+    const names = owners.get(action) ?? new Set<string>();
+    names.add(toolName); owners.set(action, names);
+  }
+  for (const { action, toolName, count } of otherActions.values()) {
+    const label = (owners.get(action)?.size ?? 0) > 1 ? action + ' (' + toolName + ')' : action;
+    segments.push(count > 1 ? label + ' × ' + count : label);
   }
   return {
     toolCount,
@@ -176,6 +172,7 @@ export function summarizeActivityGroup(
     resultTruncatedCount,
     unavailableCount,
     countsLabel: segments.join(', '),
+    resultFacts,
     failedCount,
     stoppedCount,
     truncated,

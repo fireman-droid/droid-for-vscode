@@ -2,6 +2,7 @@ import type { EditResendPort } from './editResendPort';
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import { RewindAnchorConflictError, RewindAttachmentError } from '../../../runtime/session/rewindErrors';
 import { MAX_PENDING_ATTACHMENTS } from '../../../shared/protocol/bounds';
+import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 import { type EditResendRejectReason } from '../../../shared/protocol/turns';
 import {
   truncateFromUserMessage,
@@ -356,20 +357,12 @@ export function buildEditStageAttachments(
       });
     }
   }
-  // User-echo image items directly follow their prompt in both live
-  // and loaded transcripts; ones still carrying full base64 can be
-  // rebuilt into resendable payloads.
+  // History can place images before text; use the same ownership as rendering.
   const transcript = ctl.recoveryState.transcript.transcript;
-  for (
-    let index = userItemIndex + 1;
-    index < transcript.length && staged.length < MAX_PENDING_ATTACHMENTS;
-    index += 1
-  ) {
-    const item = transcript[index]!;
-    if (item.kind === 'user') {
-      break;
-    }
-    if (item.kind !== 'image' || item.origin !== 'user') {
+  const owners = userImageOwners(transcript);
+  for (const item of transcript) {
+    if (staged.length >= MAX_PENDING_ATTACHMENTS) break;
+    if (item.kind !== 'image' || owners.get(item.id) !== userItem?.id) {
       continue;
     }
     ctl.attachmentState.attachmentIdCounter += 1;

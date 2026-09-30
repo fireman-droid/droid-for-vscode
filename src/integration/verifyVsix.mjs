@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const vsixPath = path.resolve(process.argv[2] ?? 'dist/droidvisx.vsix');
@@ -13,8 +13,13 @@ const expectedEntries = [
   'extension/changelog.md',
   // Root LICENSE ships as LICENSE.txt alongside the manifest.
   'extension/LICENSE.txt',
+  'extension/third-party/KILO-LICENSE.txt',
+  'extension/third-party/CONTINUE-LICENSE.txt',
+  'extension/third-party/JS-TIKTOKEN-LICENSE.txt',
+  'extension/third-party/TREE-SITTER-GRAMMARS-LICENSES.txt',
   'extension/dist/extension/extension.cjs',
   'extension/dist/extension/sessionCatalogWorker.cjs',
+  'extension/dist/extension/sessionHistoryWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.
   'extension/dist/extension/THIRD_PARTY_LICENSES.txt',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
@@ -35,6 +40,17 @@ const expectedEntries = [
   'extension/resources/droidvisx.svg',
 ].sort();
 
+function parserAssets(directory, relative = '') {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = relative + entry.name;
+    return entry.isDirectory() ? parserAssets(path.join(directory, entry.name), file + '/') : [file];
+  });
+}
+const parserEntries = parserAssets('dist/extension/autocomplete').map(file => 'extension/dist/extension/autocomplete/' + file);
+assert.ok(parserEntries.some(file => file.endsWith('/grammars/tree-sitter-go.wasm')));
+assert.ok(parserEntries.some(file => file.endsWith('/grammars/tree-sitter-java.wasm')));
+assert.ok(parserEntries.some(file => file.endsWith('/queries/import-queries/typescript.scm')));
+expectedEntries.push(...parserEntries); expectedEntries.sort();
 const entries = execFileSync('tar', ['-tf', vsixPath], {
   encoding: 'utf8',
 })
@@ -106,6 +122,7 @@ assert.doesNotMatch(
   'Factory Droid SDK must be bundled into the extension',
 );
 assert.doesNotMatch(extensionBundle, /sourceMappingURL/u);
+assertExtensionBundleLoads(extensionBundle);
 const catalogWorkerBundle = readEntry('extension/dist/extension/sessionCatalogWorker.cjs');
 assert.doesNotMatch(catalogWorkerBundle, /\brequire\(["']@factory\/droid-sdk/u);
 assert.doesNotMatch(catalogWorkerBundle, /sourceMappingURL/u);
@@ -159,7 +176,7 @@ assert.ok(manifest.contributes.commands.some((entry) => entry.command === 'droid
 assert.doesNotMatch(icon, /<script\b/iu);
 assert.doesNotMatch(icon, /\bon\w+\s*=/iu);
 
-console.log(`Verified ${entries.length} VSIX entries and bundled externals.`);
+console.log(`Verified ${entries.length} VSIX entries, bundled externals, and extension entry loading.`);
 
 function readEntry(entry) {
   return execFileSync('tar', ['-xOf', vsixPath, entry], {
@@ -174,4 +191,27 @@ function staticRequires(source) {
       (match) => match[1],
     ),
   );
+}
+
+function assertExtensionBundleLoads(bundle) {
+  // Load the packaged bytes without repository node_modules. UMD factory aliases
+  // can hide unresolved imports from both esbuild's metafile and static regexes.
+  execFileSync(process.execPath, ['--input-type=commonjs', '-e', `
+    const assert = require('node:assert/strict');
+    const { readFileSync } = require('node:fs');
+    const { Module, isBuiltin } = require('node:module');
+    const extension = new Module('extension.cjs');
+    const vscode = {};
+    extension.paths = [];
+    extension.require = (specifier) => {
+      if (specifier === 'vscode') return vscode;
+      if (isBuiltin(specifier)) return require(specifier);
+      const error = new Error('Extension bundle requires unpackaged dependency: ' + specifier);
+      error.code = 'MODULE_NOT_FOUND';
+      throw error;
+    };
+    extension._compile(readFileSync(0, 'utf8'), 'extension.cjs');
+    assert.equal(typeof extension.exports.activate, 'function');
+    assert.equal(typeof extension.exports.deactivate, 'function');
+  `], { input: bundle, encoding: 'utf8', timeout: 30_000 });
 }

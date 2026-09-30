@@ -382,6 +382,8 @@ function projectBlock(
           turnId,
           messageIndex,
           blockIndex,
+          turnId,
+          sdkMessageId,
         );
       }
       return;
@@ -542,6 +544,7 @@ function appendImage(
   messageIndex: number,
   blockIndex: number,
   countKey: string = turnId,
+  userMessageId?: string,
 ): void {
   const image = readSdkImageBlock(block);
   if (image === undefined) {
@@ -565,6 +568,7 @@ function appendImage(
     kind: 'image',
     turnId,
     origin,
+    ...(origin === 'user' && userMessageId !== undefined ? { userMessageId } : {}),
     mediaType: image.mediaType,
     data: oversized ? '' : image.data,
     generated: image.generated,

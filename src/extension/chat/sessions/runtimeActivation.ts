@@ -21,7 +21,23 @@ export async function prepareHistory(
   phases?: SessionSwitchTimings,
 ): Promise<HostTranscriptState | null> {
   try {
-    return await ctl.effects.prepareActivationTranscript(target, generation, phases);
+    const transcript = await ctl.effects.prepareActivationTranscript(target, generation, phases);
+    if (transcript !== null && target.kind === 'resume' &&
+        isCurrentRuntimeGeneration(ctl, generation) && isTargetWorkspaceCurrent(ctl, target.cwd) &&
+        ctl.sessionState.connection.status === 'connecting') {
+      // Show verified history while the native handshake continues. No runtime
+      // ownership or recovery checkpoint is committed at this display boundary.
+      ctl.sessionState.sessionId = target.sessionId;
+      ctl.sessionState.conversationId = ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId;
+      ctl.recoveryState.transcript = transcript;
+      ctl.turnState.turn = null;
+      ctl.recordHost({ level: 'info', name: 'host.perf.history-visible', attributes: {
+        sessionId: target.sessionId, items: transcript.transcript.length,
+        durationMs: phases ? elapsedMs(phases.startedAt) : 0,
+      } });
+      ctl.emitSnapshot();
+    }
+    return transcript;
   } catch {
     if (isCurrentRuntimeGeneration(ctl, generation) && isTargetWorkspaceCurrent(ctl, target.cwd)) {
       if (ctl.sessionState.sessionId === null && target.kind === 'resume') {
