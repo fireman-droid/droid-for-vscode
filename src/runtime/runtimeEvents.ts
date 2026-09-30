@@ -39,6 +39,7 @@ export interface MissionProgressSummary {
     | 'milestone_validation_triggered';
   readonly timestamp: string;
   readonly workerSessionId?: string;
+  readonly resumeWorkerSessionId?: string;
   readonly featureId?: string;
   readonly title?: string;
   readonly exitCode?: number;

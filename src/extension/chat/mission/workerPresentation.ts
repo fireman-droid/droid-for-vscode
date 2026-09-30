@@ -10,7 +10,8 @@ export function missionWorkerStatus(
   let lastResume = -1;
   for (let index = 0; index < progress.length; index += 1) {
     const entry = progress[index]!;
-    if (entry.workerSessionId === workerId) lastWorker = index;
+    if (entry.workerSessionId === workerId ||
+        (entry.type === 'mission_resumed' && entry.resumeWorkerSessionId === workerId)) lastWorker = index;
     if (entry.type === 'mission_resumed' || entry.type === 'mission_run_started') lastResume = index;
   }
   const entry = progress[lastWorker];
@@ -22,7 +23,7 @@ export function missionWorkerStatus(
     return lastResume > lastWorker && lifecycle !== 'paused' ? 'unknown' : 'paused';
   }
   if (lifecycle === 'paused') return 'paused';
-  if (active && (entry?.type === 'worker_started' || entry?.type === 'worker_selected_feature') &&
+  if (active && (entry?.type === 'worker_started' || entry?.type === 'worker_selected_feature' || entry?.type === 'mission_resumed') &&
       (lifecycle === 'running' || lifecycle === 'orchestrator_turn')) return 'running';
   return 'unknown';
 }

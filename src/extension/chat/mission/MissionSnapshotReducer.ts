@@ -257,6 +257,10 @@ export class MissionSnapshotReducer {
   }
 
   private applyProgressEntry(entry: MissionProgressSummary): void {
+    if (entry.type === 'mission_resumed' && entry.resumeWorkerSessionId !== undefined) {
+      this.startWorker(entry.resumeWorkerSessionId);
+      return;
+    }
     if (entry.type === 'mission_accepted' && entry.title !== undefined) {
       this.title = entry.title.slice(0, 256);
       return;
@@ -425,6 +429,7 @@ function sameProgressEntry(
     left.type === right.type &&
     left.timestamp === right.timestamp &&
     left.workerSessionId === right.workerSessionId &&
+    left.resumeWorkerSessionId === right.resumeWorkerSessionId &&
     left.featureId === right.featureId &&
     left.title === right.title &&
     left.exitCode === right.exitCode

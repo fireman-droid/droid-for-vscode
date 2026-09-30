@@ -4,6 +4,15 @@
 [CAPABILITIES](CAPABILITIES.md)。本文只保留当前工作、未完成验收和明确不做项，
 不重复历次施工记录，也不将旧计划当作新增操作或测试授权。
 
+## Mission 查看恢复
+
+- [x] 逐项核对当前 Mission 的真实进度、feature 和 worker 历史关联。
+- [x] 接收 SDK worker 模型元数据和多行失败原因，修复整份 Mission 快照被丢弃。
+- [x] 保留明确恢复的 worker 身份，修复恢复后的未知状态；读取失败提供准确反馈与刷新入口。
+- [x] 类型／预算检查、VSIX 构建校验、Microsoft VS Code 全局安装及本地提交。
+- [ ] Reload Window 后人工确认当前 Mission 的 worker 查看器与持续更新。
+- [x] 对照实时变更日志与生产链定位 `writing` 字段漏接，修复恢复可见时整份聊天快照被拒收。
+
 ## SDK 0.9.1 能力接入
 
 - [x] 正式模型目录接入 Process/daemon、共享契约、选择器与管理界面；禁用原因和模型能力可见且禁选有 Host 校验。

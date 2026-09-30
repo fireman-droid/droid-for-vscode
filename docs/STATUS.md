@@ -5,6 +5,27 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Mission 实际日志接线修复
+
+- 对用户现有 Mission 的 29 条进度记录、3 个 feature 与 2 个 worker 关联逐项核对。
+  `worker_started` 的正式 `modelId`／`substitutedFromModelId` 字段此前被旧白名单拒绝，
+  历史 `worker_failed.reason` 中的正常换行也被误拒绝；两者均会导致整份 SDK 快照
+  恢复失败并显示 Detached、0/0，现已按 SDK 0.9.1 契约接收。
+- 保留 `mission_resumed.resumeWorkerSessionId`，仅在明确恢复同一个 worker、后端仍
+  活跃且 Mission 正在执行时显示 Running。后续暂停／失败／完成记录仍覆盖恢复状态；
+  不带 worker 目标的 Mission 恢复不推断子代理已恢复。
+- 聊天入口把状态读取失败与尚未分配 worker 区分开，失败时提供刷新操作，不显示
+  误导性的空任务计数和“等待分配”。正常入口仍沿 feature 的明确 worker 绑定打开查看器。
+- 当前 worker 本地历史包含实际回复与工具活动；只读检查未发现历史文件缺失或
+  查看器路径的额外阻断。本轮记录尚无 worker 成功交接／完成事件，不能据此声称完成
+  阶段已通过真实验收。未操作用户窗口、修改真实会话或发起模型请求。
+- 同一窗口恢复可见时主聊天 `host.snapshot` 被拒收也已定位：实时文件变更行携带
+  共享契约中的 `writing: true`，Webview 的完整历史解析却遗漏该字段，导致整个聊天
+  快照被丢弃。现在完整快照接收并保留此标记，与实时变更和恢复存储使用同一规则。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、统一 VSIX 构建与 `verify:vsix`
+  的 165 条目校验通过。已全局安装到 Microsoft VS Code，162 个安装载荷 SHA-256
+  与 VSIX 一致。未新增、修改或运行测试；当前窗口须 Reload 后人工确认查看与持续更新。
+
 ## SDK 0.9.1 能力接入
 
 - Process 与 daemon 改用正式模型目录，保留内置／自定义模型、禁用原因、默认推理档位、

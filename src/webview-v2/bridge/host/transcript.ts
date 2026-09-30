@@ -107,9 +107,10 @@ export function parseChangesTranscriptItem(
   value: UnknownRecord,
 ): Extract<SessionTranscriptItem, { kind: 'changes' }> | undefined {
   if (
-    !hasExactKeys(value, ['id', 'kind', 'turnId', 'files']) ||
+    !hasExactKeys(value, ['id', 'kind', 'turnId', 'files'], ['writing']) ||
     !isId(value.id) ||
-    !isId(value.turnId)
+    !isId(value.turnId) ||
+    (value.writing !== undefined && value.writing !== true)
   ) {
     return undefined;
   }
@@ -121,6 +122,7 @@ export function parseChangesTranscriptItem(
         kind: 'changes',
         turnId: value.turnId,
         files,
+        ...(value.writing === true ? { writing: true } : {}),
       };
 }
 

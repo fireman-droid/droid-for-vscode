@@ -123,9 +123,9 @@ export interface ChangedFileSummary {
 
 /**
  * Per-turn ledger of the files its tools created or modified.
- * `writing` is a live-turn display flag; the host transcript and
- * replays only hold settled items (flag absent), so history replays
- * never animate a "writing" header.
+ * `writing: true` marks a live turn in both incremental updates and Host
+ * snapshots. Settled history omits the flag, so it never animates a
+ * "writing" header.
  */
 export interface ChangesTranscriptItem {
   readonly id: string;

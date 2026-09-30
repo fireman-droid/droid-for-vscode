@@ -36,10 +36,11 @@ export function MissionWorkers({ mission, result, port, disabled }: {
   }, [disabled, request?.id, request?.status]);
   const workers = mission?.features.filter(feature => feature.workerViewAvailable === true) ?? [];
   const failed = request?.status === 'rejected' || request?.status === 'unconfirmed';
+  const detached = mission?.availability === 'detached';
   return <Tool defaultOpen className="my-3 rounded-lg border border-[var(--panel-edge)] px-2 py-1">
-    <ToolHeader title="Mission · 子代理" status={mission ? `${mission.completedFeatureCount} / ${mission.features.length} features completed` : 'Loading…'} />
+    <ToolHeader title="Mission · 子代理" status={detached ? '状态暂不可用' : mission ? `${mission.completedFeatureCount} / ${mission.features.length} features completed` : 'Loading…'} />
     <ToolContent className="space-y-2 pl-0 pb-1">
-      {mission ? <p className="px-2 text-[11px] text-muted-foreground">{formatPhase(mission)}</p> : null}
+      {mission && !detached ? <p className="px-2 text-[11px] text-muted-foreground">{formatPhase(mission)}</p> : null}
       {workers.map(feature => {
         const status = mission?.availability === 'attached' ? feature.workerStatus ?? 'unknown' : 'unknown';
         const opening = request?.featureId === feature.id && request.status === 'pending';
@@ -57,10 +58,10 @@ export function MissionWorkers({ mission, result, port, disabled }: {
           </div>
         </div>;
       })}
-      {workers.length === 0 ? <p role="status" className="px-2 text-xs text-muted-foreground">等待 Droid 提供 Worker 会话，分配后可在这里查看子代理活动。</p> : null}
-      {failed ? <div role="status" className="flex flex-wrap items-center gap-2 px-2 text-xs text-muted-foreground">
-        <span>{request?.status === 'unconfirmed' ? '未收到操作结果，可以重新点击查看子代理。' : 'Worker 状态已变化或会话暂不可用，请刷新后重试。'}</span>
-        <Button variant="ghost" size="sm" disabled={disabled || mission === null} onClick={() => {
+      {workers.length === 0 && !detached ? <p role="status" className="px-2 text-xs text-muted-foreground">{mission ? '等待 Droid 提供 Worker 会话，分配后可在这里查看子代理活动。' : '正在读取 Mission 状态…'}</p> : null}
+      {failed || detached ? <div role="status" className="flex flex-wrap items-center gap-2 px-2 text-xs text-muted-foreground">
+        <span>{detached ? '未能读取 Mission 状态，暂时无法确认子代理信息，请刷新状态。' : request?.status === 'unconfirmed' ? '未收到操作结果，可以重新点击查看子代理。' : 'Worker 状态已变化或会话暂不可用，请刷新后重试。'}</span>
+        <Button variant="ghost" size="sm" disabled={disabled || mission === null || request?.status === 'pending'} onClick={() => {
           if (mission) setRequest({ status: 'pending', id: command({ type: 'mission.refresh', revision: mission.revision }) });
         }}>刷新状态</Button>
       </div> : null}

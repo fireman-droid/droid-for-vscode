@@ -176,7 +176,11 @@ function readProgressEntry(value: unknown): MissionProgressSummary | undefined {
     case 'mission_resumed':
       return hasExactKeys(value, ['type', 'timestamp'], ['resumeWorkerSessionId']) &&
         (value.resumeWorkerSessionId === undefined || isId(value.resumeWorkerSessionId))
-        ? { ...base, type: value.type }
+        ? {
+            ...base, type: value.type,
+            ...(value.resumeWorkerSessionId === undefined
+              ? {} : { resumeWorkerSessionId: value.resumeWorkerSessionId }),
+          }
         : undefined;
     case 'mission_run_started':
       return hasExactKeys(value, ['type', 'timestamp'], ['message']) &&
@@ -187,11 +191,13 @@ function readProgressEntry(value: unknown): MissionProgressSummary | undefined {
       return hasExactKeys(
         value,
         ['type', 'timestamp', 'workerSessionId', 'spawnId'],
-        ['featureId'],
+        ['featureId', 'modelId', 'substitutedFromModelId'],
       ) &&
         isId(value.workerSessionId) &&
         isId(value.spawnId) &&
-        (value.featureId === undefined || isId(value.featureId))
+        (value.featureId === undefined || isId(value.featureId)) &&
+        (value.modelId === undefined || typeof value.modelId === 'string') &&
+        (value.substitutedFromModelId === undefined || typeof value.substitutedFromModelId === 'string')
         ? {
             ...base,
             type: value.type,
@@ -247,7 +253,7 @@ function readProgressEntry(value: unknown): MissionProgressSummary | undefined {
         ['workerSessionId', 'exitCode', 'failureReason'],
       ) &&
         isId(value.spawnId) &&
-        isText(value.reason, MAX_MISSION_TASK_LENGTH) &&
+        isText(value.reason, MAX_MISSION_TASK_LENGTH, true) &&
         (value.workerSessionId === undefined || isId(value.workerSessionId)) &&
         (value.exitCode === undefined || Number.isSafeInteger(value.exitCode))
         ? {
