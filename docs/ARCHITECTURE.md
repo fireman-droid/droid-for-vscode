@@ -388,14 +388,18 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   提交入口查询 `isPreparing()`，界面渲染数值只负责展示。切会话/取消使旧读取失效，
   不能以一次渲染前的数字判断当前附件已经就绪；BTW 使用同样的同步查询原则。
 - Review Bridge 的 context 支持 all；普通比较从已有完整版本生成全上下文补丁。
-  recordedFileDiffs 只用保存的 before/after 树核对同一会话的完整操作链，还原结果与
-  after 不符则保留原补丁；不会引入工作区当前文件替代历史基线。全文只随 Review 请求
+  recordedFileDiffs 使用原执行会话的 before/after 树核对同一会话的完整操作链；执行中
+  以当前文件核对重放终态，不把当前文件当作历史基线。缺快照时可从已确认的完整创建／
+  写入内容开始重放；撤销证据不足不阻止全文查看。还原不符则保留原补丁。全文只随 Review 请求
   有界传递，不写入聊天历史。改动锚点独立于延迟渲染块，未渲染区也保留跳转位置。
 - 公共 `review/DiffView.tsx` 继续分块呈现完整补丁，Unified 隐藏测宽只取最长可打印
   ASCII 行；Unicode/tab 行保留原生排版测量，不靠字符数推断不同字形宽度。
 - 工具展示定义集中在 shared/transcript/toolCatalog.ts；Runtime 的 toolDetail 与
   toolResultPreview 分别从实际输入提取目标、从完整结果提取预览及诊断摘要，实时和
   history/toolResultHistory 共用。Bridge 沿 resultPreview 传递经验证的可选摘要，
+  普通工作区外 Read/Grep/Glob/LS 返回文本用 external 只读来源标记，保留来源与内容
+  过滤；不会增加磁盘读取或进入工作区 Diff／Undo。混合内外路径的 ApplyPatch 按规范
+  完整路径匹配声明与结果，分别保留工作区／Mission 文件，不因外部文件丢掉整次结果。
   Webview 复用既有 Activity 组件与分类定义，不另建工具名单。未知工具走通用文本预览；
   执行命令、文件修改、计划、权限和委派继续由各自专属展示负责。
 - 工具结果按实际调用上下文有界投影；淘汰保留来源/原因及已有计数摘要，不等于执行失败或整段历史

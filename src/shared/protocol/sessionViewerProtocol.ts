@@ -1,7 +1,7 @@
 import { type SessionTranscriptItem } from './transcript';
 import { type ThemePreference } from './shell';
 
-export const SESSION_VIEWER_PROTOCOL_VERSION = 2 as const;
+export const SESSION_VIEWER_PROTOCOL_VERSION = 3 as const;
 export const MAX_SESSION_VIEWER_TITLE_LENGTH = 512;
 export const MAX_SESSION_VIEWER_REASON_LENGTH = 512;
 export const SESSION_VIEWER_TARGET_KINDS = ['daemon-session'] as const;

@@ -99,7 +99,7 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
         if (fullPatch !== undefined) recordedOperations[index] = { ...recordedOperations[index]!, fullPatch };
       }
     }
-    const content = scope.operationUndoBlocked ? undefined : recordedFileContent(matching);
+    const content = recordedFileContent(matching);
     return { version: recordedOperationVersion(matching),
       patch: '', truncated: recordedOperations.length !== matching.length, recordedOperations,
       ...(content === undefined ? {} : { recordedContent: content }) };

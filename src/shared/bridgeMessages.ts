@@ -209,7 +209,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v48 reports confirmed native IDE connection and disconnection.
 // v49 includes pending interactions in authoritative conversation snapshots.
 // v50 adds a session-scoped retry for the runtime model catalog.
-export const BRIDGE_PROTOCOL_VERSION = 52 as const;
+// v53 retains read-only result previews from ordinary external files.
+export const BRIDGE_PROTOCOL_VERSION = 53 as const;
 
 export type WebviewToHostMessage =
   | SystemPromptRequest

@@ -363,6 +363,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       );
       if (this.options.isOperationWriting?.(message.sessionId, message.turnId!) ??
         this.options.isTurnWriting?.(message.sessionId, message.turnId!)) scope.lifecycle = 'writing';
+      scope.snapshotSessionId = this.options.resolveCanonicalTurnSessionId?.(message.sessionId, message.turnId!) ?? message.sessionId;
       return scope;
     }
     if (message.scopeKind === 'turn') {

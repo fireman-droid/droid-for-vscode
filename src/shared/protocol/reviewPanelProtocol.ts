@@ -24,7 +24,7 @@ export type ReviewPanelContext = {
 export interface ReviewRecordedEntry {
   readonly toolUseId: string;
   readonly patch: string;
-  /** Full context rebuilt from saved snapshots and verified result patches. */
+  /** Full context rebuilt from saved snapshots or full writes and verified result patches. */
   readonly fullPatch?: string;
   readonly source?: 'tool-input' | 'tool-result' | 'successful-tool-input';
   readonly outcome?: 'applied' | 'failed' | 'uncertain';

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
 import { isToolResultSummary, type ToolResultSummary } from '../../shared/transcript/toolResultSummary';
 import type { DroidStreamEvent } from '@factory/droid-sdk/node';
-import { relative, resolve } from 'node:path';
+import { basename, relative, resolve } from 'node:path';
 import { missionArtifactDisplayPath } from './toolDisplayPath';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
 import { MAX_TOOL_ACTIVITIES_PER_TURN, MAX_TOOL_NAME_LENGTH } from '../../shared/protocol/bounds';
@@ -103,8 +103,9 @@ export function readResultSource(
   const mission = missionArtifactDisplayPath(workspace, (raw as string | undefined) ?? '.');
   if (mission) return mission.path.length > MAX_TOOL_RESULT_SOURCE_LENGTH || isRestrictedToolPath(mission.path)
     ? 'restricted' : { tool, ...mission, callId };
+  const absolute = resolve(workspace, (raw as string | undefined) ?? '.');
   const path =
-    relative(workspace, resolve(workspace, (raw as string | undefined) ?? '.')).replace(
+    relative(workspace, absolute).replace(
       /\\/gu,
       '/',
     ) || '.';
@@ -112,8 +113,14 @@ export function readResultSource(
     path === '..' ||
     path.startsWith('../') ||
     /^(?:\/|[A-Za-z]:)/u.test(path)
-  )
-    return 'outside-workspace';
+  ) {
+    if (policy !== 'workspace') return 'outside-workspace';
+    if (isRestrictedToolPath(absolute)) return 'restricted';
+    // The tool has already returned this evidence. Its label grants no disk access.
+    const label = `External/${basename(absolute) || 'Root'}`;
+    return label.length > MAX_TOOL_RESULT_SOURCE_LENGTH ? 'restricted'
+      : { tool, path: label, scope: 'external', callId };
+  }
   if (path.length > MAX_TOOL_RESULT_SOURCE_LENGTH || SENSITIVE_PATH.test(path)) return 'restricted';
   return { tool, path, callId };
 }

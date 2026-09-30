@@ -5,5 +5,7 @@ export function ActivityResult({ preview }: { readonly preview: Extract<ToolResu
   const presentation = toolPresentation(preview.source.tool);
   const sourcePath = presentation?.target === 'file' || presentation?.target === 'github'
     ? preview.source.path : undefined;
-  return <ResultView preview={{ text: preview.text, label: presentation?.resultLabel ?? 'Tool result', truncated: preview.truncated, sourcePath }} />;
+  const resultLabel = presentation?.resultLabel ?? 'Tool result';
+  const label = preview.source.scope === 'external' ? `${resultLabel} · ${preview.source.path}` : resultLabel;
+  return <ResultView preview={{ text: preview.text, label, truncated: preview.truncated, sourcePath }} />;
 }

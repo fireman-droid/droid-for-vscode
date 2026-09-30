@@ -27,8 +27,8 @@ export interface ToolResultSource {
   /** Workspace-relative path, repository path, or a fixed display label. */
   readonly path: string;
   readonly callId: string;
-  /** Read-only evidence from a CLI Mission artifact, never an openable workspace path. */
-  readonly scope?: 'mission';
+  /** Already returned evidence outside the workspace, never an openable workspace path. */
+  readonly scope?: 'mission' | 'external';
 }
 export type ToolResultPreview =
   | {
@@ -78,8 +78,9 @@ function isToolResultSource(source: unknown): source is ToolResultSource {
   return (
     isStrictRecord(source) &&
     hasExactKeys(source, ['tool', 'path', 'callId'], ['scope']) &&
-    (source.scope === undefined || source.scope === 'mission' && typeof source.path === 'string' &&
-      /^Mission\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/|$)/iu.test(source.path)) &&
+    (source.scope === undefined || typeof source.path === 'string' && (
+      source.scope === 'mission' && /^Mission\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/|$)/iu.test(source.path) ||
+      source.scope === 'external' && /^External\/[^/\\]+$/u.test(source.path))) &&
     typeof source.tool === 'string' && source.tool.length > 0 && source.tool.length <= MAX_TOOL_NAME_LENGTH && !/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(source.tool) &&
     typeof source.callId === 'string' &&
     source.callId.length > 0 &&
@@ -202,7 +203,8 @@ export function enrichResultPreview(
     (canonical.availability === 'unavailable' && canonical.reason === 'not-saved')
     || (canonical.availability === 'unavailable' &&
       (canonical.reason === 'restricted' || canonical.reason === 'outside-workspace') &&
-      candidate?.availability === 'available' && candidate.source.scope === 'mission')
+      candidate?.availability === 'available' && (candidate.source.scope === 'mission' ||
+        canonical.reason === 'outside-workspace' && candidate.source.scope === 'external'))
     ? (candidate ?? canonical)
     : canonical;
 }
