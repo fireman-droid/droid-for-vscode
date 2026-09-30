@@ -76,6 +76,9 @@ export const FORK_UNSUPPORTED_MESSAGE =
 
 export const FORK_FAILED_MESSAGE = 'Droid could not fork this session.';
 
+const FORK_ADOPTION_FAILED_MESSAGE =
+  'The fork was created, but the chat could not switch to it. Retry to reconnect to the original session, or refresh History to open the fork.';
+
 export function handleSessionNew(ctl: SessionDirectoryPort): void {
   const workspace = ctl.getWorkspaceContext();
   if (!ctl.effects.canReplaceSession() || !isUsableWorkspace(workspace)) {
@@ -633,8 +636,15 @@ export async function performFork(
     'fork',
     ctl.recoveryState.transcript,
   );
+  if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
+    return;
+  }
   if (forkedConversationId === null) {
-    ctl.emitSessionDiagnostic('session-fork-failed', FORK_FAILED_MESSAGE);
+    // Runtime already adopted the fork. Do not let another send use the old
+    // Host identity until an explicit reconnect restores a matching binding.
+    ctl.sessionState.connection = { status: 'unavailable', message: FORK_ADOPTION_FAILED_MESSAGE };
+    ctl.emitSessionDiagnostic('session-fork-failed', FORK_ADOPTION_FAILED_MESSAGE);
+    ctl.emitSnapshot();
     return;
   }
 
@@ -683,7 +693,16 @@ export async function performFork(
     ctl.recoveryState.transcript,
     null,
   );
-  if (!(await ctl.effects.flushRecoveryCheckpointOrReport())) return;
+  const checkpointSaved = await ctl.effects.flushRecoveryCheckpointOrReport();
+  if (!ctl.isCurrentSessionOperation(runtime, generation, forkedSessionId, cwd)) return;
+  if (!checkpointSaved) {
+    ctl.sessionState.connection = {
+      status: 'unavailable',
+      message: 'The fork is active, but its chat state could not be saved. Retry to reconnect to the fork.',
+    };
+    ctl.emitSnapshot();
+    return;
+  }
   ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, ctl.recoveryState.transcript);
   ctl.emitSnapshot();
   ctl.emit({

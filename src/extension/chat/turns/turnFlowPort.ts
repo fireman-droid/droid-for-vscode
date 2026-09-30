@@ -96,7 +96,7 @@ export type CompactPort = TurnContextPort & Pick<HostOperations,
   'emit' | 'emitSnapshot' | 'emitSessionDiagnostic' | 'isCurrentSessionOperation' | 'interactions' | 'recoveryStore'> & {
   readonly metadata: Readonly<Pick<HostOperations['metadata'], 'settingsUpdate'>> & Pick<HostOperations['metadata'], 'tokenUsage'>;
   readonly sessionState: Readonly<Pick<SessionLifecycleState, 'conversationId'>> &
-    Pick<SessionLifecycleState, 'sessionId' | 'sessionOperationInProgress'>;
+    Pick<SessionLifecycleState, 'sessionId' | 'sessionOperationInProgress' | 'connection'>;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>> & Pick<SessionDirectoryState, 'sessions'>;
   readonly turnState: Pick<TurnState, 'turn'>;
   readonly missionState: Pick<MissionSessionState, 'mission'>;

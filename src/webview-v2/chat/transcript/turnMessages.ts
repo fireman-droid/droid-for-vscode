@@ -233,6 +233,7 @@ export function reduceTurnsMessage(
       const turnStateBase: AssistantWebviewState = {
         ...state,
         sequence: event.sequence,
+        pendingTurnId: state.pendingTurnId === event.turnId ? null : state.pendingTurnId,
         terminalTurnId: isTerminalStatus(event.status)
           ? event.turnId
           : state.terminalTurnId === event.turnId
@@ -271,6 +272,7 @@ export function reduceTurnsMessage(
       const turnErrorBase: AssistantWebviewState = {
         ...state,
         sequence: event.sequence,
+        pendingTurnId: state.pendingTurnId === event.turnId ? null : state.pendingTurnId,
         terminalTurnId: event.turnId,
         interactions: state.interactions.filter(
           (interaction) => interaction.turnId !== event.turnId,

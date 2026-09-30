@@ -14,6 +14,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   latestChanges: null,
   connection: { status: 'idle' },
   turn: null,
+  pendingTurnId: null,
   sessions: { status: 'idle', items: [] },
   settings: { status: 'loading', value: null },
   context: { status: 'loading', value: null },

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { tryAcquireFileTransactionLock } from '../storage/fileTransactionLock';
 
 /**
  * Cross-window session leases (daemon Phase 3). The daemon does not
@@ -97,10 +98,10 @@ export function releaseSessionLease(
 ): void {
   const d = withDefaults(deps);
   const owner = { pid: d.pid(), ts: d.now() };
-  d.runExclusive(file, owner, () => {
+  const locked = d.runExclusive(file, owner, () => {
     const leases = readLeases(file, d.readFile);
     if (leases === null) {
-      return;
+      throw new Error('The session lease registry could not be read during release.');
     }
     const existing = leases[sessionId];
     if (existing === undefined) {
@@ -112,6 +113,7 @@ export function releaseSessionLease(
     delete leases[sessionId];
     writeLeases(file, leases, d);
   });
+  if (!locked.acquired) throw new Error('The session lease registry is busy. Session ownership has not been released.');
 }
 
 /**
@@ -221,6 +223,28 @@ function defaultRunExclusive<T>(
   isPidAlive: (pid: number) => boolean,
   operation: () => T,
 ): RegistryLockOutcome<T> {
+  const deadline = Date.now() + REGISTRY_LOCK_ATTEMPTS * REGISTRY_LOCK_WAIT_MS;
+  // Unique bakery claims serialize the entire transaction, including recovery
+  // of the reusable legacy .lock name. A stale reader cannot unlink a newer
+  // participant's lock while that participant is in the registry transaction.
+  const transaction = tryAcquireFileTransactionLock(file, {
+    pid: owner.pid, isPidAlive, attempts: REGISTRY_LOCK_ATTEMPTS, waitMs: REGISTRY_LOCK_WAIT_MS,
+  });
+  if (!transaction.acquired) return transaction;
+  try {
+    return runRegistryTransaction(file, owner, isPidAlive, operation, deadline);
+  } finally {
+    transaction.release();
+  }
+}
+
+function runRegistryTransaction<T>(
+  file: string,
+  owner: SessionLeaseEntry,
+  isPidAlive: (pid: number) => boolean,
+  operation: () => T,
+  deadline: number,
+): RegistryLockOutcome<T> {
   const lockFile = `${file}${REGISTRY_LOCK_SUFFIX}`;
   const lockOwner: RegistryLockOwner = {
     ...owner,
@@ -242,7 +266,9 @@ function defaultRunExclusive<T>(
       defaultDeleteLock(lockFile);
       continue;
     }
-    waitSynchronously(REGISTRY_LOCK_WAIT_MS);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    waitSynchronously(Math.min(REGISTRY_LOCK_WAIT_MS, remaining));
   }
   return { acquired: false, heldByPid };
 }
@@ -317,8 +343,8 @@ function defaultDeleteOwnedLock(file: string, token: string): void {
 function defaultDeleteLock(file: string): void {
   try {
     fs.unlinkSync(file);
-  } catch {
-    // Already released or reclaimed by another live window.
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 }
 

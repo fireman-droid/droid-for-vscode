@@ -53,6 +53,8 @@ import {
   isToolExecutionPhase,
 } from '../../shared/protocol/operationDiff';
 
+// Metadata/history budget. Queued prompts are bounded independently by
+// MAX_RECOVERY_CONVERSATIONS * MAX_QUEUED_MESSAGES * MAX_TURN_TEXT_LENGTH.
 export const MAX_RECOVERY_TEXT_UNITS = MAX_SESSION_TRANSCRIPT_TEXT_UNITS;
 
 export interface ParsedConversationRecoveryState {
@@ -729,7 +731,6 @@ function recoveryTextUnits(
         }
       }
     }
-    total += conversation.queuedTexts.reduce((sum, text) => sum + text.length, 0);
   }
   return total;
 }

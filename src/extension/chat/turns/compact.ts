@@ -14,6 +14,9 @@ export const COMPACT_UNSUPPORTED_MESSAGE =
 
 export const COMPACT_FAILED_MESSAGE = 'Droid could not compact the conversation.';
 
+const COMPACT_ADOPTION_FAILED_MESSAGE =
+  'The conversation was compacted, but the chat could not switch to its new session. Retry to reconnect to the original session, or refresh History to open the compacted session.';
+
 export function handleSessionCompact(ctl: CompactPort, sessionId: string): void {
   const runtime = ctl.sessionState.runtime;
   if (runtime !== null && !ctl.effects.ensureActiveRuntimeWorkspaceCurrent()) {
@@ -86,15 +89,21 @@ export async function performCompact(
   }
 
   const previousTitle = ctl.effects.activeSessionSummary()?.title ?? 'Current session';
-  if (
-    !(await ctl.effects.adoptDurableSuccessor(
-      conversationId,
-      sessionId,
-      compactedSessionId,
-      'compact',
-    ))
-  ) {
-    ctl.emitSessionDiagnostic('session-compact-failed', COMPACT_FAILED_MESSAGE);
+  const adopted = await ctl.effects.adoptDurableSuccessor(
+    conversationId,
+    sessionId,
+    compactedSessionId,
+    'compact',
+  );
+  if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
+    return;
+  }
+  if (!adopted) {
+    // Compaction committed in Runtime before metadata persistence. A failed
+    // adoption must block sends under the old Host session id.
+    ctl.sessionState.connection = { status: 'unavailable', message: COMPACT_ADOPTION_FAILED_MESSAGE };
+    ctl.emitSessionDiagnostic('session-compact-failed', COMPACT_ADOPTION_FAILED_MESSAGE);
+    ctl.emitSnapshot();
     return;
   }
   // The compacted session stays in the catalog: its file remains on
@@ -127,7 +136,16 @@ export async function performCompact(
   // The compacted successor is a new session; its counters restart.
   ctl.metadata.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
   ctl.recoveryStore.selectConversation(conversationId);
-  if (!(await ctl.effects.flushRecoveryCheckpointOrReport())) return;
+  const checkpointSaved = await ctl.effects.flushRecoveryCheckpointOrReport();
+  if (!ctl.isCurrentSessionOperation(runtime, generation, compactedSessionId, cwd)) return;
+  if (!checkpointSaved) {
+    ctl.sessionState.connection = {
+      status: 'unavailable',
+      message: 'The compacted session is active, but its chat state could not be saved. Retry to reconnect to it.',
+    };
+    ctl.emitSnapshot();
+    return;
+  }
   ctl.emitSnapshot();
   ctl.emit({
     type: 'runtime.diagnostic',

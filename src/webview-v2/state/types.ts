@@ -72,6 +72,8 @@ export interface AssistantWebviewState {
     { type: 'host.connection' }
   >['connection'];
   readonly turn: AssistantTurn | null;
+  /** A local send remains owned by the composer until the Host confirms its identity. */
+  readonly pendingTurnId: string | null;
   readonly sessions: Extract<HostToWebviewMessage, { type: 'host.snapshot' }>['sessions'];
   readonly settings: SessionSettingsState;
   readonly context: SessionContextState;

@@ -1,11 +1,11 @@
-import { lstat, mkdir, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import * as vscode from 'vscode';
 import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type { OperationRestoreEntry } from './reviewOperationScope';
 import { MAX_REVIEW_UNDO_FILES } from '../../shared/protocol/reviewProtocol';
+import { withUndoJournal } from './operationUndoJournal';
 
-const JOURNAL = 'restore-recovery.json';
 const MAX_BYTES = 32 * 1024 * 1024;
 interface JournalEntry { path: string; before: string; after: string }
 interface Journal { version: 3; root: string; entries: JournalEntry[] }
@@ -65,7 +65,10 @@ async function saveJournal(path: string, journal: Journal): Promise<void> {
 
 export async function recoverOperationUndo(storageDir: string, root: string | undefined): Promise<void> {
   if (root === undefined) return;
-  const path = join(storageDir, JOURNAL);
+  await withUndoJournal(storageDir, root, recoverJournal);
+}
+
+async function recoverJournal(path: string, root: string): Promise<void> {
   let text: string;
   try { text = await readFile(path, 'utf8'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
@@ -103,24 +106,25 @@ export async function applyOperationUndo(
       throw new Error(`Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time. Undo individual files instead.`);
     if (entries.reduce((bytes, entry) => bytes + entry.current!.length + entry.after!.length, 0) > MAX_BYTES)
       throw new Error('The selected undo exceeds the safe size limit.');
-    await mkdir(storageDir, { recursive: true });
-    await recoverOperationUndo(storageDir, root);
-    const journal: Journal = { version: 3, root: await realpath(root), entries: [] };
-    const path = join(storageDir, JOURNAL);
-    for (const entry of entries) {
+    return await withUndoJournal(storageDir, root, async (path, canonicalRoot) => {
       if (!currentScope()) throw new Error('The review target is no longer current.');
-      const file = await readUndoFile(root, entry.path);
-      if (!file.bytes.equals(entry.current!) || entry.identity !== undefined && file.identity !== entry.identity)
-        throw new Error(`Undo stopped because ${entry.path} changed.`);
-      journal.entries.push({ path: entry.path, before: entry.current!.toString('base64'), after: entry.after!.toString('base64') });
-      // Write-ahead: a crash or partial write must never lose the original bytes.
-      await saveJournal(path, journal);
-      if (!currentScope()) throw new Error('The review target is no longer current.');
-      await replaceChecked(root, entry.path, entry.current!, entry.after!, entry.identity);
-      written += 1;
-    }
-    await rm(path);
-    return { complete: true, written };
+      await recoverJournal(path, canonicalRoot);
+      const journal: Journal = { version: 3, root: canonicalRoot, entries: [] };
+      for (const entry of entries) {
+        if (!currentScope()) throw new Error('The review target is no longer current.');
+        const file = await readUndoFile(canonicalRoot, entry.path);
+        if (!file.bytes.equals(entry.current!) || entry.identity !== undefined && file.identity !== entry.identity)
+          throw new Error(`Undo stopped because ${entry.path} changed.`);
+        journal.entries.push({ path: entry.path, before: entry.current!.toString('base64'), after: entry.after!.toString('base64') });
+        // Write-ahead: a crash or partial write must never lose the original bytes.
+        await saveJournal(path, journal);
+        if (!currentScope()) throw new Error('The review target is no longer current.');
+        await replaceChecked(canonicalRoot, entry.path, entry.current!, entry.after!, entry.identity);
+        written += 1;
+      }
+      await rm(path);
+      return { complete: true, written };
+    });
   } catch (error) {
     return { complete: false, written, reason: error instanceof Error ? error.message : 'Undo failed.' };
   }

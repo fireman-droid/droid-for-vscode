@@ -24,12 +24,12 @@ export interface SessionDirectoryPort
   readonly sessionState: Readonly<
     Pick<
       SessionLifecycleState,
-      'runtime' | 'connection' | 'runtimeGeneration' | 'activeRuntimeCwd' | 'disposed'
+      'runtime' | 'runtimeGeneration' | 'activeRuntimeCwd' | 'disposed'
     >
   > &
     Pick<
       SessionLifecycleState,
-      'conversationId' | 'sessionId' | 'sessionOperationInProgress'
+      'conversationId' | 'sessionId' | 'sessionOperationInProgress' | 'connection'
     >;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'runningSessionIds'>> &
     Pick<

@@ -35,6 +35,7 @@ export interface DaemonLifecycleOptions {
 export interface DaemonSpawnHandle {
   readonly pid: number | undefined;
   onExit(listener: (code: number | null) => void): void;
+  onError?(listener: (error: Error) => void): void;
   /** Rolling tail of the child's stderr, when captured. */
   stderrTail?(): string;
 }
@@ -404,13 +405,7 @@ function defaultSpawnDaemon(
   child.stderr?.on('data', (chunk: string) => {
     stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS);
   });
-  return {
-    pid: child.pid,
-    stderrTail: () => stderrTail,
-    onExit: (listener) => {
-      child.once('exit', (code) => listener(code));
-    },
-  };
+  return { ...observeDaemonChild(child), stderrTail: () => stderrTail };
 }
 
 function defaultSpawnDetachedDaemon(
@@ -422,11 +417,25 @@ function defaultSpawnDetachedDaemon(
     ...detachedDaemonSpawnOptions(),
     ...options,
   });
+  const handle = observeDaemonChild(child);
   child.unref();
+  return handle;
+}
+
+function observeDaemonChild(child: ReturnType<typeof spawn>): DaemonSpawnHandle {
+  let failure: Error | undefined;
+  let reportError: ((error: Error) => void) | undefined;
+  // Install immediately, including the pid-less spawn-failure path where the
+  // caller rejects before it begins waiting for the daemon's listening port.
+  child.on('error', (error) => { failure = error; reportError?.(error); });
   return {
     pid: child.pid,
     onExit: (listener) => {
       child.once('exit', (code) => listener(code));
+    },
+    onError: (listener) => {
+      reportError = listener;
+      if (failure !== undefined) listener(failure);
     },
   };
 }
@@ -517,16 +526,20 @@ async function waitForDaemonPort(
   onExit: (code: number | null) => void,
 ): Promise<void> {
   const controller = new AbortController();
+  let failure: Error | undefined;
   child.onExit((code) => {
     onExit(code);
     controller.abort();
   });
-  await waitForPort(
-    port,
-    host,
-    DAEMON_LISTEN_TIMEOUT_MS,
-    controller.signal,
-  );
+  child.onError?.((error) => {
+    failure = error;
+    controller.abort();
+  });
+  try {
+    await waitForPort(port, host, DAEMON_LISTEN_TIMEOUT_MS, controller.signal);
+  } catch (error) {
+    throw failure ?? error;
+  }
 }
 
 /**

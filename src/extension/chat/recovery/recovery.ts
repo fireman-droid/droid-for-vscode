@@ -44,6 +44,9 @@ export /**
  */
 const RECOVERED_TURN_MAX_UNKNOWN_READS = 3;
 
+const RECOVERED_TURN_UNCONFIRMED_MESSAGE =
+  'Droid could not confirm whether the previous reply is still running. Retry to reconnect before sending another message.';
+
 /**
  * History reloads while a recovered turn is still running. Reload
  * after this many working-state polls (~2s) so new assistant text
@@ -69,9 +72,8 @@ const RECOVERED_HISTORY_FAILED_CODE = 'recovered-turn-history-failed';
  * poll loop reloads history every few seconds so growing text
  * appears before idle, then closes the turn once the daemon goes
  * idle with a final history reload (the basic tier does
- * not re-stream tokens). Process sessions cannot report a working
- * state — the probe throws there — so process-mode recovery is
- * unchanged.
+ * not re-stream tokens). Process sessions resume on a fresh transport;
+ * a persisted active reply is interrupted instead of being polled.
  */
 export function reconcileDaemonTurn(
   ctl: RecoveryPort,
@@ -81,21 +83,28 @@ export function reconcileDaemonTurn(
   cwd: string,
 ): void {
   const turnId = recoveryTurnId(ctl, generation, sessionId);
+  if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
+  // Process resume creates a fresh transport, so an old in-flight reply cannot
+  // continue there. This capability check distinguishes it from a lost daemon.
+  if (runtime.supportsBackgroundTurns?.() === false) {
+    ctl.interactions.endTurn(sessionId, turnId);
+    if (ctl.turnState.turn?.turnId === turnId && ctl.turnState.turn.recovery === true &&
+        isTurnActive(ctl.turnState.turn)) {
+      ctl.emitSessionDiagnostic('recovered-process-turn-interrupted',
+        'The previous process reply cannot continue after reconnecting. Send another message to continue the conversation.', turnId);
+      ctl.effects.setTurnStatus(sessionId, turnId, 'interrupted');
+      ctl.emitSnapshot();
+      flushRecoveryCheckpointInBackground(ctl);
+    }
+    return;
+  }
   if (typeof runtime.readSessionWorkingState !== 'function') {
     ctl.interactions.endTurn(sessionId, turnId);
     return;
   }
   void (async () => {
-    let state: RuntimeSessionWorkingState;
-    try {
-      state = await runtime.readSessionWorkingState!();
-    } catch {
-      if (ctl.turnState.turn?.transportRecovery) state = 'unknown';
-      else {
-        ctl.interactions.endTurn(sessionId, turnId);
-        return;
-      }
-    }
+    const state = await readInitialRecoveredWorkingState(ctl, runtime, generation, sessionId, cwd);
+    if (state === null) return;
     const existingRecoveryTurn =
       ctl.turnState.turn?.turnId === turnId && ctl.turnState.turn.recovery === true
         ? ctl.turnState.turn
@@ -107,10 +116,17 @@ export function reconcileDaemonTurn(
       }
       return;
     }
+    if (state === 'unknown') {
+      // A failed status read says nothing about backend completion. Keep the
+      // recovered execution lock and expose Retry without dispatching the queue.
+      ctl.sessionState.connection = { status: 'unavailable', message: RECOVERED_TURN_UNCONFIRMED_MESSAGE };
+      ctl.emitSessionDiagnostic('recovered-turn-unconfirmed', RECOVERED_TURN_UNCONFIRMED_MESSAGE, turnId);
+      ctl.emitSnapshot();
+      return;
+    }
     const live =
       state === 'running' ||
-      state === 'waiting-for-user' ||
-      (state === 'unknown' && (ctl.interactions.hasPending() || existingRecoveryTurn?.transportRecovery !== undefined));
+      state === 'waiting-for-user';
     const failedTurnId = recoveredFailureTurnId(ctl, sessionId);
     if (!live && failedTurnId !== null) {
       ctl.interactions.endTurn(sessionId, turnId);
@@ -126,9 +142,6 @@ export function reconcileDaemonTurn(
       if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       return;
     }
-    // `unknown` with a replayed interaction still means a live turn
-    // (the daemon blocked on it before the state read went stale);
-    // `unknown` without one has nothing to project, so stay quiet.
     if (!live) {
       ctl.interactions.endTurn(sessionId, turnId);
       if (
@@ -205,6 +218,28 @@ export function reconcileDaemonTurn(
       turnId,
     );
   })();
+}
+
+async function readInitialRecoveredWorkingState(
+  ctl: RecoveryPort,
+  runtime: DroidRuntime,
+  generation: number,
+  sessionId: string,
+  cwd: string,
+): Promise<RuntimeSessionWorkingState | null> {
+  for (let attempt = 0; attempt < RECOVERED_TURN_MAX_UNKNOWN_READS; attempt += 1) {
+    if (attempt > 0) await delay(RECOVERED_TURN_POLL_MS);
+    if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return null;
+    let state: RuntimeSessionWorkingState;
+    try {
+      state = await runtime.readSessionWorkingState!();
+    } catch {
+      state = 'unknown';
+    }
+    if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return null;
+    if (state !== 'unknown') return state;
+  }
+  return 'unknown';
 }
 
 /**

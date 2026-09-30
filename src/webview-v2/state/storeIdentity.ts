@@ -18,6 +18,7 @@ export function reduceHostConnection(
     sequence: event.sequence,
     conversationId: event.conversationId,
     sessionId: event.sessionId,
+    pendingTurnId: conversationChanged || sessionChanged ? null : state.pendingTurnId,
     connection: event.connection,
     ide: conversationChanged || sessionChanged ? UNAVAILABLE_IDE : state.ide,
     ...(conversationChanged

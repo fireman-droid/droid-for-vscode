@@ -18,6 +18,8 @@ export interface PendingInteraction {
   readonly planDocument?: {
     readonly status: PlanDocumentStatus;
     readonly content?: string;
+    /** Retained across a subsequent ready state in the same received batch. */
+    readonly rejectedSequence?: number;
   };
 }
 
@@ -77,15 +79,12 @@ export function reducePlanDocumentState(
       interaction.request.kind === 'permission'
         ? {
             ...interaction,
-            planDocument:
-              event.status === 'ready'
-                ? { status: 'ready' as const, content: event.content }
-                : {
-                    status: event.status,
-                    ...(interaction.planDocument?.content === undefined
-                      ? {}
-                      : { content: interaction.planDocument.content }),
-                  },
+            planDocument: {
+              ...interaction.planDocument,
+              status: event.status,
+              ...(event.status === 'ready' ? { content: event.content } : {}),
+              ...(event.status === 'too-large' ? { rejectedSequence: event.sequence } : {}),
+            },
           }
         : interaction,
     ),

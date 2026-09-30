@@ -19,6 +19,7 @@ export function reduceOptimisticIntent(
       {
         ...state,
         turn: { turnId: action.turnId, status: 'submitting' },
+        pendingTurnId: action.turnId,
         terminalTurnId: null,
       },
       [

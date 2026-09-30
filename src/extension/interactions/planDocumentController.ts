@@ -133,8 +133,12 @@ export class PlanDocumentController implements PlanDocumentGateway {
       this.emitState(entry, 'too-large');
       return null;
     }
+    if (message.editedSpecContent !== undefined) {
+      // Editor changes can precede the debounced Webview projection. Only an
+      // open Host-owned document supersedes an explicitly submitted inline edit.
+      return entry.document === undefined ? message : { ...message, editedSpecContent: entry.draft };
+    }
     if (
-      message.editedSpecContent !== undefined ||
       message.selectedOption !== entry.defaultApprovalValue ||
       entry.draft === entry.initialContent
     ) {

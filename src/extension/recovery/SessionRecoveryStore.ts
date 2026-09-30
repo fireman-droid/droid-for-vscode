@@ -698,7 +698,9 @@ function conversationTextUnits(conversation: ConversationRecoveryRecord): number
       }
     }
   }
-  return total + conversation.queuedTexts.reduce((sum, text) => sum + text.length, 0);
+  // Unsent prompts have their own bound: 10 prompts of at most 200,000
+  // characters per conversation. They must not evict recovery metadata.
+  return total;
 }
 
 function isRecoveryId(value: string): boolean {

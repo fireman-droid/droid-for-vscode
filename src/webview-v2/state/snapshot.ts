@@ -2,10 +2,12 @@ import { EMPTY_SESSION_BTW_STATE } from '../../shared/protocol/btwProtocol';
 import { UNAVAILABLE_IDE } from '../../shared/protocol/ideProtocol';
 import { EMPTY_SESSION_QUEUE_STATE } from '../../shared/protocol/queueProtocol';
 import { EMPTY_SESSION_TOKEN_USAGE } from '../../shared/protocol/tokenUsage';
+import { stableTranscriptId } from '../../shared/transcript/hostTranscriptState';
 import { initialGitCommitFlowState } from '../review/gitCommitStore';
 import { EMPTY_REVIEW_UI_STATE } from '../review/reviewStore';
 import { hydrateChangesTranscript } from '../review/storeChanges';
 import { reconcileQueueEditing } from '../chat/queue/reconcileQueueEditing';
+import { boundTranscript } from '../chat/transcript/transcriptUpdates';
 import { isTerminalStatus } from './turnIdentity';
 import type { AssistantWebviewState, StoreHostMessage } from './types';
 
@@ -17,14 +19,22 @@ export function reduceSnapshotMessage(
     case 'host.snapshot': {
       const sameConversation = event.conversationId === state.conversationId;
       const sameSession = event.sessionId === state.sessionId;
-      return {
+      const pendingPromptId = state.pendingTurnId === null ? null : stableTranscriptId('user', state.pendingTurnId);
+      // A snapshot sent before the Host receives our send can arrive after its
+      // optimistic update. Keep that one local turn until an explicit response.
+      const pendingTurn = sameConversation && sameSession && state.pendingTurnId !== null &&
+        state.turn?.turnId === state.pendingTurnId && event.turn?.turnId !== state.pendingTurnId &&
+        !event.transcript.some((item) => item.id === pendingPromptId) ? state.turn : null;
+      const pendingPrompt = pendingTurn === null ? undefined : state.transcript.find((item) => item.id === pendingPromptId);
+      const next: AssistantWebviewState = {
         sequence: event.sequence,
         conversationId: event.conversationId,
         sessionId: event.sessionId,
         latestChanges: event.latestChanges ?? null,
         connection: event.connection,
         ide: event.ide ?? UNAVAILABLE_IDE,
-        turn:
+        pendingTurnId: pendingTurn?.turnId ?? null,
+        turn: pendingTurn ?? (
           event.turn === null
             ? null
             : {
@@ -32,7 +42,7 @@ export function reduceSnapshotMessage(
                 status: event.turn.status,
                 compacting: event.turn.compacting === true,
                 ...(event.turn.error === undefined ? {} : { error: event.turn.error }),
-              },
+              }),
         sessions: event.sessions,
         settings: event.settings,
         context: event.context,
@@ -83,12 +93,13 @@ export function reduceSnapshotMessage(
           return previous?.planDocument === undefined ? pending : { ...pending, planDocument: previous.planDocument };
         }),
         terminalTurnId:
-          event.turn !== null && isTerminalStatus(event.turn.status)
+          pendingTurn === null && event.turn !== null && isTerminalStatus(event.turn.status)
             ? event.turn.turnId
             : null,
         // Git status is workspace-level; a fresh status arrives on demand.
         git: sameConversation ? state.git : initialGitCommitFlowState,
       };
+      return pendingPrompt === undefined ? next : boundTranscript(next, [...next.transcript, pendingPrompt]);
     }
   }
 }

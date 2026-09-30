@@ -44,6 +44,13 @@ function PermissionCard({ request, interaction, actions }: {
   const [preview, setPreview] = useState(false);
   const presentation = getPermissionPresentation(request);
   const plan = interaction.planDocument;
+  const submittedAfterRejection = useRef(-1);
+  useEffect(() => {
+    if (waiting && (plan?.rejectedSequence ?? -1) > submittedAfterRejection.current) {
+      sent.current = false;
+      setWaiting(false);
+    }
+  }, [plan?.rejectedSequence, waiting]);
   const planContent = plan?.content ?? presentation.planPreview;
   const planTools = request.tools.filter((tool) => tool.confirmationKind === 'exit_spec_mode');
   const previewedTool = planContent !== undefined ? planTools.find((tool) => tool.detail === request.editableSpecContent)
@@ -51,6 +58,7 @@ function PermissionCard({ request, interaction, actions }: {
   const canOpenPlan = request.editableSpecContent !== undefined && request.options.filter((option) => option.requiresEditedSpec).length === 1;
   const respond = (value: string, content?: string) => {
     if (sent.current) return;
+    submittedAfterRejection.current = plan?.rejectedSequence ?? -1;
     sent.current = true;
     setWaiting(true);
     actions.onPermission(interaction, value, content);
