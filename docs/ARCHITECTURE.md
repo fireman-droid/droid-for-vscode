@@ -392,7 +392,7 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 `DroidRuntime` 是 Host 面对的接口，`FactoryDroidRuntime` 管理执行和 session 适配。
 SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产品所需行为。
 
-- SDK 0.7.0 通过公开 `DaemonSessionController`、`MultiSessionStateManager` 连接，
+- SDK 0.9.1 通过公开 `DaemonSessionController`、`MultiSessionStateManager` 连接，
   不访问 `.sessions.controller`。`sessionHandle.ts` 管理 attached handle、替换与 detach；
   权限路由缺 handler 默认取消。detach 不等于关闭 backend，关闭失败不报告成功。
 - `windowDaemonPool.ts` 给每个主聊天分配 daemon/IDE relay，`routedDaemon.ts` 按

@@ -64,6 +64,7 @@ export type RuntimeAvailability =
         | 'daemon-credentials-unreadable'
         | 'daemon-refresh-failed'
         | 'daemon-unavailable'
+        | 'sdk-protocol-incompatible'
         | 'initialization-failed';
       message: string;
     };

@@ -5,6 +5,22 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Mission 会话重连兼容性
+
+- SDK 固定为官方 `@factory/droid-sdk@0.9.1`，支持 CLI 已产生的
+  `worker_exited_without_handoff` 任务失败原因；旧 SDK 会在读取这类 Mission 历史时
+  拒绝整个 `load_session` 响应，反复 Reconnect 也无法恢复。历史加载与实时 Mission
+  进度共用更新后的协议校验，保留失败记录，不改写用户的会话或 Mission 文件。
+- daemon 适配同步新版 SDK 的客户端身份、终端通知和会话摘要读取接口，维持原有
+  终端事件与历史读取行为。重连保留初始化错误分类，协议校验失败会明确提示版本
+  不兼容；不把原始 SDK 响应或校验值写入此错误提示。
+- 升级暴露的 SDK 接口类型差异及 Runtime 文件预算阻塞已修正；最终
+  `pnpm run package:vsix` 内的类型检查、`lint:budgets`、公共 UI 与生产构建通过，
+  `pnpm run verify:vsix` 校验 165 条目及扩展入口通过。已全局安装到 Microsoft VS Code，
+  安装清单确认 SDK 0.9.1，10 项载荷 SHA-256 与构建一致。安装 CLI 的 `url.parse`
+  弃用提示未阻断安装；同步一处现有错误文案断言，未新增或运行测试、编辑器自动化
+  或模型调用。会话恢复仍需 Reload Window 后人工验收。
+
 ## Mission 工件预览与改动展示
 
 - 工具已返回的当前用户 `.factory/missions/<UUID>/...` 内容使用独立 Mission 展示
@@ -396,7 +412,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 
 - Droid CLI/SDK 是会话和执行权威。Runtime 适配 Process/daemon，Host 持有会话、
   请求、权限、文件和恢复所有权，共享 Bridge 严格校验，Webview 只消费展示状态。
-- SDK 保持 0.7.0，使用公开 `DaemonSessionController`、`MultiSessionStateManager`
+- SDK 固定为 0.9.1，使用公开 `DaemonSessionController`、`MultiSessionStateManager`
   与窄 facade；不访问 `.sessions.controller`，不为展示创建竞争会话连接。
   未完成跨 SDK/CLI 版本兼容验收，不能由类型声明推断完整产品能力。
 - Chat、Models、Mission、Viewer、Review 五个生产入口使用 V2；交互复用

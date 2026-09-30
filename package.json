@@ -318,7 +318,7 @@
   },
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",
-    "@factory/droid-sdk": "0.7.0",
+    "@factory/droid-sdk": "0.9.1",
     "@tanstack/react-virtual": "^3.14.9",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

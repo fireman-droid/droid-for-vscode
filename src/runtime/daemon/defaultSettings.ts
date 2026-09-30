@@ -22,6 +22,7 @@ const validators: Record<keyof DefaultSettingsPatch, Validator> = {
   compactionTokenLimit: tokens,
   compactionTokenLimitPerModel: (value) => isStrictRecord(value) && Object.entries(value).every(([key, count]) => text(key) && tokens(count)),
   compactionModel: text, compactionThresholdCheckEnabled: boolean,
+  enableOneHourAnthropicCaching: boolean,
   compactionModelMode: oneOf(['current-model', 'factory-default']), cloudSessionSync: boolean,
   subagentModelSettings: fields({
     lightModel: text, lightReasoningEffort: reasoning,
@@ -39,6 +40,7 @@ const validators: Record<keyof DefaultSettingsPatch, Validator> = {
     skipScrutiny: boolean, skipUserTesting: boolean,
   }),
   runInWorktree: nullable(boolean), worktreeDirectory: nullable(text),
+  worktreeAutoDeleteLimit: nullable((value) => typeof value === 'number' && Number.isInteger(value) && value >= 1),
 };
 
 /** Validate the exposed public defaults fields, never accept a full settings file. */

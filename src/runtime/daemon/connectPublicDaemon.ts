@@ -28,7 +28,7 @@ export interface PublicDaemonOptions extends ConnectToDaemonOptions {
   readonly onConnectionState?: (state: DaemonTransportState) => void;
 }
 
-/** SDK 0.7.0 local facade connection policy, now owned through its public controller. */
+/** SDK 0.9.1 local facade connection policy, owned through its public controller. */
 export async function connectPublicDaemon(
   options: PublicDaemonOptions,
 ): Promise<DaemonApi> {
@@ -44,6 +44,7 @@ export async function connectPublicDaemon(
       machineType: MachineType.Local,
       url: options.url,
       clientType: 'sdk',
+      sdk: SDK_TAG.metadata,
       getAccessToken: options.getAccessToken ?? (async () => options.auth.apiKey),
       onAuthenticationError: options.onAuthenticationError,
       connectionTimeoutMs: 5000,
@@ -112,18 +113,19 @@ export function retainDaemonController(
   const observe = (notification: DaemonNotification): void => {
     handles.get(notification.sessionId)?.observe(notification.notification);
     for (const listener of listeners) listener(notification);
+    if (notification.notification.type === 'daemon.terminal_data') {
+      const { terminalId, data } = notification.notification;
+      for (const listener of terminalListeners)
+        listener({ type: 'data', sessionId: notification.sessionId, terminalId, data });
+    }
   };
   controller.on('sessionNotification', observe);
-  const onTerminalData = (event: Omit<Extract<DaemonTerminalEvent, { type: 'data' }>, 'type'>) => {
-    for (const listener of terminalListeners) listener({ type: 'data', ...event });
-  };
   const onTerminalExit = (event: Omit<Extract<DaemonTerminalEvent, { type: 'exit' }>, 'type'>) => {
     for (const listener of terminalListeners) listener({ type: 'exit', ...event });
   };
   const onTerminalDisconnect = () => {
     for (const listener of terminalListeners) listener({ type: 'disconnected' });
   };
-  controller.on('terminalData', onTerminalData);
   controller.on('terminalExit', onTerminalExit);
   controller.on('disconnected', onTerminalDisconnect);
   controller.on('error', report);
@@ -245,7 +247,6 @@ export function retainDaemonController(
       recovery.dispose();
       unbindInteractions();
       controller.off('sessionNotification', observe);
-      controller.off('terminalData', onTerminalData);
       controller.off('terminalExit', onTerminalExit);
       controller.off('disconnected', onTerminalDisconnect);
       onTerminalDisconnect();

@@ -1,4 +1,4 @@
-import { ConnectionError } from '@factory/droid-sdk/node';
+import { ConnectionError, InvalidSessionCwdError } from '@factory/droid-sdk/node';
 import { DaemonAvailabilityError } from '../daemon/daemonConnection';
 import { type RuntimeSessionTarget } from '../DroidRuntime';
 import type { RuntimeAvailability } from '../runtimeEvents';
@@ -14,6 +14,41 @@ import {
 } from '../../shared/protocol/operationDiff';
 
 const MAX_SESSION_ID_LENGTH = 256;
+
+export function classifyInitializationFailure(error: unknown): {
+  reason: Extract<RuntimeAvailability, { status: 'unavailable' }>['reason'];
+  message: string;
+  level: 'warn' | 'error';
+  diagnosticError?: unknown;
+} {
+  if (error instanceof Error && error.message === 'Response validation failed') {
+    // Schema errors can contain response values in their cause. Report only
+    // the fixed classification, without forwarding the SDK error or cause.
+    return {
+      reason: 'sdk-protocol-incompatible',
+      message: 'The local Droid CLI returned data incompatible with the Droid SDK.',
+      level: 'error',
+    };
+  }
+  if (error instanceof DaemonAvailabilityError) {
+    const [reason, message] = daemonInitializationFailure(error.reason);
+    return { reason, message, level: 'error', diagnosticError: error };
+  }
+  if (error instanceof InvalidSessionCwdError) {
+    return {
+      reason: 'invalid-cwd', message: 'Droid rejected the requested working directory.', level: 'warn',
+    };
+  }
+  if (isMissingCliError(error)) {
+    return { reason: 'cli-not-found', message: 'The Droid CLI executable was not found.', level: 'warn' };
+  }
+  return {
+    reason: 'initialization-failed',
+    message: 'The Droid SDK could not initialize a session.',
+    level: 'error',
+    diagnosticError: error,
+  };
+}
 
 export function daemonInitializationFailure(
   reason: DaemonAvailabilityError['reason'],

@@ -20,6 +20,8 @@ export function unavailableMessage(
       return 'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then Retry.';
     case 'daemon-unavailable':
       return 'The local droid daemon could not be reached. Retry the connection.';
+    case 'sdk-protocol-incompatible':
+      return 'The local Droid CLI returned session data that this extension\'s SDK cannot read. Update the Droid extension to a compatible version, then reconnect.';
     case 'initialization-failed':
       return 'The local Droid runtime could not be initialized.';
   }

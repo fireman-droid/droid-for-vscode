@@ -38,6 +38,7 @@ export function createDaemonResources(
           parentSessionId: callingSessionId,
           parentToolUseId: callingToolUseId,
           archivedTime: archivedAt === undefined ? undefined : new Date(archivedAt),
+          getMessages: (messageOptions) => sessions.getMessages(sessionId, messageOptions),
         }),
       );
     },

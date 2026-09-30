@@ -782,7 +782,7 @@ describe('ChatController', () => {
       expect(connectionMessages(messages).at(-1)).toMatchObject({
         connection: {
           status: 'unavailable',
-          message: 'The selected Droid session could not be opened.',
+          message: 'The local Droid runtime could not be initialized.',
         },
       });
     });

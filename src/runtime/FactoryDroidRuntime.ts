@@ -1,5 +1,4 @@
 import {
-  InvalidSessionCwdError,
   SDK_VERSION,
   type AvailableModelConfig,
   type DroidObservability,
@@ -15,7 +14,6 @@ import {
   setSkillDisabled,
 } from './capabilities/sessionCapabilities';
 import { loadSessionCommands } from './commands/FactoryCommandCatalog';
-import { DaemonAvailabilityError } from './daemon/daemonConnection';
 import { recoveredTurnError } from './turnRecovery';
 import {
   type DroidRuntime,
@@ -67,9 +65,8 @@ import {
 } from './session/replacements';
 import { projectRewindInfo } from './session/rewindInfo';
 import {
-  daemonInitializationFailure,
+  classifyInitializationFailure,
   describeUnknown,
-  isMissingCliError,
   normalizeSessionTarget,
   readSubagentStartedNotification,
   sameSessionTarget,
@@ -719,37 +716,9 @@ export class FactoryDroidRuntime implements DroidRuntime {
         interactionHandler: this.interactionHandler,
       });
     } catch (error) {
-      if (error instanceof DaemonAvailabilityError) {
-        const [reason, message] = daemonInitializationFailure(error.reason);
-        this.recordInitializationFinished(startedAt, reason, 'error', error);
-        return this.unavailable(reason, message);
-      }
-      if (error instanceof InvalidSessionCwdError) {
-        this.recordInitializationFinished(startedAt, 'invalid-cwd', 'warn');
-        return this.unavailable(
-          'invalid-cwd',
-          'Droid rejected the requested working directory.',
-        );
-      }
-
-      if (isMissingCliError(error)) {
-        this.recordInitializationFinished(startedAt, 'cli-not-found', 'warn');
-        return this.unavailable(
-          'cli-not-found',
-          'The Droid CLI executable was not found.',
-        );
-      }
-
-      this.recordInitializationFinished(
-        startedAt,
-        'initialization-failed',
-        'error',
-        error,
-      );
-      return this.unavailable(
-        'initialization-failed',
-        'The Droid SDK could not initialize a session.',
-      );
+      const failure = classifyInitializationFailure(error);
+      this.recordInitializationFinished(startedAt, failure.reason, failure.level, failure.diagnosticError);
+      return this.unavailable(failure.reason, failure.message);
     }
 
     if (this.disposed) {

@@ -251,10 +251,7 @@ export async function replaceRuntime(
   if (activation.status === 'failed') {
     ctl.sessionState.connection = {
       status: 'unavailable',
-      message:
-        target.kind === 'resume'
-          ? SESSION_RESUME_FAILED_MESSAGE
-          : SESSION_NEW_FAILED_MESSAGE,
+      message: activation.message,
     };
     ctl.emitSessionDiagnostic(
       target.kind === 'resume' ? 'session-resume-failed' : 'session-new-failed',

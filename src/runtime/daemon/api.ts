@@ -10,7 +10,8 @@ import type {
 
 export type DaemonNotification = Parameters<FactoryDroidEvents['sessionNotification']>[0];
 export type DaemonTerminalEvent =
-  | ({ readonly type: 'data' } & Parameters<FactoryDroidEvents['terminalData']>[0])
+  | ({ readonly type: 'data'; readonly sessionId: string } & Pick<
+      Extract<DaemonNotification['notification'], { type: 'daemon.terminal_data' }>, 'terminalId' | 'data'>)
   | ({ readonly type: 'exit' } & Parameters<FactoryDroidEvents['terminalExit']>[0])
   | { readonly type: 'disconnected' };
 export type DaemonHandlers = Pick<
