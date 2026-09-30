@@ -23,7 +23,16 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
   const threshold = streaming ? STREAM_BACKGROUND_THRESHOLD : BACKGROUND_THRESHOLD;
   const offload = !unavailable && (background || text.length >= threshold && canUseWorker());
   if (offload && !background) setBackground(true);
-  const synchronous = useMemo(() => offload ? null : parseMarkdown(text, thinking), [offload, text, thinking]);
+  const synchronous = useMemo(() => {
+    if (offload) return null;
+    const cached = recallMarkdown(text, thinking);
+    // Prefixes are useful while a worker parses a stream, but a synchronous
+    // render must use the entire current document, including closing fences.
+    if (cached?.text === text) return cached.nodes;
+    const nodes = parseMarkdown(text, thinking);
+    if (!streaming) retainMarkdown({ text, thinking, nodes });
+    return nodes;
+  }, [offload, text, thinking, streaming]);
 
   useEffect(() => {
     if (!background || unavailable) return;

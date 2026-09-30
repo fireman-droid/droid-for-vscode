@@ -128,7 +128,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     this.resetSetupOperation();
     this.prepareSetupDraft(task);
     this.navigate('new-mission');
-    this.postWorkspaceRoute('new-mission');
+    this.postWorkspaceRoute('new-mission', undefined, 'overview');
     this.postSetupSnapshot();
     this.source.focusChat?.();
   }
@@ -139,7 +139,7 @@ export class MissionControlPanelController implements vscode.Disposable {
       this.workspaceState.activate(active.sessionId);
       const catalogId = createCatalogId(active.sessionId);
       this.navigate('detail', catalogId);
-      this.postWorkspaceRoute('detail', catalogId);
+      this.postWorkspaceRoute('detail', catalogId, 'overview');
       this.source.focusChat?.();
       return;
     }
@@ -362,7 +362,7 @@ export class MissionControlPanelController implements vscode.Disposable {
         this.resetSetupOperation();
         this.workspaceState.activate(sessionId);
         this.navigate('detail', message.catalogId);
-        this.postWorkspaceRoute('detail', message.catalogId);
+        this.postWorkspaceRoute('detail', message.catalogId, 'overview');
         this.source.focusChat?.();
         return;
       }
@@ -527,8 +527,8 @@ export class MissionControlPanelController implements vscode.Disposable {
     };
   }
 
-  private postWorkspaceRoute(route: MissionControlRoute, catalogId?: string): void {
-    this.setupEmitter.fire(this.workspaceRouteMessage(route, catalogId));
+  private postWorkspaceRoute(route: MissionControlRoute, catalogId?: string, view?: 'chat' | 'overview'): void {
+    this.setupEmitter.fire(this.workspaceRouteMessage(route, catalogId, view));
   }
 
   private createWorkspaceRouteMessage(): MissionWorkspaceHostMessage | null {
@@ -543,6 +543,7 @@ export class MissionControlPanelController implements vscode.Disposable {
   private workspaceRouteMessage(
     route: MissionControlRoute,
     catalogId?: string,
+    view?: 'chat' | 'overview',
   ): Extract<MissionWorkspaceHostMessage, { type: 'missionControl.route' }> {
     return route === 'detail'
       ? {
@@ -550,11 +551,13 @@ export class MissionControlPanelController implements vscode.Disposable {
           protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
           route,
           catalogId: catalogId!,
+          ...(view === undefined ? {} : { view }),
         }
       : {
           type: 'missionControl.route',
           protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
           route,
+          ...(view === undefined ? {} : { view }),
         };
   }
 
@@ -691,7 +694,7 @@ export class MissionControlPanelController implements vscode.Disposable {
           this.workspaceState.activate(sessionId);
           const catalogId = createCatalogId(sessionId);
           this.navigate('detail', catalogId);
-          this.postWorkspaceRoute('detail', catalogId);
+          this.postWorkspaceRoute('detail', catalogId, 'chat');
         }
       } else {
         this.setupPhase = readinessIndeterminate ? 'indeterminate' : 'draft';

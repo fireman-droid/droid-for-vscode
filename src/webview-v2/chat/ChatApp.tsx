@@ -116,9 +116,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const [quoteNotice, setQuoteNotice] = useState<string | null>(null);
   useEffect(() => setQuoteNotice(null), [composer.draft, state.sessionId]);
   const missionControl = useMissionControl(port, createTurnId);
-  const [missionChat, setMissionChat] = useState(false);
   const openMission = useCallback(() => {
-    setMissionChat(false);
     const task = normalizeMissionTaskText(currentComposer.current.draft);
     missionControl({ type: 'mission.panel.open', target: 'setup', ...(task === undefined ? {} : { task }) });
   }, [missionControl]);
@@ -149,7 +147,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     appendCanvasDraft: composer.appendCanvasDraft,
     settleSend: composer.settleSend,
   });
-  useEffect(() => { setMissionChat(false); }, [host.missionWorkspaceRoute, state.conversationId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
   const notice = selectVisibleNotice(host.transientDiagnostic, state.sessionId, state.turn?.turnId ?? null, running || state.turn?.status === 'stopping');
   const statusMessage = getStatusMessage(state, composer.draft);
@@ -168,7 +165,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute]);
   return (
     <ContentProvider value={content}>
-    <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={host.missionWorkspaceRoute !== null || undefined} data-mission-chat={missionChat || undefined}>
+    <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={host.missionWorkspaceRoute !== null || undefined} data-mission-chat={host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
         <div className="flex min-w-0 items-center gap-1.5"><AppInfo />
@@ -178,7 +175,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => setMissionChat(false)}>Mission</Button> : null}
+          {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
           <WorkingSubagents state={state} flow={subagents} />
           <Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-4" /></Button>
           <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
@@ -226,7 +223,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         </ToolActionsContext.Provider>
     </ChatLayout>
     {host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
-      onShowChat={() => setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
+      inputNeeded={state.mission?.role === 'orchestrator' && state.interactions.length > 0} onShowChat={() => host.setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
     {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
       modelCatalog={state.modelCatalog} images={btw.images} selectedModel={btw.selectedModel}
       onModelChange={btw.setChosenModel} sending={btw.sending}

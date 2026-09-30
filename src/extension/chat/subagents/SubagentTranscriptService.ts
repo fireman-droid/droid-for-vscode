@@ -11,6 +11,13 @@ import type { SessionHistoryLoader } from '../../../runtime/history/SessionHisto
 
 import { sessionMessageTurnId } from '../../../shared/transcript/sessionMessageIdentity';
 import { reconcileChildHistory, restoreChildTools } from './childHistoryReconciliation';
+import {
+  invocationTranscripts,
+  invocationRowKey as rowKey,
+  invocationRunning,
+  readInvocationEvidence,
+  type SubagentInvocation,
+} from './subagentInvocationScope';
 import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
 import type {
   OperationDiff,
@@ -56,7 +63,8 @@ export interface SubagentViewerSnapshot {
 interface ChildEntry {
   readonly childSessionId: string;
   readonly cwd: string;
-  readonly rows: Map<string, SubagentParentRow>;
+  readonly rows: Map<string, SubagentInvocation>;
+  activeRowKey: string;
   state: HostTranscriptState;
   activity: TurnActivityState;
   activeTurnId: string | null;
@@ -64,7 +72,6 @@ interface ChildEntry {
   lifecycle: SubagentViewerSnapshot['lifecycle'];
   loading: Promise<void> | null;
   historyPhase: 'loading' | 'ready' | 'unavailable';
-  settled: boolean;
   resyncing: boolean;
   resyncRequested: boolean;
   readonly listeners: Set<() => void>;
@@ -159,6 +166,8 @@ export class SubagentTranscriptService {
     const queues = invocationQueues(
       records.filter((record) => record.parentToolUseId === undefined),
     );
+    const latestRows = new Map<ChildEntry, string>();
+    const mappedRows = new Set<string>();
     for (const item of transcript) {
       if (item.kind !== 'tool' || item.subagent === undefined) {
         continue;
@@ -200,20 +209,11 @@ export class SubagentTranscriptService {
         }, parentSessionId);
         continue;
       }
-      const existing = this.byChild.get(record.childSessionId);
-      if (existing !== undefined && [...existing.rows.values()].some((row) =>
-        row.toolUseId !== item.toolUseId)) {
-        this.noteIssue({
-          turnId: item.turnId,
-          toolUseId: item.toolUseId,
-          reason: 'mapping-ambiguous',
-          message: 'The child session is already bound to a different parent Task call.',
-        }, parentSessionId);
-        continue;
-      }
+      if (!this.canBind(parentSessionId, item.turnId, item.toolUseId, record.childSessionId,
+        record.parentToolUseId === item.toolUseId, record.promptMessageId)) continue;
       this.rowIssues.delete(key);
       if (record.parentToolUseId === item.toolUseId) this.evidenceRows.add(key);
-      this.register({
+      const entry = this.register({
         parentSessionId,
         turnId: item.turnId,
         toolUseId: item.toolUseId,
@@ -222,7 +222,16 @@ export class SubagentTranscriptService {
         cwd,
         childSessionId: record.childSessionId,
         lifecycle: invocationLifecycle(record.summary.status),
+        ...(record.promptMessageId === undefined ? {} : { promptMessageId: record.promptMessageId }),
       });
+      latestRows.set(entry, key);
+      mappedRows.add(key);
+    }
+    for (const [entry, key] of latestRows) {
+      // A stale parent snapshot must not replace a newer live continuation.
+      if (mappedRows.has(entry.activeRowKey)) this.activate(entry, key);
+      this.options.source.watch(entry.childSessionId, entry.cwd, entry.running);
+      this.publish(entry);
     }
   }
 
@@ -255,74 +264,12 @@ export class SubagentTranscriptService {
     parentSessionId: string,
     turnId?: string,
   ): ParentSubagentEvidence {
-    const operations: SubagentOperationEvidence[] = [];
-    const notices = [...this.rowIssues.entries()]
-      .filter(([key, notice]) =>
-        key.startsWith(`${parentSessionId}\u0000`) &&
-        (turnId === undefined || notice.turnId === turnId))
-      .map(([, notice]) => notice);
-    const dedupe = new Set<string>();
-    let sequence = 0;
-    for (const entry of this.byChild.values()) {
-      const rows = [...entry.rows.values()].filter((row) =>
-        row.parentSessionId === parentSessionId &&
-        (turnId === undefined || row.turnId === turnId));
-      if (rows.length !== 1) continue;
-      const row = rows[0]!;
-      if (!this.evidenceRows.has(rowKey(parentSessionId, row.toolUseId)) ||
-        this.rowIssues.get(rowKey(parentSessionId, row.toolUseId))?.reason === 'mapping-ambiguous') {
-        notices.push({ turnId: row.turnId, toolUseId: row.toolUseId, reason: 'mapping-ambiguous',
-          message: 'Child history is matched only by description. Its parent operation cannot be confirmed.' });
-        continue;
-      }
-      if (entry.historyPhase === 'loading') {
-        notices.push({ turnId: row.turnId, toolUseId: row.toolUseId, reason: 'pending',
-          message: 'Child operation evidence is still loading.' });
-      } else if (entry.historyPhase === 'unavailable') {
-        notices.push({
-          turnId: row.turnId,
-          toolUseId: row.toolUseId,
-          reason: 'history-unavailable',
-          message: 'The mapped child transcript is unavailable.',
-        });
-      } else if (entry.state.historyStatus === 'partial' || entry.state.truncated) {
-        notices.push({
-          turnId: row.turnId,
-          toolUseId: row.toolUseId,
-          reason: 'history-partial',
-          message: 'The mapped child transcript is partial; operation coverage may be incomplete.',
-        });
-      }
-      for (const item of entry.state.transcript) {
-        if (item.kind !== 'tool' || item.operationDiff === undefined) continue;
-        const diff = item.operationDiff.status === 'ready'
-          ? { ...item.operationDiff, sourceSessionId: entry.childSessionId }
-          : item.operationDiff;
-        const identity =
-          diff.status === 'ready' && diff.callId !== undefined
-            ? `${entry.childSessionId}\u0000${diff.callId}`
-            : `${entry.childSessionId}\u0000${item.toolUseId}`;
-        if (dedupe.has(identity)) continue;
-        dedupe.add(identity);
-        operations.push({
-          sequence: sequence++,
-          parentToolUseId: row.toolUseId,
-          childSessionId: entry.childSessionId,
-          toolUseId: item.toolUseId,
-          toolName: item.toolName,
-          operationDiff: diff,
-          ...(item.executionPhase === undefined
-            ? {}
-            : { executionPhase: item.executionPhase }),
-        });
-      }
-    }
-    return { operations, notices: dedupeNotices(notices) };
+    return readInvocationEvidence(this.byChild.values(), this.evidenceRows, this.rowIssues, parentSessionId, turnId);
   }
 
   isParentRunning(parentSessionId: string, turnId: string): boolean {
-    return [...this.byChild.values()].some((entry) => entry.running &&
-      [...entry.rows.values()].some((row) => row.parentSessionId === parentSessionId && row.turnId === turnId));
+    return [...this.byChild.values()].some((entry) => [...entry.rows.values()].some((row) =>
+      row.parentSessionId === parentSessionId && row.turnId === turnId && invocationRunning(row.lifecycle)));
   }
 
   subscribeParent(
@@ -341,9 +288,10 @@ export class SubagentTranscriptService {
     }
     listeners.add(listener);
     for (const entry of this.byChild.values()) {
-      for (const row of entry.rows.values()) {
+      const transcripts = invocationTranscripts(entry);
+      for (const [key, row] of entry.rows) {
         if (row.parentSessionId === parentSessionId) {
-          listener(row.turnId, row.toolUseId, activitiesOf(entry.state), entry.lifecycle);
+          listener(row.turnId, row.toolUseId, activitiesOf(transcripts.get(key) ?? []), row.lifecycle);
         }
       }
     }
@@ -357,7 +305,8 @@ export class SubagentTranscriptService {
 
   open(parentSessionId: string, turnId: string, toolUseId: string): boolean {
     const binding = this.byRow.get(rowKey(parentSessionId, toolUseId));
-    if (binding === undefined || binding.row.turnId !== turnId) {
+    if (binding === undefined || binding.row.turnId !== turnId ||
+      this.rowIssues.get(rowKey(parentSessionId, toolUseId))?.reason === 'mapping-ambiguous') {
       return false;
     }
     this.options.openViewer({
@@ -418,28 +367,17 @@ export class SubagentTranscriptService {
         return;
       }
       this.pendingChildren.delete(pendingKey);
-      const existing = this.byChild.get(notification.childSessionId);
-      if (
-        row !== null &&
-        existing !== undefined &&
-        [...existing.rows.values()].some((bound) => bound.toolUseId !== row.toolUseId)
-      ) {
-        this.noteIssue({
-          turnId: row.turnId,
-          toolUseId: row.toolUseId,
-          reason: 'mapping-ambiguous',
-          message: 'The child session is already bound to a different parent Task call.',
-        }, row.parentSessionId);
-      } else if (row !== null) {
-        const key = rowKey(row.parentSessionId, row.toolUseId);
-        this.evidenceRows.add(key);
-        this.rowIssues.delete(key);
-        this.register({
-          ...row,
-          childSessionId: notification.childSessionId,
-          lifecycle: 'working',
-        });
-      }
+      if (!this.canBind(row.parentSessionId, row.turnId, row.toolUseId, notification.childSessionId, true)) return;
+      const key = rowKey(row.parentSessionId, row.toolUseId);
+      const known = this.byRow.has(key);
+      this.evidenceRows.add(key);
+      this.rowIssues.delete(key);
+      const entry = this.register({ ...row, childSessionId: notification.childSessionId, lifecycle: 'working' });
+      // Replayed availability for an older Task must not steal live ownership.
+      if (!known || entry.activeRowKey === key) this.activate(entry, key);
+      this.options.source.watch(entry.childSessionId, entry.cwd, entry.running);
+      this.publish(entry);
+      if (!known && entry.rows.size > 1) void this.resync(entry);
       return;
     }
 
@@ -455,32 +393,28 @@ export class SubagentTranscriptService {
   }
 
   private register(
-    value: SubagentParentRow & {
+    value: SubagentInvocation & {
       readonly childSessionId: string;
-      readonly lifecycle: SubagentViewerSnapshot['lifecycle'];
     },
   ): ChildEntry {
     const key = rowKey(value.parentSessionId, value.toolUseId);
-    const row: SubagentParentRow = value;
+    let row: SubagentInvocation = value;
     const existing = this.byChild.get(value.childSessionId);
     if (existing !== undefined) {
-      const wasRunning = existing.running;
-      if (!existing.settled) {
-        existing.lifecycle = value.lifecycle;
-        existing.running = value.lifecycle === 'starting' || value.lifecycle === 'working';
-        existing.settled = !existing.running;
-      }
+      const previous = existing.rows.get(key);
+      row = { ...previous, ...value };
+      // Replayed dispatch/running metadata must not revive a settled invocation.
+      if (previous !== undefined && !invocationRunning(previous.lifecycle) && invocationRunning(value.lifecycle))
+        row.lifecycle = previous.lifecycle;
       existing.rows.set(key, row);
       this.byRow.set(key, { entry: existing, row });
-      this.options.source.watch(existing.childSessionId, existing.cwd, existing.running);
-      if (wasRunning && !existing.running) void this.reconcileTerminal(existing);
-      this.publish(existing);
       return existing;
     }
     const entry: ChildEntry = {
       childSessionId: value.childSessionId,
       cwd: value.cwd,
       rows: new Map([[key, row]]),
+      activeRowKey: key,
       state: createHostTranscriptState('unavailable'),
       activity: createTurnActivityState(),
       activeTurnId: null,
@@ -488,30 +422,64 @@ export class SubagentTranscriptService {
       lifecycle: value.lifecycle,
       loading: null,
       historyPhase: 'loading',
-      settled: value.lifecycle !== 'starting' && value.lifecycle !== 'working',
       resyncing: false,
       resyncRequested: false,
       listeners: new Set(),
     };
     this.byChild.set(entry.childSessionId, entry);
     this.byRow.set(key, { entry, row });
-    this.options.source.watch(entry.childSessionId, entry.cwd, entry.running);
     void this.refreshHistory(entry);
-    this.publish(entry);
     return entry;
+  }
+
+  private canBind(
+    parentSessionId: string, turnId: string, toolUseId: string, childSessionId: string,
+    direct: boolean, promptMessageId?: string,
+  ): boolean {
+    const key = rowKey(parentSessionId, toolUseId);
+    const bound = this.byRow.get(key);
+    const child = this.byChild.get(childSessionId);
+    const conflict = bound !== undefined && bound.entry.childSessionId !== childSessionId ||
+      [...(child?.rows.entries() ?? [])].some(([otherKey, other]) => otherKey !== key &&
+        (other.parentSessionId !== parentSessionId || !direct || !this.evidenceRows.has(otherKey) ||
+          promptMessageId !== undefined && other.promptMessageId === promptMessageId));
+    if (conflict) this.noteIssue({ turnId, toolUseId, reason: 'mapping-ambiguous',
+      message: 'Conflicting Task-to-child records prevent a reliable invocation mapping.' }, parentSessionId);
+    return !conflict;
+  }
+
+  private activate(entry: ChildEntry, key: string): void {
+    const row = entry.rows.get(key)!;
+    const changed = entry.activeRowKey !== key;
+    const wasRunning = entry.running;
+    entry.activeRowKey = key;
+    entry.lifecycle = row.lifecycle;
+    entry.running = invocationRunning(row.lifecycle);
+    if (changed) {
+      entry.activeTurnId = null;
+      entry.activity = createTurnActivityState();
+    }
+    if (wasRunning && !entry.running) void this.reconcileTerminal(entry);
+  }
+
+  private setLifecycle(entry: ChildEntry, lifecycle: SubagentViewerSnapshot['lifecycle']): void {
+    entry.rows.get(entry.activeRowKey)!.lifecycle = lifecycle;
+    this.activate(entry, entry.activeRowKey);
   }
 
   private refreshHistory(entry: ChildEntry): Promise<void> {
     if (entry.loading !== null) return entry.loading;
     const before = entry.state;
     const wasRunning = entry.running;
+    const invocationKey = entry.activeRowKey;
     entry.historyPhase = 'loading';
     const pending = this.history.loadHistory({ cwd: entry.cwd, sessionId: entry.childSessionId })
       .then((loaded) => {
         if (this.disposed || this.byChild.get(entry.childSessionId) !== entry) return;
         entry.historyPhase = loaded.status === 'available' ? 'ready' : 'unavailable';
         if (loaded.status === 'available') {
-          entry.state = reconcileChildHistory(loaded.state, before, entry.state, wasRunning || entry.running);
+          entry.state = reconcileChildHistory(loaded.state, before, entry.state,
+            wasRunning || entry.running || invocationKey !== entry.activeRowKey);
           if (entry.activeTurnId !== null)
             entry.activity = restoreChildTools(entry.state, entry.activeTurnId, entry.activity);
         }
@@ -534,17 +502,22 @@ export class SubagentTranscriptService {
         if (entry.loading !== null) await entry.loading;
         if (this.disposed) return;
         await this.refreshHistory(entry);
-        const row = entry.rows.values().next().value;
+        const activeKey = entry.activeRowKey;
+        const row = entry.rows.get(activeKey)!;
         const records = row === undefined ? null : await this.history.loadSubagentInvocations?.({
           cwd: entry.cwd, sessionId: row.parentSessionId,
           parentToolUseIds: [row.toolUseId],
         }).catch(() => null);
         if (this.disposed) return;
-        const record = records?.find((item) => item.childSessionId === entry.childSessionId);
-        if (record !== undefined && record.summary.status !== 'running') {
-          entry.lifecycle = invocationLifecycle(record.summary.status);
-          entry.running = entry.lifecycle === 'starting';
-          entry.settled = !entry.running;
+        if (entry.activeRowKey !== activeKey) { entry.resyncRequested = true; continue; }
+        const matches = records?.filter(item => item.childSessionId === entry.childSessionId &&
+          (item.parentToolUseId === row.toolUseId || item.parentToolUseId === undefined && entry.rows.size === 1));
+        const record = matches?.length === 1 ? matches[0] : undefined;
+        if (record !== undefined) {
+          this.register({ ...row, childSessionId: entry.childSessionId,
+            lifecycle: invocationLifecycle(record.summary.status),
+            ...(record.promptMessageId === undefined ? {} : { promptMessageId: record.promptMessageId }) });
+          this.activate(entry, activeKey);
           this.options.source.watch(entry.childSessionId, entry.cwd, entry.running);
           if (!entry.running) await this.refreshHistory(entry);
           this.publish(entry);
@@ -556,11 +529,8 @@ export class SubagentTranscriptService {
   private applyNotification(entry: ChildEntry, notification: SubagentEvent): void {
     switch (notification.type) {
       case 'settled':
-        entry.settled = true;
-        entry.running = false;
-        entry.lifecycle = notification.lifecycle;
+        this.setLifecycle(entry, notification.lifecycle);
         this.publish(entry);
-        void this.reconcileTerminal(entry);
         break;
       case 'assistant-turn':
         this.startAssistantTurn(entry, notification.messageId);
@@ -726,11 +696,7 @@ export class SubagentTranscriptService {
         return true;
       }
       case 'working-state':
-        if (event.isWorking) {
-          entry.settled = false;
-          entry.running = true;
-          entry.lifecycle = 'working';
-        }
+        if (event.isWorking) this.setLifecycle(entry, 'working');
         return true;
       default:
         return false;
@@ -758,10 +724,11 @@ export class SubagentTranscriptService {
 
   private publish(entry: ChildEntry): void {
     entry.listeners.forEach((listener) => listener());
-    const activities = activitiesOf(entry.state);
-    for (const row of entry.rows.values()) {
+    const transcripts = invocationTranscripts(entry);
+    for (const [key, row] of entry.rows) {
+      const activities = activitiesOf(transcripts.get(key) ?? []);
       this.parentListeners.get(row.parentSessionId)?.forEach((listener) => {
-        listener(row.turnId, row.toolUseId, activities, entry.lifecycle);
+        listener(row.turnId, row.toolUseId, activities, row.lifecycle);
       });
     }
   }
@@ -806,14 +773,14 @@ function toolMessage(
   };
 }
 
-function activitiesOf(state: HostTranscriptState): readonly SubagentActivityItem[] {
+function activitiesOf(items: readonly SessionTranscriptItem[]): readonly SubagentActivityItem[] {
   const activities: SubagentActivityItem[] = [];
   for (
-    let index = state.transcript.length - 1;
+    let index = items.length - 1;
     index >= 0 && activities.length < 4;
     index -= 1
   ) {
-    const item = state.transcript[index];
+    const item = items[index];
     if (item?.kind !== 'tool') {
       continue;
     }
@@ -845,10 +812,6 @@ function identityKey(type: string, description: string): string {
   return `${type}\u0000${description}`;
 }
 
-function rowKey(parentSessionId: string, toolUseId: string): string {
-  return `${parentSessionId}\u0000${toolUseId}`;
-}
-
 function viewerTitle(type: string, description: string): string {
   const safeType = sanitizeSubagentType(type);
   const safeDescription = sanitizeSubagentDescription(description);
@@ -871,16 +834,4 @@ function invocationLifecycle(
     default:
       return 'starting';
   }
-}
-
-function dedupeNotices(
-  notices: readonly SubagentEvidenceNotice[],
-): readonly SubagentEvidenceNotice[] {
-  const seen = new Set<string>();
-  return notices.filter((notice) => {
-    const key = `${notice.turnId}\u0000${notice.toolUseId}\u0000${notice.reason}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }

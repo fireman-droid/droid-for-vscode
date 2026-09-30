@@ -133,12 +133,16 @@ export type MissionControlPanelHostMessage =
       readonly type: 'missionControl.route';
       readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
       readonly route: 'catalog' | 'new-mission';
+      /** Omit to preserve the selected chat/overview presentation. */
+      readonly view?: 'chat' | 'overview';
     }
   | {
       readonly type: 'missionControl.route';
       readonly protocolVersion: typeof MISSION_CONTROL_PANEL_PROTOCOL_VERSION;
       readonly route: 'detail';
       readonly catalogId: string;
+      /** Omit to preserve the selected chat/overview presentation. */
+      readonly view?: 'chat' | 'overview';
     };
 
 const LIFECYCLE_SET = new Set<string>(MISSION_LIFECYCLES);
@@ -257,22 +261,25 @@ export function parseMissionControlPanelHostMessage(
   }
   if (
     isStrictRecord(value) &&
-    hasExactKeys(value, ['type', 'protocolVersion', 'route']) &&
+    hasExactKeys(value, ['type', 'protocolVersion', 'route'], ['view']) &&
     value.type === 'missionControl.route' &&
     value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    (value.view === undefined || value.view === 'chat' || value.view === 'overview') &&
     (value.route === 'catalog' || value.route === 'new-mission')
   ) {
     return {
       type: 'missionControl.route',
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       route: value.route,
+      ...(value.view === undefined ? {} : { view: value.view }),
     };
   }
   if (
     isStrictRecord(value) &&
-    hasExactKeys(value, ['type', 'protocolVersion', 'route', 'catalogId']) &&
+    hasExactKeys(value, ['type', 'protocolVersion', 'route', 'catalogId'], ['view']) &&
     value.type === 'missionControl.route' &&
     value.protocolVersion === MISSION_CONTROL_PANEL_PROTOCOL_VERSION &&
+    (value.view === undefined || value.view === 'chat' || value.view === 'overview') &&
     value.route === 'detail' &&
     isCatalogId(value.catalogId)
   ) {
@@ -281,6 +288,7 @@ export function parseMissionControlPanelHostMessage(
       protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
       route: 'detail',
       catalogId: value.catalogId,
+      ...(value.view === undefined ? {} : { view: value.view }),
     };
   }
   if (

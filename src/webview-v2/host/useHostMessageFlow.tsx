@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import { type ThemePreference } from '../../shared/protocol/shell';
 import type { MissionControlSetupSnapshotMessage } from '../../shared/protocol/missionControlSetupProtocol';
 import {
@@ -27,7 +27,7 @@ const HANDSHAKE_TIMEOUT_MS = 5_000;
 
 export function useHostMessageFlow(
   vscode: ChatPort,
-  state: Pick<AssistantWebviewState, 'sequence' | 'transcript' | 'missionControlResult' | 'connection' | 'sessionId'>,
+  state: Pick<AssistantWebviewState, 'sequence' | 'transcript' | 'connection' | 'sessionId'>,
   handlers: {
     readonly dispatch: Dispatch<AssistantWebviewAction>;
     readonly getSequence: () => number;
@@ -46,19 +46,15 @@ export function useHostMessageFlow(
   const canvasSequence = useRef(-1);
   const [transientDiagnostic, setTransientDiagnostic] =
     useState<TransientDiagnostic | null>(null);
-  const [missionWorkspaceRoute, setMissionWorkspaceRoute] = useState<
-    'new-mission' | 'detail' | null
-  >(null);
+  const [missionWorkspace, setMissionWorkspace] = useState<{
+    route: 'new-mission' | 'detail' | null;
+    chat: boolean;
+  }>({ route: null, chat: true });
+  const setMissionChat = useCallback((chat: boolean) => {
+    setMissionWorkspace((current) => ({ ...current, chat }));
+  }, []);
   const [missionSetup, setMissionSetup] =
     useState<MissionControlSetupSnapshotMessage | null>(null);
-  useEffect(() => {
-    if (
-      state.missionControlResult?.action === 'start' &&
-      state.missionControlResult.status === 'accepted'
-    ) {
-      setMissionWorkspaceRoute('detail');
-    }
-  }, [state.missionControlResult]);
   useEffect(() => {
     let queue: StoreHostMessage[] = [];
     let frame: number | null = null;
@@ -79,7 +75,13 @@ export function useHostMessageFlow(
     const unsubscribe = subscribeHostMessages((message) => {
       switch (message.type) {
         case 'missionControl.route':
-          setMissionWorkspaceRoute(message.route === 'catalog' ? null : message.route);
+          setMissionWorkspace((current) => ({
+            route: message.route === 'catalog' ? null : message.route,
+            chat: message.route === 'catalog' ? true
+              : message.view !== undefined ? message.view === 'chat'
+              : message.route === 'new-mission' && current.route !== 'new-mission' ? false
+              : current.chat,
+          }));
           if (message.route === 'catalog') setMissionSetup(null);
           return;
         case 'missionControl.setup.snapshot':
@@ -146,7 +148,9 @@ export function useHostMessageFlow(
     return () => clearTimeout(timer);
   }, [received, vscode]);
   return {
-    missionWorkspaceRoute,
+    missionWorkspaceRoute: missionWorkspace.route,
+    missionChat: missionWorkspace.chat,
+    setMissionChat,
     missionSetup,
     transientDiagnostic,
     showHandshakeNotice: stalled && !received,

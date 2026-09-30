@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { SESSION_VIEWER_PROTOCOL_VERSION, type SessionViewerSnapshotMessage } from '../../shared/protocol/sessionViewerProtocol';
 import { parseSessionViewerHostMessage } from './validateSessionViewerHostMessage';
 import type { ThemePreference } from '../../shared/protocol/shell';
+import { reconcileViewerSnapshot } from './reconcileViewerSnapshot';
 
 export function useSessionViewer(vscode: { postMessage(message: unknown): void }) {
   const [snapshot, setSnapshot] = useState<SessionViewerSnapshotMessage | null>(null);
@@ -20,7 +21,7 @@ export function useSessionViewer(vscode: { postMessage(message: unknown): void }
         document.documentElement.dataset.dvxTheme = message.resolved;
         document.documentElement.dataset.dvxThemePreference = message.preference;
         setTheme({ resolved: message.resolved, preference: message.preference });
-      } else setSnapshot(message);
+      } else setSnapshot((previous) => reconcileViewerSnapshot(previous, message));
     };
     window.addEventListener('message', onMessage);
     vscode.postMessage({ type: 'sessionViewer.ready', protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION });

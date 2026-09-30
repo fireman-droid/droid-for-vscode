@@ -237,6 +237,13 @@
   语言语法、别名与嵌入候选集中在 `markdown/codeLanguages.ts`，不在业务页面添加
   语言判断。明确语言优先、文件后缀辅助、缺失信息有界识别；无法可靠识别时保留
   原文。思考继续使用紧凑容器，不增加复制工具栏、Canvas 或其他正文动作。
+- 虚拟行重新进入视口时，短中篇正文也可复用共享 Markdown 缓存；同步渲染必须
+  全文完全匹配，不能把已缓存的流式前缀冒充完整回复。缓存最多 128 条、总输入
+  1,048,576 字符；代码高亮另外按完整源码及有效语言配置有界复用，最多 128 条、
+  键与结果合计 1,048,576 字符。两者均为当前 Webview 内存缓存，不持久化源码。
+- Viewer 相同快照不触发正文更新；追加输出时保留所有字段未变的历史消息引用，
+  复用主聊天描述器与操作摘要选择器。状态和停止反馈仍独立更新，目标变化不沿用
+  前一快照。手动滚动仍由原生事件即时处理，不增加停止滚动后的延迟刷新。
 - 同一文件的累计 Diff 后台刷新保留已有正文直到新结果返回，避免 Loading 占位
   与完整差异反复切换高度；首次加载、身份切换、失败和重试继续明确反馈。
 - 右侧圆点改变 transform、opacity 和颜色，不动画宽高；提示框短淡入。
@@ -1045,6 +1052,10 @@ stateDiagram-v2
 - Cancel setup 关闭创建设置；All Missions 打开独立目录。
 - Show chat 只切换窄窗口的显示区域，保留 Mission 会话和草稿；Leave Mission
   执行原 Host 退出流程，不用它代替 Mission 内的聊天切换。
+- Mission 路由用可选 `view` 区分显式导航和后台同步；状态刷新、会话恢复及发送
+  不重置聊天／总览选择。主动打开 Mission 或从目录选择才展示总览；启动成功
+  展示聊天。生命周期 `Awaiting input` 保留原值，但 Input needed 与待回答横幅
+  必须来自当前 Orchestrator 的实际待处理交互。
 - Start 通过 readiness 后创建 Orchestrator、应用设置并发送 task。
 - Start 成功后左侧切换为 Mission 专属对话，右侧原地切成详情，不能继续显示
   New Mission 或停在 `Starting…`。
@@ -1143,6 +1154,10 @@ flowchart LR
 - `childSessionId` 不进入共享 Bridge、Webview state、UI 或日志。
 - Webview 只发送当前父 Session、Turn 和 Task 的 opaque `toolUseId`；Host 验证
   该 Task 确实存在后才解析 child Session。
+- 同一父 Session 中，明确的 Task 调用 ID 可以指向同一续用 child；生命周期按
+  调用保存，Viewer 仍显示该 child 的完整历史。活动与文件操作使用 ledger 的
+  `promptMessageId` 匹配真实用户消息分段，ID 仅留在 Host/Runtime。边界缺失时
+  显示证据不完整，不猜测归属或把相同操作重复分配；描述匹配不能授权续用映射。
 - 父 Session 的原始通知按 envelope `sessionId` 分流。Child 的
   assistant text、Thinking、Tool call/progress/result、图片、working state 和
   turn completion 进入只读 Transcript Store。

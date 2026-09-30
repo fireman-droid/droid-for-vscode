@@ -5,6 +5,24 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子代理续用、Mission 导航与历史滚动
+
+- 同一子代理会话可以关联父聊天中的多次明确 Task 调用；每次调用分别保存生命周期，
+  点击仍打开该子代理的完整只读历史。活动和文件操作按 ledger 的实际 prompt 消息
+  边界归属；边界缺失时明确标记证据不完整，不把整段历史重复归给多次调用。
+- Mission 路由区分主动打开总览与后台状态同步；Show chat 后发送、恢复和状态更新
+  保留聊天视图，主动打开 Mission 才切回总览。启动成功进入聊天；Input needed
+  只在当前 Orchestrator 存在实际待处理提问或审批时显示。
+- 主聊天与 Viewer 的短中篇 Markdown 也复用有界解析缓存，仅全文相同才直接复用；
+  代码高亮按完整源码、语言来源和识别选项复用结果，减少虚拟行重新进入视口的计算。
+  Viewer 保留未变化快照与消息的引用，沿用主聊天增量投影，避免周期刷新重绘整个正文。
+  原生手动滚动、自动跟随及高度补偿规则保持不变；尚未量化滚动帧率改善。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 与
+  `pnpm run verify:vsix` 通过，VSIX 校验 165 条目及扩展入口。已全局安装到 Microsoft
+  VS Code，10 项扩展与 Webview 载荷的 SHA-256 与构建一致。安装 CLI 的 `url.parse`
+  弃用提示未阻断安装。需 Reload Window 后人工验收；本轮未获定向测试授权，未
+  新增、修改或运行测试、浏览器自动化或真实模型请求，构建不代表完成滚动行为验收。
+
 ## 顶部连接状态合并
 
 - Droid 旁仅保留一个连接入口；聊天与 IDE 均连接才显示绿点和 Online，连接中、

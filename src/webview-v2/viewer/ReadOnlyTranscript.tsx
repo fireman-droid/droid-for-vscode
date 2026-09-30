@@ -1,18 +1,23 @@
 import { ReadOnlyTranscriptView } from '@droidvisx/chat-ui/chat/ReadOnlyTranscriptView';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { describeTranscript } from '../chat/transcript/transcriptGroups';
+import { createTranscriptSelector } from '../chat/transcript/transcriptGroups';
 import { resolveAssistantStatus } from '../chat/transcript/transcriptStatus';
 import { AssistantReply } from '../chat/AssistantReply';
 import { ReadOnlyQuestion } from './ReadOnlyQuestion';
 import { isPlanLive, selectPlanAnchors } from '../chat/transcript/planAnchor';
 import { PlanLine } from '../chat/PlanLine';
-import { summarizeOperations } from '../chat/operationSummary';
+import { createOperationSummarySelector } from '../chat/operationSummary';
+import { createTranscriptMessagesSelector } from '../chat/transcriptProjection';
 
-export function ReadOnlyTranscript({ items, running, truncated = false }: { readonly items: readonly SessionTranscriptItem[]; readonly running: boolean; readonly truncated?: boolean }) {
-  const { descriptors, replyTails, replyTimestamps } = useMemo(() => describeTranscript(items), [items]);
+const NO_PENDING_REPLIES: ReadonlySet<string> = new Set();
+
+export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, running, truncated = false }: { readonly items: readonly SessionTranscriptItem[]; readonly running: boolean; readonly truncated?: boolean }) {
+  const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
+    messages: createTranscriptMessagesSelector() }), []);
+  const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
   const plans = useMemo(() => selectPlanAnchors(items), [items]);
-  const operationSummaries = useMemo(() => summarizeOperations(items), [items]);
+  const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
   const [planChoices, setPlanChoices] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const turnId = useMemo(() => {
     if (!running) return null;
@@ -23,8 +28,8 @@ export function ReadOnlyTranscript({ items, running, truncated = false }: { read
     return null;
   }, [running, items]);
   const active = turnId ? { turnId, status: 'streaming' as const } : null;
-  const byId = new Map(descriptors.map((descriptor) => [descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, descriptor]));
-  const messages = descriptors.map((descriptor) => ({ id: descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, role: descriptor.kind }));
+  const byId = useMemo(() => new Map(descriptors.map((descriptor) => [descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, descriptor])), [descriptors]);
+  const messages = useMemo(() => selectors.messages(descriptors, replyTails, NO_PENDING_REPLIES), [descriptors, replyTails, selectors]);
   return <ReadOnlyTranscriptView messages={messages} truncated={truncated} renderMessage={(id, stopFollowing) => {
     const descriptor = byId.get(id)!;
     if (descriptor.kind === 'user') {
@@ -38,4 +43,4 @@ export function ReadOnlyTranscript({ items, running, truncated = false }: { read
       operationSummary={operationSummaries.get(descriptor.turnId)} operationsLive={status.type === 'running'} onInteract={stopFollowing}
       completedAt={status.type === 'running' ? undefined : replyTimestamps.get(descriptor.id)} regenerate={undefined} fork={undefined} />;
   }} />;
-}
+});

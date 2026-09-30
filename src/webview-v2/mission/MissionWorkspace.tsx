@@ -8,11 +8,12 @@ import { MissionDetails } from './MissionDetails';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 
-export function MissionWorkspace({ route, setup, mission, result, vscode, onCatalog, onClose, onShowChat }: {
+export function MissionWorkspace({ route, setup, mission, result, inputNeeded, vscode, onCatalog, onClose, onShowChat }: {
   readonly route: 'new-mission' | 'detail';
   readonly setup: MissionControlSetupSnapshotMessage | null;
   readonly mission: MissionSnapshotMessage | null;
   readonly result: MissionControlResultMessage | null;
+  readonly inputNeeded: boolean;
   readonly vscode: { postMessage(message: unknown): void };
   readonly onCatalog: () => void;
   readonly onClose: () => void;
@@ -43,7 +44,7 @@ export function MissionWorkspace({ route, setup, mission, result, vscode, onCata
             ? <p className="text-xs text-muted-foreground">Loading Mission state…</p>
             : <span className="v2-mission-pill" data-tone={phaseTone(mission)}><span aria-hidden="true" className="v2-mission-dot" />{formatPhase(mission)}</span>}
       </div>
-      {!configuring || !setup?.capabilities ? <Button variant="outline" className="v2-mission-chat-toggle h-8 w-full" onClick={onShowChat}><MessageSquare />Show chat{mission?.lifecycle === 'awaiting_input' ? ' · Input needed' : ''}</Button> : null}
+      {!configuring || !setup?.capabilities ? <Button variant="outline" className="v2-mission-chat-toggle h-8 w-full" onClick={onShowChat}><MessageSquare />Show chat{inputNeeded ? ' · Input needed' : ''}</Button> : null}
     </header>
     <div className={configuring && setup?.capabilities ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4'}>
       {route === 'new-mission' ? <>
@@ -60,7 +61,7 @@ export function MissionWorkspace({ route, setup, mission, result, vscode, onCata
           : <div className="space-y-4">{readinessNotice}{setup === null || setup.availability === 'loading'
             ? <DroidLoading label="Loading Mission setup…" detail="Waiting for chat and model capabilities." />
             : <p role="status" className="v2-mission-empty text-xs text-muted-foreground">{describeSetupStatus(setup)}</p>}</div>}
-      </> : mission === null ? <DroidLoading label="Loading Mission details…" /> : <MissionDetails mission={mission} result={result} vscode={vscode} />}
+      </> : mission === null ? <DroidLoading label="Loading Mission details…" /> : <MissionDetails mission={mission} result={result} inputNeeded={inputNeeded} vscode={vscode} />}
     </div>
   </aside>;
 }

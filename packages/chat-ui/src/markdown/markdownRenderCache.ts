@@ -6,9 +6,9 @@ export interface ParsedMarkdown {
   readonly nodes: readonly RootContent[];
 }
 
-// Reuse recently viewed long replies after virtual row eviction. Keep only
+// Reuse recently viewed replies after virtual row eviction. Keep only
 // the latest prefix of a stream, with bounded retention in this webview.
-const MAX_ENTRIES = 24;
+const MAX_ENTRIES = 128;
 const MAX_TEXT_LENGTH = 1_048_576;
 const entries = new Set<ParsedMarkdown>();
 let textLength = 0;

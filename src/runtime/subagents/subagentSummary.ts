@@ -69,6 +69,8 @@ export interface SubagentInvocationRecord {
   readonly summary: ToolSubagentSummary;
   readonly childSessionId: string | null;
   readonly parentToolUseId?: string;
+  /** Host-only start boundary when a Task continues an existing child session. */
+  readonly promptMessageId?: string;
 }
 
 /** Host-only CLI identifiers are opaque; anything unprintable is dropped. */
@@ -126,6 +128,9 @@ export function readSubagentInvocationRecords(
       ...(typeof entry.parentToolUseId === 'string' &&
       SAFE_OPAQUE_ID.test(entry.parentToolUseId)
         ? { parentToolUseId: entry.parentToolUseId }
+        : {}),
+      ...(typeof entry.promptMessageId === 'string' && SAFE_OPAQUE_ID.test(entry.promptMessageId)
+        ? { promptMessageId: entry.promptMessageId }
         : {}),
     });
   }

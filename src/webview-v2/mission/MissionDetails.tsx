@@ -17,9 +17,10 @@ const rejectionCopy = {
   invalid: 'Droid could not apply this action to the selected Mission.',
 };
 
-export function MissionDetails({ mission, result, vscode }: {
+export function MissionDetails({ mission, result, inputNeeded, vscode }: {
   readonly mission: MissionSnapshotMessage;
   readonly result: MissionControlResultMessage | null;
+  readonly inputNeeded: boolean;
   readonly vscode: { postMessage(message: unknown): void };
 }) {
   const command = useMissionControl(vscode, requestId);
@@ -50,7 +51,7 @@ export function MissionDetails({ mission, result, vscode }: {
       <Progress aria-label="Completed Mission features" value={completed} max={Math.max(1, total)} aria-valuetext={total === 0 ? 'Waiting for a feature plan' : `${completed} of ${total} features completed`} />
       {current ? <p className="break-words text-xs text-muted-foreground">Current feature <span className="font-medium text-foreground">{current.title}</span></p> : null}
       {mission.availability === 'detached' ? <p role="status" className="v2-mission-feedback flex items-start gap-2 rounded-md border border-border p-2.5 text-xs text-muted-foreground"><Unplug aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />This Mission is detached from the current runtime. Live controls are unavailable.</p> : null}
-      {mission.lifecycle === 'awaiting_input' ? <p role="status" data-tone="attention" className="v2-mission-banner flex items-start gap-2 p-2.5 text-xs"><CircleHelp aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />Droid needs your input. Answer the pending request in the Mission chat.</p> : null}
+      {inputNeeded ? <p role="status" data-tone="attention" className="v2-mission-banner flex items-start gap-2 p-2.5 text-xs"><CircleHelp aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />Droid needs your input. Review the pending question or approval in the Mission chat.</p> : null}
     </section>
     <div aria-label="Mission controls" className="flex flex-wrap gap-2">
       {mission.controls.canResume ? <Button className="h-8" disabled={busy} onClick={() => send({ type: 'mission.resume', revision: mission.revision })}><Play />Resume Mission</Button> : null}
