@@ -1,14 +1,16 @@
+import { fileURLToPath } from 'node:url';
+import { resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
+import { isToolResultSummary, type ToolResultSummary } from '../../shared/transcript/toolResultSummary';
 import type { DroidStreamEvent } from '@factory/droid-sdk/node';
 import { relative, resolve } from 'node:path';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
-import { MAX_TOOL_ACTIVITIES_PER_TURN } from '../../shared/protocol/bounds';
+import { MAX_TOOL_ACTIVITIES_PER_TURN, MAX_TOOL_NAME_LENGTH } from '../../shared/protocol/bounds';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { stripTerminalNoise } from '../../shared/transcript/toolOutput';
 import {
   MAX_TOOL_RESULT_LINES,
   MAX_TOOL_RESULT_SOURCE_LENGTH,
   MAX_TOOL_RESULT_TEXT_UNITS,
-  RESULT_TOOLS,
   unavailableResult,
   type ResultTool,
   type ToolResultPreview,
@@ -27,8 +29,8 @@ export function isRestrictedToolContent(text: string): boolean {
   return SENSITIVE_TEXT.test(text) || /[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(text);
 }
 
-export function nativeResultTool(name: string): ResultTool | undefined {
-  return RESULT_TOOLS.find((tool) => tool === name);
+export function previewResultTool(name: string): ResultTool | undefined {
+  return resultPreviewPolicy(name) === 'none' ? undefined : name;
 }
 
 export function readGitHubResultPath(input: Record<string, unknown>): string | undefined {
@@ -51,32 +53,41 @@ export function readResultSource(
   callId: string,
 ): ResultSource {
   if (
-    !isStrictRecord(input) ||
+    !isStrictRecord(input) || !tool || tool.length > MAX_TOOL_NAME_LENGTH ||
+    /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(tool) ||
     !callId ||
     callId.length > MAX_BRIDGE_ID_LENGTH ||
     /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(callId)
   )
     return 'untrusted';
-  if (tool === 'WebSearch') {
+  const policy = resultPreviewPolicy(tool);
+  const target = toolPresentation(tool)?.target;
+  if (policy === 'web') {
     if (typeof input.query !== 'string' || !input.query.trim() ||
       input.query.length > MAX_SOURCE_INPUT_LENGTH) return 'untrusted';
     return isRestrictedToolContent(input.query) ? 'restricted' : { tool, path: 'Web search', callId };
   }
-  if (tool === 'github___get_file_contents') {
+  if (policy === 'github') {
     const path = readGitHubResultPath(input);
     if (path === undefined) return 'untrusted';
     return SENSITIVE_PATH.test(path) ? 'restricted' : { tool, path, callId };
   }
+  let raw: unknown;
+  if (policy === 'workspace') {
+    raw = target === 'file' ? (input.file_path ?? input.filePath ?? input.path)
+      : target === 'search' ? input.path
+      : target === 'glob' ? (input.folder ?? input.path)
+      : (input.directory_path ?? input.path);
+    if (raw === undefined && target === 'file') return 'untrusted';
+  } else {
+    raw = input.file_path ?? input.filePath ?? input.path ?? input.directory_path ?? input.folder;
+    if (typeof input.uri === 'string' && input.uri.startsWith('file:')) {
+      try { raw = fileURLToPath(input.uri); } catch { return 'untrusted'; }
+    } else if (policy === 'diagnostics' && input.uri !== undefined) return 'untrusted';
+    // Remote and argument-free tools have an identified call, but no local file source.
+    if (raw === undefined && policy !== 'diagnostics') return { tool, path: 'Tool result', callId };
+  }
   if (!workspace) return 'untrusted';
-  const raw =
-    tool === 'Read'
-      ? (input.file_path ?? input.filePath)
-      : tool === 'Grep'
-        ? input.path
-        : tool === 'Glob'
-          ? (input.folder ?? input.path)
-          : (input.directory_path ?? input.path);
-  if (raw === undefined && tool === 'Read') return 'untrusted';
   if (
     raw !== undefined &&
     (typeof raw !== 'string' ||
@@ -160,31 +171,43 @@ export function extractResultPreview(
     return unavailableResult(truncated ? 'unsupported' : 'empty');
   // A truncated UTF-16 string must not end with an unmatched high surrogate.
   if (truncated && /[\uD800-\uDBFF]$/u.test(text)) text = text.slice(0, -1);
-  return { availability: 'available', source, text, truncated };
+  const summary = resultPreviewPolicy(source.tool) === 'diagnostics'
+    ? diagnosticSummary(content) : undefined;
+  return { availability: 'available', source, text, truncated,
+    ...(summary === undefined ? {} : { summary }) };
+}
+
+/** Parse complete bounded tool output, never a partial or model-written status. */
+function diagnosticSummary(content: unknown): ToolResultSummary | undefined {
+  const text = typeof content === 'string' ? content : Array.isArray(content) && content.length === 1 &&
+    isStrictRecord(content[0]) && content[0].type === 'text' && typeof content[0].text === 'string'
+    ? content[0].text : undefined;
+  if (text === undefined || text.length > MAX_RESULT_SCAN_UNITS) return undefined;
+  let result: unknown;
+  try { result = JSON.parse(text); } catch { return undefined; }
+  if (!isStrictRecord(result) || !Array.isArray(result.diagnostics)) return undefined;
+  const summary = { kind: 'diagnostics', totalCount: result.totalCount, filteredCount: result.filteredCount };
+  return isToolResultSummary(summary) && result.diagnostics.length === summary.filteredCount ? summary : undefined;
 }
 
 export function createToolResultCollector(workspace?: string) {
-  const sources = new Map<string, ResultSource>();
+  const sources = new Map<string, { toolName: string; source: ResultSource }>();
   return (event: DroidStreamEvent): ToolResultPreview | undefined => {
     if (event.type === 'tool_call') {
-      const tool = nativeResultTool(event.name);
-      if (
-        tool &&
-        (sources.has(event.toolUseId) || sources.size < MAX_TOOL_ACTIVITIES_PER_TURN)
-      ) {
-        sources.set(
-          event.toolUseId,
-          readResultSource(tool, event.input, workspace, event.toolUseId),
-        );
+      const tool = previewResultTool(event.name);
+      if (tool && (sources.has(event.toolUseId) || sources.size < MAX_TOOL_ACTIVITIES_PER_TURN)) {
+        sources.set(event.toolUseId, {
+          toolName: event.name,
+          source: readResultSource(tool, event.input, workspace, event.toolUseId),
+        });
       }
       return undefined;
     }
     if (event.type !== 'tool_result') return undefined;
-    const source = sources.get(event.toolUseId);
+    const call = sources.get(event.toolUseId);
     sources.delete(event.toolUseId);
-    if (!nativeResultTool(event.toolName) || event.isError) return undefined;
-    if (typeof source === 'object' && source.tool !== event.toolName)
-      return unavailableResult('untrusted');
-    return extractResultPreview(event.content, source ?? 'untrusted');
+    if (!previewResultTool(event.toolName) || event.isError) return undefined;
+    if (call?.toolName !== event.toolName) return unavailableResult('untrusted');
+    return extractResultPreview(event.content, call.source);
   };
 }

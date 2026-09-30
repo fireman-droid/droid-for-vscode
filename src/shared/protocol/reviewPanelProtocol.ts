@@ -3,6 +3,7 @@ import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 import { isOperationDiff, isSafeOperationText, type OperationDiff, type OperationDiffFile } from './operationDiff';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from './reviewProtocol';
 
+export type ReviewContext = 3 | 20 | 100 | 'all';
 export type ReviewPanelOpen = {
   readonly type: 'review.panel.open'; readonly sessionId: string;
   readonly scopeKind: ReviewScopeKind; readonly turnId?: string;
@@ -11,7 +12,7 @@ export type ReviewPanelOpen = {
 };
 export type ReviewPanelRequest = ReviewPanelOpen | { readonly type: 'reviewPanel.ready' } |
   { readonly type: 'reviewPanel.readFile' | 'reviewPanel.openNative'; readonly requestId: string;
-    readonly reviewScopeId: string; readonly baseline: string; readonly path: string; readonly context: 3 | 20 | 100 } |
+    readonly reviewScopeId: string; readonly baseline: string; readonly path: string; readonly context: ReviewContext } |
   { readonly type: 'reviewPanel.gitStatus' | 'reviewPanel.openAgent' } |
   { readonly type: 'reviewPanel.commit'; readonly paths: readonly string[]; readonly message: string } |
   { readonly type: 'reviewPanel.openPath'; readonly path: string };
@@ -23,6 +24,8 @@ export type ReviewPanelContext = {
 export interface ReviewRecordedEntry {
   readonly toolUseId: string;
   readonly patch: string;
+  /** Full context rebuilt from saved snapshots and verified result patches. */
+  readonly fullPatch?: string;
   readonly source?: 'tool-input' | 'tool-result' | 'successful-tool-input';
   readonly outcome?: 'applied' | 'failed' | 'uncertain';
   readonly message?: string;
@@ -69,7 +72,7 @@ export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | un
   if (value.type === 'reviewPanel.readFile' || value.type === 'reviewPanel.openNative')
     return hasExactKeys(value, ['type', 'requestId', 'reviewScopeId', 'baseline', 'path', 'context']) &&
       isId(value.requestId) && isId(value.reviewScopeId) && isId(value.baseline) &&
-      isSafeWorkspaceRelativePath(value.path) && [3, 20, 100].includes(Number(value.context)) && typeof value.context === 'number'
+      isSafeWorkspaceRelativePath(value.path) && (value.context === 'all' || typeof value.context === 'number' && [3, 20, 100].includes(value.context))
       ? value as ReviewPanelRequest : undefined;
   return undefined;
 }
@@ -90,7 +93,7 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
     (value.recordedOperations === undefined || Array.isArray(value.recordedOperations) &&
       value.recordedOperations.length <= 200 &&
       value.recordedOperations.every((entry) => isStrictRecord(entry) &&
-        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent']) && isId(entry.toolUseId) &&
+        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent', 'fullPatch']) && isId(entry.toolUseId) &&
         (entry.source === undefined || ['tool-input', 'tool-result', 'successful-tool-input'].includes(String(entry.source))) &&
         (entry.outcome === undefined || ['applied', 'failed', 'uncertain'].includes(String(entry.outcome))) &&
         (entry.message === undefined || typeof entry.message === 'string' && entry.message.length <= 2_000) &&
@@ -98,8 +101,10 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
         (entry.sequence === undefined || Number.isSafeInteger(entry.sequence) && Number(entry.sequence) >= 0) &&
         (entry.kind === undefined || ['added', 'modified', 'deleted', 'renamed'].includes(String(entry.kind))) &&
         (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
+        (entry.fullPatch === undefined || entry.source === 'tool-result' && entry.outcome === 'applied' &&
+          typeof entry.fullPatch === 'string' && entry.fullPatch.length <= 512_000) &&
         typeof entry.patch === 'string' && entry.patch.length <= 24_000) &&
-      value.recordedOperations.reduce((sum: number, entry: ReviewRecordedEntry) => sum + entry.patch.length + (entry.submittedContent?.length ?? 0), 0) <= 512_000);
+      value.recordedOperations.reduce((sum: number, entry: ReviewRecordedEntry) => sum + entry.patch.length + (entry.submittedContent?.length ?? 0) + (entry.fullPatch?.length ?? 0), 0) <= 512_000);
 }
 
 function isRecordedContent(value: unknown): value is ReviewRecordedContent {

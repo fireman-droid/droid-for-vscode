@@ -145,7 +145,11 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                 {!readOnly && current && files.length > 1 ? <DropdownMenuItem disabled={!canMark} onSelect={() => actions.onMarkReviewed(true)}><CheckCheck />Mark viewed & next</DropdownMenuItem> : null}
                 {!readOnly && !operationsScope ? <>
                   <DropdownMenuItem disabled={!current || flow.scopePending} onSelect={flow.openNative}>Open Native Diff</DropdownMenuItem>
-                  {[3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
+                </> : null}
+                {!operationOnly ? <>
+                  <DropdownMenuItem onSelect={() => flow.setContext('all')}>Full file{flow.context === 'all' ? ' ✓' : ''}</DropdownMenuItem>
+                  {recordedEntries ? <DropdownMenuItem onSelect={() => flow.setContext(3)}>Saved change excerpts{flow.context !== 'all' ? ' ✓' : ''}</DropdownMenuItem>
+                    : [3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
                 </> : null}
                 {!readOnly && current && operationsScope ? <>
                 {!current.restorable ? <p className="review-undo-hint">Undo needs a complete, reversible record. This file does not have one.</p> : null}
@@ -167,7 +171,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
               : !operation && !file ? flow.fileError ? <p className="review-empty">Diff unavailable.</p> : <DroidLoading label="Reading Diff…" />
               : !operation && file?.error ? <p className="review-empty" role="status">{file.error}</p>
               : recordedEntries ? <RecordedFileReview key={`${path}:${review?.reviewScopeId ?? operation?.callId ?? ''}`} entries={recordedEntries}
-                content={recordedContent} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar} />
+                content={recordedContent} fullContext={flow.context === 'all'} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar} />
               : patch && patch !== '@@' ? <DiffView patch={patch} path={path} split={split} />
               : operationFile?.contentRestricted ? null
               : <p className="review-empty">{operationFile ? `File ${operationFile.kind}. Text changes were not recorded.` : operationsScope ? 'No text Diff evidence is available.' : 'No net text changes.'}</p>}

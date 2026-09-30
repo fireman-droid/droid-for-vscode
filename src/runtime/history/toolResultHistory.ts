@@ -41,7 +41,7 @@ export function historyResultOperationDiff(
 }
 import {
   extractResultPreview,
-  nativeResultTool,
+  previewResultTool,
   readResultSource,
   type ResultSource,
 } from '../tools/toolResultPreview';
@@ -52,7 +52,7 @@ export function historyResultSource(
   workspace: string | undefined,
   callId: string,
 ): ResultSource | undefined {
-  const tool = nativeResultTool(name);
+  const tool = previewResultTool(name);
   return tool === undefined
     ? undefined
     : readResultSource(tool, input, workspace, callId);

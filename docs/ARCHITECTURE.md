@@ -373,9 +373,18 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - 主输入与历史编辑共用 `chat/useAttachmentIngress.ts`；开始读取即同步增加准备计数，
   提交入口查询 `isPreparing()`，界面渲染数值只负责展示。切会话/取消使旧读取失效，
   不能以一次渲染前的数字判断当前附件已经就绪；BTW 使用同样的同步查询原则。
+- Review Bridge 的 context 支持 all；普通比较从已有完整版本生成全上下文补丁。
+  recordedFileDiffs 只用保存的 before/after 树核对同一会话的完整操作链，还原结果与
+  after 不符则保留原补丁；不会引入工作区当前文件替代历史基线。全文只随 Review 请求
+  有界传递，不写入聊天历史。改动锚点独立于延迟渲染块，未渲染区也保留跳转位置。
 - 公共 `review/DiffView.tsx` 继续分块呈现完整补丁，Unified 隐藏测宽只取最长可打印
   ASCII 行；Unicode/tab 行保留原生排版测量，不靠字符数推断不同字形宽度。
-- 工具结果按实际调用上下文有界投影；淘汰保留来源/原因，不等于执行失败或整段历史
+- 工具展示定义集中在 shared/transcript/toolCatalog.ts；Runtime 的 toolDetail 与
+  toolResultPreview 分别从实际输入提取目标、从完整结果提取预览及诊断摘要，实时和
+  history/toolResultHistory 共用。Bridge 沿 resultPreview 传递经验证的可选摘要，
+  Webview 复用既有 Activity 组件与分类定义，不另建工具名单。未知工具走通用文本预览；
+  执行命令、文件修改、计划、权限和委派继续由各自专属展示负责。
+- 工具结果按实际调用上下文有界投影；淘汰保留来源/原因及已有计数摘要，不等于执行失败或整段历史
   丢失。片段可从 Droid 历史重建，不以扩展全文缓存补造，未知敏感内容不能声称全已检测。
 
 ## Runtime 与 IDE 兼容点

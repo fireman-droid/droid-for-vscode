@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from 'react';
+import { Fragment, memo, useMemo, useRef } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
 import { highlightCode } from '../markdown/highlightCode';
 import { codeLanguageForPath } from '../markdown/codeLanguages';
@@ -31,15 +31,17 @@ export function splitDiffRows(lines: readonly InlineDiffLine[]): DiffRow[] {
   }
   return rows;
 }
-type DiffBlock<T> = { index: number; header: string } | { index: number; rows: readonly T[] };
-function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined): DiffBlock<T>[] {
+type DiffBlock<T> = { index: number; header: string } | { index: number; rows: readonly T[]; changeStart: boolean };
+function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean): DiffBlock<T>[] {
   const blocks: DiffBlock<T>[] = [];
   for (let index = 0; index < rows.length;) {
     const text = header(rows[index]!);
     if (text !== undefined) { blocks.push({ index: index++, header: text }); continue; }
     const start = index++;
-    while (index < rows.length && index - start < 64 && header(rows[index]!) === undefined) index++;
-    blocks.push({ index: start, rows: rows.slice(start, index) });
+    const changeStart = changed(rows[start]!) && (start === 0 || !changed(rows[start - 1]!));
+    while (index < rows.length && index - start < 64 && header(rows[index]!) === undefined &&
+      !(changed(rows[index]!) && !changed(rows[index - 1]!))) index++;
+    blocks.push({ index: start, rows: rows.slice(start, index), changeStart });
   }
   return blocks;
 }
@@ -68,8 +70,8 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
   const lines = useMemo(() => limit === undefined ? all : all.slice(0, limit), [all, limit]);
   const blocks = useMemo(() => split
-    ? diffBlocks(splitDiffRows(lines), (row) => row.header)
-    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined), [lines, split]);
+    ? diffBlocks(splitDiffRows(lines), (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
+    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, split]);
   const widthText = useMemo(() => {
     if (split) return '';
     let longestAscii = '';
@@ -94,12 +96,14 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
       {!split ? <div aria-hidden className="review-diff-width" style={{ height: 0, overflow: 'hidden', visibility: 'hidden',
         whiteSpace: 'pre', paddingLeft: '13ch', paddingRight: 16, userSelect: 'none' }}>{widthText}</div> : null}
       {blocks.map((block) => 'header' in block
-        ? <div key={block.index} data-diff-hunk className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
-        : <DeferredDiffChunk key={block.index} count={block.rows.length} defer={defer} split={split} observe={observe}>
+        ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
+        : <Fragment key={block.index}>
+          {block.changeStart ? <div data-diff-hunk aria-hidden="true" /> : null}
+          <DeferredDiffChunk count={block.rows.length} defer={defer} split={split} observe={observe}>
           {() => block.rows.map((row, index) => split
             ? <SplitRow key={index} row={row as DiffRow} language={language} />
             : <UnifiedRow key={index} line={row as InlineDiffLine} language={language} />)}
-        </DeferredDiffChunk>)}
+        </DeferredDiffChunk></Fragment>)}
     </div>
   </div>;
 });

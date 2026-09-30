@@ -1,3 +1,6 @@
+import { toolNameCandidates, toolPresentation } from './toolCatalog';
+export { toolNameCandidates } from './toolCatalog';
+
 export const MAX_TOOL_ACTION_SUMMARY_LENGTH = 160;
 export const MAX_TOOL_PROGRESS_UPDATES_PER_TOOL = 100;
 
@@ -10,28 +13,6 @@ export const TOOL_ACTIVITY_UPDATE_KINDS = [
 ] as const;
 
 export type ToolActivityUpdateKind = (typeof TOOL_ACTIVITY_UPDATE_KINDS)[number];
-
-// Current action title followed by its former generated title. The latter
-// identifies cached defaults without rewriting model-authored summaries.
-const KNOWN_TOOL_ACTIONS: Readonly<Record<string, readonly [string, string]>> = {
-  applypatch: ['Apply patch', 'Updated workspace files'],
-  askuser: ['Ask for input', 'Requested your input'],
-  create: ['Create file', 'Created workspace files'],
-  edit: ['Edit file', 'Updated workspace files'],
-  execute: ['Run command', 'Ran a local command'],
-  exitspecmode: ['Present implementation plan', 'Prepared an implementation plan'],
-  fetchurl: ['Fetch URL', 'Researched an external source'],
-  glob: ['Find files', 'Inspected workspace structure'],
-  grep: ['Search files', 'Searched workspace content'],
-  ls: ['List directory', 'Inspected workspace structure'],
-  read: ['Read file', 'Read workspace files'],
-  skill: ['Load skill', 'Loaded workflow guidance'],
-  task: ['Delegate task', 'Delegated focused work'],
-  taskoutput: ['Check task output', 'Checked delegated work'],
-  todowrite: ['Update task plan', 'Updated the task plan'],
-  websearch: ['Search web', 'Researched external sources'],
-  write: ['Write file', 'Updated workspace files'],
-};
 
 const BROWSER_TOOL_ACTIONS: Readonly<Record<string, string>> = {
   back: 'Go back',
@@ -72,21 +53,6 @@ const BROWSER_TOOL_ACTIONS: Readonly<Record<string, string>> = {
   networkrequests: 'Inspect network',
 };
 
-/**
- * Lookup keys a raw SDK tool name may match under: the full name and
- * its namespace leaf, both stripped to lowercase alphanumerics. Shared
- * by Runtime input classification and the webview activity grouping.
- * Display-only MCP leaf parsing must not expand these trusted matches.
- */
-export function toolNameCandidates(toolName: string): readonly [string, string] {
-  const safeName = toolName.replace(/\p{Cc}/gu, '').trim();
-  const leaf = safeName.split(/[.:/]/u).at(-1) ?? safeName;
-  return [
-    safeName.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase(),
-    leaf.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase(),
-  ];
-}
-
 /** Browser activity describes the requested action, not a verification result. */
 export function browserToolAction(toolName: string): string | undefined {
   const [normalized] = toolNameCandidates(toolName);
@@ -108,11 +74,11 @@ export function resolveToolAction(toolName: string, action?: string): string {
 export function summarizeToolAction(toolName: string): string {
   const browserAction = browserToolAction(toolName);
   if (browserAction !== undefined) return browserAction;
-  const [normalized, normalizedLeaf] = toolNameCandidates(toolName);
+  const [normalized] = toolNameCandidates(toolName);
   if (normalized.includes('figma')) return displayToolAction(toolName, 'Figma');
-  const known = ownAction(KNOWN_TOOL_ACTIONS, normalized) ?? ownAction(KNOWN_TOOL_ACTIONS, normalizedLeaf);
+  const known = toolPresentation(toolName);
   if (known !== undefined) {
-    return known[0];
+    return known.action;
   }
   return displayToolAction(toolName);
 }
@@ -134,9 +100,9 @@ function displayToolLeaf(toolName: string): string {
 }
 
 function legacyToolAction(toolName: string): string {
-  const [normalized, normalizedLeaf] = toolNameCandidates(toolName);
-  const known = ownAction(KNOWN_TOOL_ACTIONS, normalized) ?? ownAction(KNOWN_TOOL_ACTIONS, normalizedLeaf);
-  if (known !== undefined) return known[1];
+  const [normalized] = toolNameCandidates(toolName);
+  const known = toolPresentation(toolName);
+  if (known !== undefined) return known.formerAction;
   if (normalized.includes('figma')) return 'Inspected the design';
   if (normalized.includes('browser')) return 'Verified the interface';
   const safeName = toolName.replace(/\p{Cc}/gu, '').trim();

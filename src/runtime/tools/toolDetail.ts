@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import { toolPresentation } from '../../shared/transcript/toolCatalog';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
 import {
   MAX_TOOL_DETAIL_LENGTH,
@@ -96,19 +98,19 @@ export function extractToolTarget(
     return undefined;
   }
   const record = input as Record<string, unknown>;
-  const names = toolNameCandidates(toolName);
-  if (toolName === 'github___get_file_contents') return readGitHubResultPath(record);
-  if (toolName === 'WebSearch') {
+  const targetKind = toolPresentation(toolName)?.target;
+  if (targetKind === 'github') return readGitHubResultPath(record);
+  if (targetKind === 'query') {
     const query = readTargetText(record, ['query']);
     return query === undefined || isRestrictedToolContent(query) ? undefined : query;
   }
-  if (names.includes('skill')) {
+  if (targetKind === 'skill') {
     return readTargetText(record, ['skill']);
   }
-  if (names.includes('read')) {
+  if (targetKind === 'file') {
     return readWorkspacePath(record, ['file_path', 'filePath', 'path'], workspaceRoot);
   }
-  if (names.includes('grep') || names.includes('search')) {
+  if (targetKind === 'search') {
     return joinTargetParts(
       readTargetText(record, ['pattern', 'query', 'search']),
       readWorkspacePath(
@@ -119,7 +121,7 @@ export function extractToolTarget(
       readTargetText(record, ['glob_pattern', 'glob', 'include']),
     );
   }
-  if (names.includes('glob')) {
+  if (targetKind === 'glob') {
     return joinTargetParts(
       readTargetPattern(record, ['patterns', 'pattern', 'glob_pattern', 'glob']),
       readWorkspacePath(
@@ -129,14 +131,34 @@ export function extractToolTarget(
       ),
     );
   }
-  if (names.includes('ls') || names.includes('list')) {
+  if (targetKind === 'directory') {
     return readWorkspacePath(
       record,
       ['path', 'directory_path', 'directory', 'folder', 'dir', 'cwd'],
       workspaceRoot,
     );
   }
-  return undefined;
+  return genericToolTarget(record, workspaceRoot);
+}
+
+/** Known scalar targets only: do not dump tool arguments or URL credentials. */
+function genericToolTarget(record: Record<string, unknown>, workspaceRoot?: string): string | undefined {
+  const uri = record.uri ?? record.url;
+  if (typeof uri === 'string' && uri.length <= MAX_TOOL_TARGET_INPUT_SCAN_LENGTH) {
+    try {
+      const parsed = new URL(uri);
+      if (parsed.protocol === 'file:')
+        return readWorkspacePath({ path: fileURLToPath(parsed) }, ['path'], workspaceRoot);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        const label = parsed.origin + parsed.pathname;
+        return isRestrictedToolContent(label) ? undefined : normalizeTargetText(label);
+      }
+    } catch { return undefined; }
+  }
+  const path = readWorkspacePath(record, ['file_path', 'filePath', 'path', 'directory_path', 'folder'], workspaceRoot);
+  if (path !== undefined) return path;
+  const text = readTargetText(record, ['query', 'pattern', 'element']);
+  return text === undefined || isRestrictedToolContent(text) ? undefined : text;
 }
 
 function readWorkspacePath(

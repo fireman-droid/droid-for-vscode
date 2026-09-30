@@ -3,7 +3,7 @@ import {
   parseReviewHostMessage, type ReviewAgentStateMessage, type ReviewOperationResultMessage,
   type ReviewRestorePreviewStateMessage, type ReviewScopeKind, type ReviewScopeState,
 } from '../../shared/protocol/reviewProtocol';
-import { isReviewPanelContext, isReviewPanelFile, type ReviewPanelContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
+import { isReviewPanelContext, isReviewPanelFile, type ReviewContext, type ReviewPanelContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
 import { readHostMessage } from '../bridge/validateHostMessage';
 import { useReviewActions } from './useReviewActions';
 import { createDiffRefreshQueue } from './diffRefreshQueue';
@@ -19,7 +19,7 @@ export function useReviewWorkbench(port: ReviewPort) {
   const [operation, setOperation] = useState<ReviewOperationResultMessage | null>(null);
   const [agent, setAgent] = useState<ReviewAgentStateMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [context, setContext] = useState<3 | 20 | 100>(3);
+  const [context, setContext] = useState<ReviewContext>('all');
   const [scopePending, setScopePending] = useState(false);
   const identity = useRef<ReviewPanelContext | null>(null);
   const fileRead = useRef<{
