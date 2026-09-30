@@ -12,7 +12,6 @@ import { useComposerFlow } from './composer/useComposerFlow';
 import { useHostMessageFlow } from '../host/useHostMessageFlow';
 import { useConversationTransition } from '../shell/conversationTransition';
 import { Button } from '../ui/button';
-import { DroidConnectionDot } from '../ui/droid-motion';
 import { useWebviewTheme } from '../shell/theme';
 import { createChatStore, selectChatShell } from './store';
 import { LiveTranscript } from './Transcript';
@@ -44,7 +43,7 @@ import { normalizeMissionTaskText } from '../../shared/protocol/missionProtocol'
 import { MissionWorkspace } from '../mission/MissionWorkspace';
 import { SelectSessionContext } from './thread/messageContexts';
 import { useAnswerScroll } from './useAnswerScroll';
-import { IdeStatus } from './IdeStatus';
+import { ChatConnectionStatus } from './ChatConnectionStatus';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
 import { AppInfo } from './AppInfo';
 
@@ -173,16 +172,12 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
         <div className="flex min-w-0 items-center gap-1.5"><AppInfo />
-          <span role={state.connection.status === 'unavailable' ? 'alert' : 'status'} title={`Local runtime ${state.connection.status}${state.mission ? ` · ${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : ''}`} className="grid size-3.5 place-items-center">
-            <DroidConnectionDot state={state.connection.status} working={running} />
-            <span className="sr-only">{`Local runtime ${state.connection.status}`}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <IdeStatus ide={state.ide} sessionId={state.sessionId} port={port}
-            initializing={state.connection.status === 'idle' || state.connection.status === 'connecting'}
+          <ChatConnectionStatus connection={state.connection} ide={state.ide} sessionId={state.sessionId} port={port} working={running}
+            missionLabel={state.mission ? `${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : undefined}
             blocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => setMissionChat(false)}>Mission</Button> : null}
           <WorkingSubagents state={state} flow={subagents} />
           <Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-4" /></Button>

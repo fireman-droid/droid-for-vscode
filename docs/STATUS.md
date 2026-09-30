@@ -5,6 +5,19 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 顶部连接状态合并
+
+- Droid 旁仅保留一个连接入口；聊天与 IDE 均连接才显示绿点和 Online，连接中、
+  离线、IDE 错误及需要重连分别反馈。右侧移除独立 IDE 状态与重连图标，保留
+  工作任务、新建会话和历史入口；Mission 原有入口保留。
+- 悬停或键盘聚焦可查看两条连接的真实状态、原因与 Mission 信息。需要重连 IDE
+  时直接点击状态入口，沿用空闲／任务／操作限制和请求等待、超时反馈；健康时点击
+  仅刷新 IDE 状态。聊天服务离线仍使用底部现有恢复入口，不改变 Runtime 或 Bridge。
+- `pnpm run package:vsix` 内的类型／预算检查及生产构建通过，`pnpm run verify:vsix`
+  校验 165 条目及扩展入口通过。统一包已全局安装到 Microsoft VS Code，主聊天 JS
+  和 CSS 与安装文件 SHA-256 一致，需 Reload Window 后人工确认。本轮未新增、
+  修改或运行测试及浏览器自动化；构建与包校验不代表已完成视觉或重连行为验收。
+
 ## 子代理展示与主聊天对齐
 
 - Session Viewer 接入主聊天的主题样式、阅读列宽和消息间距；正文、思考、工具、
