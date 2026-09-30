@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Pencil, Plus, RefreshCw, Search, Settings2, SlidersHorizontal } from 'lucide-react';
+import { Check, Info, KeyRound, Pencil, Plus, RefreshCw, Search, Server, Settings2, SlidersHorizontal } from 'lucide-react';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelsTransport } from './useModels';
 import { useModelsPage } from './useModelsPage';
@@ -63,10 +63,11 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
 
   return <Dialog open={panelOpen} onOpenChange={(open) => { if (!open && !busy) closePanel(); }}><main className="models-page">
     <header className="models-page-header">
-      <div><h1>模型管理</h1><p className="models-help mt-1">选择服务商、兼容接口和模型，在聊天中使用。</p></div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="icon" aria-label="刷新模型配置" title="刷新模型配置" disabled={disabled} onClick={() => void run({ kind: 'refresh' })}><RefreshCw /></Button>
-        <DialogTrigger asChild><Button disabled={disabled || !snapshot} onClick={startAdding}><Plus />添加模型</Button></DialogTrigger>
+      <div className="models-page-title"><SlidersHorizontal aria-hidden /><div><h1>模型管理</h1><p className="models-help">管理服务商与自定义模型</p></div></div>
+      <div className="models-header-actions">
+        {current ? <span className="models-current" title={`当前聊天使用 ${current.displayName || current.model}`}><Check aria-hidden /><span>聊天中 · <strong>{current.displayName || current.model}</strong></span></span> : null}
+        <Button variant="ghost" size="icon" className="size-8" aria-label="刷新模型配置" title="刷新模型配置" disabled={disabled} onClick={() => void run({ kind: 'refresh' })}><RefreshCw /></Button>
+        <DialogTrigger asChild><Button className="h-8" disabled={disabled || !snapshot} onClick={startAdding}><Plus />添加模型</Button></DialogTrigger>
       </div>
     </header>
     <div className="models-workspace">
@@ -77,15 +78,15 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
         <nav aria-label="模型服务商" className="models-source-list">
           {page.groups.map((provider) => {
             return <Button key={provider.host} variant="plain" size="none" className="models-source" disabled={disabled}
-              title={`${provider.name}\n${provider.host}`}
+              title={`${provider.name}\n${provider.host} · ${provider.connections.length} 个接口 · ${provider.modelCount} 个模型`}
               aria-current={provider.host === page.group?.host ? 'page' : undefined} onClick={() => {
                 page.selectProvider(provider); manager.setNotice(null);
               }}>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate">{provider.name}</span><span className="models-source-count">{provider.modelCount}</span></span>
-                <span className="mt-1 block text-[11px] font-normal leading-4 text-muted-foreground">{provider.connections.length} 个接口</span>
-                <span className="block break-all font-mono text-[10.5px] font-normal leading-4 text-muted-foreground">{provider.host}</span>
+              <Server className="models-source-icon" aria-hidden />
+              <span className="models-source-name"><span>{provider.name}</span>
+                {provider.name !== provider.host ? <span className="models-source-host">{provider.host}</span> : null}
               </span>
+              <span className="models-source-count" aria-label={`${provider.modelCount} 个模型`}>{provider.modelCount}</span>
             </Button>;
           })}
           {snapshot?.connections.length === 0 ? <p className="models-help px-2 py-3">还没有服务商</p> : null}
@@ -104,7 +105,6 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
               <Button disabled={disabled} onClick={startAdding}><Plus />添加模型</Button>
             </div>
           : <>
-            {current ? <div className="models-current"><Check className="size-3.5 shrink-0" /><span className="min-w-0 break-words">当前聊天使用 <strong className="font-medium">{current.displayName || current.model}</strong></span></div> : null}
             <header className="models-section-header">
               <div className="min-w-0">
                 <div className="flex items-center gap-2"><h2 className="break-words">{page.group?.name}</h2>
@@ -112,34 +112,31 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
                     if (page.group) { manager.setNotice(null); setAlias({ kind: 'provider', host: page.group.host, name: page.group.name }); }
                   }}><Pencil /></Button>
                 </div>
-                <p className="models-help mt-1">{page.group?.connections.length} 个接口 · {page.group?.modelCount} 个模型配置</p>
+                <p className="models-help mt-1">{page.group?.connections.length} 个接口 · {page.group?.modelCount} 个模型</p>
               </div>
-              <Button variant="outline" size="sm" disabled={disabled} onClick={() => newConnection(true)}><Plus />添加接口</Button>
+              <Button variant="outline" size="sm" className="h-8" disabled={disabled} onClick={() => newConnection(true)}><Plus />添加接口</Button>
             </header>
             <div className="models-interface">
-              <div className="models-interface-toolbar">
-                <div className="models-field min-w-0 flex-1"><span id="models-interface-label">兼容接口</span>
-                  <Select value={connection.id} disabled={disabled} onValueChange={(id) => { page.setSelectedId(id); manager.setNotice(null); }}>
-                    <SelectTrigger aria-labelledby="models-interface-label" className="w-full"><SelectValue>
-                      {PROTOCOLS[connection.protocol].name} · {connection.name}
-                    </SelectValue></SelectTrigger>
-                    <SelectContent>{page.group?.connections.map((source) => <SelectItem key={source.id} value={source.id}
-                      textValue={`${PROTOCOLS[source.protocol].name} ${source.name} ${source.baseUrl}`}>
-                      <span className="block">{PROTOCOLS[source.protocol].name} · {source.name}</span>
-                      <span className="block break-all font-mono text-[11px] text-muted-foreground">{source.baseUrl}</span>
-                    </SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <Button variant="ghost" size="sm" disabled={disabled} onClick={editConnection}><Settings2 />接口设置</Button>
+              <div className="models-interface-details">
+                {(page.group?.connections.length ?? 0) > 1 ? <Select value={connection.id} disabled={disabled} onValueChange={(id) => { page.setSelectedId(id); manager.setNotice(null); }}>
+                  <SelectTrigger aria-label="兼容接口" className="models-interface-select h-8"><SelectValue>
+                    {PROTOCOLS[connection.protocol].name} · {connection.name}
+                  </SelectValue></SelectTrigger>
+                  <SelectContent>{page.group?.connections.map((source) => <SelectItem key={source.id} value={source.id}
+                    textValue={`${PROTOCOLS[source.protocol].name} ${source.name} ${source.baseUrl}`}>
+                    <span className="block">{PROTOCOLS[source.protocol].name} · {source.name}</span>
+                    <span className="block break-all font-mono text-[11px] text-muted-foreground">{source.baseUrl}</span>
+                  </SelectItem>)}</SelectContent>
+                </Select> : <p className="models-interface-name">{PROTOCOLS[connection.protocol].name}</p>}
+                <p className="models-interface-url" title={connection.baseUrl}>{connection.baseUrl}</p>
               </div>
-              <p className="models-help break-all font-mono">{connection.baseUrl}</p>
-              <p className="models-help">{connection.name} · {models.length} 个模型
-                {connection.imported ? ' · 来自 Droid 设置' : ''} · {connection.hasKey ? '已配置密钥' : '未配置密钥'}
-              </p>
-              <p className="models-help">此处只切换查看接口，点击模型旁的“使用此模型”才会切换当前聊天。</p>
+              <span className="models-interface-key" title={connection.imported ? '来自 Droid 设置' : undefined}><KeyRound aria-hidden />{connection.hasKey ? '密钥已配置' : '未配置密钥'}</span>
+              <Button variant="ghost" size="sm" className="h-8" disabled={disabled} onClick={editConnection}><Settings2 aria-hidden />接口设置</Button>
             </div>
-            <div className="models-search"><Search aria-hidden /><Input type="search" className="h-[34px] rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" aria-label="搜索已配置模型" placeholder="搜索模型名称或 Model ID" value={page.search} onChange={(event) => page.setSearch(event.target.value)} /></div>
-            {!snapshot.canApply && snapshot.applyMessage ? <p role="status" className="models-help">暂时无法切换模型：{snapshot.applyMessage}</p> : null}
+            <div className="models-list-toolbar"><h3>模型 <span>{page.search ? `${visible.length} / ${models.length}` : models.length}</span></h3>
+              <div className="models-search"><Search aria-hidden /><Input type="search" className="h-8 rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" aria-label="搜索已配置模型" placeholder="搜索名称或 Model ID" value={page.search} onChange={(event) => page.setSearch(event.target.value)} /></div>
+            </div>
+            {!snapshot.canApply && snapshot.applyMessage ? <p id="models-apply-status" role="status" className="models-apply-status"><Info aria-hidden /><span>{modelApplyMessage(snapshot.applyMessage)}</span></p> : null}
             <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={(action) => { void run(action); }}
               onRename={(model) => { manager.setNotice(null); setAlias({ kind: 'model', model }); }}
               onEdit={(model) => { manager.setNotice(null); page.setModelForm({ model }); }} />
@@ -184,6 +181,14 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
         </div>
       </DialogContent>
   </main></Dialog>;
+}
+
+function modelApplyMessage(message: string): string {
+  if (message === 'Connect a chat before selecting a model here.') return '连接聊天后，即可在这里切换模型。';
+  if (message === 'Finish the current task, queued messages or interaction before changing the chat model.') {
+    return '聊天正在处理任务或等待操作，完成后即可切换模型。';
+  }
+  return message;
 }
 
 function ModelsFeedback({ page }: { readonly page: ModelsPageState }) {
