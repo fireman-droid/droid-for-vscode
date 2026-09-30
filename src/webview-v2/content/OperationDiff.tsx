@@ -5,7 +5,7 @@ import { InlineDiffContext } from '../review/useInlineDiff';
 import { DiffView } from '../review/DiffView';
 import { RecordedSource } from '../review/RecordedSource';
 import { Button } from '../ui/button';
-import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { operationFileStats } from '../chat/operationSummary';
 import { operationLabel } from './operationPresentation';
 export const OPERATION_UNAVAILABLE = {
@@ -20,6 +20,7 @@ export const OPERATION_UNAVAILABLE = {
 
 export function OperationFileDetails({ file }: { readonly file: OperationDiffFile }) {
   return <div className="operation-diff">
+    {file.scope === 'mission' ? <p className="operation-diff-note">Mission artifact · Read-only</p> : null}
     {file.previousPath ? <p className="operation-diff-note">Moved from {file.previousPath}</p> : null}
     {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
     {file.submittedContent !== undefined ? <>
@@ -40,16 +41,16 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
   if (result.source !== 'tool-result') return <p className="operation-diff-unavailable" role="status">
     {operationLabel(result)}. No confirmed changes were recorded.
   </p>;
-  const files = result.files.filter((file) => !hideConfirmed || !isConfirmedOperationFile(result, file));
+  const files = result.files.filter((file) => !hideConfirmed || !isWorkspaceOperationFile(file) || !isConfirmedOperationFile(result, file));
   if (!files.length) return null;
   return <div aria-label="File operations" className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
-      ? <FileChangeView key={file.path} file={operationFileStats(file)} onInteract={onInteract} label={file.submittedContent !== undefined ? 'Written' : file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
-        actions={context?.connected && context.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
+      ? <FileChangeView key={`${file.scope ?? 'workspace'}:${file.path}`} file={operationFileStats(file)} onInteract={onInteract} label={file.submittedContent !== undefined ? 'Written' : file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
+        actions={isWorkspaceOperationFile(file) && context?.connected && context.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
         }); }}>Review</Button> : undefined}>
         <OperationFileDetails file={file} />
       </FileChangeView>
-      : <p key={file.path} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? 'Operation failed' : 'Changes unconfirmed'}{file.message ? ` · ${file.message}` : ''}</p>)}
+      : <p key={`${file.scope ?? 'workspace'}:${file.path}`} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? 'Operation failed' : 'Changes unconfirmed'}{file.message ? ` · ${file.message}` : ''}</p>)}
   </div>;
 }

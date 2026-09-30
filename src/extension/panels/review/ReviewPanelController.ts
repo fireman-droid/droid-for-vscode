@@ -10,7 +10,7 @@ import { readWebviewBootTheme } from '../../webview/webviewTheme';
 import { isTurnActive } from '../../chat/internals';
 import type { SessionViewerPanelController } from '../sessionViewer/SessionViewerPanelController';
 import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../../shared/protocol/gitCommitFlow';
-import { operationDiffWithChanges } from '../../../shared/protocol/operationDiff';
+import { operationDiffWithChanges, workspaceOperationDiff } from '../../../shared/protocol/operationDiff';
 import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 
 export class ReviewPanelController implements vscode.Disposable {
@@ -173,21 +173,19 @@ export class ReviewPanelController implements vscode.Disposable {
               (operation) => operation.toolUseId === target.toolUseId,
             )?.operationDiff
         : undefined;
+    const operation = item?.kind === 'tool'
+      ? item.operationDiff ?? { status: 'unavailable' as const, reason: 'not-recorded' as const }
+      : persistedOperation;
+    const workspaceOperation = operation === undefined ? undefined : workspaceOperationDiff(operationDiffWithChanges(operation));
     this.post({
       type: 'reviewPanel.context', sessionId: target?.sessionId ?? null, valid: this.current(),
       latestTurnId:
         this.latestOperationTurn()?.turnId ??
         this.controller.effects.readLatestConversationChanges()?.turnId ??
         null,
-      operation:
-        item?.kind === 'tool'
-          ? operationDiffWithChanges(
-              item.operationDiff ?? { status: 'unavailable', reason: 'not-recorded' },
-            )
-          : persistedOperation === undefined
-            ? null
-            : operationDiffWithChanges(persistedOperation),
-      operationPath: target?.path ?? null,
+      operation: workspaceOperation ?? null,
+      operationPath: workspaceOperation?.status === 'ready' && workspaceOperation.files.some(file => file.path === target?.path)
+        ? target!.path! : null,
     });
   }
   private async handle(value: unknown): Promise<void> {

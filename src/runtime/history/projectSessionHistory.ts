@@ -12,14 +12,8 @@ import {
   MAX_SESSION_TRANSCRIPT_ITEMS,
 } from '../../shared/bridgeMessages';
 import { type ImageOrigin } from '../../shared/protocol/attachments';
-import {
-  type SessionTranscriptItem,
-  type ToolSubagentSummary,
-} from '../../shared/protocol/transcript';
-import {
-  stableTranscriptId,
-  type HostTranscriptState,
-} from '../../shared/transcript/hostTranscriptState';
+import { type SessionTranscriptItem } from '../../shared/protocol/transcript';
+import { stableTranscriptId } from '../../shared/transcript/hostTranscriptState';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import {
   MAX_SESSION_TRANSCRIPT_TEXT_UNITS,
@@ -39,12 +33,10 @@ import {
 } from './toolResultHistory';
 import { operationDiffFields } from '../../shared/protocol/operationDiff';
 import {
-  createSubagentQueues,
-  readSubagentInvocations,
+  readSubagentInvocationRecords,
   readTaskDelegation,
-  takeSubagentSummary,
-  type SubagentSummaryQueues,
 } from '../subagents/subagentSummary';
+import { withSubagentInvocationSummaries } from '../subagents/subagentInvocationMatching';
 import { extractToolBackgroundHint } from '../tools/toolBackgroundHint';
 import {
   extractToolAction,
@@ -99,8 +91,6 @@ interface Projection {
   readonly multiFileTools: Map<string, readonly string[]>;
   readonly toolCounts: Map<string, number>;
   readonly imageCounts: Map<string, number>;
-  /** Unconsumed subagent ledger entries, keyed by delegation identity. */
-  readonly subagentQueues: SubagentSummaryQueues;
   transcriptHead: number;
   transcriptSize: number;
   transcriptTextUnits: number;
@@ -144,7 +134,6 @@ export function* projectSessionHistorySteps(
       multiFileTools: new Map(),
       toolCounts: new Map(),
       imageCounts: new Map(),
-      subagentQueues: createSubagentQueues(readSubagentInvocations(loaded)),
       transcriptHead: 0,
       transcriptSize: 0,
       transcriptTextUnits: 0,
@@ -171,11 +160,11 @@ export function* projectSessionHistorySteps(
         projection.multiFileTools,
       ),
     );
-    const state: HostTranscriptState = {
+    const state = withSubagentInvocationSummaries({
       transcript: [...imageBudget.transcript],
       historyStatus: truncated ? 'partial' : 'complete',
       truncated,
-    };
+    }, readSubagentInvocationRecords(loaded));
     const mission = readSessionMission(loaded);
     const tokenUsage = readSessionTokenUsage(loaded);
     return {
@@ -666,7 +655,7 @@ function appendTool(
   const detail = extractToolDetail(toolName, block.input);
   const target = extractToolTarget(toolName, block.input, projection.workspaceRoot);
   const backgroundHint = extractToolBackgroundHint(toolName, block.input);
-  const subagent = historyToolSubagent(projection, toolName, block.input);
+  const subagent = readTaskDelegation(toolName, block.input);
   const operationDiff = historyOperationDiff(
     block.name,
     block.input,
@@ -689,7 +678,7 @@ function appendTool(
     ...(detail === undefined ? {} : { detailKind: detail.kind, detail: detail.text }),
     ...(target === undefined ? {} : { target }),
     ...(backgroundHint === undefined ? {} : { backgroundHint }),
-    ...(subagent === undefined ? {} : { subagent }),
+    ...(subagent === null ? {} : { subagent }),
     ...operationDiffFields({ operationDiff }),
   });
   projection.toolCounts.set(turnId, (projection.toolCounts.get(turnId) ?? 0) + 1);
@@ -706,31 +695,6 @@ function appendTool(
     });
     projection.toolIdentities.set(transcriptId, rawToolIdentity);
   }
-}
-
-/**
- * The subagent summary for one Task tool call: the delegation
- * identity from the call's own input, settled with the oldest
- * unconsumed matching ledger entry (status, tool uses, duration).
- * A Task row without a ledger match keeps its identity but reports
- * no status instead of inventing one.
- */
-function historyToolSubagent(
-  projection: Projection,
-  toolName: string,
-  input: unknown,
-): ToolSubagentSummary | undefined {
-  const delegation = readTaskDelegation(toolName, input);
-  if (delegation === null) {
-    return undefined;
-  }
-  return (
-    takeSubagentSummary(
-      projection.subagentQueues,
-      delegation.type,
-      delegation.description,
-    ) ?? delegation
-  );
 }
 
 function completeTool(projection: Projection, block: Record<string, unknown>): void {

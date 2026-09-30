@@ -1,5 +1,6 @@
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import type { HostTranscriptState } from '../../../shared/transcript/hostTranscriptState';
+import { workspaceOperationDiff } from '../../../shared/protocol/operationDiff';
 import type {
   ParentSubagentEvidence,
   SubagentEvidenceNotice,
@@ -79,8 +80,10 @@ export function readInvocationEvidence(
       }
       for (const item of items) {
         if (item.kind !== 'tool' || item.operationDiff === undefined) continue;
-        const diff = item.operationDiff.status === 'ready'
-          ? { ...item.operationDiff, sourceSessionId: entry.childSessionId } : item.operationDiff;
+        const workspace = workspaceOperationDiff(item.operationDiff);
+        if (workspace === undefined) continue;
+        const diff = workspace.status === 'ready'
+          ? { ...workspace, sourceSessionId: entry.childSessionId } : workspace;
         const identity = `${entry.childSessionId}\u0000${diff.status === 'ready' ? diff.callId ?? item.toolUseId : item.toolUseId}`;
         if (dedupe.has(identity)) continue;
         dedupe.add(identity);

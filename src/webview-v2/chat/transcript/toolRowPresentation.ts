@@ -6,8 +6,9 @@ export const RESULT_UNAVAILABLE_COPY: Record<ResultUnavailableReason, { label: s
   evicted: { label: 'Not retained', detail: 'The conversation limit removed this result snippet.' },
   restricted: {
     label: 'No preview',
-    detail: 'The snippet was not retained because its path is outside the workspace or its source or content is restricted. This does not mean the tool failed.',
+    detail: 'This result preview is restricted. The tool’s execution status is shown separately.',
   },
+  'outside-workspace': { label: 'External result', detail: 'The tool targeted a location outside the workspace. Its result preview is not retained.' },
   unsupported: { label: 'No preview', detail: 'This result format does not support text snippets.' },
   untrusted: { label: 'No preview', detail: 'The result source could not be verified.' },
 };

@@ -27,11 +27,8 @@ import {
 import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
 import { operationDiffFields, type OperationDiff } from '../../../shared/protocol/operationDiff';
 import type { ToolExecutionPhase } from '../../../shared/protocol/operationDiff';
-import {
-  createSubagentQueues,
-  subagentIdentityKey,
-  takeSubagentSummaryLast,
-} from '../../../runtime/subagents/subagentSummary';
+import type { SubagentInvocationRecord } from '../../../runtime/subagents/subagentSummary';
+import { matchSubagentInvocations } from '../../../runtime/subagents/subagentInvocationMatching';
 
 type ToolEvent = Extract<
   RuntimeEvent,
@@ -519,8 +516,8 @@ function additionalFileCount(
 /**
  * Upgrades one Task tool row to a subagent row when the runtime saw a
  * `child_session_available` notification. The row is resolved by the
- * notification's parent tool-use id, falling back to the most recent
- * running Task tool without a subagent (older CLIs omit the id). A
+ * notification's parent tool-use id, falling back only to a unique
+ * running Task tool with unknown/pending lifecycle (older CLIs omit the id). A
  * turn with no matching Task row projects nothing.
  */
 export function projectSubagentStarted(
@@ -538,14 +535,15 @@ export function projectSubagentStarted(
   }
   const existing = state.tools.get(toolUseId)!;
   // A row whose identity came from the Task input (no lifecycle
-  // status yet) upgrades to the notification's identity + `running`;
-  // a row that already holds a status keeps it.
-  if (existing.subagent?.status !== undefined) {
+  // status yet) or pending invocation upgrades to the actual start;
+  // running/terminal ledger state is already authoritative.
+  if (existing.subagent?.status !== undefined && existing.subagent.status !== 'pending') {
     return { state, projection: null };
   }
   const entry: ToolActivityEntry = {
     ...existing,
     subagent: {
+      ...existing.subagent,
       type: started.subagentType,
       description: started.description,
       status: 'running',
@@ -564,16 +562,17 @@ function resolveSubagentTarget(
   state: TurnActivityState,
   toolUseId: string | null,
 ): string | null {
-  if (toolUseId !== null && state.tools.has(toolUseId)) {
-    return toolUseId;
+  if (toolUseId !== null) {
+    return state.tools.has(toolUseId) ? toolUseId : null;
   }
   let fallback: string | null = null;
   for (const [id, entry] of state.tools) {
     if (
       entry.status === 'running' &&
-      entry.subagent?.status === undefined &&
+      (entry.subagent?.status === undefined || entry.subagent.status === 'pending') &&
       toolNameCandidates(entry.toolName).includes('task')
     ) {
+      if (fallback !== null) return null;
       fallback = id;
     }
   }
@@ -591,39 +590,39 @@ export function hasSubagentRows(state: TurnActivityState): boolean {
 }
 
 /**
- * Settles the turn's subagent rows with the session ledger's final
- * summaries after the turn ends. Only rows whose Task tool already
- * reached a terminal status settle: a still-`running` row means the
- * turn broke off mid-delegation, and re-emitting it would resurrect a
- * live status on a stopped transcript row (history reload shows the
- * ledger truth for those). The whole-session ledger may contain older
- * invocations of the same identity from earlier turns, so rows pair
- * with entries newest-first.
+ * Reconciles child lifecycle independently from its parent Task tool.
+ * Exact invocation ids take priority; ambiguous same-name records do
+ * not update a row. Counts and timing can change without a status change.
  */
 export function reconcileSubagentSummaries(
   state: TurnActivityState,
-  summaries: readonly ToolSubagentSummary[],
+  records: readonly SubagentInvocationRecord[],
+  matchingRows: readonly Pick<PendingSubagentRow, 'toolUseId' | 'type' | 'description'>[] = [],
 ): {
   readonly state: TurnActivityState;
   readonly projections: readonly ToolActivityProjection[];
 } {
-  if (summaries.length === 0) {
+  if (records.length === 0) {
     return { state, projections: [] };
   }
 
-  const queues = createSubagentQueues(summaries);
   const rows = [...state.tools].filter(
-    ([, entry]) => entry.subagent !== undefined && entry.status !== 'running',
+    ([, entry]) => entry.subagent !== undefined,
   );
+  const retainedIds = new Set(matchingRows.map((row) => row.toolUseId));
+  const matched = matchSubagentInvocations([
+    ...matchingRows,
+    ...rows.filter(([toolUseId]) => !retainedIds.has(toolUseId))
+      .map(([toolUseId, entry]) => ({ toolUseId, ...entry.subagent! })),
+  ], records);
   const updates: Array<[string, ToolActivityEntry]> = [];
-  for (const [toolUseId, entry] of rows.reverse()) {
+  for (const [toolUseId, entry] of rows) {
     const subagent = entry.subagent!;
-    const settled = takeSubagentSummaryLast(queues, subagent.type, subagent.description);
-    if (settled === undefined || (settled.status === subagent.status &&
-      (settled.startedAt === undefined || settled.startedAt === subagent.startedAt))) {
-      continue;
-    }
-    updates.push([toolUseId, { ...entry, subagent: { ...subagent, ...settled } }]);
+    const incoming = matched.get(toolUseId)?.summary;
+    if (incoming === undefined) continue;
+    const next = { ...subagent, ...incoming, type: subagent.type, description: subagent.description };
+    if (sameSubagentSummary(subagent, next)) continue;
+    updates.push([toolUseId, { ...entry, subagent: next }]);
   }
   if (updates.length === 0) {
     return { state, projections: [] };
@@ -631,8 +630,7 @@ export function reconcileSubagentSummaries(
 
   const tools = new Map(state.tools);
   const projections: ToolActivityProjection[] = [];
-  // Re-reverse so emitted updates follow row order.
-  for (const [toolUseId, entry] of updates.reverse()) {
+  for (const [toolUseId, entry] of updates) {
     tools.set(toolUseId, entry);
     projections.push(projectEntryStandalone(toolUseId, entry));
   }
@@ -649,10 +647,11 @@ export interface PendingSubagentRow {
   readonly toolUseId: string;
   readonly type: string;
   readonly description: string;
+  readonly subagent: ToolSubagentSummary;
 }
 
 /**
- * Collects the turn's delegations whose subagent is still `running`
+ * Collects the turn's delegations whose subagent is still running/pending
  * after settlement — background Task dispatches that outlive the
  * parent turn (probed 2026-08-12: the ledger keeps them `running`
  * until the child actually finishes, minutes after the turn ends).
@@ -663,7 +662,7 @@ export function collectRunningSubagentRows(
 ): readonly PendingSubagentRow[] {
   const rows: PendingSubagentRow[] = [];
   for (const [toolUseId, entry] of state.tools) {
-    if (entry.subagent?.status !== 'running') {
+    if (entry.subagent?.status !== 'running' && entry.subagent?.status !== 'pending') {
       continue;
     }
     rows.push({
@@ -671,6 +670,7 @@ export function collectRunningSubagentRows(
       toolUseId,
       type: entry.subagent.type,
       description: entry.subagent.description,
+      subagent: entry.subagent,
     });
   }
   return rows;
@@ -700,90 +700,63 @@ export function collectTranscriptSubagentRows(
       toolUseId: item.toolUseId,
       type: item.subagent.type,
       description: item.subagent.description,
+      subagent: item.subagent,
     });
   }
   return rows;
 }
 
 /**
- * Pairs still-running delegation rows with ledger entries that have
- * since reached a terminal state. Same identity discipline as
- * `reconcileSubagentSummaries` (sanitized type+description, newest
- * entry first), operating on detached row identities so the
- * reconcile keeps working after new turns replaced `turn.activity`.
- *
- * The whole-session ledger may hold old terminal invocations of the
- * same identity from earlier turns, which must not settle a row that
- * is genuinely still running. Per identity, rows only settle while
- * the ledger reports fewer live (`running`/`pending`) entries than
- * rows are waiting: each drop in the live count releases one row,
- * newest row first, paired with the newest terminal entry.
+ * Updates detached delegations by invocation identity after a new
+ * foreground turn replaces their activity state. Live rows retain
+ * their last published summary; terminal records leave the watch.
  */
 export function settleZombieSubagents(
   rows: readonly PendingSubagentRow[],
-  summaries: readonly ToolSubagentSummary[],
+  records: readonly SubagentInvocationRecord[],
+  matchingRows: readonly Pick<PendingSubagentRow, 'toolUseId' | 'type' | 'description'>[] = rows,
 ): {
   readonly settled: ReadonlyArray<{
+    readonly row: PendingSubagentRow;
+    readonly subagent: ToolSubagentSummary;
+  }>;
+  readonly updates: ReadonlyArray<{
     readonly row: PendingSubagentRow;
     readonly subagent: ToolSubagentSummary;
   }>;
   readonly pending: readonly PendingSubagentRow[];
 } {
   if (rows.length === 0) {
-    return { settled: [], pending: rows };
+    return { settled: [], updates: [], pending: rows };
   }
-  const liveCounts = new Map<string, number>();
-  const terminal: ToolSubagentSummary[] = [];
-  for (const summary of summaries) {
-    if (
-      summary.status === 'completed' ||
-      summary.status === 'failed' ||
-      summary.status === 'cancelled'
-    ) {
-      terminal.push(summary);
-    } else {
-      const key = subagentIdentityKey(summary.type, summary.description);
-      liveCounts.set(key, (liveCounts.get(key) ?? 0) + 1);
-    }
-  }
-  const queues = createSubagentQueues(terminal);
-  const waitingCounts = new Map<string, number>();
-  for (const row of rows) {
-    const key = subagentIdentityKey(row.type, row.description);
-    waitingCounts.set(key, (waitingCounts.get(key) ?? 0) + 1);
-  }
-
+  const matched = matchSubagentInvocations(matchingRows, records);
   const settled: Array<{
     row: PendingSubagentRow;
     subagent: ToolSubagentSummary;
   }> = [];
+  const updates: Array<{ row: PendingSubagentRow; subagent: ToolSubagentSummary }> = [];
   const pending: PendingSubagentRow[] = [];
-  // Newest rows claim the newest ledger entries, mirroring the
-  // turn-end reconcile.
-  for (const row of [...rows].reverse()) {
-    const key = subagentIdentityKey(row.type, row.description);
-    const waiting = waitingCounts.get(key) ?? 0;
-    const live = liveCounts.get(key) ?? 0;
-    if (live >= waiting) {
-      // As many ledger entries still run as rows wait: this row is
-      // one of them, keep it pending.
+  for (const row of rows) {
+    const incoming = matched.get(row.toolUseId)?.summary;
+    if (incoming === undefined) {
       pending.push(row);
-      liveCounts.set(key, live - 1);
-      waitingCounts.set(key, waiting - 1);
       continue;
     }
-    waitingCounts.set(key, waiting - 1);
-    const subagent = takeSubagentSummaryLast(queues, row.type, row.description);
-    if (subagent === undefined) {
-      pending.push(row);
-    } else {
+    const subagent = { ...row.subagent, ...incoming, type: row.type, description: row.description };
+    if (!sameSubagentSummary(row.subagent, subagent)) updates.push({ row, subagent });
+    if (subagent.status === 'completed' || subagent.status === 'failed' || subagent.status === 'cancelled') {
       settled.push({ row, subagent });
+    } else {
+      pending.push({ ...row, type: subagent.type, description: subagent.description, subagent });
     }
   }
-  return {
-    settled: settled.reverse(),
-    pending: pending.reverse(),
-  };
+  return { settled, updates, pending };
+}
+
+function sameSubagentSummary(left: ToolSubagentSummary, right: ToolSubagentSummary): boolean {
+  return left.type === right.type && left.description === right.description &&
+    left.status === right.status && left.toolUseCount === right.toolUseCount &&
+    left.durationMs === right.durationMs && left.startedAt === right.startedAt;
 }
 
 /**

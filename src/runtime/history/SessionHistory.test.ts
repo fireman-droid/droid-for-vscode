@@ -1022,7 +1022,7 @@ describe('projectSessionHistory', () => {
     });
   });
 
-  it('settles Task rows with ledger summaries by delegation identity in order', () => {
+  it('hydrates only unambiguous Task identities from legacy ledger summaries', () => {
     const task = (id: string, type: string, description: string) => ({
       type: 'tool_use',
       id,
@@ -1081,9 +1081,6 @@ describe('projectSessionHistory', () => {
         subagent: {
           type: 'worker',
           description: 'same job',
-          status: 'completed',
-          toolUseCount: 12,
-          durationMs: 377050,
         },
       },
       {
@@ -1091,7 +1088,6 @@ describe('projectSessionHistory', () => {
         subagent: {
           type: 'worker',
           description: 'same job',
-          status: 'failed',
         },
       },
       {
@@ -1114,12 +1110,9 @@ describe('projectSessionHistory', () => {
       { toolName: 'Read' },
     ]);
     const tools = result.state.transcript.filter((item) => item.kind === 'tool');
-    expect(
-      tools[3] !== undefined &&
-        'subagent' in tools[3] &&
-        tools[3].subagent !== undefined &&
-        'status' in tools[3].subagent,
-    ).toBe(false);
+    for (const index of [0, 1, 3]) {
+      expect(tools[index]?.subagent).not.toHaveProperty('status');
+    }
     expect(tools[4] !== undefined && 'subagent' in tools[4]).toBe(false);
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain('child-1');

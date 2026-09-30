@@ -6,6 +6,7 @@ import {
 import { trimTranscriptToLimits } from '../../shared/transcript/transcriptLimits';
 import { transcriptItemKey } from './transcriptReconcileKey';
 import { preserveToolResultPreviews } from '../../shared/transcript/toolResultPreview';
+import { preserveSubagentSummaries } from '../../shared/transcript/preserveSubagentSummaries';
 
 /**
  * Merges a freshly loaded session history with a locally recovered
@@ -26,7 +27,9 @@ export function reconcileSessionHistory(
     }
     return markPartial(recovered);
   }
-  const transcript = preserveToolResultPreviews(loaded.transcript, recovered.transcript);
+  const transcript = preserveSubagentSummaries(
+    preserveToolResultPreviews(loaded.transcript, recovered.transcript), recovered.transcript,
+  );
   if (transcript !== loaded.transcript) loaded = { ...loaded, transcript };
   return (
     reconcileByUserAnchors(loaded, recovered, options) ??

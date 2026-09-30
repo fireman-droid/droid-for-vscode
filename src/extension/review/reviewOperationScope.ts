@@ -1,6 +1,7 @@
 import {
   hasOperationTextChanges,
   isConfirmedOperationFile,
+  isWorkspaceOperationFile,
   type OperationDiff,
   type OperationDiffFile,
   type ToolExecutionPhase,
@@ -199,7 +200,7 @@ function flattenOperations(
     const diff = operation.operationDiff;
     return diff.status !== 'ready'
       ? []
-      : diff.files.map((file) => ({
+      : diff.files.filter(isWorkspaceOperationFile).map((file) => ({
           sequence: operation.sequence,
           sessionId: operation.sessionId,
           toolUseId: operation.toolUseId,

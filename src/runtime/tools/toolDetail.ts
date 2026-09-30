@@ -11,6 +11,7 @@ import {
   toolNameCandidates,
 } from '../../shared/transcript/toolActivity';
 import { toWorkspaceRelativePath } from './toolFilePath';
+import { missionArtifactDisplayPath } from './toolDisplayPath';
 import { isRestrictedToolContent, readGitHubResultPath } from './toolResultPreview';
 
 const MAX_TOOL_TARGET_INPUT_SCAN_LENGTH = MAX_TOOL_TARGET_LENGTH * 8;
@@ -171,6 +172,8 @@ function readWorkspacePath(
   }
   const rawPath = readTargetText(record, keys);
   if (rawPath === undefined) return undefined;
+  const mission = missionArtifactDisplayPath(workspaceRoot, rawPath);
+  if (mission !== undefined) return mission.path.slice(0, MAX_TOOL_TARGET_LENGTH);
   const workspacePath = toWorkspaceRelativePath(workspaceRoot, rawPath);
   if (workspacePath !== undefined) return workspacePath;
   const absolute = resolve(workspaceRoot, rawPath);

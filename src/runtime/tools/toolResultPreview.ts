@@ -3,6 +3,7 @@ import { resultPreviewPolicy, toolPresentation } from '../../shared/transcript/t
 import { isToolResultSummary, type ToolResultSummary } from '../../shared/transcript/toolResultSummary';
 import type { DroidStreamEvent } from '@factory/droid-sdk/node';
 import { relative, resolve } from 'node:path';
+import { missionArtifactDisplayPath } from './toolDisplayPath';
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
 import { MAX_TOOL_ACTIVITIES_PER_TURN, MAX_TOOL_NAME_LENGTH } from '../../shared/protocol/bounds';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
@@ -17,7 +18,7 @@ import {
   type ToolResultSource,
 } from '../../shared/transcript/toolResultPreview';
 
-export type ResultSource = ToolResultSource | 'restricted' | 'untrusted';
+export type ResultSource = ToolResultSource | 'restricted' | 'outside-workspace' | 'untrusted';
 const MAX_SOURCE_INPUT_LENGTH = 4_096;
 const MAX_RESULT_SCAN_UNITS = MAX_TOOL_RESULT_TEXT_UNITS * 2;
 const SENSITIVE_PATH =
@@ -27,6 +28,10 @@ const SENSITIVE_TEXT =
 
 export function isRestrictedToolContent(text: string): boolean {
   return SENSITIVE_TEXT.test(text) || /[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(text);
+}
+
+export function isRestrictedToolPath(path: string): boolean {
+  return SENSITIVE_PATH.test(path.replaceAll('\\', '/'));
 }
 
 export function previewResultTool(name: string): ResultTool | undefined {
@@ -95,6 +100,9 @@ export function readResultSource(
       /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(raw))
   )
     return 'untrusted';
+  const mission = missionArtifactDisplayPath(workspace, (raw as string | undefined) ?? '.');
+  if (mission) return mission.path.length > MAX_TOOL_RESULT_SOURCE_LENGTH || isRestrictedToolPath(mission.path)
+    ? 'restricted' : { tool, ...mission, callId };
   const path =
     relative(workspace, resolve(workspace, (raw as string | undefined) ?? '.')).replace(
       /\\/gu,
@@ -103,11 +111,10 @@ export function readResultSource(
   if (
     path === '..' ||
     path.startsWith('../') ||
-    /^(?:\/|[A-Za-z]:)/u.test(path) ||
-    path.length > MAX_TOOL_RESULT_SOURCE_LENGTH ||
-    SENSITIVE_PATH.test(path)
+    /^(?:\/|[A-Za-z]:)/u.test(path)
   )
-    return 'restricted';
+    return 'outside-workspace';
+  if (path.length > MAX_TOOL_RESULT_SOURCE_LENGTH || SENSITIVE_PATH.test(path)) return 'restricted';
   return { tool, path, callId };
 }
 

@@ -719,6 +719,12 @@ Host／Bridge 安全动作。组件使用项目共享 shadcn/Radix，不移植 C
 - 相同文件的多次操作合并文件入口与累计行数，详情保留各条操作顺序，不拼造净差。
 - Diff 保留内部纵横滚动和键盘访问，窄侧栏文件路径截断但保留完整 title。
 - Viewer 与离线 Chat 在卡片内展开保留片段；可用的 Review／Undo 由宿主回调决定。
+- 当前用户 `.factory/missions/<UUID>/...` 的已返回工具内容属于只读 Mission 工件，
+  使用独立来源标记和 `Mission/<UUID>/...` 展示路径；该分类不授权读取路径，也不
+  表示已核验当前 Mission 归属。工件的已确认内容／Diff 留在自身活动行，不进入
+  工作区文件汇总、Review、Open 或 Undo；混合操作仍正常展示其中的工作区文件。
+- 结果来源超出工作区与敏感内容限制分别反馈，不能冒充工具失败。历史重投影可以
+  用可用 Mission 证据替换旧范围限制提示，但不恢复容量驱逐的内容。
 
 ### 有界真实结果片段
 
@@ -1199,6 +1205,14 @@ flowchart LR
 - Reload 后，已完成 child 从 `subagentInvocations` 与 child history 恢复；
   daemon 中仍运行的 child 由 ledger 重建 Registry，并通过同一 controller 的
   `ensureChildSessionAttached()` 恢复通知订阅。
+- 父聊天的本地快照与 daemon 分页历史也合并本地 ledger 摘要；process 历史沿同一
+  匹配规则投影。调用 ID 优先，旧版无 ID 记录仅在候选唯一时匹配；同名或重复 ID
+  存在歧义时保留未知状态，不按先后顺序分配完成状态或子会话。
+- 历史刷新只补回缺失的已知摘要，保留历史中明确的 ledger 字段；Host 和 Webview
+  按回合与工具调用 ID 对齐增量，支持恢复中保留历史行 ID 的回合重映射。
+- 已知 running/pending 调用保留 ledger 生命周期追踪，状态未变时也更新次数和
+  耗时；终态退出追踪。该追踪不读取 child 正文、不替代 Viewer 的通知订阅，
+  不从父 Task 调用结束推断 child 完成。
 - process 模式不能跨 Reload 保持后台 turn，只恢复已经落盘的历史。
 - 切换或归档父 Session 不停止 child，也不关闭已经打开的 Viewer。
 - 短暂丢失通知时保留最后可信状态，terminal history 对齐补齐缺口，不制造假进度。

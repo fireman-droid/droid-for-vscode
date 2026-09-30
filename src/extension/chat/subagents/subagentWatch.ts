@@ -56,10 +56,10 @@ export function scheduleLiveSubagentSync(
   turnId: string,
 ): void {
   const cwd = ctl.sessionState.activeRuntimeCwd;
-  const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
+  const loadInvocations = ctl.sessionHistory.loadSubagentInvocations?.bind(
     ctl.sessionHistory,
   );
-  if (cwd === null || loadSummaries === undefined) {
+  if (cwd === null || loadInvocations === undefined) {
     return;
   }
   const key = `${sessionId}:${turnId}`;
@@ -83,7 +83,7 @@ export function scheduleLiveSubagentSync(
     sessionId,
     turnId,
     cwd,
-    loadSummaries,
+    loadInvocations,
     LIVE_SUBAGENT_SYNC_DELAY_MS,
   );
 }
@@ -94,16 +94,16 @@ function armLiveSubagentTimer(
   sessionId: string,
   turnId: string,
   cwd: string,
-  loadSummaries: NonNullable<SessionHistoryLoader['loadSubagentSummaries']>,
+  loadInvocations: NonNullable<SessionHistoryLoader['loadSubagentInvocations']>,
   delayMs: number,
 ): void {
   state.timer = setTimeout(() => {
     state.timer = null;
     state.attempt += 1;
-    void loadSummaries({ cwd, sessionId,
+    void loadInvocations({ cwd, sessionId,
       parentToolUseIds: [...(ctl.turnState.turn?.activity.tools.keys() ?? [])] })
       .catch(() => null)
-      .then((summaries) => {
+      .then((records) => {
         const turn = ctl.turnState.turn;
         if (
           ctl.sessionState.disposed ||
@@ -113,7 +113,7 @@ function armLiveSubagentTimer(
         ) {
           return;
         }
-        if (summaries === null) {
+        if (records === null) {
           // The mid-turn ledger read failed outright; say so instead
           // of silently looking like "no rows yet".
           ctl.recordHost({
@@ -126,10 +126,10 @@ function armLiveSubagentTimer(
           });
         }
         const updated =
-          summaries === null
+          records === null
             ? []
             : (() => {
-                const result = reconcileSubagentSummaries(turn.activity, summaries);
+                const result = reconcileSubagentSummaries(turn.activity, records, subagentMatchingRows(ctl));
                 turn.activity = result.state;
                 return result.projections;
               })();
@@ -152,7 +152,10 @@ function armLiveSubagentTimer(
             name: 'host.subagent.live-sync',
             attributes: { rows: updated.length, attempt: state.attempt },
           });
-        } else if (state.attempt === 1 && state.timer === null) {
+        }
+        if (state.timer === null && collectRunningSubagentRows(turn.activity, turnId).length > 0) {
+          armLiveSubagentTimer(ctl, state, sessionId, turnId, cwd, loadInvocations, ZOMBIE_SUBAGENT_POLL_MS);
+        } else if (updated.length === 0 && state.attempt === 1 && state.timer === null) {
           // The ledger row may simply not be written yet; try once
           // more before leaving it to the turn-end reconcile.
           armLiveSubagentTimer(
@@ -161,7 +164,7 @@ function armLiveSubagentTimer(
             sessionId,
             turnId,
             cwd,
-            loadSummaries,
+            loadInvocations,
             LIVE_SUBAGENT_SYNC_RETRY_MS,
           );
         }
@@ -198,12 +201,12 @@ export function settleTurnSubagents(
   // mid-turn sync would double-settle the same rows.
   clearLiveSubagentSync(ctl);
   const cwd = ctl.sessionState.activeRuntimeCwd;
-  const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
+  const loadInvocations = ctl.sessionHistory.loadSubagentInvocations?.bind(
     ctl.sessionHistory,
   );
   if (
     cwd === null ||
-    loadSummaries === undefined ||
+    loadInvocations === undefined ||
     ctl.sessionState.sessionId !== sessionId ||
     ctl.turnState.turn?.turnId !== turnId ||
     !hasSubagentRows(ctl.turnState.turn.activity)
@@ -212,10 +215,10 @@ export function settleTurnSubagents(
   }
   // A new foreground turn can start before this ledger read finishes.
   // Retain the old turn's running rows before relinquishing its activity state.
-  armZombieSubagentWatch(ctl, sessionId, cwd, loadSummaries,
+  armZombieSubagentWatch(ctl, sessionId, cwd, loadInvocations,
     collectRunningSubagentRows(ctl.turnState.turn.activity, turnId));
-  void loadSummaries({ cwd, sessionId,
-    parentToolUseIds: [...ctl.turnState.turn.activity.tools.keys()] }).then((summaries) => {
+  void loadInvocations({ cwd, sessionId,
+    parentToolUseIds: [...ctl.turnState.turn.activity.tools.keys()] }).then((records) => {
     const turn = ctl.turnState.turn;
     if (
       ctl.sessionState.disposed ||
@@ -224,8 +227,8 @@ export function settleTurnSubagents(
     ) {
       return;
     }
-    if (summaries !== null) {
-      const result = reconcileSubagentSummaries(turn.activity, summaries);
+    if (records !== null) {
+      const result = reconcileSubagentSummaries(turn.activity, records, subagentMatchingRows(ctl));
       turn.activity = result.state;
       for (const projection of result.projections) {
         // The turn already reached its terminal state, so a live
@@ -249,7 +252,7 @@ export function settleTurnSubagents(
       ctl,
       sessionId,
       cwd,
-      loadSummaries,
+      loadInvocations,
       collectRunningSubagentRows(turn.activity, turnId),
     );
   });
@@ -265,7 +268,7 @@ export function armZombieSubagentWatch(
   ctl: SubagentWatchPort,
   sessionId: string,
   cwd: string,
-  loadSummaries: NonNullable<SessionHistoryLoader['loadSubagentSummaries']>,
+  loadInvocations: NonNullable<SessionHistoryLoader['loadSubagentInvocations']>,
   rows: readonly PendingSubagentRow[],
 ): void {
   const existing = ctl.subagentState.zombieSubagentWatch;
@@ -292,7 +295,7 @@ export function armZombieSubagentWatch(
     rows,
     ticking: false,
     timer: setInterval(() => {
-      void tickZombieSubagentWatch(ctl, cwd, loadSummaries);
+      void tickZombieSubagentWatch(ctl, cwd, loadInvocations);
     }, ZOMBIE_SUBAGENT_POLL_MS),
   };
   ctl.subagentState.zombieSubagentWatch = watch;
@@ -316,7 +319,7 @@ export function clearZombieSubagentWatch(ctl: SubagentWatchPort): void {
 export async function tickZombieSubagentWatch(
   ctl: SubagentWatchPort,
   cwd: string,
-  loadSummaries: NonNullable<SessionHistoryLoader['loadSubagentSummaries']>,
+  loadInvocations: NonNullable<SessionHistoryLoader['loadSubagentInvocations']>,
 ): Promise<void> {
   const watch = ctl.subagentState.zombieSubagentWatch;
   if (watch === null || watch.ticking) {
@@ -332,13 +335,13 @@ export async function tickZombieSubagentWatch(
   watch.ticking = true;
   try {
     if (watch.rows.length > 0) {
-      const summaries = await loadSummaries({
+      const records = await loadInvocations({
         cwd,
         sessionId: watch.sessionId,
         parentToolUseIds: watch.rows.map((row) => row.toolUseId),
       }).catch(() => null);
       if (
-        summaries === null &&
+        records === null &&
         ctl.subagentState.zombieSubagentWatch === watch &&
         !ctl.sessionState.disposed &&
         !failedWatchReads.has(watch)
@@ -356,7 +359,7 @@ export async function tickZombieSubagentWatch(
         });
       }
       if (
-        summaries === null ||
+        records === null ||
         ctl.subagentState.zombieSubagentWatch !== watch ||
         ctl.sessionState.disposed ||
         ctl.sessionState.sessionId !== watch.sessionId
@@ -364,13 +367,13 @@ export async function tickZombieSubagentWatch(
         return;
       }
       failedWatchReads.delete(watch);
-      const { settled, pending } = settleZombieSubagents(watch.rows, summaries);
+      const { settled, updates, pending } = settleZombieSubagents(watch.rows, records, subagentMatchingRows(ctl, watch.rows));
       watch.rows = pending;
       if (settled.length > 0) ctl.recordHost({
         level: 'info', name: 'host.subagent.zombie-watch-settled',
         attributes: { sessionId: watch.sessionId, settled: settled.length, pending: pending.length },
       });
-      for (const { row, subagent } of settled) {
+      for (const { row, subagent } of updates) {
         if (ctl.turnState.turn?.turnId === row.turnId) {
           ctl.turnState.turn.activity = applySubagentSettlement(
             ctl.turnState.turn.activity,
@@ -411,6 +414,17 @@ export async function tickZombieSubagentWatch(
   }
 }
 
+function subagentMatchingRows(
+  ctl: SubagentWatchPort,
+  extra: readonly Pick<PendingSubagentRow, 'toolUseId' | 'type' | 'description'>[] = [],
+) {
+  const rows = ctl.recoveryState.transcript.transcript.flatMap((item) =>
+    item.kind === 'tool' && item.subagent !== undefined
+      ? [{ toolUseId: item.toolUseId, type: item.subagent.type, description: item.subagent.description }] : []);
+  const retainedIds = new Set(rows.map((row) => row.toolUseId));
+  return [...rows, ...extra.filter((row) => !retainedIds.has(row.toolUseId))];
+}
+
 /**
  * Re-arms the zombie-delegation ledger poll from a replayed
  * transcript (Reload Window / session switch), covering rows whose
@@ -423,17 +437,17 @@ export function armReplayedSubagentWatch(
   cwd: string,
   transcript: HostTranscriptState,
 ): void {
-  const loadSummaries = ctl.sessionHistory.loadSubagentSummaries?.bind(
+  const loadInvocations = ctl.sessionHistory.loadSubagentInvocations?.bind(
     ctl.sessionHistory,
   );
-  if (loadSummaries === undefined) {
+  if (loadInvocations === undefined) {
     return;
   }
   armZombieSubagentWatch(
     ctl,
     sessionId,
     cwd,
-    loadSummaries,
+    loadInvocations,
     collectTranscriptSubagentRows(transcript.transcript),
   );
 }

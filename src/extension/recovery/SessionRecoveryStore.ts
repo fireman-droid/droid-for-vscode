@@ -10,6 +10,7 @@ import {
 import { conversationMetadata, recoveryTurnMetadata, withoutCachedHistory } from './conversationMetadata';
 import type { ConversationImageArtifactStore } from './conversationImageArtifacts';
 import { mergeToolOperations } from './operationEvidenceState';
+import { workspaceOperationDiff } from '../../shared/protocol/operationDiff';
 import {
   CONVERSATION_RECOVERY_VERSION,
   MAX_RECOVERY_CONVERSATIONS,
@@ -362,7 +363,7 @@ export class SessionRecoveryStore {
     if (conversation === undefined) return undefined;
     for (let index = conversation.turns.length - 1; index >= 0; index -= 1) {
       const turn = conversation.turns[index];
-      if (turn !== undefined && (turn.toolOperations?.length ?? 0) > 0) {
+      if (turn !== undefined && turn.toolOperations?.some(operation => workspaceOperationDiff(operation.operationDiff) !== undefined)) {
         return cloneTurn(turn);
       }
     }

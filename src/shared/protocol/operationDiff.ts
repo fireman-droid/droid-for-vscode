@@ -23,6 +23,8 @@ export type OperationDiff = {
   readonly reason: 'not-recorded' | 'unattributed' | 'failed' | 'too-large' | 'restricted' | 'evicted' | 'unchanged';
 };
 export interface OperationDiffFile {
+  /** Read-only Mission artifact; path is a display label, never a workspace path. */
+  readonly scope?: 'mission';
   readonly path: string;
   readonly previousPath?: string;
   readonly kind: 'added' | 'modified' | 'deleted' | 'renamed';
@@ -50,9 +52,11 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       !/[\u0000-\u001f\u007f]/u.test(value.sourceSessionId)) && Array.isArray(value.files) &&
     value.files.length > 0 && value.files.length <= MAX_OPERATION_DIFF_FILES &&
     value.files.every((file) => isStrictRecord(file) &&
-      hasExactKeys(file, ['path', 'kind', 'patch'], ['previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent']) &&
+      hasExactKeys(file, ['path', 'kind', 'patch'], ['scope', 'previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent']) &&
       isSafeWorkspaceRelativePath(file.path) &&
       (file.previousPath === undefined || isSafeWorkspaceRelativePath(file.previousPath)) &&
+      (file.scope === undefined || file.scope === 'mission' && isMissionOperationPath(file.path) &&
+        (file.previousPath === undefined || isMissionOperationPath(file.previousPath)) && file.reversible === false) &&
       ['added', 'modified', 'deleted', 'renamed'].includes(String(file.kind)) &&
       (file.outcome === undefined || ['applied', 'failed', 'uncertain'].includes(String(file.outcome))) &&
       (file.message === undefined || typeof file.message === 'string' && file.message.length <= 2_000 &&
@@ -72,6 +76,20 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
 export function isSafeOperationText(value: unknown): value is string {
   return typeof value === 'string' && value.length <= MAX_OPERATION_DIFF_UNITS &&
     !/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(value);
+}
+export function isMissionOperationPath(value: unknown): value is string {
+  return isSafeWorkspaceRelativePath(value) &&
+    /^Mission\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/.+/iu.test(value);
+}
+export function isWorkspaceOperationFile(file: Pick<OperationDiffFile, 'scope'>): boolean {
+  return file.scope === undefined;
+}
+
+/** Mission labels must never enter workspace Review, open-file or Undo paths. */
+export function workspaceOperationDiff(value: OperationDiff): OperationDiff | undefined {
+  if (value.status !== 'ready') return value;
+  const files = value.files.filter(isWorkspaceOperationFile);
+  return files.length === 0 ? undefined : files.length === value.files.length ? value : { ...value, files };
 }
 export function operationDiffFields(value: { readonly operationDiff?: OperationDiff }) {
   return value.operationDiff === undefined ? {} : { operationDiff: value.operationDiff };
@@ -109,7 +127,9 @@ export function operationDiffWithChanges(value: OperationDiff): OperationDiff {
 export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: OperationDiff | undefined): OperationDiff | undefined {
   if (saved === undefined) return incoming;
   if (incoming === undefined) return saved;
-  if (saved.status === 'unavailable' && (saved.reason === 'restricted' || saved.reason === 'evicted')) return saved;
+  if (saved.status === 'unavailable' && (saved.reason === 'evicted' || saved.reason === 'restricted' &&
+    !(incoming.status === 'ready' && incoming.source === 'tool-result' && incoming.files.length > 0 &&
+      incoming.files.every(file => file.scope === 'mission')))) return saved;
   if (saved.status === 'ready' && incoming.status === 'ready' &&
     (saved.callId !== undefined && incoming.callId !== undefined && saved.callId !== incoming.callId ||
       saved.sourceSessionId !== undefined && incoming.sourceSessionId !== undefined &&
@@ -121,7 +141,7 @@ export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: 
       if (file.contentRestricted || file.outcome !== 'applied' || file.patch !== '' ||
         file.submittedContent !== undefined) return file;
       const complete = incoming.files.find((candidate) => candidate.path === file.path &&
-        candidate.previousPath === file.previousPath && candidate.kind === file.kind &&
+        candidate.scope === file.scope && candidate.previousPath === file.previousPath && candidate.kind === file.kind &&
         candidate.outcome === 'applied' && !candidate.contentRestricted &&
         (candidate.patch !== '' || candidate.submittedContent !== undefined));
       return complete ?? file;

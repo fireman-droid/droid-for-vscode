@@ -1,6 +1,7 @@
 import type { HostTranscriptState } from '../../../shared/transcript/hostTranscriptState';
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import { preserveToolResultPreviews } from '../../../shared/transcript/toolResultPreview';
+import { preserveSubagentSummaries } from '../../../shared/transcript/preserveSubagentSummaries';
 import { trimTranscriptToLimits } from '../../../shared/transcript/transcriptLimits';
 import type { TurnActivityState } from '../turns/turnActivityState';
 
@@ -11,7 +12,9 @@ export function reconcileChildHistory(
   live: HostTranscriptState,
   running: boolean,
 ): HostTranscriptState {
-  const snapshot = preserveToolResultPreviews(loaded.transcript, live.transcript);
+  const snapshot = preserveSubagentSummaries(
+    preserveToolResultPreviews(loaded.transcript, live.transcript), live.transcript,
+  );
   if (!running) return { ...loaded, transcript: snapshot };
   const beforeItems = indexed(before.transcript);
   const liveItems = indexed(live.transcript);

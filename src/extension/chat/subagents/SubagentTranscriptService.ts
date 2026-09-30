@@ -26,8 +26,10 @@ import type {
 import {
   sanitizeSubagentDescription,
   sanitizeSubagentType,
+  subagentIdentityKey,
   type SubagentInvocationRecord,
 } from '../../../runtime/subagents/subagentSummary';
+import { matchSubagentInvocations } from '../../../runtime/subagents/subagentInvocationMatching';
 import {
   appendExternalUserMessage,
   createHostTranscriptState,
@@ -163,9 +165,11 @@ export class SubagentTranscriptService {
         direct.set(record.parentToolUseId, record);
       }
     }
-    const queues = invocationQueues(
-      records.filter((record) => record.parentToolUseId === undefined),
-    );
+    const matches = matchSubagentInvocations(transcript.flatMap((item) =>
+      item.kind === 'tool' && item.subagent !== undefined
+        ? [{ toolUseId: item.toolUseId, type: item.subagent.type, description: item.subagent.description }] : []), records);
+    const legacyIdentities = new Set(records.filter((record) => record.parentToolUseId === undefined)
+      .map((record) => subagentIdentityKey(record.summary.type, record.summary.description)));
     const latestRows = new Map<ChildEntry, string>();
     const mappedRows = new Set<string>();
     for (const item of transcript) {
@@ -184,11 +188,14 @@ export class SubagentTranscriptService {
         }, parentSessionId);
         continue;
       }
-      const record =
-        direct.get(item.toolUseId) ??
-        queues.get(identityKey(item.subagent.type, item.subagent.description))?.shift();
+      const record = matches.get(item.toolUseId);
       if (record?.parentToolUseId === undefined && this.evidenceRows.has(key)) continue;
       if (record === undefined) {
+        if (legacyIdentities.has(subagentIdentityKey(item.subagent.type, item.subagent.description))) {
+          this.noteIssue({ turnId: item.turnId, toolUseId: item.toolUseId, reason: 'mapping-ambiguous',
+            message: 'The Task description does not uniquely identify a child-session invocation.' }, parentSessionId);
+          continue;
+        }
         this.noteIssue({
           turnId: item.turnId,
           toolUseId: item.toolUseId,
@@ -790,26 +797,6 @@ function activitiesOf(items: readonly SessionTranscriptItem[]): readonly Subagen
     });
   }
   return activities;
-}
-
-function invocationQueues(
-  records: readonly SubagentInvocationRecord[],
-): Map<string, SubagentInvocationRecord[]> {
-  const queues = new Map<string, SubagentInvocationRecord[]>();
-  for (const record of records) {
-    const key = identityKey(record.summary.type, record.summary.description);
-    const queue = queues.get(key);
-    if (queue === undefined) {
-      queues.set(key, [record]);
-    } else {
-      queue.push(record);
-    }
-  }
-  return queues;
-}
-
-function identityKey(type: string, description: string): string {
-  return `${type}\u0000${description}`;
 }
 
 function viewerTitle(type: string, description: string): string {

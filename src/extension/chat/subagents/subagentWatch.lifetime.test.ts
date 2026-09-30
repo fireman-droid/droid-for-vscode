@@ -12,11 +12,12 @@ async function harness() {
   let running = true;
   let parentRunning = false;
   const summary = { type: 'scout', description: 'Long research', status: 'running' as const };
-  const loadSummaries = vi.fn(async () => [{ ...summary, status: running ? 'running' as const : 'completed' as const }]);
+  const loadInvocations = vi.fn(async () => [{ parentToolUseId: 'task-1', childSessionId: 'child-1',
+    summary: { ...summary, status: running ? 'running' as const : 'completed' as const } }]);
   const history: SessionHistoryLoader = {
     loadHistory: vi.fn<SessionHistoryLoader['loadHistory']>(async () => ({ status: 'available', state: { historyStatus: 'complete', truncated: false,
       transcript: [{ kind: 'assistant', id: 'answer', turnId: 'auto', text: 'Long research finished' }] } })),
-    loadSubagentSummaries: loadSummaries,
+    loadSubagentInvocations: loadInvocations,
   };
   const runtime = Object.assign(createMockRuntime(), {
     readSessionWorkingState: vi.fn(async () => parentRunning ? 'running' as const : 'idle' as const),
@@ -25,10 +26,10 @@ async function harness() {
   const { controller, messages } = createController(() => runtime, undefined, undefined, undefined, history);
   controllers.push(controller); ready(controller); await waitForConnected(messages);
   vi.useFakeTimers();
-  armZombieSubagentWatch(controller, 'session-1', '/workspace', loadSummaries, [
-    { turnId: 'launch', toolUseId: 'task-1', type: summary.type, description: summary.description },
+  armZombieSubagentWatch(controller, 'session-1', '/workspace', loadInvocations, [
+    { turnId: 'launch', toolUseId: 'task-1', type: summary.type, description: summary.description, subagent: summary },
   ]);
-  return { controller, messages, history, loadSummaries, settleChild: () => { running = false; }, parent: (value: boolean) => { parentRunning = value; } };
+  return { controller, messages, history, loadInvocations, settleChild: () => { running = false; }, parent: (value: boolean) => { parentRunning = value; } };
 }
 
 describe('background delegation watch lifetime', () => {
@@ -36,12 +37,12 @@ describe('background delegation watch lifetime', () => {
     const h = await harness();
     await vi.advanceTimersByTimeAsync(11 * 60_000);
     expect(h.controller.subagentState.zombieSubagentWatch).not.toBeNull();
-    expect(h.loadSummaries).toHaveBeenCalledTimes(132);
+    expect(h.loadInvocations).toHaveBeenCalledTimes(132);
     h.settleChild(); await vi.advanceTimersByTimeAsync(5_000);
     expect(h.messages).toContainEqual(expect.objectContaining({ type: 'subagent.update', subagent: expect.objectContaining({ status: 'completed' }) }));
-    const reads = h.loadSummaries.mock.calls.length;
+    const reads = h.loadInvocations.mock.calls.length;
     await vi.advanceTimersByTimeAsync(40_000);
-    expect(h.loadSummaries).toHaveBeenCalledTimes(reads);
+    expect(h.loadInvocations).toHaveBeenCalledTimes(reads);
     expect(h.controller.subagentState.zombieSubagentWatch).toBeNull();
   });
 
@@ -57,11 +58,11 @@ describe('background delegation watch lifetime', () => {
 
   it('shares an in-flight ledger read across timer ticks and stops on session replacement', async () => {
     const h = await harness();
-    let resolve!: (value: Awaited<ReturnType<typeof h.loadSummaries>>) => void;
-    h.loadSummaries.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-    const first = tickZombieSubagentWatch(h.controller, '/workspace', h.loadSummaries);
+    let resolve!: (value: Awaited<ReturnType<typeof h.loadInvocations>>) => void;
+    h.loadInvocations.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const first = tickZombieSubagentWatch(h.controller, '/workspace', h.loadInvocations);
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(h.loadSummaries).toHaveBeenCalledOnce();
+    expect(h.loadInvocations).toHaveBeenCalledOnce();
     h.controller.sessionState.sessionId = 'other';
     resolve([]); await first;
     await vi.advanceTimersByTimeAsync(5_000);

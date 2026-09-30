@@ -23,6 +23,7 @@ import {
   readSubagentInvocationRecords,
   type SubagentInvocationRecord,
 } from '../subagents/subagentSummary';
+import { withSubagentInvocationSummaries } from '../subagents/subagentInvocationMatching';
 import { projectSessionMessagesAsync } from './asyncHistoryProjection';
 import { locatePersistedSessionFile } from './persistedSessionMessages';
 import { MAX_RAW_MESSAGE_WINDOW, orderMessagesChronologically, readPersistedHistory, type PersistedHistoryReader } from './persistedHistory';
@@ -114,6 +115,17 @@ export function createDaemonFirstHistoryLoader(
       if (projected.status !== 'available') {
         throw new Error('daemon message projection unavailable');
       }
+      let state = projected.state;
+      const parentToolUseIds = state.transcript.flatMap(item => item.kind === 'tool' && item.subagent !== undefined
+        ? [item.toolUseId] : []);
+      if (parentToolUseIds.length > 0) {
+        // History already loaded successfully. Missing optional summaries must
+        // neither discard it nor launch another CLI process to recover labels.
+        const invocations = await loadLocalInvocations({ ...request, parentToolUseIds });
+        if (invocations === null) record({ level: 'warn', name: 'runtime.subagents.history-summary',
+          attributes: { outcome: 'ledger-unavailable', sessionId: request.sessionId, rows: parentToolUseIds.length } });
+        else state = withSubagentInvocationSummaries(state, invocations);
+      }
       const sidecar = await readSessionSidecar(
         sessionsDirectory,
         request.cwd,
@@ -137,7 +149,7 @@ export function createDaemonFirstHistoryLoader(
       });
       return {
         status: 'available',
-        state: projected.state,
+        state,
         ...(projected.messageAncestry === undefined ? {} : { messageAncestry: projected.messageAncestry }),
         ...(sidecar.mission === undefined ? {} : { mission: sidecar.mission }),
         ...(sidecar.tokenUsage === undefined ? {} : { tokenUsage: sidecar.tokenUsage }),
@@ -157,7 +169,7 @@ export function createDaemonFirstHistoryLoader(
     }
   };
 
-  const loadInvocations = async (
+  const loadLocalInvocations = async (
     request: SubagentHistoryRequest,
   ): Promise<readonly SubagentInvocationRecord[] | null> => {
     const fromLedger = await readTaskInvocationLedger(
@@ -165,18 +177,23 @@ export function createDaemonFirstHistoryLoader(
       request.sessionId,
       request.parentToolUseIds,
     );
-    if (fromLedger !== null) {
-      // CLI migration leaves older invocations in the previous location.
-      // Current records win; never let a stale running entry replace completion.
-      if (options.taskInvocationsFile !== undefined) return fromLedger;
-      const legacy = await readTaskInvocationLedger(
-        path.join(os.homedir(), '.factory', 'task-invocations.json'),
-        request.sessionId, request.parentToolUseIds,
-      );
-      const currentKeys = new Set(fromLedger.map(invocationKey));
-      return [...(legacy ?? []).filter((entry) => !currentKeys.has(invocationKey(entry))), ...fromLedger]
-        .sort((left, right) => (left.summary.startedAt ?? 0) - (right.summary.startedAt ?? 0));
-    }
+    if (fromLedger === null || options.taskInvocationsFile !== undefined) return fromLedger;
+    // CLI migration leaves older invocations in the previous location.
+    // Current records win; never let a stale running entry replace completion.
+    const legacy = await readTaskInvocationLedger(
+      path.join(os.homedir(), '.factory', 'task-invocations.json'),
+      request.sessionId, request.parentToolUseIds,
+    );
+    const currentKeys = new Set(fromLedger.map(invocationKey));
+    return [...(legacy ?? []).filter((entry) => !currentKeys.has(invocationKey(entry))), ...fromLedger]
+      .sort((left, right) => (left.summary.startedAt ?? 0) - (right.summary.startedAt ?? 0));
+  };
+
+  const loadInvocations = async (
+    request: SubagentHistoryRequest,
+  ): Promise<readonly SubagentInvocationRecord[] | null> => {
+    const fromLedger = await loadLocalInvocations(request);
+    if (fromLedger !== null) return fromLedger;
     record({
       level: 'warn',
       name: 'runtime.subagents.ledger',
@@ -337,7 +354,7 @@ export async function readTaskInvocationLedger(
       isStrictRecord(entry) && (entry.parentSessionId === sessionId ||
         (typeof entry.parentToolUseId === 'string' && retainedCalls.has(entry.parentToolUseId))),
   );
-  // Ledger order for FIFO pairing = dispatch order.
+  // Keep dispatch order for consumers; identity matching does not depend on it.
   entries.sort((left, right) => readTime(left) - readTime(right));
   return readSubagentInvocationRecords({
     result: { subagentInvocations: entries },

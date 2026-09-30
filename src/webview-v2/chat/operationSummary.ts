@@ -1,7 +1,7 @@
 import type { ChangeFile } from '@droidvisx/chat-ui/chat/changePresentation';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { isConfirmedOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 
 export interface OperationSummaryFile extends ChangeFile {
   readonly records: readonly OperationDiffFile[];
@@ -37,7 +37,8 @@ export function isFoldableFileOperation(item: SessionTranscriptItem): boolean {
   if (item.kind !== 'tool' || item.status !== 'completed' || item.errorMessage || item.subagent ||
     item.detailKind === 'command' || !['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase())) return false;
   const diff = item.operationDiff && changedDiff(item.operationDiff);
-  return diff?.status === 'ready' && diff.files.length > 0 && diff.files.every((file) => isConfirmedOperationFile(diff, file));
+  return diff?.status === 'ready' && diff.files.length > 0 &&
+    diff.files.every((file) => isWorkspaceOperationFile(file) && isConfirmedOperationFile(diff, file));
 }
 
 /** Recorded operation totals, never a workspace/net-diff approximation. */
@@ -49,10 +50,12 @@ export function summarizeOperations(items: readonly SessionTranscriptItem[], tur
     if (item.subagent !== undefined) { summary.delegated = true; summaries.set(item.turnId, summary); }
     const diff = item.operationDiff && changedDiff(item.operationDiff);
     if (diff?.status !== 'ready' || diff.source !== 'tool-result') continue;
+    const workspaceFiles = diff.files.filter(isWorkspaceOperationFile);
+    if (workspaceFiles.length === 0) continue;
     const identity = JSON.stringify([diff.sourceSessionId ?? '', diff.callId ?? item.toolUseId]);
     if (summary.calls.has(identity)) continue;
     summary.calls.add(identity);
-    for (const file of diff.files) {
+    for (const file of workspaceFiles) {
       if (!isConfirmedOperationFile(diff, file)) { summary.unconfirmed += 1; continue; }
       const previous = summary.files.get(file.path);
       const stats = operationFileStats(file);

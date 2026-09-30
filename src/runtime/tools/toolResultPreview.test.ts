@@ -85,12 +85,12 @@ describe('bounded native tool result extraction', () => {
     });
   });
 
-  it.each(['.env', '.ssh/id_ed25519', '.npmrc', '../outside.txt'])(
-    'does not expose restricted source %s',
-    (path) => {
+  it.each([['.env', 'restricted'], ['.ssh/id_ed25519', 'restricted'], ['.npmrc', 'restricted'], ['../outside.txt', 'outside-workspace']])(
+    'does not expose unavailable source %s',
+    (path, reason) => {
       expect(
         readResultSource('Read', { file_path: resolve(root, path) }, root, 'read-1'),
-      ).toBe('restricted');
+      ).toBe(reason);
     },
   );
 

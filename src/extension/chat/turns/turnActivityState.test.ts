@@ -7,7 +7,8 @@ import {
   MAX_TOOL_ACTIVITIES_PER_TURN,
 } from '../../../shared/protocol/bounds';
 import { MAX_TOOL_PROGRESS_UPDATES_PER_TOOL } from '../../../shared/bridgeMessages';
-import { type SessionTranscriptItem } from '../../../shared/protocol/transcript';
+import { type SessionTranscriptItem, type ToolSubagentSummary } from '../../../shared/protocol/transcript';
+import { type SubagentInvocationRecord } from '../../../runtime/subagents/subagentSummary';
 import {
   applySubagentSettlement,
   collectRunningSubagentRows,
@@ -24,6 +25,10 @@ import {
   settleZombieSubagents,
   type TurnActivityState,
 } from './turnActivityState';
+
+function invocation(summary: ToolSubagentSummary, parentToolUseId?: string): SubagentInvocationRecord {
+  return { summary, childSessionId: null, ...(parentToolUseId === undefined ? {} : { parentToolUseId }) };
+}
 
 describe('turnActivityState', () => {
   it.each([false, true])('keeps an input-specific action through progress and settlement (error: %s)', (isError) => {
@@ -862,7 +867,7 @@ describe('turnActivityState', () => {
     expect(duplicate.state).toBe(upgraded.state);
   });
 
-  it('falls back to the newest running Task row when the id is missing', () => {
+  it('does not guess a Task row when an id-less notification has multiple candidates', () => {
     let state = createTurnActivityState();
     for (const toolUseId of ['task-a', 'task-b']) {
       state = projectToolEvent(state, {
@@ -890,10 +895,8 @@ describe('turnActivityState', () => {
       description: '',
     });
 
-    expect(upgraded.projection).toMatchObject({
-      toolUseId: 'task-b',
-      subagent: { type: 'explore', description: '', status: 'running' },
-    });
+    expect(upgraded.projection).toBeNull();
+    expect(upgraded.state).toBe(state);
     expect(noTarget.projection).toBeNull();
     expect(noTarget.state.tools.size).toBe(0);
   });
@@ -907,10 +910,10 @@ describe('turnActivityState', () => {
     state = projectToolEvent(state, {
       type: 'tool-result', toolName: 'Task', toolUseId: 'task-time', action: 'Delegate task', isError: false,
     }).state;
-    const running = reconcileSubagentSummaries(state, [{ ...subagent, startedAt: 1_789_976_666_681 }]);
+    const running = reconcileSubagentSummaries(state, [invocation({ ...subagent, startedAt: 1_789_976_666_681 }, 'task-time')]);
     expect(running.projections[0]?.subagent).toMatchObject({ status: 'running', startedAt: 1_789_976_666_681 });
     const completed = reconcileSubagentSummaries(running.state, [
-      { type: subagent.type, description: subagent.description, status: 'completed', durationMs: 30_794 },
+      invocation({ type: subagent.type, description: subagent.description, status: 'completed', durationMs: 30_794 }, 'task-time'),
     ]);
     expect(completed.projections[0]?.subagent).toMatchObject({ status: 'completed', startedAt: 1_789_976_666_681,
       durationMs: 30_794 });
@@ -982,7 +985,7 @@ describe('turnActivityState', () => {
     });
   });
 
-  it('settles terminal subagent rows from the ledger newest-first', () => {
+  it('settles same-name subagents by invocation id independently of ledger order', () => {
     let state = createTurnActivityState();
     for (const toolUseId of ['task-1', 'task-2']) {
       state = projectToolEvent(state, {
@@ -1006,20 +1009,20 @@ describe('turnActivityState', () => {
     }
 
     const settled = reconcileSubagentSummaries(state, [
-      {
-        type: 'explore',
-        description: 'Same delegation',
-        status: 'completed',
-        toolUseCount: 4,
-        durationMs: 1_200,
-      },
-      {
+      invocation({
         type: 'explore',
         description: 'Same delegation',
         status: 'completed',
         toolUseCount: 9,
         durationMs: 5_000,
-      },
+      }, 'task-2'),
+      invocation({
+        type: 'explore',
+        description: 'Same delegation',
+        status: 'completed',
+        toolUseCount: 4,
+        durationMs: 1_200,
+      }, 'task-1'),
     ]);
 
     expect(settled.projections).toHaveLength(2);
@@ -1043,7 +1046,7 @@ describe('turnActivityState', () => {
     });
   });
 
-  it('never settles rows the stream left running and tolerates an empty ledger', () => {
+  it('updates child lifecycle without settling the running parent tool and tolerates an empty ledger', () => {
     let state = projectToolEvent(createTurnActivityState(), {
       type: 'tool-start',
       toolName: 'Task',
@@ -1056,17 +1059,19 @@ describe('turnActivityState', () => {
       description: 'Interrupted delegation',
     }).state;
 
-    const skipped = reconcileSubagentSummaries(state, [
-      {
+    const settled = reconcileSubagentSummaries(state, [
+      invocation({
         type: 'explore',
         description: 'Interrupted delegation',
         status: 'cancelled',
-      },
+      }, 'task-broken'),
     ]);
     const empty = reconcileSubagentSummaries(state, []);
 
-    expect(skipped.projections).toHaveLength(0);
-    expect(skipped.state).toBe(state);
+    expect(settled.projections).toHaveLength(1);
+    expect(settled.projections[0]).toMatchObject({
+      toolUseId: 'task-broken', status: 'running', subagent: { status: 'cancelled' },
+    });
     expect(empty.projections).toHaveLength(0);
     expect(empty.state).toBe(state);
   });
@@ -1091,18 +1096,18 @@ describe('turnActivityState', () => {
       isError: false,
     }).state;
     const running = reconcileSubagentSummaries(state, [
-      {
+      invocation({
         type: 'explore',
         description: 'Steady delegation',
         status: 'running',
-      },
+      }, 'task-1'),
     ]);
     const unmatched = reconcileSubagentSummaries(state, [
-      {
+      invocation({
         type: 'other-type',
         description: 'Different delegation',
         status: 'completed',
-      },
+      }),
     ]);
 
     expect(running.projections).toHaveLength(0);
@@ -1148,17 +1153,18 @@ describe('zombie subagent settlement', () => {
         toolUseId: 'task-bg',
         type: 'explore',
         description: 'Background research',
+        subagent: { type: 'explore', description: 'Background research', status: 'running' },
       },
     ]);
 
     const settled = reconcileSubagentSummaries(state, [
-      {
+      invocation({
         type: 'explore',
         description: 'Background research',
         status: 'completed',
         toolUseCount: 4,
         durationMs: 9_000,
-      },
+      }, 'task-bg'),
     ]).state;
     expect(collectRunningSubagentRows(settled, 'turn-9')).toEqual([]);
   });
@@ -1214,12 +1220,14 @@ describe('zombie subagent settlement', () => {
         toolUseId: 'task-live',
         type: 'explore',
         description: 'Outlived the reload',
+        subagent: { type: 'explore', description: 'Outlived the reload', status: 'running' },
       },
       {
         turnId: 'turn-2',
         toolUseId: 'task-queued',
         type: 'worker',
         description: 'Never started',
+        subagent: { type: 'worker', description: 'Never started', status: 'pending' },
       },
     ]);
     expect(collectTranscriptSubagentRows([])).toEqual([]);
@@ -1232,27 +1240,29 @@ describe('zombie subagent settlement', () => {
         toolUseId: 'task-a',
         type: 'explore',
         description: 'Background research',
+        subagent: { type: 'explore', description: 'Background research', status: 'running' as const },
       },
       {
         turnId: 'turn-1',
         toolUseId: 'task-b',
         type: 'worker',
         description: 'Still running work',
+        subagent: { type: 'worker', description: 'Still running work', status: 'running' as const },
       },
     ];
     const result = settleZombieSubagents(rows, [
-      {
+      invocation({
         type: 'explore',
         description: 'Background research',
         status: 'completed',
         toolUseCount: 7,
         durationMs: 123_000,
-      },
-      {
+      }, 'task-a'),
+      invocation({
         type: 'worker',
         description: 'Still running work',
         status: 'running',
-      },
+      }, 'task-b'),
     ]);
 
     expect(result.settled).toEqual([
@@ -1270,78 +1280,74 @@ describe('zombie subagent settlement', () => {
     expect(result.pending).toEqual([rows[1]]);
   });
 
-  it('pairs repeated identities newest-first like the turn-end reconcile', () => {
+  it('keeps repeated identities pending when legacy records have no invocation ids', () => {
     const rows = ['task-1', 'task-2'].map((toolUseId) => ({
       turnId: 'turn-1',
       toolUseId,
       type: 'worker',
       description: 'Same delegation',
+      subagent: { type: 'worker', description: 'Same delegation', status: 'running' as const },
     }));
     const result = settleZombieSubagents(rows, [
-      {
+      invocation({
         type: 'worker',
         description: 'Same delegation',
         status: 'failed',
-      },
-      {
+      }),
+      invocation({
         type: 'worker',
         description: 'Same delegation',
         status: 'completed',
         toolUseCount: 2,
         durationMs: 8_000,
-      },
+      }),
     ]);
 
-    // The newest row takes the newest ledger entry.
-    expect(
-      result.settled.map(({ row, subagent }) => [row.toolUseId, subagent.status]),
-    ).toEqual([
-      ['task-1', 'failed'],
-      ['task-2', 'completed'],
-    ]);
-    expect(result.pending).toEqual([]);
+    expect(result).toEqual({ settled: [], updates: [], pending: rows });
   });
 
   it('never settles a running row with an older terminal entry of the same identity', () => {
     // The whole-session ledger: an old completed delegation from an
-    // earlier turn plus the current one, still running. The live
-    // entry accounts for the waiting row, so nothing settles.
+    // earlier turn plus the current one, still running. Invocation
+    // ids distinguish the rows even though their descriptions match.
     const rows = [
       {
         turnId: 'turn-2',
         toolUseId: 'task-now',
         type: 'explore',
         description: 'Repeated delegation',
+        subagent: { type: 'explore', description: 'Repeated delegation', status: 'running' as const },
       },
     ];
     const ledger = [
-      {
+      invocation({
         type: 'explore',
         description: 'Repeated delegation',
         status: 'completed' as const,
         toolUseCount: 3,
         durationMs: 60_000,
-      },
-      {
+      }, 'task-old'),
+      invocation({
         type: 'explore',
         description: 'Repeated delegation',
         status: 'running' as const,
-      },
+      }, 'task-now'),
     ];
     expect(settleZombieSubagents(rows, ledger)).toEqual({
       settled: [],
+      updates: [],
       pending: rows,
     });
 
     // Once the live entry reaches a terminal state, the row settles
-    // with the newest terminal entry.
+    // with its own terminal entry.
     const done = settleZombieSubagents(rows, [
       ledger[0]!,
-      {
+      invocation({
         type: 'explore',
         description: 'Repeated delegation',
         status: 'failed' as const,
-      },
+      }, 'task-now'),
     ]);
     expect(done.settled).toEqual([
       {
@@ -1363,21 +1369,23 @@ describe('zombie subagent settlement', () => {
         toolUseId: 'task-a',
         type: 'explore',
         description: 'Background research',
+        subagent: { type: 'explore', description: 'Background research', status: 'running' as const },
       },
     ];
     expect(settleZombieSubagents(rows, [])).toEqual({
       settled: [],
+      updates: [],
       pending: rows,
     });
     expect(
       settleZombieSubagents(rows, [
-        {
+        invocation({
           type: 'other',
           description: 'Unrelated',
           status: 'completed',
-        },
+        }),
       ]),
-    ).toEqual({ settled: [], pending: rows });
+    ).toEqual({ settled: [], updates: [], pending: rows });
   });
 
   it('applies a settlement to the current activity state', () => {

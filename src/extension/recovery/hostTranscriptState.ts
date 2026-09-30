@@ -460,9 +460,11 @@ function projectSubagentUpdate(
   state: HostTranscriptState,
   message: SubagentUpdateMessage,
 ): HostTranscriptState {
-  const id = stableTranscriptId('tool', message.turnId, message.toolUseId);
+  // Recovery may re-home the row to a local turn while retaining its original
+  // transcript id. Address the same Task identity used by the Webview reducer.
   const existingIndex = state.transcript.findIndex(
-    (item) => item.id === id && item.kind === 'tool',
+    (item) => item.kind === 'tool' && item.turnId === message.turnId &&
+      item.toolUseId === message.toolUseId,
   );
   const existing = state.transcript[existingIndex];
   if (

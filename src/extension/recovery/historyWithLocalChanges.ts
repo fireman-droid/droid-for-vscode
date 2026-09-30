@@ -1,5 +1,6 @@
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { trimTranscriptToLimits } from '../../shared/transcript/transcriptLimits';
+import { preserveSubagentSummaries } from '../../shared/transcript/preserveSubagentSummaries';
 import type { ConversationRecoveryRecord, ConversationTurnRecord } from './conversationRecoveryState';
 import type { HostTranscriptState } from './hostTranscriptState';
 
@@ -7,6 +8,7 @@ import type { HostTranscriptState } from './hostTranscriptState';
 export function historyWithLocalChanges(
   history: HostTranscriptState,
   conversation: ConversationRecoveryRecord | undefined,
+  currentTranscript: readonly SessionTranscriptItem[] = [],
 ): HostTranscriptState {
   const turns = new Map<string, ConversationTurnRecord>();
   for (const turn of conversation?.turns ?? []) {
@@ -22,7 +24,11 @@ export function historyWithLocalChanges(
       });
     }
   };
-  for (const item of history.transcript) {
+  // A live settlement can be newer than the debounced display checkpoint.
+  // Loaded ledger fields remain authoritative; only absent fields are filled.
+  const observed = preserveSubagentSummaries(history.transcript, currentTranscript);
+  const restored = preserveSubagentSummaries(observed, conversation?.display.transcript.transcript ?? []);
+  for (const item of restored) {
     if (item.kind === 'user') {
       finish();
       current = item.messageId === undefined ? undefined : turns.get(item.messageId);

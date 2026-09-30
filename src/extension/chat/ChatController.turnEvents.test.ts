@@ -528,13 +528,17 @@ describe('ChatController', () => {
     });
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(async () => unavailableSessionHistory()),
-      loadSubagentSummaries: vi.fn(async () => [
+      loadSubagentInvocations: vi.fn(async () => [
         {
-          type: 'explore',
-          description: 'Survey the auth module',
-          status: 'completed' as const,
-          toolUseCount: 7,
-          durationMs: 4200,
+          parentToolUseId: 'task-1',
+          childSessionId: 'child-1',
+          summary: {
+            type: 'explore',
+            description: 'Survey the auth module',
+            status: 'completed' as const,
+            toolUseCount: 7,
+            durationMs: 4200,
+          },
         },
       ]),
     };
@@ -569,9 +573,10 @@ describe('ChatController', () => {
         },
       });
     });
-    expect(history.loadSubagentSummaries).toHaveBeenCalledWith({
+    expect(history.loadSubagentInvocations).toHaveBeenCalledWith({
       cwd: 'C:\\workspace',
       sessionId: 'session-1',
+      parentToolUseIds: ['task-1'],
     });
     const activities = toolActivities(messages);
     expect(activities).toEqual([
@@ -647,7 +652,8 @@ describe('ChatController', () => {
     let settledInLedger = false;
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(async () => unavailableSessionHistory()),
-      loadSubagentSummaries: vi.fn(async () => [settledInLedger ? completed : running]),
+      loadSubagentInvocations: vi.fn(async () => [{ parentToolUseId: 'task-bg', childSessionId: 'child-bg',
+        summary: settledInLedger ? completed : running }]),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -669,7 +675,7 @@ describe('ChatController', () => {
     try {
       send(controller, 'session-1', 'turn-1', 'Delegate in the background');
       await vi.advanceTimersByTimeAsync(0);
-      expect(history.loadSubagentSummaries).toHaveBeenCalledTimes(1);
+      expect(history.loadSubagentInvocations).toHaveBeenCalledTimes(1);
 
       // While the ledger still says running, polls settle nothing.
       await vi.advanceTimersByTimeAsync(5_100);
@@ -688,11 +694,11 @@ describe('ChatController', () => {
       ]);
 
       // The watch cleared itself: no further polling.
-      const loads = (history.loadSubagentSummaries as ReturnType<typeof vi.fn>).mock.calls
+      const loads = (history.loadSubagentInvocations as ReturnType<typeof vi.fn>).mock.calls
         .length;
       await vi.advanceTimersByTimeAsync(20_000);
       expect(
-        (history.loadSubagentSummaries as ReturnType<typeof vi.fn>).mock.calls.length,
+        (history.loadSubagentInvocations as ReturnType<typeof vi.fn>).mock.calls.length,
       ).toBe(loads);
     } finally {
       vi.useRealTimers();
@@ -776,7 +782,8 @@ describe('ChatController', () => {
     }));
     const history: SessionHistoryLoader = {
       loadHistory,
-      loadSubagentSummaries: vi.fn(async () => [settledInLedger ? completed : running]),
+      loadSubagentInvocations: vi.fn(async () => [{ parentToolUseId: 'task-bg', childSessionId: 'child-bg',
+        summary: settledInLedger ? completed : running }]),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -876,7 +883,8 @@ describe('ChatController', () => {
     }));
     const history: SessionHistoryLoader = {
       loadHistory,
-      loadSubagentSummaries: vi.fn(async () => [settledInLedger ? completed : running]),
+      loadSubagentInvocations: vi.fn(async () => [{ parentToolUseId: 'task-bg', childSessionId: 'child-bg',
+        summary: settledInLedger ? completed : running }]),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -964,7 +972,9 @@ describe('ChatController', () => {
     }));
     const history: SessionHistoryLoader = {
       loadHistory,
-      loadSubagentSummaries: vi.fn(async () => summaries),
+      loadSubagentInvocations: vi.fn(async () => summaries.map((summary, index) => ({
+        parentToolUseId: index === 0 ? 'task-a' : 'task-b', childSessionId: `child-${index}`, summary,
+      }))),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -1035,7 +1045,7 @@ describe('ChatController', () => {
           truncated: false,
         },
       })),
-      loadSubagentSummaries: vi.fn(async () => [completed]),
+      loadSubagentInvocations: vi.fn(async () => [{ parentToolUseId: 'task-live', childSessionId: 'child-live', summary: completed }]),
     };
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('replay-session'));
@@ -1062,11 +1072,11 @@ describe('ChatController', () => {
         }),
       ]);
       // Settled: the watch cleared itself and stops polling.
-      const loads = (history.loadSubagentSummaries as ReturnType<typeof vi.fn>).mock.calls
+      const loads = (history.loadSubagentInvocations as ReturnType<typeof vi.fn>).mock.calls
         .length;
       await vi.advanceTimersByTimeAsync(20_000);
       expect(
-        (history.loadSubagentSummaries as ReturnType<typeof vi.fn>).mock.calls.length,
+        (history.loadSubagentInvocations as ReturnType<typeof vi.fn>).mock.calls.length,
       ).toBe(loads);
     } finally {
       vi.useRealTimers();
@@ -1092,7 +1102,7 @@ describe('ChatController', () => {
     });
     const history: SessionHistoryLoader = {
       loadHistory: vi.fn(async () => unavailableSessionHistory()),
-      loadSubagentSummaries: vi.fn(async () => []),
+      loadSubagentInvocations: vi.fn(async () => []),
     };
     const { controller, messages } = createController(
       () => runtime,
@@ -1109,7 +1119,7 @@ describe('ChatController', () => {
     await vi.waitFor(() => {
       expect(turnStates(messages).at(-1)?.status).toBe('completed');
     });
-    expect(history.loadSubagentSummaries).not.toHaveBeenCalled();
+    expect(history.loadSubagentInvocations).not.toHaveBeenCalled();
   });
 
   it('surfaces the read-only mission identity of a resumed session', async () => {

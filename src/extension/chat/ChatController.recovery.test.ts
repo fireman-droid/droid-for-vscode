@@ -1197,7 +1197,7 @@ describe('ChatController', () => {
       .mockReturnValueOnce(second);
     const history = {
       ...authoritativeHistory(),
-      loadSubagentSummaries: vi.fn(async () => []),
+      loadSubagentInvocations: vi.fn(async () => []),
     };
     const { controller, messages } = createController(
       createRuntime,

@@ -6,8 +6,8 @@ import {
   type OperationDiffFile,
 } from '../../shared/protocol/operationDiff';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
-import { toWorkspaceRelativePath } from './toolFilePath';
-import { isRestrictedToolContent, readResultSource } from './toolResultPreview';
+import { toolDisplayPath } from './toolDisplayPath';
+import { isRestrictedToolContent, isRestrictedToolPath, readResultSource } from './toolResultPreview';
 
 export type OperationTool = 'applypatch' | 'edit' | 'create' | 'write';
 type UnavailableReason = Extract<
@@ -72,7 +72,7 @@ export function parseOperationResult(
 
 /** A restricted file must not hide unrelated files from the same tool operation. */
 export function redactOperationFile(file: OperationDiffFile, workspace: string): OperationDiffFile {
-  const restrictedPath = (path: string) =>
+  const restrictedPath = (path: string) => file.scope === 'mission' ? isRestrictedToolPath(path) :
     typeof readResultSource('Read', { file_path: path }, workspace, 'operation') === 'string';
   if (!restrictedPath(file.path) &&
     (!file.previousPath || !restrictedPath(file.previousPath)) &&
@@ -104,11 +104,11 @@ export function readDeclaredFiles(
     return readApplyPatchDeclarations(input.input, workspace);
   }
   const rawPath = input.file_path ?? input.filePath ?? input.path;
-  const path =
+  const location =
     typeof rawPath === 'string'
-      ? toWorkspaceRelativePath(workspace, rawPath)
+      ? toolDisplayPath(workspace, rawPath)
       : undefined;
-  if (!path) return null;
+  if (!location) return null;
   if (tool === 'edit') {
     if (
       typeof input.old_str !== 'string' ||
@@ -118,7 +118,8 @@ export function readDeclaredFiles(
       return null;
     return [
       {
-        path,
+        ...location,
+        ...(location.scope === 'mission' ? { reversible: false } : {}),
         kind: 'modified',
         patch: replacementPatch(input.old_str, input.new_str),
         ...(input.change_all === true || input.replace_all === true
@@ -128,7 +129,7 @@ export function readDeclaredFiles(
   }
   const source = input.content ?? input.file_text ?? input.text;
   if (typeof source !== 'string') return null;
-  return [{ path, kind: 'added', patch: addedContentPatch(source) }];
+  return [{ ...location, ...(location.scope === 'mission' ? { reversible: false } : {}), kind: 'added', patch: addedContentPatch(source) }];
 }
 
 function parseEditResult(
@@ -154,13 +155,13 @@ function parseEditResult(
   ).length;
   if (additions !== value.linesAdded || removals !== value.linesRemoved)
     return 'not-recorded';
-  const path = toWorkspaceRelativePath(workspace, value.file_path);
-  if (!path || declared.length !== 1 || path !== declared[0]!.path)
+  const location = toolDisplayPath(workspace, value.file_path);
+  if (!location || declared.length !== 1 || location.path !== declared[0]!.path || location.scope !== declared[0]!.scope)
     return 'unattributed';
   if (value.diffLines.length === 0 && additions === 0 && removals === 0) return 'unchanged';
   const patch = editDiffLinesPatch(value.diffLines);
   if (patch === undefined) return 'not-recorded';
-  return [{ path, kind: 'modified', patch, outcome: 'applied', reversible: false }];
+  return [{ ...location, kind: 'modified', patch, outcome: 'applied', reversible: false }];
 }
 
 function parseApplyPatchResult(
@@ -181,18 +182,18 @@ function parseApplyPatchResult(
       !['create', 'update', 'delete'].includes(String(raw.display_operation))
     )
       return 'not-recorded';
-    const originalPath = toWorkspaceRelativePath(workspace, raw.file_path);
+    const original = toolDisplayPath(workspace, raw.file_path);
     const movedTo =
       raw.moved_to === undefined
         ? undefined
         : typeof raw.moved_to === 'string'
-          ? toWorkspaceRelativePath(workspace, raw.moved_to)
+          ? toolDisplayPath(workspace, raw.moved_to)
           : undefined;
-    if (!originalPath || (raw.moved_to !== undefined && !movedTo))
+    if (!original || (raw.moved_to !== undefined && !movedTo) || movedTo && movedTo.scope !== original.scope)
       return 'restricted';
-    const identity = movedTo
-      ? `${originalPath}\u0000${movedTo}`
-      : originalPath;
+    const identity = `${original.scope ?? 'workspace'}\u0000${movedTo
+      ? `${original.path}\u0000${movedTo.path}`
+      : original.path}`;
     const expected = remaining.get(identity);
     if (!expected) return 'unattributed';
     remaining.delete(identity);
@@ -208,6 +209,7 @@ function parseApplyPatchResult(
     if (error !== undefined) {
       files.push({
         path: expected.path,
+        ...(expected.scope === undefined ? {} : { scope: expected.scope }),
         ...(expected.previousPath ? { previousPath: expected.previousPath } : {}),
         kind,
         patch: '',
@@ -235,11 +237,12 @@ function parseApplyPatchResult(
     }
     files.push({
       path: expected.path,
+      ...(expected.scope === undefined ? {} : { scope: expected.scope }),
       ...(expected.previousPath ? { previousPath: expected.previousPath } : {}),
       kind,
       patch,
       outcome: 'applied',
-      reversible,
+      reversible: expected.scope === 'mission' ? false : reversible,
       ...(message === undefined ? {} : { message }),
     });
   }
@@ -267,15 +270,15 @@ function parseCreateResult(
     typeof value.file_path !== 'string'
   )
     return 'not-recorded';
-  const path = toWorkspaceRelativePath(workspace, value.file_path);
-  if (!path || declared.length !== 1 || path !== declared[0]!.path)
+  const location = toolDisplayPath(workspace, value.file_path);
+  if (!location || declared.length !== 1 || location.path !== declared[0]!.path || location.scope !== declared[0]!.scope)
     return 'unattributed';
   if (!isStrictRecord(input)) return 'unattributed';
   const content = input.content ?? input.file_text ?? input.text;
   if (typeof content !== 'string') return 'not-recorded';
   const submittedContent = content.replace(/\r\n?/gu, '\n');
   if (submittedContent.length > MAX_OPERATION_DIFF_UNITS) return 'too-large';
-  return [{ path, kind: 'added', patch: '', submittedContent, outcome: 'applied', reversible: false }];
+  return [{ ...location, kind: 'added', patch: '', submittedContent, outcome: 'applied', reversible: false }];
 }
 
 function readApplyPatchDeclarations(
@@ -290,6 +293,7 @@ function readApplyPatchDeclarations(
     | {
         originalPath: string;
         path: string;
+        scope?: 'mission';
         kind: OperationDiffFile['kind'];
         patch: string[];
       }
@@ -298,6 +302,7 @@ function readApplyPatchDeclarations(
     if (!current) return;
     files.push({
       path: current.path,
+      ...(current.scope === undefined ? {} : { scope: current.scope, reversible: false }),
       ...(current.path === current.originalPath
         ? {}
         : { previousPath: current.originalPath }),
@@ -310,11 +315,11 @@ function readApplyPatchDeclarations(
     const header = /^\*\*\* (Add|Update|Delete) File: (.+)$/u.exec(line);
     if (header) {
       finish();
-      const path = toWorkspaceRelativePath(workspace, header[2]!);
-      if (!path) return null;
+      const location = toolDisplayPath(workspace, header[2]!);
+      if (!location) return null;
       current = {
-        originalPath: path,
-        path,
+        originalPath: location.path,
+        ...location,
         kind:
           header[1] === 'Add'
             ? 'added'
@@ -324,9 +329,9 @@ function readApplyPatchDeclarations(
         patch: ['@@'],
       };
     } else if (line.startsWith('*** Move to: ') && current) {
-      const path = toWorkspaceRelativePath(workspace, line.slice(13));
-      if (!path) return null;
-      current.path = path;
+      const location = toolDisplayPath(workspace, line.slice(13));
+      if (!location || location.scope !== current.scope) return null;
+      current.path = location.path;
       current.kind = 'renamed';
     } else if (line === '*** End Patch') {
       finish();
@@ -529,7 +534,7 @@ function addedContentPatch(content: string): string {
 }
 
 function declaredKey(file: OperationDiffFile): string {
-  return file.previousPath ? `${file.previousPath}\u0000${file.path}` : file.path;
+  return `${file.scope ?? 'workspace'}\u0000${file.previousPath ? `${file.previousPath}\u0000${file.path}` : file.path}`;
 }
 
 function readResultText(content: unknown): string | 'too-large' | undefined {
