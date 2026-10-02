@@ -69,6 +69,18 @@ export function findLoadedModel(
   loaded: readonly LoadedModel[],
   rows: readonly SavedModel[],
 ): { readonly runtimeId: string | null; readonly loadMessage: string } {
+  const identity = findLoadedModelIdentity(row, loaded, rows);
+  if (identity.runtimeId === null) return identity;
+  const match = loaded.find((model) => model.id === identity.runtimeId)!;
+  return match.disabledReason === null ? identity : { runtimeId: null, loadMessage: match.disabledReason };
+}
+
+/** Resolve a saved endpoint configuration only when Droid exposes one exact identity. */
+export function findLoadedModelIdentity(
+  row: SavedModel,
+  loaded: readonly LoadedModel[],
+  rows: readonly SavedModel[],
+): { readonly runtimeId: string | null; readonly loadMessage: string } {
   if (!row.isValid)
     return { runtimeId: null, loadMessage: 'Droid marked this configuration invalid.' };
   const name = row.displayName ?? row.model;
@@ -89,11 +101,6 @@ export function findLoadedModel(
       loadMessage:
         'Saved, but not present in Droid’s model catalog. Refresh to check again.',
     };
-  if (match.disabledReason !== null)
-    return {
-      runtimeId: null,
-      loadMessage: match.disabledReason,
-    };
   if (match.provider !== row.provider)
     return {
       runtimeId: null,
@@ -108,6 +115,7 @@ export function projectManagedModels(
   connections: readonly ModelConnection[],
   loaded: readonly LoadedModel[],
   tests: ReadonlyMap<string, ModelVerification>,
+  isDisabled: (row: SavedModel) => boolean = () => false,
 ): ManagedModel[] {
   return rows.flatMap((row) => {
     const connection = !isCustomModelBaseUrl(row.baseUrl)
@@ -127,6 +135,7 @@ export function projectManagedModels(
         maxOutputTokens: row.maxOutputTokens ?? null,
         noImageSupport: row.noImageSupport ?? false,
         valid: row.isValid,
+        enabled: !isDisabled(row),
         ...findLoadedModel(row, loaded, rows),
         test: tests.get(modelRevision(row)) ?? null,
       },

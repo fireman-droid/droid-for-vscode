@@ -71,6 +71,10 @@ export function useModelsPage(transport: ModelsTransport) {
       });
       return true;
     }
+    if (saved.enabled === false) {
+      manager.setNotice({ ok: true, message: '配置已保存。此模型已禁用，恢复后才能验证。' });
+      return true;
+    }
     await manager.run({ kind: 'verifyModel', rawIndex: saved.rawIndex, expectedModel: saved.model });
     return true;
   };
@@ -113,6 +117,7 @@ export function operationLabel(kind: string | null): string {
     case 'discover': return 'Requesting the provider’s model list…';
     case 'importModels': return 'Saving selected models…';
     case 'useModel': return 'Refreshing the idle chat and confirming its model…';
+    case 'setModelEnabled': return 'Updating model availability…';
     default: return 'Waiting for Droid to confirm the change…';
   }
 }

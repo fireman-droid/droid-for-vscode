@@ -167,7 +167,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
       connectionId: connection.id,
       ...(model === null ? {} : { rawIndex: model.rawIndex, expectedModel: model.model }),
       model: id.trim(), displayName: name.trim(), maxOutputTokens: tokens.trim() === '' ? null : Number(tokens), noImageSupport: noImages,
-    }, (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'verify');
+    }, model?.enabled !== false && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'verify');
   }}>
     <fieldset disabled={busy} className="space-y-5">
       {showConnection ? <div className="models-form-intro"><span>当前接口</span><strong>{connection.name}</strong><span>{PROTOCOLS[connection.protocol].name}</span></div> : null}
@@ -185,7 +185,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
           aria-invalid={!!nameMessage} aria-describedby={`${formId}-name-hint${nameMessage ? ` ${formId}-name-error` : ''}`}
           onBlur={() => setTouched((current) => ({ ...current, name: true }))} onChange={(event) => setName(event.target.value)} />
         <FieldError id={`${formId}-name-error`} message={nameMessage} />
-        <p id={`${formId}-name-hint`} className="models-field-hint">用于聊天中的模型选择。不同接口也需要使用不同的显示名称。</p>
+        <p id={`${formId}-name-hint`} className="models-field-hint">用于聊天中的模型选择。同名模型会自动补充渠道标识。</p>
       </div>
       <Collapsible open={advanced} onOpenChange={setAdvanced} className="models-advanced">
         <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="models-advanced-trigger flex w-full items-center justify-between py-2 text-[13px] text-muted-foreground">
@@ -202,8 +202,8 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
               <p id={`${formId}-tokens-hint`} className="models-field-hint">仅在服务方要求时填写输出上限。</p>
             </div>
             <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />此模型不支持图片输入</label>
-            <Button variant="outline" type="submit" value="verify" size="sm"><SavingIcon busy={busy} />保存并验证…</Button>
-            <p className="models-field-hint">验证会请求一次真实模型回复，由 Droid 确认后执行。</p>
+            <Button variant="outline" type="submit" value="verify" size="sm" disabled={model?.enabled === false}><SavingIcon busy={busy} />保存并验证…</Button>
+            <p className="models-field-hint">{model?.enabled === false ? '此模型已禁用，可保存修改；恢复后才能验证。' : '验证会请求一次真实模型回复，由 Droid 确认后执行。'}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>

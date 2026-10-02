@@ -19,6 +19,7 @@ import {
   type CustomModelDiscoveryGateway,
 } from '../chat/models/modelDiscovery';
 import type { ProviderRegistry } from '../chat/models/providerRegistry';
+import { MODEL_DISABLED_MESSAGE, ModelAvailabilityError, type DisabledModelsStore } from './DisabledModelsStore';
 import {
   connectionKey,
   findLoadedModel,
@@ -39,6 +40,7 @@ export interface ModelManagerDependencies {
   readonly promptKey: () => PromiseLike<string | undefined>;
   readonly readApplyState: () => ModelApplyState;
   readonly apply: (runtimeId: string, signal: AbortSignal) => Promise<void>;
+  readonly availability?: DisabledModelsStore;
 }
 export interface ModelActionResult {
   readonly message: string;
@@ -64,7 +66,7 @@ export class ModelManager {
     const apply = this.deps.readApplyState();
     return {
       connections,
-      models: projectManagedModels(rows, connections, loaded, this.tests),
+      models: projectManagedModels(rows, connections, loaded, this.tests, (row) => this.deps.availability?.isDisabled(row) ?? false),
       activeModelId: apply.activeModelId,
       canApply: apply.canApply,
       applyMessage: apply.message,
@@ -167,9 +169,19 @@ export class ModelManager {
       );
       if (row === undefined)
         throw new ModelManagerError('This model changed elsewhere. Refresh and retry.');
+      if (action.kind === 'setModelEnabled') {
+        if (!row.baseUrl || connectionKey(row.provider, row.baseUrl) !== connectionKey(action.provider, action.baseUrl)) {
+          throw new ModelManagerError('模型的所属接口已变化，请刷新后重试。');
+        }
+        if (!this.deps.availability) throw new ModelManagerError('模型启用设置暂不可用，请重新加载窗口。');
+        await this.deps.availability.setDisabled(row, !action.enabled);
+        return { message: action.enabled ? '模型已恢复启用。' : '模型已禁用，接口、密钥和模型配置已保留。' };
+      }
       if (action.kind === 'renameModel') {
-        const displayName = action.name.trim();
-        this.requireUniqueName(displayName, row.rawIndex, rows);
+        const connection = connections.find((item) =>
+          typeof row.baseUrl === 'string' && isCustomModelBaseUrl(row.baseUrl) &&
+          connectionKey(item.protocol, item.baseUrl) === connectionKey(row.provider, row.baseUrl));
+        const displayName = this.uniqueName(action.name, row.rawIndex, rows, connection?.name ?? row.provider);
         await this.deps.gateway.save({
           rawIndex: row.rawIndex, expectedModel: row.model, model: row.model,
           provider: row.provider, displayName,
@@ -182,8 +194,10 @@ export class ModelManager {
       }
       if (action.kind === 'deleteModel') {
         await this.deps.gateway.delete(row.rawIndex, row.model);
+        await this.deps.availability?.forget(row);
         return { message: 'Model removed from Droid configuration.' };
       }
+      if (this.deps.availability?.isDisabled(row)) throw new ModelManagerError(MODEL_DISABLED_MESSAGE);
       const loaded = findLoadedModel(row, await this.deps.gateway.loaded(), rows);
       if (loaded.runtimeId === null) throw new ModelManagerError(loaded.loadMessage);
       if (action.kind === 'verifyModel') {
@@ -198,6 +212,9 @@ export class ModelManager {
       return { message: 'Droid confirmed this model in the current chat.' };
     } finally {
       this.busy = false;
+      if (['saveConnection', 'saveModel', 'importModels', 'renameModel', 'deleteModel'].includes(action.kind)) {
+        this.deps.availability?.refresh();
+      }
     }
   }
 
@@ -280,6 +297,9 @@ export class ModelManager {
               : { noImageSupport: row.noImageSupport }),
             ...(key === undefined ? {} : { apiKey: key.trim() }),
           });
+          await this.deps.availability?.move(row, {
+            ...row, provider: draft.protocol, baseUrl: normalizeProviderRoot(draft.baseUrl),
+          });
           this.tests.delete(modelRevision(row));
           updated++;
         } catch (error) {
@@ -309,8 +329,7 @@ export class ModelManager {
     if (draft.rawIndex !== undefined && previous === undefined) {
       throw new ModelManagerError('This model changed elsewhere. Refresh and retry.');
     }
-    const displayName = draft.displayName.trim() || draft.model.slice(0, 160);
-    this.requireUniqueName(displayName, draft.rawIndex, rows);
+    const displayName = this.uniqueName(draft.displayName.trim() || draft.model.slice(0, 160), draft.rawIndex, rows, connection.name);
     if (
       this.connectionRows(connection, rows).some(
         (row) => row.rawIndex !== draft.rawIndex && row.model === draft.model,
@@ -336,17 +355,31 @@ export class ModelManager {
       maxOutputTokens: draft.maxOutputTokens,
       noImageSupport: draft.noImageSupport,
     });
-    if (previous !== undefined) this.tests.delete(modelRevision(previous));
+    if (previous !== undefined) {
+      await this.deps.availability?.move(previous, {
+        ...previous, model: draft.model, provider: connection.protocol, baseUrl: normalizeProviderRoot(connection.baseUrl),
+      });
+      this.tests.delete(modelRevision(previous));
+    }
   }
 
-  private requireUniqueName(name: string, rawIndex: number | undefined, rows: readonly SavedModel[]): void {
-    if (!name || rows.some((row) => row.rawIndex !== rawIndex && (row.displayName ?? row.model) === name)) {
-      throw new ModelManagerError('请使用不重复的模型别名，Droid 需要通过名称识别模型。');
+  private uniqueName(name: string, rawIndex: number | undefined, rows: readonly SavedModel[], connectionName: string): string {
+    const requested = name.trim();
+    if (!requested) throw new ModelManagerError('请输入模型名称。');
+    const names = new Set(rows.filter((row) => row.rawIndex !== rawIndex).map((row) => row.displayName ?? row.model));
+    if (!names.has(requested)) return requested;
+    const channel = connectionName.trim().slice(0, 80);
+    for (let index = 1; index <= names.size + 1; index++) {
+      const suffix = ` · ${channel}${index === 1 ? '' : ` (${index})`}`;
+      const candidate = `${requested.slice(0, 160 - suffix.length)}${suffix}`;
+      if (!names.has(candidate)) return candidate;
     }
+    throw new ModelManagerError('无法为此渠道生成模型名称，请重试。');
   }
 }
 
 export function modelManagerFailure(error: unknown): string {
+  if (error instanceof ModelAvailabilityError) return error.message.slice(0, 2048);
   if (error instanceof ModelManagerError) return error.message.slice(0, 2048);
   if (error instanceof ModelDiscoveryError) {
     if (error.status === 404)

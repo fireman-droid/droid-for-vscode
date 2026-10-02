@@ -1,4 +1,5 @@
 import type { SettingsHostPort } from './metadataPorts';
+import { ModelAvailabilityError } from '../../models/DisabledModelsStore';
 import {
   type ConfirmedSessionSettings,
   type SessionSettingUpdateMessage,
@@ -76,8 +77,12 @@ export function handleSettingUpdate(
     field: message.field,
     value: message.value,
   } as RuntimeSessionSettingUpdate;
-  void runtime
-    .updateSessionSetting(update)
+  const selectedModel = (message.field === 'modelId' || message.field === 'specModeModelId') ? message.value : null;
+  void Promise.resolve(selectedModel === null ? undefined : ctl.modelAvailability?.assertEnabled(selectedModel))
+    .then(() => {
+      if (!isCurrentSettingsUpdate(ctl, runtime, generation, message.sessionId, cwd, operation)) return confirmed;
+      return runtime.updateSessionSetting(update);
+    })
     .then((result) => {
       if (
         !isCurrentSettingsUpdate(
@@ -97,7 +102,7 @@ export function handleSettingUpdate(
       };
       emitSettings(ctl, message.sessionId);
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       if (
         !isCurrentSettingsUpdate(
           ctl,
@@ -113,7 +118,7 @@ export function handleSettingUpdate(
       ctl.metadata.settings = {
         status: 'error',
         value: confirmed,
-        message: SETTINGS_UPDATE_FAILED_MESSAGE,
+        message: error instanceof ModelAvailabilityError ? error.message : SETTINGS_UPDATE_FAILED_MESSAGE,
       };
       emitSettings(ctl, message.sessionId);
     })

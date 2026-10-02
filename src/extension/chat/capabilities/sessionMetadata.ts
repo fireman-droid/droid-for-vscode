@@ -97,6 +97,9 @@ async function refreshModelCatalog(
   let catalog: ModelCatalogState;
   try {
     catalog = projectModelCatalog(await runtime.readModelCatalog());
+    if (catalog.status === 'ready' && ctl.modelAvailability) {
+      catalog = { ...catalog, items: await ctl.modelAvailability.projectCatalog(catalog.items) };
+    }
   } catch {
     catalog = { status: 'error', items: [], message: MODEL_CATALOG_FAILED_MESSAGE };
   }

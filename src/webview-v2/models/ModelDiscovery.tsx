@@ -22,18 +22,12 @@ export function ModelDiscovery({ page, onDone, onManual }: {
   const { connection, discovered, models, chosen, busy } = page;
   const items = discovered ?? [];
   const existing = new Set(models.map((model) => model.model));
-  const names = new Set(page.manager.snapshot?.models.map((model) => model.displayName || model.model));
   const displayName = (item: DiscoveredCustomModel) => aliases[item.model] ?? item.displayName ?? '';
-  const effectiveName = (item: DiscoveredCustomModel) => displayName(item).trim() || item.model.slice(0, 160);
   const selected = items.filter((item) => chosen.has(item.model) && !existing.has(item.model));
-  const selectedNames = new Map<string, number>();
-  for (const item of selected) selectedNames.set(effectiveName(item), (selectedNames.get(effectiveName(item)) ?? 0) + 1);
   const errorFor = (item: DiscoveredCustomModel) => {
     if (existing.has(item.model)) return null;
     const alias = displayName(item).trim();
     if (alias && !isSafeText(alias, MAX_MODEL_DISPLAY_NAME_LENGTH)) return '别名包含无效字符或超过长度限制。';
-    if (names.has(effectiveName(item))) return '这个名称已被其他模型使用，请设置不同的别名。';
-    if ((selectedNames.get(effectiveName(item)) ?? 0) > 1) return '所选模型的别名重复，请调整后再添加。';
     return null;
   };
   const conflicts = selected.filter((item) => errorFor(item) !== null).length;
@@ -60,6 +54,7 @@ export function ModelDiscovery({ page, onDone, onManual }: {
     });
   };
   return <div className="models-discovery">
+    <p className="models-help">同名模型会自动补充渠道标识，便于在聊天中区分。</p>
     <div className="models-search models-discovery-search">
       <Search aria-hidden /><Input type="search" className="h-9 rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" disabled={busy} aria-label="筛选发现的模型" placeholder="搜索模型名称或 Model ID…"
         value={search} onChange={(event) => setSearch(event.target.value)} />

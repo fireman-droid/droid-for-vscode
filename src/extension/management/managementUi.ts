@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { DaemonApi } from '../../runtime/daemon/api';
+import type { ModelAvailability } from '../models/DisabledModelsStore';
 
 export class ManagementError extends Error {}
 
@@ -8,6 +9,7 @@ export interface ManagementContext {
   readonly sessionId: string;
   readonly cwd: string;
   readonly signal: AbortSignal;
+  readonly modelAvailability?: ModelAvailability;
   assertCurrent(write?: boolean): void;
 }
 

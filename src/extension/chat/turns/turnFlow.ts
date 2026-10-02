@@ -116,6 +116,14 @@ export async function consumeTurn(
   try {
     await beforeSnapshot;
     if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+    if (ctl.modelAvailability) {
+      const settings = ctl.metadata.settings.value ?? await runtime.readSessionSettings();
+      const modelId = settings?.interactionMode === 'spec'
+        ? settings.specModeModelId ?? settings.modelId : settings?.modelId;
+      if (modelId !== undefined) await ctl.modelAvailability.assertEnabled(modelId);
+      await ctl.missionGateway?.assertPlanningModelsEnabled(sessionId);
+    }
+    if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
     if ((ctl.turnState.turn?.status as TurnStatus | undefined) === 'stopping') {
       handleTurnComplete(ctl, sessionId, turnId, { type: 'turn-complete', outcome: 'interrupted' });
       return;

@@ -1,4 +1,5 @@
 import type { DaemonSessionCatalog } from '../../runtime/daemon/DaemonSessionCatalog';
+import type { ModelAvailability } from '../models/DisabledModelsStore';
 import type { DroidRuntime } from '../../runtime/DroidRuntime';
 import { type SessionHistoryLoader } from '../../runtime/history/SessionHistory';
 import type {
@@ -34,6 +35,7 @@ import type { CustomModelDiscoveryGateway } from './models/modelDiscovery';
 import { type UserPanelRequestDropReason } from './operationEligibility';
 import { SessionMetadataState } from './capabilities/sessionMetadataState';
 export interface HostOperations {
+  readonly modelAvailability?: ModelAvailability;
   readonly childSession?: { readonly sessionId: string; readonly cwd: string };
   readonly metadata: SessionMetadataState;
   readonly recoveryStore: SessionRecoveryStore;

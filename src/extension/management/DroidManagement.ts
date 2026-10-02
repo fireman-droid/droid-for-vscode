@@ -3,6 +3,7 @@ import type { DaemonApi } from '../../runtime/daemon/api';
 import { MANAGEMENT_SECTIONS, type ManagementSection } from '../../shared/protocol/managementProtocol';
 import type { ChatController } from '../chat/ChatController';
 import { readModelApplyState } from '../models/modelChatApply';
+import { ModelAvailabilityError, type ModelAvailability } from '../models/DisabledModelsStore';
 import { manageMarketplaces, managePlugins } from './plugins';
 import { manageMcp, signInMcp } from './mcp';
 import { manageDefaults } from './defaults';
@@ -23,6 +24,7 @@ export class DroidManagement implements vscode.Disposable {
     private readonly controller: ChatController,
     private readonly getDaemon: () => Promise<DaemonApi>,
     private readonly daemonMode: boolean,
+    private readonly modelAvailability?: ModelAvailability,
   ) { this.terminals = new DaemonTerminalManager(controller); }
 
   async open(section?: ManagementSection, serverName?: string): Promise<void> {
@@ -76,6 +78,7 @@ export class DroidManagement implements vscode.Disposable {
         throw new ManagementError('These management operations require daemon runtime mode. Existing Process Skills and MCP controls remain available in the chat menu.');
       const context: ManagementContext = {
         droid: await this.getDaemon(), sessionId, cwd, signal: abort.signal, assertCurrent,
+        ...(this.modelAvailability === undefined ? {} : { modelAvailability: this.modelAvailability }),
       };
       assertCurrent();
       if (target === 'plugins') await managePlugins(context);
@@ -89,7 +92,7 @@ export class DroidManagement implements vscode.Disposable {
       else if (serverName !== undefined) await signInMcp(context, serverName);
       else await manageMcp(context);
     } catch (error) {
-      if (!abort.signal.aborted) await vscode.window.showErrorMessage(error instanceof ManagementError
+      if (!abort.signal.aborted) await vscode.window.showErrorMessage(error instanceof ManagementError || error instanceof ModelAvailabilityError
         ? error.message : 'Droid could not complete the management operation. Check the service connection, source and organization policy. Changes already confirmed by Droid are not rolled back.');
     } finally {
       abort.abort();

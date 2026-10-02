@@ -3,6 +3,7 @@ import type { DaemonApi, DaemonCreateSessionOptions, DaemonSessionHandle } from 
 
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import type { FactoryDroidSession } from '../../../runtime/session/sessionTypes';
+import type { ModelAvailability } from '../../models/DisabledModelsStore';
 import { hasSavedMissionModelSettings } from '../../../runtime/daemon/missionSettingsFile';
 import {
   createRuntimeInteractionCallbacks,
@@ -67,6 +68,7 @@ export type MissionGatewayResult =
     };
 
 export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
+  readonly modelAvailability?: ModelAvailability;
   readonly getSystemPrompt?: () => import('../../../shared/protocol/systemPromptProtocol').SessionSystemPrompt | undefined;
   readonly getDroid: () => Promise<DaemonApi>;
   readonly preferences: MissionPreferenceStore;
@@ -166,10 +168,11 @@ export class MissionGateway {
       scrutinyEnabled: input.message.scrutinyEnabled,
       userTestingEnabled: input.message.userTestingEnabled,
     };
+    const catalog = await this.options.modelAvailability?.projectCatalog(input.catalog) ?? input.catalog;
     const effective = validateStart(
       input.message.orchestrator,
       requestedPreferences,
-      input.catalog,
+      catalog,
     );
     if (effective.valid === false) {
       return { status: 'rejected', code: effective.reason };
@@ -259,6 +262,15 @@ export class MissionGateway {
     await session.updateSettings({ missionSettings: settings });
     if (!sameMissionSettings(session.settings.missionSettings, settings)) {
       throw new Error('The selected Mission Worker and Validator settings could not be restored.');
+    }
+  }
+
+  async assertPlanningModelsEnabled(sessionId: string): Promise<void> {
+    if (this.options.modelAvailability === undefined) return;
+    const startup = this.options.preferences.readStartup(sessionId);
+    if (!startup) return;
+    for (const modelId of new Set([startup.preferences.worker.modelId, startup.preferences.validator.modelId])) {
+      await this.options.modelAvailability.assertEnabled(modelId);
     }
   }
 

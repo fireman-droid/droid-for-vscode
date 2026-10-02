@@ -1,4 +1,5 @@
 import type { DaemonPluginCatalog } from '../../../runtime/daemon/DaemonPluginCatalog';
+import type { ModelAvailability } from '../../models/DisabledModelsStore';
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import type { RuntimeDiagnosticEvent } from '../../../runtime/runtimeDiagnostics';
 import { type HostToWebviewMessage } from '../../../shared/bridgeMessages';
@@ -41,6 +42,7 @@ interface PanelPort extends SessionPort {
 }
 
 export interface SettingsHostPort extends SessionPort {
+  readonly modelAvailability?: ModelAvailability;
   readonly metadata: Pick<SessionMetadataState, 'settings' | 'settingsUpdate'> &
     Readonly<Pick<SessionMetadataState, 'modelCatalog'>>;
   hasPendingInteractions(): boolean;

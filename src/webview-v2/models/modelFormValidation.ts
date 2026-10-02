@@ -28,11 +28,7 @@ export function modelErrors(
   if (!idError && others.some((row) => row.connectionId === connectionId && row.model === id)) {
     idError = '此接口已有这个 Model ID，请编辑已有模型或填写其他 ID。';
   }
-  let aliasError = name && !isSafeText(name, 160) ? '模型别名最多 160 个字符，且不能包含控制字符。' : undefined;
-  const displayName = name || id.slice(0, 160);
-  if (!aliasError && displayName && others.some((row) => row.displayName === displayName)) {
-    aliasError = '这个显示名称已被其他模型使用，请填写一个不同的模型别名。';
-  }
+  const aliasError = name && !isSafeText(name, 160) ? '模型别名最多 160 个字符，且不能包含控制字符。' : undefined;
   const tokenValue = Number(draft.tokens);
   const tokensError = draft.tokens.trim() !== '' && (
     !Number.isSafeInteger(tokenValue) || tokenValue < 1 || tokenValue > MAX_CUSTOM_MODEL_OUTPUT_TOKENS

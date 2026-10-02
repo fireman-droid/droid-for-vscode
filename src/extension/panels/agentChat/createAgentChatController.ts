@@ -7,6 +7,7 @@ import { createGitChangeStatsReader } from '../../changes/changeStats';
 import { createTurnSnapshotStore } from '../../changes/turnSnapshots';
 import { watchWorkspaceChanges } from '../../changes/watchWorkspaceChanges';
 import { ChatController } from '../../chat/ChatController';
+import { bindModelAvailability } from '../../models/bindModelAvailability';
 import { emitIdeState, type NativeIdeBackend } from '../../chat/ideIntegration';
 import { RecentCommandsStore } from '../../chat/capabilities/RecentCommandsStore';
 import { PlanDocumentController } from '../../interactions/planDocumentController';
@@ -87,6 +88,7 @@ export function createAgentChatController(options: {
   controller.modelDiscovery = parent.modelDiscovery;
   controller.systemPromptStore = parent.systemPromptStore;
   controller.providerRegistry = parent.providerRegistry;
+  if (parent.modelAvailability) subscriptions.push(bindModelAvailability(controller, parent.modelAvailability));
   controller.promptProviderApiKey = parent.promptProviderApiKey;
   if (options.nativeIde) {
     controller.nativeIde = { read: options.nativeIde.read };

@@ -53,6 +53,8 @@ import { createTerminalMirror } from './terminal/terminalMirror';
 import { createHttpCustomModelDiscovery } from './chat/models/modelDiscovery';
 import { ProviderRegistry } from './chat/models/providerRegistry';
 import { createModelManagementGateway } from '../runtime/models/modelManagement';
+import { DisabledModelsStore } from './models/DisabledModelsStore';
+import { bindModelAvailability } from './models/bindModelAvailability';
 import { ModelManager } from './models/ModelManager';
 import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
@@ -201,6 +203,8 @@ export function activate(context: vscode.ExtensionContext): void {
     return droid;
   };
   const sessionLease = createSessionLeaseHooks();
+  const modelManagementGateway = createModelManagementGateway(getDaemonDroid);
+  const modelAvailability = new DisabledModelsStore(context.globalState, modelManagementGateway);
   const daemonSessions =
     runtimeMode !== 'daemon'
       ? null
@@ -342,6 +346,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const reviewCoordinator = reviewFeature.coordinator;
   const systemPromptStore = new SystemPromptStore(context.globalState);
   const missionGateway = new MissionGateway({
+    modelAvailability,
     getSystemPrompt: () => systemPromptStore.sessionPrompt(),
     getDroid: getDaemonDroid,
     getAttachedSessionId: () => controller?.sessionState.sessionId ?? undefined,
@@ -513,7 +518,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const modelsPanel = new ModelsPanelController(
     context.extensionUri,
     new ModelManager({
-      gateway: createModelManagementGateway(getDaemonDroid),
+      gateway: modelManagementGateway,
+      availability: modelAvailability,
       registry: controller.providerRegistry,
       discovery: controller.modelDiscovery,
       promptKey: controller.promptProviderApiKey,
@@ -521,7 +527,8 @@ export function activate(context: vscode.ExtensionContext): void {
       apply: (runtimeId, signal) => applyModelToChat(controller, runtimeId, signal),
     }),
   );
-  const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon');
+  context.subscriptions.push(bindModelAvailability(controller, modelAvailability));
+  const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon', modelAvailability);
   const browserDevBridge = new BrowserDevBridge(
     controller,
     missionControl,

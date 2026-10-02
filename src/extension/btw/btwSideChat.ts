@@ -1,4 +1,5 @@
 import type { BtwAnswerEvent, BtwPromptOptions } from '../../runtime/btw/BtwSidecar';
+import { ModelAvailabilityError } from '../models/DisabledModelsStore';
 import {
   EMPTY_SESSION_BTW_STATE,
   type SessionBtwState,
@@ -68,6 +69,7 @@ export class BtwSideChat {
   constructor(
     private readonly createSidecar: BtwSidecarFactory,
     private readonly emit: (sessionId: string, btw: SessionBtwState) => void,
+    private readonly resolveEnabledModel?: (modelId: string | undefined) => Promise<string | undefined>,
   ) {}
 
   /** Prepares the hidden fork as soon as the side pane opens. */
@@ -116,9 +118,11 @@ export class BtwSideChat {
         try {
           // Stop can arrive while the fork is preparing, before any
           // question has been dispatched to the sidecar.
+          const modelId = await this.resolveEnabledModel?.(questionOptions.modelId) ?? questionOptions.modelId;
+          if (this.generation !== generation) return;
           if (!this.stopping) {
             for await (const event of sidecar.ask(question, {
-              ...(questionOptions.modelId === undefined ? {} : { modelId: questionOptions.modelId }),
+              ...(modelId === undefined ? {} : { modelId }),
               ...(questionOptions.images?.length ? { images: questionOptions.images.map((image) => ({
                 type: 'base64' as const, mediaType: image.mediaType, data: image.dataBase64,
               })) } : {}),
@@ -151,12 +155,12 @@ export class BtwSideChat {
           if (!settled && this.generation === generation) {
             this.setState(completeBtwEntry(this.state, entryId), true);
           }
-        } catch {
+        } catch (error) {
           if (this.generation === generation) {
             this.setState(
               this.stopping
                 ? completeBtwEntry(this.state, entryId)
-                : failBtwEntry(this.state, entryId, BTW_ANSWER_FAILED_MESSAGE),
+                : failBtwEntry(this.state, entryId, error instanceof ModelAvailabilityError ? error.message : BTW_ANSWER_FAILED_MESSAGE),
               true,
             );
           }

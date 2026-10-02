@@ -211,6 +211,7 @@ function ModelsFeedback({ page }: { readonly page: ModelsPageState }) {
     renameProvider: '正在保存服务商别名…', renameModel: '正在保存模型别名…',
     discover: '正在获取模型列表…', importModels: '正在添加所选模型…',
     saveModel: '正在保存模型…', deleteModel: '正在删除模型…', deleteConnection: '正在移除接口…',
+    setModelEnabled: '正在更新模型启用状态…',
     verifyModel: '正在等待模型验证结果…', useModel: '正在切换聊天模型…',
   };
   return <>

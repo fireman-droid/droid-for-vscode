@@ -9,7 +9,7 @@ import {
 import { MAX_MODEL_CATALOG_ITEMS, MAX_MODEL_ID_LENGTH } from './bounds';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 
-export const MODEL_MANAGER_VERSION = 2 as const;
+export const MODEL_MANAGER_VERSION = 3 as const;
 export interface ModelsOpenMessage {
   readonly type: 'models.open';
 }
@@ -38,6 +38,8 @@ export interface ManagedModel {
   readonly maxOutputTokens: number | null;
   readonly noImageSupport: boolean;
   readonly valid: boolean;
+  /** User preference in this GUI; omitted means enabled. */
+  readonly enabled?: boolean;
   readonly runtimeId: string | null;
   readonly loadMessage: string;
   readonly test: ModelVerification | null;
@@ -79,6 +81,7 @@ export type ModelsAction =
   | { readonly kind: 'renameProvider'; readonly providerHost: string; readonly name: string }
   | { readonly kind: 'renameModel'; readonly rawIndex: number; readonly expectedModel: string; readonly name: string }
   | { readonly kind: 'saveModel'; readonly draft: ManagedModelDraft }
+  | { readonly kind: 'setModelEnabled'; readonly rawIndex: number; readonly expectedModel: string; readonly enabled: boolean; readonly provider: CustomModelProvider; readonly baseUrl: string }
   | {
       readonly kind: 'importModels';
       readonly connectionId: string;
@@ -238,6 +241,14 @@ export function parseModelsRequest(value: unknown): ModelsRequest | undefined {
   ) {
     parsed = { kind: action.kind, rawIndex: action.rawIndex, expectedModel: action.expectedModel, name: action.name };
   } else if (
+    action.kind === 'setModelEnabled' &&
+    hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel', 'enabled', 'provider', 'baseUrl']) &&
+    index(action.rawIndex) && isSafeText(action.expectedModel, MAX_MODEL_ID_LENGTH) &&
+    typeof action.enabled === 'boolean' && protocol(action.provider) && typeof action.baseUrl === 'string' && isCustomModelBaseUrl(action.baseUrl)
+  ) {
+    parsed = { kind: action.kind, rawIndex: action.rawIndex, expectedModel: action.expectedModel, enabled: action.enabled,
+      provider: action.provider, baseUrl: action.baseUrl };
+  } else if (
     action.kind === 'saveConnection' &&
     hasExactKeys(action, ['kind', 'draft'])
   ) {
@@ -346,7 +357,7 @@ function snapshot(value: unknown): value is ModelsSnapshot {
           'runtimeId',
           'loadMessage',
           'test',
-        ]) &&
+        ], ['enabled']) &&
         index(row.rawIndex) &&
         isSafeText(row.model, MAX_MODEL_ID_LENGTH) &&
         isSafeText(row.displayName, 160) &&
@@ -354,6 +365,7 @@ function snapshot(value: unknown): value is ModelsSnapshot {
         tokens(row.maxOutputTokens) &&
         typeof row.noImageSupport === 'boolean' &&
         typeof row.valid === 'boolean' &&
+        (row.enabled === undefined || typeof row.enabled === 'boolean') &&
         (row.runtimeId === null || id(row.runtimeId)) &&
         typeof row.loadMessage === 'string' &&
         row.loadMessage.length <= 2048 &&

@@ -35,7 +35,9 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
       if (raw === undefined) continue;
       patch = readPatch(raw) ?? undefined;
     } else if (selection.value === 'modelId') {
-      const model = await choose('Default model', (defaults.availableModels ?? []).filter((model) => !model.disabledReason).map((model) => ({
+      const availableModels = defaults.availableModels ?? [];
+      const catalog = await context.modelAvailability?.projectCatalog(availableModels) ?? availableModels;
+      const model = await choose('Default model', catalog.filter((model) => !model.disabledReason).map((model) => ({
         label: model.displayName, description: model.id, id: model.id,
       })));
       if (model) patch = { modelId: model.id };
@@ -83,9 +85,21 @@ export async function manageDefaults(context: ManagementContext): Promise<void> 
         }
       }
     }
+    await assertSelectedModelsEnabled(context, patch);
+    context.assertCurrent(true);
     requireSuccess(await context.droid.settings.updateDefaults(patch), 'the defaults update');
     context.assertCurrent();
     await changed('Droid confirmed the user settings update. Session model defaults apply to new sessions; runtime cache and cleanup settings follow Droid’s user-wide configuration. The active chat model was not switched.');
+  }
+}
+
+async function assertSelectedModelsEnabled(context: ManagementContext, patch: DefaultSettingsPatch): Promise<void> {
+  if (context.modelAvailability === undefined) return;
+  const models = [patch.modelId, patch.specModeModelId, patch.compactionModel, patch.missionOrchestratorModel,
+    patch.subagentModelSettings?.lightModel, patch.subagentModelSettings?.mediumModel, patch.subagentModelSettings?.heavyModel,
+    patch.missionModelSettings?.workerModel, patch.missionModelSettings?.validationWorkerModel];
+  for (const modelId of new Set(models)) {
+    if (typeof modelId === 'string') await context.modelAvailability.assertEnabled(modelId);
   }
 }
 

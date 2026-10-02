@@ -1,4 +1,5 @@
 import type { SessionCatalog } from '../../runtime/catalog/SessionCatalog';
+import type { DisabledModelsStore } from '../models/DisabledModelsStore';
 import type { DaemonPluginCatalog } from '../../runtime/daemon/DaemonPluginCatalog';
 import type { DaemonSessionCatalog } from '../../runtime/daemon/DaemonSessionCatalog';
 import type { DroidRuntime } from '../../runtime/DroidRuntime';
@@ -120,6 +121,7 @@ export class ChatController {
    */
   readonly metadata = new SessionMetadataState();
   sequence = -1;
+  modelAvailability?: DisabledModelsStore;
   nativeIde?: Pick<NativeIdeBackend, 'read'> & Partial<Pick<NativeIdeBackend, 'reconnect'>>;
   ideReconnectInProgress = false;
   ideReconnectError: { sessionId: string; message: string } | null = null;
@@ -174,6 +176,10 @@ export class ChatController {
         ? null
         : new BtwSideChat(btwSidecarFactory, (sessionId, btw) => {
             this.emit({ type: 'session.btw', sessionId, btw });
+          }, async (modelId) => {
+            const selected = modelId ?? this.metadata.settings.value?.modelId;
+            if (selected !== undefined) await this.modelAvailability?.assertEnabled(selected);
+            return selected;
           });
     this.interactions = new PendingInteractionCoordinator(
       ({ sessionId, turnId, request }) => {
