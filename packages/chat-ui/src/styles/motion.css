@@ -28,7 +28,8 @@
   }
   .dvx-overlay-surface[data-motion='anchored'][data-state='closed'] {
     animation: dvx-anchored-out var(--motion-exit) ease-in both;
-    pointer-events: none;
+    /* Radix keeps an inline pointer-events:auto while Presence finishes the exit. */
+    pointer-events: none !important;
   }
   @keyframes dvx-anchored-in {
     from { opacity: 0; transform: translate(var(--overlay-enter-x), var(--overlay-enter-y)) scale(.98); }

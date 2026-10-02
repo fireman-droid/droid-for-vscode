@@ -28,6 +28,7 @@ import { ContentProvider } from '../content/context';
 import { ToolActionsContext } from '../content/toolActions';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { SubagentActivityStoreContext, useSubagentPanelFlow } from './subagents/subagentPanelFlow';
+import { useWorkingSubagents } from './subagents/useWorkingSubagents';
 import { Composer } from './Composer';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import { appendSelectionQuote } from '@droidvisx/chat-ui/chat/selectionQuote';
@@ -67,6 +68,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const theme = useWebviewTheme(persistTheme);
   const workspace = useWorkspaceActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status, dispatch });
   const subagents = useSubagentPanelFlow(port, state.sessionId);
+  const workingSubagents = useWorkingSubagents(state, subagents);
   const images = useLocalImageSource(port, state.sessionId, state.connection.status, state.localImages);
   const content = useMemo(() => ({
     workspaceRoot: state.workspaceRoot,
@@ -196,9 +198,11 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
         <SessionRecovery state={state} blocked={transition.blocking && transition.overlay !== null} onReconnect={sessions.handleRetry} port={port} />
         <div className="v2-composer-dock">
-        {!childChat ? <WorkingSubagents key={state.sessionId ?? 'none'} state={state} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+        <div className="v2-composer-panels">
+        {!childChat ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />
+        </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
