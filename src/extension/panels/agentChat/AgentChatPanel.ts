@@ -9,6 +9,7 @@ import { handleWebviewClipboard } from '../../webview/webviewClipboard';
 import { routeWebviewMessage } from '../../webview/webviewMessageRouter';
 import { createWebviewStateDelivery } from '../../webview/webviewStateDelivery';
 import { readWebviewBootTheme, readWebviewThemePreference } from '../../webview/webviewTheme';
+import { createModelSourcePreference } from '../../webview/modelSourcePreference';
 
 export interface AgentChatPanelOptions {
   readonly extensionUri: vscode.Uri;
@@ -44,7 +45,8 @@ export class AgentChatPanel implements vscode.Disposable {
       localResourceRoots: [webviewDistUri, vscode.Uri.joinPath(options.extensionUri, 'resources')],
     });
     let disposed = false;
-    const subscriptions: vscode.Disposable[] = [];
+    const modelSourcePreference = createModelSourcePreference(panel.webview);
+    const subscriptions: vscode.Disposable[] = [modelSourcePreference];
     const post = (message: unknown): void => {
       if (disposed) return;
       void panel.webview.postMessage(message).then(() => undefined, () => {
@@ -76,7 +78,7 @@ export class AgentChatPanel implements vscode.Disposable {
         post(message);
       }),
       panel.webview.onDidReceiveMessage((value: unknown) => {
-        if (disposed || options.navigation.handleMessage(value)) return;
+        if (disposed || modelSourcePreference.handleMessage(value) || options.navigation.handleMessage(value)) return;
         if (handleWebviewClipboard(value, panel.webview)) return;
         if (isStrictRecord(value) && typeof value.type === 'string' && (
           SESSION_REPLACEMENT_COMMANDS.has(value.type) || value.type.startsWith('mission.') || value.type.startsWith('missionControl.') ||

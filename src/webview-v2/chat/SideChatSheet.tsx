@@ -5,7 +5,7 @@ import { MAX_BTW_TEXT_LENGTH, type SessionBtwState } from '../../shared/protocol
 import type { ModelCatalogState } from '../../shared/protocol/settings';
 import { IMAGE_MEDIA_TYPES } from '../../shared/protocol/bounds';
 import { Button } from '../ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
+import { ModelSourceSelect } from '../models/ModelSourceSelect';
 import { BtwImages } from './BtwImages';
 import type { useBtwImages } from './useBtwImages';
 
@@ -27,8 +27,6 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
     : selected?.disabled ? selected.disabledReason
     : selected?.supportsImages === false && images.images.length > 0
       ? 'This model does not support images. Remove the images or choose another model.' : null;
-  const modelLabel = models.find((model) => model.id === selectedModel)?.displayName ?? selectedModel ?? 'Model';
-  const missingModel = selectedModel !== undefined && !models.some((model) => model.id === selectedModel);
   return <SideChatView {...props} state={{ ...state, status: state.status === 'forking' ? 'preparing' : state.status }} maxTextLength={MAX_BTW_TEXT_LENGTH}
     notice={images.reading ? 'Preparing images…' : modelNotice ?? images.notice ?? props.notice}
     hasAttachments={images.images.length > 0} sendDisabled={images.reading > 0 || sending || Boolean(modelNotice)}
@@ -40,19 +38,10 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
         images.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '';
       }} />
       <Button variant="ghost" size="icon-sm" disabled={unavailable || selected?.disabled || selected?.supportsImages === false} title={selected?.supportsImages === false ? 'This model does not support images' : 'Attach images'} aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
-      <Select value={selectedModel ?? ''} onValueChange={onModelChange} disabled={unavailable || !models.length}>
-        <SelectTrigger aria-label="Side conversation model" title={`Model for side questions: ${modelLabel}`} className="ml-auto h-7 min-w-0 max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs">
-          <SelectValue placeholder="Model">{modelLabel}</SelectValue>
-        </SelectTrigger>
-        <SelectContent side="top" align="end" className="max-h-80 w-[240px] max-w-[min(360px,calc(100vw-24px))]">
-          {missingModel ? <SelectItem value={selectedModel!} disabled>{selectedModel}</SelectItem> : null}
-          {models.map((model) => <SelectItem key={model.id} value={model.id} disabled={model.disabled}>
-            <span>{model.displayName}</span>
-            <span className="block max-w-64 whitespace-normal text-xs text-muted-foreground">
-              {model.disabledReason ?? (model.supportsImages ? 'Images supported' : 'Text only')}
-            </span>
-          </SelectItem>)}
-        </SelectContent>
-      </Select>
+      <ModelSourceSelect label="Side conversation model" value={selectedModel} onChange={onModelChange}
+        disabled={unavailable || modelCatalog?.status !== 'ready'} placeholder="Model" side="top" align="end"
+        className="ml-auto h-7 max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs"
+        models={models.map((model) => ({ ...model,
+          description: model.disabledReason ?? (model.supportsImages ? 'Images supported' : 'Text only') }))} />
     </>} />;
 }

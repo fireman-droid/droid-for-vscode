@@ -4,6 +4,7 @@ import {
 } from '../../shared/bridgeMessages';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import type { AgentChatCommand } from '../../shared/protocol/agentChatProtocol';
+import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 
 export { readHostMessage } from './validateHostMessage';
 
@@ -13,7 +14,7 @@ export interface PersistedWebviewState {
 
 interface VsCodeApi {
   getState(): unknown;
-  postMessage(message: WebviewToHostMessage | AgentChatCommand): void;
+  postMessage(message: WebviewToHostMessage | AgentChatCommand | ModelSourceRequest): void;
   setState(state: PersistedWebviewState): void;
 }
 

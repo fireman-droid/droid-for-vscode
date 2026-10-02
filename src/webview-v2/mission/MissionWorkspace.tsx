@@ -52,7 +52,7 @@ export function MissionWorkspace({ route, setup, mission, result, inputNeeded, v
       {route === 'new-mission' ? <>
         {setup?.capabilities ? <MissionSetup capabilities={setup.capabilities} initialTask={setup.draft.task} initialDraft={setup.draft} onDraftChange={onDraftChange} onDismiss={onClose}
           startHint={describeSetupStatus(setup)} notice={readinessNotice}
-          result={result?.action === 'start' ? { requestId: result.requestId, status: result.status } : null}
+          result={result?.action === 'start' ? result : null}
           startDisabled={setup.availability !== 'ready' || (setup.phase !== 'draft' && setup.phase !== 'indeterminate')}
           onStart={(submission) => {
             if (setup.availability !== 'ready') return null;

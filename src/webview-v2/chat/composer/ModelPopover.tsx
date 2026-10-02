@@ -12,6 +12,8 @@ import {
   type SessionSettingsState,
 } from '../../../shared/protocol/settings';
 import { CustomModelsContext } from '../../models/customModelsFlow';
+import { ModelSourceControl, ModelSourceEmpty, ModelSourceNotice, useModelSource } from '../../models/ModelSourceControl';
+import { matchesModelSource } from '../../../shared/protocol/modelSourceProtocol';
 import type { SessionSettingSelection } from './useOptimisticSetting';
 import { ChevronDownIcon, SettingsStatus, Stat, formatReasoningLabel } from './shared';
 
@@ -51,6 +53,7 @@ export function ModelPopover({
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
   const [view, setView] = useState<'root' | 'spec'>('root');
+  const { mode: sourceMode } = useModelSource();
   const confirmed = settings.value;
   const isSpecView = view === 'spec';
   const specModelOverrideId = confirmed?.specModeModelId ?? null;
@@ -79,15 +82,13 @@ export function ModelPopover({
       return [];
     }
     const normalized = query.trim().toLocaleLowerCase();
-    if (normalized.length === 0) {
-      return modelCatalog.items;
-    }
     return modelCatalog.items.filter(
       (model) =>
-        model.displayName.toLocaleLowerCase().includes(normalized) ||
-        model.id.toLocaleLowerCase().includes(normalized),
+        matchesModelSource(model, sourceMode) &&
+        (model.displayName.toLocaleLowerCase().includes(normalized) ||
+        model.id.toLocaleLowerCase().includes(normalized)),
     );
-  }, [modelCatalog, query]);
+  }, [modelCatalog, query, sourceMode]);
 
   const selectEffort = (effort: SessionReasoningEffort | null): void => {
     if (isSpecView) onUpdate({ field: 'specModeReasoningEffort', value: effort });
@@ -153,6 +154,10 @@ export function ModelPopover({
                 </Button>
               </div>
             ) : null}
+            <div className="space-y-2 px-2 pt-2">
+              <ModelSourceControl models={modelCatalog.items} />
+              <ModelSourceNotice model={selected} />
+            </div>
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
               Search models
             </label>
@@ -264,7 +269,7 @@ export function ModelPopover({
                         </span>
                       ) : null}
                       <span className="basis-full text-[11px] leading-4 text-muted-foreground">
-                        {model.isCustom ? 'Custom' : 'Built-in'} · {model.supportsImages ? 'Images' : 'Text only'}
+                        {model.isCustom ? 'BYOK' : '官方'} · {model.supportsImages ? 'Images' : 'Text only'}
                         {model.supportsImageGeneration ? ' · Image generation' : ''}
                       </span>
                       {model.disabled ? <span className="basis-full break-words text-[11px] leading-4">{model.disabledReason}</span> : null}
@@ -288,13 +293,7 @@ export function ModelPopover({
                   </div>
                 );
               })}
-              {filtered.length === 0 ? (
-                <p className="dvx-popover-message">
-                  {modelCatalog.items.length === 0
-                    ? 'No models available.'
-                    : 'No matching models.'}
-                </p>
-              ) : null}
+              {filtered.length === 0 ? <ModelSourceEmpty /> : null}
             </div>
           </div>
           {!isSpecView ? (

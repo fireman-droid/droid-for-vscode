@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MAX_MISSION_TASK_LENGTH, isMissionTaskText, missionPairError, resolveMissionProfile, type MissionProfile, type MissionReasoningEffort, type MissionSetupCapabilities } from '../../shared/protocol/missionProtocol';
+import { MAX_MISSION_TASK_LENGTH, MISSION_START_FAILURE_MESSAGES, isMissionTaskText, missionPairError, resolveMissionProfile, type MissionProfile, type MissionReasoningEffort, type MissionSetupCapabilities, type MissionStartFailureCode } from '../../shared/protocol/missionProtocol';
 import type { MissionSetupSubmission } from './missionStart';
 import type { MissionControlSetupDraft } from '../../shared/protocol/missionControlSetupProtocol';
 
 export interface MissionSetupResult {
   readonly requestId: string;
   readonly status: 'accepted' | 'rejected';
+  readonly startFailureCode?: MissionStartFailureCode;
 }
 export interface MissionSetupProps {
   readonly capabilities: MissionSetupCapabilities;
@@ -59,7 +60,9 @@ export function useMissionSetupFlow({ capabilities, initialTask, initialDraft, o
   useEffect(() => {
     if (pendingRequestId !== null && result?.requestId === pendingRequestId && result.status === 'rejected') {
       setPendingRequestId(null);
-      setSettlement('Mission could not start. Review the unchanged settings and try again.');
+      setSettlement(result.startFailureCode === undefined
+        ? 'Mission could not start. Check chat and workspace readiness, then retry.'
+        : MISSION_START_FAILURE_MESSAGES[result.startFailureCode]);
     }
   }, [pendingRequestId, result]);
   const validation = useMemo(() => {

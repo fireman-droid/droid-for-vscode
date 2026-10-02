@@ -24,6 +24,7 @@ import { MissionWorkspaceState } from '../../chat/mission/MissionWorkspaceState'
 import type { ChatController, ControllerHostMessage } from '../../chat/ChatController';
 import { getWebviewHtml } from '../../webview/webviewHtml';
 import { handleWebviewClipboard } from '../../webview/webviewClipboard';
+import { createModelSourcePreference } from '../../webview/modelSourcePreference';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -198,16 +199,18 @@ export class MissionControlPanelController implements vscode.Disposable {
     );
     const instance = this.nextPanelInstance;
     this.nextPanelInstance += 1;
+    const modelSourcePreference = createModelSourcePreference(panel.webview);
     const entry: PanelEntry = {
       instance,
       panel,
-      disposables: [],
+      disposables: [modelSourcePreference],
       seenRequestIds: new Set(),
       ready: false,
     };
     this.panelEntry = entry;
     entry.disposables.push(
       panel.webview.onDidReceiveMessage((value: unknown) => {
+        if (modelSourcePreference.handleMessage(value)) return;
         this.handleMessage(entry, value);
       }),
       panel.onDidDispose(() => {

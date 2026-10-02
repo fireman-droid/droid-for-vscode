@@ -6,6 +6,7 @@ import { Textarea } from '../ui/input';
 import { Switch } from '../ui/controls';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { MissionSelect } from './MissionSelect';
+import { ModelSourceSelect } from '../models/ModelSourceSelect';
 import { ChevronDown, LoaderCircle, Network, Play, SlidersHorizontal, Target } from 'lucide-react';
 
 const effortLabel = (value: string) => value === 'xhigh' ? 'Extra high' : value.charAt(0).toUpperCase() + value.slice(1);
@@ -29,7 +30,7 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
       <section className="v2-mission-setup-section v2-mission-orchestrator">
         <SectionHeading icon={<Network />} title="Orchestrator" detail="Plans the work and coordinates Workers." />
         <PairFields name="Orchestrator" pair={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setOrchestrator} />
-        <p className="text-xs text-muted-foreground">Applied to this chat when the Mission starts.</p>
+        <p className="text-xs text-muted-foreground">默认沿用当前聊天的模型和推理强度；可在这里分别调整，启动 Mission 时应用。</p>
       </section>
       <Collapsible className="v2-mission-execution" open={advanced} onOpenChange={setAdvanced} disabled={flow.controlsDisabled}>
         <CollapsibleTrigger asChild><Button variant="ghost" className="v2-mission-settings-trigger" aria-label="Advanced Mission settings" disabled={flow.controlsDisabled}>
@@ -73,16 +74,20 @@ function PairFields({ name, pair, capabilities, disabled, onChange }: {
   const model = capabilities.catalog.find((item) => item.id === pair.modelId);
   const efforts = model?.supportedReasoningEfforts.length ? model.supportedReasoningEfforts
     : model?.defaultReasoningEffort ? [model.defaultReasoningEffort] : [];
-  const modelOptions = capabilities.catalog.map((item) => ({ value: item.id,
-    label: `${item.displayName}${item.isCustom === undefined ? '' : item.isCustom ? ' · Custom' : ' · Built-in'}${capabilities.catalog.some((other) => other.id !== item.id && other.displayName === item.displayName && other.isCustom === item.isCustom) ? ` · ${item.id}` : ''}` }));
+  const modelOptions = capabilities.catalog.map((item) => ({ ...item,
+    description: capabilities.catalog.some((other) => other.id !== item.id &&
+      other.displayName === item.displayName && other.isCustom === item.isCustom) ? item.id : undefined }));
   return <div className="mission-pair">
-    <MissionSelect label={`${name} model`} value={pair.modelId} options={modelOptions}
+    <div className="grid min-w-0 gap-1.5 text-xs">
+    <span className="text-muted-foreground">{name} 模型</span>
+    <ModelSourceSelect label={`${name} model`} value={pair.modelId || undefined} models={modelOptions}
       disabled={disabled} onChange={(modelId) => {
         const selected = capabilities.catalog.find((item) => item.id === modelId);
         onChange({ modelId, reasoningEffort: selected?.supportedReasoningEfforts.includes(pair.reasoningEffort)
           ? pair.reasoningEffort : selected?.defaultReasoningEffort ?? selected?.supportedReasoningEfforts[0] ?? pair.reasoningEffort });
       }} placeholder="Choose an available model" />
-    <MissionSelect label={`${name} reasoning`} value={efforts.includes(pair.reasoningEffort) ? pair.reasoningEffort : ''}
+    </div>
+    <MissionSelect label={`${name} reasoning`} fieldLabel={`${name} 推理强度`} value={efforts.includes(pair.reasoningEffort) ? pair.reasoningEffort : ''}
       options={efforts.map((effort) => ({ value: effort, label: effortLabel(effort) }))} disabled={disabled || model?.supportedReasoningEfforts.length === 0}
       onChange={(value) => onChange({ ...pair, reasoningEffort: value as MissionReasoningEffort })} placeholder="Choose available reasoning" />
   </div>;

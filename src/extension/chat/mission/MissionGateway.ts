@@ -1,4 +1,5 @@
-import type { DaemonApi, DaemonSessionHandle } from '../../../runtime/daemon/api';
+import type { ReasoningEffort } from '@factory/droid-sdk';
+import type { DaemonApi, DaemonCreateSessionOptions, DaemonSessionHandle } from '../../../runtime/daemon/api';
 
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 import type { FactoryDroidSession } from '../../../runtime/session/sessionTypes';
@@ -15,6 +16,7 @@ import {
 import type {
   MissionReasoningEffort,
   MissionSetupCapabilities,
+  MissionStartFailureCode,
   MissionStartMessage,
 } from '../../../shared/protocol/missionProtocol';
 import type { MissionReadinessWarning } from '../../../shared/protocol/missionControlSetupProtocol';
@@ -61,11 +63,7 @@ export type MissionGatewayResult =
     }
   | {
       readonly status: 'rejected';
-      readonly code:
-        | 'unavailable-model'
-        | 'unsupported-reasoning'
-        | 'settings-mismatch'
-        | 'daemon-unavailable';
+      readonly code: MissionStartFailureCode;
     };
 
 export interface MissionGatewayOptions extends MissionCatalogProjectionOptions {
@@ -187,6 +185,7 @@ export class MissionGateway {
     const missionId = createMissionOrchestratorIdentity();
     let session: DaemonSessionHandle | undefined;
     let adopted = false;
+    let failureCode: MissionStartFailureCode = 'daemon-unavailable';
     try {
       // Bind before attachment, but keep the previous chat's interaction owner
       // until the controller has successfully adopted this Mission runtime.
@@ -202,16 +201,19 @@ export class MissionGateway {
         modelId: input.message.orchestrator.modelId,
         reasoningEffort: input.message.orchestrator
           .reasoningEffort as MissionReasoningEffort,
-        missionSettings: settings as never,
+        missionSettings: settings,
         missionId,
         callbacks: interactions.callbacks,
       });
-      // A settings update acknowledged before the first planning turn does not
-      // initialize Droid's Mission profile. Supply it with session creation so
-      // workers cannot start from the global model defaults.
+      // Droid accepts missionSettings at initialization but currently drops them
+      // while constructing the session. Its settings-update path retains these
+      // choices for plan approval; require the real notification before planning.
+      failureCode = 'settings-update-failed';
+      await droid.sessions.updateSettings(session.id, { missionSettings: settings });
       if (!(await hasMissionSettings(session, settings))) {
         return { status: 'rejected', code: 'settings-mismatch' };
       }
+      failureCode = 'daemon-unavailable';
       // Before plan approval Droid keeps profiles in memory only. Retain this
       // exact session's choices until its official model-settings file exists.
       await this.options.preferences.saveStartup(session.id, missionId, effective.value);
@@ -233,7 +235,7 @@ export class MissionGateway {
         activateInteractions: owner.activate,
       };
     } catch {
-      return { status: 'rejected', code: 'daemon-unavailable' };
+      return { status: 'rejected', code: failureCode };
     } finally {
       if (session !== undefined && !adopted) {
         await session.detach().catch(() => undefined);
@@ -254,7 +256,7 @@ export class MissionGateway {
       throw new Error('The selected Mission Worker or Validator model is no longer available.');
     }
     const settings = toMissionSettings(startup.preferences);
-    await session.updateSettings({ missionSettings: settings as never });
+    await session.updateSettings({ missionSettings: settings });
     if (!sameMissionSettings(session.settings.missionSettings, settings)) {
       throw new Error('The selected Mission Worker and Validator settings could not be restored.');
     }
@@ -332,12 +334,14 @@ function validateStart(
   return validatePreferences(preferences, catalog);
 }
 
-function toMissionSettings(preferences: MissionWorkspacePreferences): MissionSettings {
+function toMissionSettings(
+  preferences: MissionWorkspacePreferences,
+): Required<NonNullable<DaemonCreateSessionOptions['missionSettings']>> {
   return {
     workerModel: preferences.worker.modelId,
-    workerReasoningEffort: preferences.worker.reasoningEffort,
+    workerReasoningEffort: preferences.worker.reasoningEffort as ReasoningEffort,
     validationWorkerModel: preferences.validator.modelId,
-    validationWorkerReasoningEffort: preferences.validator.reasoningEffort,
+    validationWorkerReasoningEffort: preferences.validator.reasoningEffort as ReasoningEffort,
     skipScrutiny: !preferences.scrutinyEnabled,
     skipUserTesting: !preferences.userTestingEnabled,
   };
@@ -362,11 +366,18 @@ async function hasMissionSettings(
   session: DaemonSessionHandle,
   expected: MissionSettings,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    if (sameMissionSettings(session.settings.missionSettings, expected)) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  return false;
+  if (sameMissionSettings(session.settings.missionSettings, expected)) return true;
+  return new Promise((resolve) => {
+    const finish = (confirmed: boolean): void => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(confirmed);
+    };
+    const timer = setTimeout(() => finish(false), 5_000);
+    const check = (): void => {
+      if (sameMissionSettings(session.settings.missionSettings, expected)) finish(true);
+    };
+    const unsubscribe = session.onNotification(check);
+    check();
+  });
 }

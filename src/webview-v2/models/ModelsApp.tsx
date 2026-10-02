@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Check, Info, KeyRound, Pencil, Plus, RefreshCw, Search, Server, Settings2, SlidersHorizontal } from 'lucide-react';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelsTransport } from './useModels';
@@ -14,8 +14,15 @@ import { AliasForm, ConnectionForm, ModelForm } from './ModelForms';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 import { AddModels, type ModelsPageState } from './AddModels';
 import { ModelList } from './ModelList';
+import { ModelSourceControl, ModelSourceProvider } from './ModelSourceControl';
+import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 
 export function ModelsApp({ transport }: { readonly transport: ModelsTransport }) {
+  const postModelSource = useCallback((message: ModelSourceRequest) => transport.postModelSourceMessage?.(message), [transport]);
+  return <ModelSourceProvider postMessage={postModelSource}><ModelsPage transport={transport} /></ModelSourceProvider>;
+}
+
+function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
   const page = useModelsPage(transport);
   const { manager, connection, models, visible, busy } = page;
   const { snapshot, run } = manager;
@@ -95,6 +102,12 @@ export function ModelsApp({ transport }: { readonly transport: ModelsTransport }
       </aside>
       <section className="models-main" aria-label="模型列表" aria-busy={busy}>
         <div className="models-main-content">
+          <section aria-label="聊天模型选择范围" className="mb-5 space-y-2 rounded-md border border-border p-3">
+            <h2 className="text-sm font-medium">聊天模型选择范围</h2>
+            <ModelSourceControl className="max-w-sm" />
+            <p className="models-help">官方显示 Droid 内置模型，BYOK 显示自定义模型，混合显示全部。同步到聊天、Spec、侧聊和 Mission 的模型选择。</p>
+            <p className="models-help">下方管理 BYOK 接口与配置；切换显示范围不会改变已选模型。</p>
+          </section>
           {!panelOpen ? <ModelsFeedback page={page} /> : null}
           {snapshot === null ? busy ? <DroidLoading label="正在读取模型配置…" detail="等待本地 Droid 返回。" />
             : <div className="models-empty"><SlidersHorizontal /><h2>暂时无法读取模型</h2><p className="models-help">请检查 Droid 是否已登录，然后刷新重试。</p>

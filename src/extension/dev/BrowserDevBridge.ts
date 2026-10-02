@@ -20,6 +20,8 @@ import type { MissionControlPanelController } from '../panels/mission/MissionCon
 import { resolveBrowserDevSourceRoot } from './browserDevSourceRoot';
 import { routeWebviewMessage } from '../webview/webviewMessageRouter';
 import { createWebviewStateDelivery } from '../webview/webviewStateDelivery';
+import { createModelSourcePreference } from '../webview/modelSourcePreference';
+import { MODEL_SOURCE_VERSION } from '../../shared/protocol/modelSourceProtocol';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -42,6 +44,7 @@ interface BrowserDevRun {
   eventResponse: ServerResponse | null;
   keepAlive: ReturnType<typeof setInterval> | null;
   delivery: ReturnType<typeof createWebviewStateDelivery> | null;
+  modelSourcePreference: ReturnType<typeof createModelSourcePreference> | null;
 }
 
 interface BrowserDevGeneration {
@@ -234,7 +237,12 @@ export class BrowserDevBridge implements vscode.Disposable {
         eventResponse: null,
         keepAlive: null,
         delivery: null,
+        modelSourcePreference: null,
       };
+      run.modelSourcePreference = createModelSourcePreference({
+        postMessage: async (message) => this.send(run, message),
+      });
+      subscriptions.push(run.modelSourcePreference);
       run.delivery = createWebviewStateDelivery({
         isCurrent: () => this.isActive(owner),
         isVisible: () => run.eventResponse !== null,
@@ -434,6 +442,10 @@ export class BrowserDevBridge implements vscode.Disposable {
     if (request.method === 'POST' && request.url === '/message') {
       void readJson(request).then(
         (message) => {
+          if (run.modelSourcePreference?.handleMessage(message)) {
+            respond(response, 204);
+            return;
+          }
           routeWebviewMessage(message, {
             controller: this.controller,
             diagnostics: this.diagnostics,
@@ -456,7 +468,10 @@ export class BrowserDevBridge implements vscode.Disposable {
             postTheme: () => {
               this.sendTheme(run);
             },
-            onReady: (message) => run.delivery?.onReady(message),
+            onReady: (message) => {
+              run.delivery?.onReady(message);
+              run.modelSourcePreference?.handleMessage({ type: 'ui.modelSource.read', version: MODEL_SOURCE_VERSION });
+            },
             onStateApplied: (message) => run.delivery?.onStateApplied(message),
           });
           respond(response, 204);

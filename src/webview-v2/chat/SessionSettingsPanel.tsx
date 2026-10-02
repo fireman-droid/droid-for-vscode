@@ -4,7 +4,8 @@ import type { ModelCatalogState, SessionSettingsState } from '../../shared/proto
 import type { SessionSettingSelection } from './composer/useOptimisticSetting';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
+import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
+import { ModelSourceControl, ModelSourceEmpty, ModelSourceNotice, useModelSource } from '../models/ModelSourceControl';
 
 export { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
 import { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
@@ -22,12 +23,18 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
 }) {
   const [query, setQuery] = useState('');
   const [spec, setSpec] = useState(false);
+  const { mode } = useModelSource();
   const confirmed = settings.value;
   const modelId = spec ? confirmed?.specModeModelId ?? confirmed?.modelId : confirmed?.modelId;
   const selected = catalog.items.find((model) => model.id === modelId);
   const normalized = query.trim().toLocaleLowerCase();
-  const models = catalog.items.filter((model) =>
-    model.displayName.toLocaleLowerCase().includes(normalized) || model.id.toLocaleLowerCase().includes(normalized));
+  const models = catalog.items.filter((model) => matchesModelSource(model, mode) && (
+    model.displayName.toLocaleLowerCase().includes(normalized) || model.id.toLocaleLowerCase().includes(normalized)));
+  const options = models.map((model) => ({ label: model.displayName, value: model.id, disabled: model.disabled,
+    description: model.disabledReason ?? `${model.isCustom ? 'BYOK' : '官方'} · ${model.supportsImages ? 'Images' : 'Text only'}${model.supportsImageGeneration ? ' · Image generation' : ''}` }));
+  if (selected && !models.some((model) => model.id === selected.id)) {
+    options.unshift({ label: selected.displayName, value: selected.id, disabled: true, description: '当前选择 · 不在筛选结果中' });
+  }
   return <div className="space-y-2">
     {confirmed === null ? (
       <p role={settings.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">
@@ -43,16 +50,17 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
           }} />
         <SettingChoice label="Autonomy" value={confirmed.autonomyLevel} options={choices(SESSION_AUTONOMY_LEVELS)} disabled={disabled} onChange={(value) => onUpdate({ field: 'autonomyLevel', value })} />
       </> : <h3 className="text-xs font-medium">Spec drafting</h3>}
+      <ModelSourceControl models={catalog.items} />
       <Input type="search" aria-label="Search models" placeholder="Search models" value={query} onChange={(event) => setQuery(event.target.value)} />
       <SettingChoice
         label={spec ? 'Spec model' : 'Model'}
         value={spec ? confirmed.specModeModelId ?? '' : confirmed.modelId}
         placeholder="Same as session"
-        options={models.map((model) => ({ label: model.displayName, value: model.id, disabled: model.disabled,
-          description: model.disabledReason ?? `${model.isCustom ? 'Custom' : 'Built-in'} · ${model.supportsImages ? 'Images' : 'Text only'}${model.supportsImageGeneration ? ' · Image generation' : ''}` }))}
+        options={options}
         disabled={disabled || catalog.status !== 'ready'}
         onChange={(value) => onUpdate(spec ? { field: 'specModeModelId', value } : { field: 'modelId', value })}
       />
+      <ModelSourceNotice model={selected} />
       <SettingChoice
         label={spec ? 'Spec reasoning' : 'Reasoning'}
         value={spec ? confirmed.specModeReasoningEffort ?? '' : confirmed.reasoningEffort}
@@ -66,7 +74,7 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
         <Button variant="outline" size="sm" disabled={disabled || confirmed.specModeReasoningEffort == null} onClick={() => onUpdate({ field: 'specModeReasoningEffort', value: null })}>Use model default</Button>
       </div> : null}
       {selected?.disabled ? <p role="status" className="text-xs text-muted-foreground">{selected.disabledReason}</p> : null}
-      {catalog.status === 'ready' && models.length === 0 ? <p role="status" className="text-xs text-muted-foreground">{catalog.items.length === 0 ? 'No models available.' : 'No matching models.'}</p> : null}
+      {catalog.status === 'ready' && models.length === 0 ? <ModelSourceEmpty /> : null}
       {catalog.status !== 'ready' ? <p role={catalog.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">{catalog.status === 'loading' ? 'Loading available models…' : catalog.message}</p> : null}
       <Button variant="ghost" size="sm" onClick={() => { setSpec(!spec); setQuery(''); }}>{spec ? 'Back to session settings' : 'Spec drafting…'}</Button>
       {settings.status === 'updating' ? <p role="status" className="text-xs text-muted-foreground">Waiting for Droid to confirm settings…</p> : null}

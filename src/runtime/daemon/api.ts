@@ -19,7 +19,7 @@ export type DaemonHandlers = Pick<
   ConnectToDaemonOptions,
   'permissionHandler' | 'askUserHandler'
 >;
-/** Mission profiles must reach initialization before Droid starts planning. */
+/** Mission profiles are supplied at initialization and confirmed before planning. */
 export type DaemonCreateSessionOptions = CreateDaemonSessionOptions & Pick<
   Parameters<DaemonSessionController['initializeSession']>[0], 'missionSettings'
 >;

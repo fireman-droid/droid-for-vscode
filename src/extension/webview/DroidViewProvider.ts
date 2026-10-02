@@ -9,6 +9,7 @@ import { readWebviewBootTheme, readWebviewThemePreference } from './webviewTheme
 import type { ReviewPanelOpen } from '../../shared/protocol/reviewPanelProtocol';
 import { createWebviewStateDelivery } from './webviewStateDelivery';
 import type { AgentNavigationPort } from '../panels/agentChat/AgentChatManager';
+import { createModelSourcePreference } from './modelSourcePreference';
 
 export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'droidvisx.chat';
@@ -21,6 +22,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   private missionSetupListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
   private agentSubscription: vscode.Disposable | undefined;
+  private modelSourcePreference: ReturnType<typeof createModelSourcePreference> | undefined;
   private stateDelivery: ReturnType<typeof createWebviewStateDelivery> | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -55,6 +57,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 
     this.disposeViewSubscriptions();
     this.webviewView = webviewView;
+    const modelSourcePreference = createModelSourcePreference(webviewView.webview);
+    this.modelSourcePreference = modelSourcePreference;
     const webviewDistUri = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
 
     webviewView.webview.options = {
@@ -121,6 +125,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     });
     this.messageListener = webviewView.webview.onDidReceiveMessage(
       (untrustedMessage: unknown) => {
+        if (modelSourcePreference.handleMessage(untrustedMessage)) return;
         if (this.agentNavigation?.handleMessage(untrustedMessage)) return;
         if (handleWebviewClipboard(untrustedMessage, webviewView.webview)) return;
         routeWebviewMessage(untrustedMessage, {
@@ -192,6 +197,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   }
 
   private disposeViewSubscriptions(): void {
+    this.modelSourcePreference?.dispose();
+    this.modelSourcePreference = undefined;
     this.stateDelivery?.dispose();
     this.stateDelivery = undefined;
     this.messageListener?.dispose();

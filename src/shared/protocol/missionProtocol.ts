@@ -231,6 +231,15 @@ export const MISSION_CONTROL_ACTIONS = [
 ] as const;
 export type MissionControlAction = (typeof MISSION_CONTROL_ACTIONS)[number];
 
+export const MISSION_START_FAILURE_MESSAGES = {
+  'unavailable-model': 'A selected Mission model is no longer available. Choose an available model and retry.',
+  'unsupported-reasoning': 'A selected Mission reasoning level is no longer supported. Choose a supported level and retry.',
+  'settings-update-failed': 'Droid could not apply the Worker and Validator settings. No planning prompt was sent; check Droid Logs and retry.',
+  'settings-mismatch': 'Droid did not confirm the requested Worker, Validator, and validation settings. No planning prompt was sent.',
+  'daemon-unavailable': 'Droid could not initialize the Mission. Check Droid Logs and retry.',
+} as const;
+export type MissionStartFailureCode = keyof typeof MISSION_START_FAILURE_MESSAGES;
+
 export interface MissionControlResultMessage {
   readonly type: 'mission.controlResult';
   readonly protocolVersion: typeof MISSION_BRIDGE_PROTOCOL_VERSION;
@@ -240,6 +249,7 @@ export interface MissionControlResultMessage {
   readonly action: MissionControlAction;
   readonly status: 'accepted' | 'rejected';
   readonly rejectionCode?: 'busy' | 'stale' | 'unavailable' | 'invalid';
+  readonly startFailureCode?: MissionStartFailureCode;
 }
 
 export type MissionHostMessage = MissionSnapshotMessage | MissionControlResultMessage;
@@ -426,7 +436,7 @@ function parseMissionControlResult(
     !hasExactKeys(
       value,
       ['type', 'protocolVersion', 'sequence', 'scope', 'requestId', 'action', 'status'],
-      ['rejectionCode'],
+      ['rejectionCode', 'startFailureCode'],
     ) ||
     value.protocolVersion !== MISSION_BRIDGE_PROTOCOL_VERSION ||
     !isRevision(value.sequence) ||
@@ -436,6 +446,10 @@ function parseMissionControlResult(
     !(MISSION_CONTROL_ACTIONS as readonly string[]).includes(value.action) ||
     (value.status !== 'accepted' && value.status !== 'rejected') ||
     (value.status === 'accepted' && value.rejectionCode !== undefined) ||
+    (value.startFailureCode !== undefined &&
+      (value.action !== 'start' || value.status !== 'rejected' ||
+        typeof value.startFailureCode !== 'string' ||
+        !Object.prototype.hasOwnProperty.call(MISSION_START_FAILURE_MESSAGES, value.startFailureCode))) ||
     (value.status === 'rejected' &&
       !(
         value.rejectionCode === 'busy' ||
@@ -454,6 +468,9 @@ function parseMissionControlResult(
     requestId: value.requestId,
     action: value.action as MissionControlAction,
     status: value.status,
+    ...(value.startFailureCode === undefined
+      ? {}
+      : { startFailureCode: value.startFailureCode as MissionStartFailureCode }),
     ...(value.rejectionCode === undefined
       ? {}
       : {

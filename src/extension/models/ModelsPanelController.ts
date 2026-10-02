@@ -8,6 +8,7 @@ import {
 import { getWebviewHtml } from '../webview/webviewHtml';
 import { handleWebviewClipboard } from '../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../webview/webviewTheme';
+import { createModelSourcePreference } from '../webview/modelSourcePreference';
 import { ModelManager, ModelManagerError, modelManagerFailure } from './ModelManager';
 
 interface PanelEntry {
@@ -37,7 +38,8 @@ export class ModelsPanelController implements vscode.Disposable {
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] },
     );
-    const entry: PanelEntry = { panel, subscriptions: [], operation: null };
+    const modelSourcePreference = createModelSourcePreference(panel.webview);
+    const entry: PanelEntry = { panel, subscriptions: [modelSourcePreference], operation: null };
     this.entry = entry;
     const theme = (): void =>
       this.post(entry, {
@@ -47,6 +49,7 @@ export class ModelsPanelController implements vscode.Disposable {
       });
     entry.subscriptions.push(
       panel.webview.onDidReceiveMessage((value: unknown) => {
+        if (modelSourcePreference.handleMessage(value)) return;
         if (handleWebviewClipboard(value, panel.webview)) return;
         const request = parseModelsRequest(value);
         if (request === undefined) return;

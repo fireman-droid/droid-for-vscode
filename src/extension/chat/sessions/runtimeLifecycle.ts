@@ -31,6 +31,8 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
     if (ctl.childSession) {
       // Delegated sessions are intentionally absent from the main chat catalog.
       // Open the verified child directly; catalog failures must not create a chat.
+      // Bind this controller's catalog so activation can publish its active row.
+      ctl.effects.bindCatalogViewToWorkspace(workspace.cwd);
       await ctl.recoveryStore.load();
       if (ctl.sessionState.disposed) return;
       const target = await resolveStartupTarget(ctl, workspace.cwd);

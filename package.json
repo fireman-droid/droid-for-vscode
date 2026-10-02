@@ -167,6 +167,22 @@
           "default": "auto",
           "description": "Color theme for the Droid panel. Takes effect immediately."
         },
+        "droidvisx.modelSource": {
+          "type": "string",
+          "enum": [
+            "official",
+            "byok",
+            "mixed"
+          ],
+          "enumDescriptions": [
+            "Show Factory-managed models.",
+            "Show custom models configured with your own API keys.",
+            "Show both Factory-managed and custom models (default)."
+          ],
+          "default": "mixed",
+          "scope": "application",
+          "description": "Model sources shown in Droid model selectors. Takes effect immediately and does not change the active model."
+        },
         "droidvisx.autocomplete.enabled": {
           "type": "boolean",
           "default": false,

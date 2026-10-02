@@ -83,7 +83,7 @@ export interface RuntimeLifecyclePort extends RuntimeActivationPort,
   readonly missionState: Pick<MissionSessionState, 'mission'> &
     Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
   readonly effects: RuntimeActivationPort['effects'] & Pick<ChatEffects,
-    'clearCatalog' | 'beginCatalogLoad' | 'loadCatalog' | 'isCurrentCatalogRequest' |
+    'clearCatalog' | 'bindCatalogViewToWorkspace' | 'beginCatalogLoad' | 'loadCatalog' | 'isCurrentCatalogRequest' |
     'discardCatalogRequest' | 'seedBackgroundRunning' | 'hasCatalogSession' |
     'flushRecoveryCheckpoint' | 'setSessionRunning' | 'ensureBackgroundRunningPoll' |
     'markSessionSwitchReady' | 'resumeRecoveredIdeReconnect' | 'resetSessionMetadata'>;

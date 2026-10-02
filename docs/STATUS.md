@@ -5,6 +5,38 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 模型来源切换与 Mission 创建
+
+- 主聊天、子会话聊天、Spec、BTW 侧聊和 Mission 三个角色的模型菜单已接通
+  “官方／BYOK／混合”筛选。依据目录的 `isCustom` 字段区分来源；未知来源只在
+  混合模式展示，不按模型名称或 ID 猜测。
+- 所有入口共用 `droidvisx.modelSource` 用户设置，重开菜单／窗口读取 Host 保存值，
+  已打开的聊天同步变化；Browser Dev Client 使用同一 Host 偏好通路。保存以 Host
+  确认为准，失败反馈并保留原设置。
+- 切换来源只改变可选列表，不修改当前模型、Spec 继承、Mission 角色与推理档位。
+  当前选择落在筛选范围外时保留名称并提供“显示全部”；空列表也可恢复混合模式。
+  自定义模型管理与接口配置不受展示筛选影响。
+- 模型管理页提供同一来源偏好；Mission 将两个字段明确标为“模型”和“推理强度”，
+  默认沿用当前聊天，Worker／Validator 默认继续继承。
+- 核对当前安装 CLI 的初始化实现：请求接受 `missionSettings`，但新会话构造时没有
+  传入角色设置，读取到默认配置；原 Host 初始化后直接对比，因设置不一致拒绝开始。
+  创建现在显式调用 SDK `updateSettings`，收到完整 Worker／Validator／校验开关
+  确认后才接管聊天并发送规划任务；通过通知等待替代原先 100ms 的短轮询，
+  5 秒仍未确认则保留失败状态，不用本地覆盖伪造确认。
+- 模型不可用、推理档位不支持、设置更新失败、设置未确认和后端初始化失败使用不同
+  原因码；Host、Bridge、MissionWorkspace 与表单完整传递，不再统一显示“检查设置”。
+  失败不清空任务和角色选择，也不发送规划请求。未操作用户的真实 Mission。
+- 最新日志还显示 Worker 子会话进入 connected 后反复拒收 `host.snapshot`：启动分支
+  未绑定工作区目录，Host 无法生成当前会话的 active 条目，违背前端快照契约。
+  已在子会话启动时绑定工作区，保留严格校验；此问题影响打开子对话，与新建 Mission
+  的角色设置确认问题分别修复。
+- 最终 `pnpm run typecheck`、`pnpm run lint:budgets` 通过；构建使用本机 Node 24.20.0。
+- `pnpm run package:vsix`（含类型／预算检查、公共 UI 与生产构建）和
+  `pnpm run verify:vsix` 通过，统一包校验 165 条目。已全局安装到 Microsoft VS Code，
+  162 个安装载荷 SHA-256 与新包一致；VSIX 为 10,571,788 字节。安装 CLI 的
+  `url.parse` 弃用提示未阻断安装。未新增、修改或运行测试、浏览器自动化或模型请求；
+  真实 Mission 创建与来源切换仍需 Reload Window 后人工验收，构建不替代行为验收。
+
 ## 子会话交互与 Mission 模型选择
 
 - 按用户确认的 GUI 入口保留 `/mission` 和右侧创建卡片；daemon 模式下普通 Task 与
@@ -17,7 +49,7 @@
   中不提供，Host 同步拒绝；显式 process 模式仍使用只读查看器。已运行轮次通过现有历史
   对账更新，新发送使用正常流式通路。本轮未实际操作用户会话，尚待 VS Code 人工验收。
 - 真实日志中角色 custom/xhigh 设置已获 SDK 确认，但计划批准前重载丢失了内存配置，
-  后来首次 Worker 使用了全局内置模型。创建现在把角色设置直接传入 initializeSession；
+  后来首次 Worker 使用了全局内置模型。创建传入角色设置并在初始化后显式更新、核对；
   Host 保存按会话绑定的启动配置，规划恢复时核对并恢复，官方配置持久化后停止恢复。
 - 创建表单同步 Host 草稿，Worker／Validator 从正在编辑的 Orchestrator 继承；选择器
   标明 Custom/Built-in，并按所选模型保留兼容推理档位或采用其默认值。

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 import {
   MODEL_MANAGER_VERSION,
   parseModelsHostMessage,
@@ -11,6 +12,7 @@ import {
 
 export interface ModelsTransport {
   postMessage(message: ModelsRequest): void;
+  postModelSourceMessage?(message: ModelSourceRequest): void;
   subscribe(listener: (message: unknown) => void): () => void;
 }
 export type ModelsResult = Extract<ModelsHostMessage, { type: 'models.result' }>;

@@ -1,10 +1,14 @@
-import type { MissionStartMessage } from '../../../shared/protocol/missionProtocol';
+import {
+  MISSION_START_FAILURE_MESSAGES,
+  type MissionStartFailureCode,
+  type MissionStartMessage,
+} from '../../../shared/protocol/missionProtocol';
 import type { ControllerPort } from './controllerMissionPort';
 import { recoverMissionProjection } from './recovery';
 
 export { handleMissionCommand } from './controls';
 
-const MISSION_START_BLOCKED = 'Mission setup is still starting.';
+const MISSION_START_BLOCKED = 'Mission cannot start while the chat, workspace, or model setup is unavailable or busy.';
 
 export function handleMissionStart(
   ctl: ControllerPort,
@@ -56,7 +60,9 @@ export function handleMissionStart(
         return;
       }
       if (result.status === 'rejected') {
-        emitRejected(ctl, message.requestId, 'invalid');
+        emitRejected(ctl, message.requestId,
+          result.code === 'unavailable-model' || result.code === 'unsupported-reasoning' ? 'invalid' : 'unavailable',
+          result.code);
         return;
       }
       const oldRuntime = ctl.sessionState.runtime;
@@ -155,6 +161,7 @@ function emitRejected(
   ctl: ControllerPort,
   requestId: string,
   rejectionCode: 'invalid' | 'unavailable',
+  startFailureCode?: MissionStartFailureCode,
 ): void {
   ctl.emit({
     type: 'mission.controlResult',
@@ -164,8 +171,11 @@ function emitRejected(
     action: 'start',
     status: 'rejected',
     rejectionCode,
+    ...(startFailureCode === undefined ? {} : { startFailureCode }),
   });
-  if (rejectionCode === 'unavailable') {
+  if (startFailureCode !== undefined) {
+    ctl.emitSessionDiagnostic(`mission-start-${startFailureCode}`, MISSION_START_FAILURE_MESSAGES[startFailureCode]);
+  } else if (rejectionCode === 'unavailable') {
     ctl.emitSessionDiagnostic('mission-start-blocked', MISSION_START_BLOCKED);
   }
 }

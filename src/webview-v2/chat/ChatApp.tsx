@@ -47,6 +47,8 @@ import { ChatConnectionStatus } from './ChatConnectionStatus';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
 import { AppInfo } from './AppInfo';
 import { AgentChatHeading, useAgentChatNavigation } from './AgentNavigation';
+import { ModelSourceProvider } from '../models/ModelSourceControl';
+import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 
 export function ChatApp({ port }: { readonly port: ChatPort }) {
   const [store] = useState(createChatStore);
@@ -61,6 +63,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const persistTheme = useCallback((preference: ThemePreference) => {
     port.postMessage({ type: 'ui.theme.set', preference });
   }, [port]);
+  const postModelSource = useCallback((message: ModelSourceRequest) => port.postMessage(message), [port]);
   const theme = useWebviewTheme(persistTheme);
   const workspace = useWorkspaceActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status, dispatch });
   const subagents = useSubagentPanelFlow(port, state.sessionId);
@@ -169,6 +172,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     theme={theme.context} onMissionOpen={childChat ? undefined : openMission} missionActive={!childChat && host.missionWorkspaceRoute === 'detail'} />,
   [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute, childChat]);
   return (
+    <ModelSourceProvider postMessage={postModelSource}>
     <ContentProvider value={content}>
     <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={!childChat && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
@@ -239,5 +243,6 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
       onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onAsk={btw.sendDraft} onStop={btw.stop} onDismiss={btw.dismiss} /> : null}
     </div>
     </ContentProvider>
+    </ModelSourceProvider>
   );
 }
