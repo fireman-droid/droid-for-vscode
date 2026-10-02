@@ -418,11 +418,12 @@ describe('createTurnSnapshotStore', () => {
     });
     const { store } = createStore(runGit);
     await store.capture(SCOPE, 'before');
-    await expect(store.diff(SCOPE)).resolves.toEqual(new Map());
+    await expect(store.diff(SCOPE)).rejects.toThrow('Turn snapshot comparison is unavailable.');
     expect(runGit.mock.calls.filter((call) => verb(call[0]) === 'diff')).toHaveLength(0);
   });
 
-  it('disables a session after a failed capture and skips later retries', async () => {
+  it('skips recapturing a failed turn but captures the next turn in the same session', async () => {
+    let failed = true;
     const runGit = vi.fn(async (args: readonly string[]) => {
       const command = verb(args);
       if (command === 'rev-parse') {
@@ -433,8 +434,9 @@ describe('createTurnSnapshotStore', () => {
         );
       }
       if (command === 'add') {
-        return gitResult('', 128);
+        return gitResult('', failed ? 128 : 0);
       }
+      if (command === 'write-tree') return gitResult(BEFORE);
       return gitResult('', 1);
     });
     const recordDiagnostic = vi.fn();
@@ -452,6 +454,8 @@ describe('createTurnSnapshotStore', () => {
         }),
       }),
     );
+    failed = false;
+    await expect(store.capture({ ...SCOPE, turnId: 'next-turn' }, 'before')).resolves.toBe(BEFORE);
   });
 
   it('reports unavailable Git without modifying the workspace when private initialization also fails', async () => {

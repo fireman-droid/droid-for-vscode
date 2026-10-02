@@ -103,9 +103,13 @@ export class ReviewPanelController implements vscode.Disposable {
   private initialize(): void {
     if (!this.ready || !this.pendingOpen || !this.current()) return;
     this.postTheme(); this.postContext();
-    const message = this.pendingOpen;
+    const pending = this.pendingOpen;
+    const operation = this.targetOperation();
+    const message: ReviewPanelOpen = pending.toolUseId && operation?.status === 'ready' && operation.files.length > 0
+      ? { ...pending, scopeKind: 'operations', path: pending.path ?? operation.files[0]!.path }
+      : pending;
     this.pendingOpen = null;
-    const intent = message.toolUseId === undefined && (message.path !== undefined || message.action !== undefined)
+    const intent = message.path !== undefined || message.action !== undefined
       ? { generation: this.openGeneration, request: message } : null;
     if (intent) { void this.openWithIntent(intent); return; }
     this.controller.handleMessage({ type: 'review.open', sessionId: message.sessionId, scopeKind: message.scopeKind,
@@ -160,7 +164,7 @@ export class ReviewPanelController implements vscode.Disposable {
       this.controller.handleMessage({ type: 'review.restorePreview', ...scope, target: 'turn' });
     }
   }
-  private postContext(): void {
+  private targetOperation() {
     const target = this.target;
     const item = target?.toolUseId ? this.controller.recoveryState.transcript.transcript.find((entry) =>
       entry.kind === 'tool' && entry.turnId === target.turnId && entry.toolUseId === target.toolUseId) : undefined;
@@ -176,16 +180,25 @@ export class ReviewPanelController implements vscode.Disposable {
     const operation = item?.kind === 'tool'
       ? item.operationDiff ?? { status: 'unavailable' as const, reason: 'not-recorded' as const }
       : persistedOperation;
-    const workspaceOperation = operation === undefined ? undefined : workspaceOperationDiff(operationDiffWithChanges(operation));
+    return operation === undefined ? undefined : workspaceOperationDiff(operationDiffWithChanges(operation));
+  }
+  private postContext(): void {
+    const target = this.target;
+    const workspaceOperation = this.targetOperation();
+    const recorded = workspaceOperation?.status === 'ready' && workspaceOperation.files.length > 0;
     this.post({
       type: 'reviewPanel.context', sessionId: target?.sessionId ?? null, valid: this.current(),
       latestTurnId:
         this.latestOperationTurn()?.turnId ??
         this.controller.effects.readLatestConversationChanges()?.turnId ??
         null,
-      operation: workspaceOperation ?? null,
-      operationPath: workspaceOperation?.status === 'ready' && workspaceOperation.files.some(file => file.path === target?.path)
-        ? target!.path! : null,
+      // A clicked operation uses the same selected-edit reader as the main
+      // Review workbench, so it can recover full context and open native diff.
+      operation: recorded ? null : workspaceOperation ?? null,
+      ...(recorded && target?.toolUseId ? { toolUseId: target.toolUseId } : {}),
+      operationPath: workspaceOperation?.status === 'ready'
+        ? workspaceOperation.files.find(file => file.path === target?.path)?.path ?? workspaceOperation.files[0]?.path ?? null
+        : null,
     });
   }
   private async handle(value: unknown): Promise<void> {

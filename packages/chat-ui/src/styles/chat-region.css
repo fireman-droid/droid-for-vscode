@@ -258,18 +258,9 @@
   .operation-diff-stats i { font-style: normal; color: light-dark(#007041, #86b896); }
   .operation-diff-stats b { font-weight: 400; color: light-dark(#be1744, #d99598); }
   .v2-chat-surface .operation-diff .review-diff {
-    font-size: 13px;
-    line-height: 18px;
-    --diff-add: var(--vscode-diffEditor-insertedLineBackground, light-dark(#e8f4ec, #203329));
-    --diff-remove: var(--vscode-diffEditor-removedLineBackground, light-dark(#fbe9ee, #3b2628));
+    --diff-code-font-size: 13px;
+    --diff-line-height: 20px;
   }
-  [data-theme-preference='auto'] .v2-chat-surface .operation-diff .review-diff {
-    --diff-add: color-mix(in srgb, light-dark(#218739, #81c995) 10%, var(--code-surface));
-    --diff-remove: color-mix(in srgb, light-dark(#b52c40, #f28b82) 10%, var(--code-surface));
-  }
-  .v2-chat-surface .operation-diff :is(.review-unified-row, .review-diff-cell) { min-height: 18px; }
-  .v2-chat-surface .operation-diff .diff-add .diff-sign { color: light-dark(#007041, #86b896); }
-  .v2-chat-surface .operation-diff .diff-remove .diff-sign { color: light-dark(#be1744, #d99598); }
   .v2-chat-surface .operation-diff .diff-number { font-size: 11px; }
   .v2-chat-surface .operation-diff .review-hunk { font-size: 11px; }
   .v2-chat-surface .operation-diff footer { font-size: 11px; }

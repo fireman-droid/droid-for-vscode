@@ -133,7 +133,8 @@ export function createTurnSnapshotStore(
   const objectsDir = join(storageDir, 'objects');
   let sessions = readPersistedSessions(persistence);
   let pendingSessions: Map<string, TurnSnapshotRecord[]> | undefined;
-  const disabledSessions = new Set<string>();
+  const failedTurns = new Set<string>();
+  const turnKey = (scope: TurnSnapshotScope) => JSON.stringify([scope.sessionId, scope.turnId]);
   let storeDisabled = false;
   let layout: GitLayout | undefined;
   let indexSeq = 0;
@@ -194,7 +195,7 @@ export function createTurnSnapshotStore(
     phase: 'before' | 'after',
     reason: string,
   ): undefined => {
-    disabledSessions.add(scope.sessionId);
+    failedTurns.add(turnKey(scope));
     dependencies.recordDiagnostic({
       level: 'warn',
       name: 'host.changes.snapshot-failed',
@@ -308,9 +309,9 @@ export function createTurnSnapshotStore(
     phase: 'before' | 'after',
   ): Promise<string | undefined> => {
     const started = dependencies.now();
-    if (disposed || storeDisabled || disabledSessions.has(scope.sessionId)) {
+    if (disposed || storeDisabled || failedTurns.has(turnKey(scope))) {
       dependencies.recordDiagnostic({ level: 'warn', name: 'host.changes.snapshot.skipped',
-        attributes: { ...scope, phase, reason: disposed ? 'disposed' : storeDisabled ? 'store-disabled' : 'session-disabled' } });
+        attributes: { ...scope, phase, reason: disposed ? 'disposed' : storeDisabled ? 'store-disabled' : 'turn-disabled' } });
       return undefined;
     }
     await flushPending();
@@ -407,7 +408,7 @@ export function createTurnSnapshotStore(
     scope: TurnSnapshotScope,
     paths: readonly string[],
   ): Promise<void> => {
-    if (disposed || storeDisabled || disabledSessions.has(scope.sessionId)) return;
+    if (disposed || storeDisabled || failedTurns.has(turnKey(scope))) return;
     const record = readTurn(sessions, scope.sessionId, scope.turnId);
     if (record?.before === undefined) return;
     const root = getWorkspaceRoot();
@@ -667,7 +668,7 @@ export function createTurnSnapshotStore(
       closing = true;
       disposeOutcome = queue.then(async () => {
         disposed = true;
-        disabledSessions.clear();
+        failedTurns.clear();
         layout = undefined;
         if (persistenceFailed) {
           throw persistenceFailure;

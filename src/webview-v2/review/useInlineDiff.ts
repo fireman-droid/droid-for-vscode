@@ -66,7 +66,7 @@ export function useInlineDiff(path: string, turnId: string, enabled: boolean) {
         message.sequence > invalidationSequence) {
         invalidationSequence = message.sequence;
         settled = true;
-        queue.refresh(0);
+        queue.refresh(0, true);
       }
     });
     queue.refresh(0);

@@ -7,7 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
-import { DiffView } from './DiffView';
+import { DiffView, findDiffChange } from './DiffView';
 import { ReviewFiles } from './ReviewFiles';
 import { ReviewCommit } from './ReviewCommit';
 import { useReviewWorkbench, type ReviewPort } from './useReviewWorkbench';
@@ -36,6 +36,10 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const recordedEntries = useMemo<readonly ReviewRecordedEntry[] | undefined>(() => operationFile && operation ? [{
     ...operationFile, toolUseId: operation.callId ?? 'operation', source: operation.source,
   }] : file?.recordedOperations, [operationFile, operation, file?.recordedOperations]);
+  const selectedRecordedEntry = flow.selectedToolUseId ? recordedEntries?.find((entry) => entry.toolUseId === flow.selectedToolUseId)
+    : recordedEntries?.reduce<ReviewRecordedEntry | undefined>((latest, entry) => entry.source === 'tool-result' && entry.outcome === 'applied' &&
+      (entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch)) ? entry : latest, undefined) ?? recordedEntries?.at(-1);
+  const nativeUnavailable = selectedRecordedEntry?.fullPatchUnavailableReason === 'unavailable';
   const recordedContent = operation ? operationFile?.submittedContent !== undefined ? {
     content: operationFile.submittedContent, sourceToolUseId: operation?.callId ?? 'operation', appliedEdits: 0, remainingOperations: 0,
   } : undefined : file?.recordedContent;
@@ -76,16 +80,15 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     !flow.fileRefreshing && !flow.fileError &&
     file.version === current.version && current.version !== 'unavailable' && current.status !== 'reviewed' &&
     !writing;
-  const hasHunks = !!patch || !!file?.recordedOperations?.some((entry) => hasOperationTextChanges(entry.patch));
+  const hasHunks = !!patch || !!file?.recordedOperations?.some((entry) => hasOperationTextChanges(entry.fullPatch ?? entry.patch));
   const agentRunning = flow.agent?.status === 'running' || flow.agent?.status === 'starting';
   const hunk = (direction: number) => {
     const container = scroll.current;
     if (!container) return;
-    const hunks = [...container.querySelectorAll<HTMLElement>('[data-diff-hunk]')];
-    const top = container.getBoundingClientRect().top;
-    const next = direction > 0 ? hunks.find((entry) => entry.getBoundingClientRect().top > top + 8)
-      : hunks.reverse().find((entry) => entry.getBoundingClientRect().top < top - 8);
-    if (next) container.scrollBy({ top: next.getBoundingClientRect().top - top,
+    const labelHeight = split ? container.querySelector('.review-split-labels')?.getBoundingClientRect().height ?? 0 : 0;
+    const top = container.getBoundingClientRect().top + labelHeight;
+    const next = findDiffChange(container, top + direction * 8, direction);
+    if (next !== null) container.scrollBy({ top: next - top,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
   return <main className="review-workbench">
@@ -118,6 +121,11 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       {flow.operation?.ok && flow.operation.reviewScopeId === review?.reviewScopeId
         ? <p className="review-notice" role="status">{flow.operation.message}</p> : null}
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
+      {review && !operationOnly && !flow.scopePending ? <p className="review-notice" role="status">
+        {writing ? operationsScope ? 'Live run · confirmed edits appear after each tool finishes.' : 'Live workspace comparison · updates as files change.'
+          : operationsScope ? 'Recorded operations · inspect each edit and its result.'
+            : review.scopeKind === 'turn' && !missingSnapshot ? 'Completed turn · before → after.' : review.baselineLabel}
+      </p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
         {showFiles ? <ReviewFiles files={files} selected={path} onSelect={selectFile} /> : null}
         <section className="review-code">
@@ -143,11 +151,12 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                 <DropdownMenuItem disabled={fileIndex <= 0} onSelect={() => navigateFile('previous')}><ChevronLeft />Previous file</DropdownMenuItem>
                 <DropdownMenuItem disabled={fileIndex < 0 || fileIndex >= files.length - 1} onSelect={() => navigateFile('next')}><ChevronRight />Next file</DropdownMenuItem>
                 {!readOnly && current && files.length > 1 ? <DropdownMenuItem disabled={!canMark} onSelect={() => actions.onMarkReviewed(true)}><CheckCheck />Mark viewed & next</DropdownMenuItem> : null}
-                {!readOnly && !operationsScope ? <>
-                  <DropdownMenuItem disabled={!current || flow.scopePending} onSelect={flow.openNative}>Open Native Diff</DropdownMenuItem>
+                {!operationOnly ? <>
+                  <DropdownMenuItem disabled={!current || flow.scopePending || nativeUnavailable}
+                    title={nativeUnavailable ? 'The complete versions for this edit are unavailable.' : undefined} onSelect={flow.openNative}>Open Native Diff</DropdownMenuItem>
                 </> : null}
                 {!operationOnly ? <>
-                  <DropdownMenuItem onSelect={() => flow.setContext('all')}>Full file{flow.context === 'all' ? ' ✓' : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => flow.setContext('all')}>{recordedEntries ? 'Request full file context' : 'Full file'}{flow.context === 'all' ? ' ✓' : ''}</DropdownMenuItem>
                   {recordedEntries ? <DropdownMenuItem onSelect={() => flow.setContext(3)}>Saved change excerpts{flow.context !== 'all' ? ' ✓' : ''}</DropdownMenuItem>
                     : [3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
                 </> : null}
@@ -171,12 +180,13 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
               : !operation && !file ? flow.fileError ? <p className="review-empty">Diff unavailable.</p> : <DroidLoading label="Reading Diff…" />
               : !operation && file?.error ? <p className="review-empty" role="status">{file.error}</p>
               : recordedEntries ? <RecordedFileReview key={`${path}:${review?.reviewScopeId ?? operation?.callId ?? ''}`} entries={recordedEntries}
-                content={recordedContent} fullContext={flow.context === 'all'} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar} />
+                content={recordedContent} fullContext={flow.context === 'all'} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar}
+                loading={flow.fileRefreshing} selectedToolUseId={flow.selectedToolUseId} onSelectEdit={flow.selectRecordedEdit} onOpenNative={!operationOnly ? flow.openNative : undefined} />
               : patch && patch !== '@@' ? <DiffView patch={patch} path={path} split={split} />
               : operationFile?.contentRestricted ? null
               : <p className="review-empty">{operationFile ? `File ${operationFile.kind}. Text changes were not recorded.` : operationsScope ? 'No text Diff evidence is available.' : 'No net text changes.'}</p>}
             {file?.truncated && !operation ? <p className="review-notice">{file.recordedOperations
-              ? 'Some saved operation excerpts exceed the preview limit.'
+              ? 'Some recorded content exceeds the preview limit. Open Native Diff for the selected edit.'
               : 'Preview limit reached. Open Native Diff to read the complete comparison.'}</p> : null}
           </div>
 

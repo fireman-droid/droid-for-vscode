@@ -115,7 +115,7 @@ export async function diffBytes(before: Buffer, after: Buffer, context = 3): Pro
         '--no-ext-diff', '--no-textconv', `--unified=${context}`, '--', 'before', 'after',
       ], {
         cwd: directory, encoding: 'utf8', windowsHide: true,
-        timeout: 10_000, maxBuffer: 4 * 1024 * 1024,
+        timeout: 10_000, maxBuffer: Math.max(4 * 1024 * 1024, (before.length + after.length) * 2 + 65_536),
       }, (error, stdout) => {
         // --no-index exits with 1 when it finds changes.
         if (error !== null && error.code !== 1) reject(error);

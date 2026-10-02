@@ -25,6 +25,7 @@ import { scopeId } from './reviewCoordinatorSupport';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import { loadTurnReviewScope } from './reviewTurnScope';
 import { readReviewContents, readReviewPatch } from './reviewContent';
+import { loadOperationReviewScope } from './reviewOperationScope';
 
 const files = [
   { path: 'old.txt', additions: 1, deletions: 0 },
@@ -72,14 +73,18 @@ describe('ReviewCoordinator reload recovery', () => {
       ],
     };
     const scope = loadTurnReviewScope(options, new Map(), null, 'session-1', 'turn-1');
-    expect(scope).toMatchObject({ lifecycle: 'unavailable', baselineLabel: 'Recorded operations · no full turn snapshot' });
+    expect(scope).toMatchObject({ lifecycle: 'unavailable', baselineLabel: 'Before turn → after turn' });
     expect(scope.files.every((file) => !file.comparable && !file.restorable)).toBe(true);
-    expect(await readReviewPatch(options, scope, 'old.txt', 3)).toMatchObject({
+    const recorded = loadOperationReviewScope({ type: 'review.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-1' },
+      operations.map((operation, sequence) => ({ sequence, sessionId: 'session-1', toolUseId: operation.toolUseId, toolName: 'Edit',
+        operationDiff: { status: 'ready', source: 'tool-result', files: [{ path: operation.path, patch: operation.patch, kind: 'modified', outcome: 'applied' }] },
+      })), new Map());
+    expect(await readReviewPatch(options, recorded, 'old.txt', 3)).toMatchObject({
       patch: '', truncated: false, recordedOperations: operations.map(({ toolUseId, patch }) => ({ toolUseId, patch })),
     });
     expect(snapshots.readTreeBytes).not.toHaveBeenCalled();
-    await expect(readReviewPatch(options, scope, 'latest.txt', 3)).rejects.toThrow('No saved before/after snapshot');
-    await expect(readReviewContents(options, scope, 'old.txt')).rejects.toThrow('Turn Diff unavailable');
+    await expect(readReviewPatch(options, recorded, 'latest.txt', 3)).rejects.toThrow('Review file is no longer available');
+    await expect(readReviewContents(options, scope, 'old.txt')).rejects.toThrow('saved baseline for this turn is unavailable');
   });
 
   it('loads Branch state without opening Diff and refreshes explicitly', async () => {
@@ -424,13 +429,13 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.dispose();
   });
 
-  it('uses canonical turn rows for Review and Restore bytes from snapshots', async () => {
+  it('uses canonical turn rows and saved file bytes for Review without granting turn Undo', async () => {
     const persistence: ChangeStatsPersistence = {
       get: <T>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
     };
     const publish = vi.fn();
-    const readTreeBytes = vi.fn(async () => null);
+    const readTreeBytes = vi.fn(async (_scope: unknown, _path: string, phase: string) => Buffer.from(phase === 'before' ? 'before\n' : 'after\n'));
     const coordinator = new ReviewCoordinator({
       getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
       snapshots: {
@@ -484,6 +489,9 @@ describe('ReviewCoordinator reload recovery', () => {
     const state = publish.mock.calls.find(
       ([message]) => message.type === 'review.state',
     )?.[0]?.state;
+    const content = await coordinator.readFile({ sessionId: 'session-1', reviewScopeId: state.reviewScopeId,
+      baseline: state.baseline, path: 'canonical.txt', context: 'all' });
+    expect(content.patch).toContain('-before\n+after');
     coordinator.handle({
       type: 'review.restorePreview',
       sessionId: 'session-1',
@@ -503,12 +511,8 @@ describe('ReviewCoordinator reload recovery', () => {
       'legacy.txt',
       expect.anything(),
     );
-    expect(publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'review.restorePreview',
-        restorable: ['canonical.txt'],
-      }),
-    );
+    expect(state.files[0].restorable).toBe(false);
+    expect(publish).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'review.restorePreview' }));
     coordinator.dispose();
   });
 
@@ -564,13 +568,8 @@ describe('ReviewCoordinator reload recovery', () => {
       target: 'turn',
     });
     await coordinator.replay('session-1');
-    expect(publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'review.restorePreview',
-        restorable: [],
-        conflicted: ['canonical.txt'],
-      }),
-    );
+    expect(state.files[0].restorable).toBe(false);
+    expect(publish).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'review.restorePreview' }));
     coordinator.dispose();
   });
 

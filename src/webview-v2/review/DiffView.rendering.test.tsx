@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DiffView } from '../../../packages/chat-ui/src/review/DiffView';
+import { DiffView, findDiffChange } from '../../../packages/chat-ui/src/review/DiffView';
 
 const observers: ViewportObserver[] = [];
 class ViewportObserver {
   readonly elements = new Set<Element>();
-  constructor(private readonly callback: IntersectionObserverCallback) { observers.push(this); }
+  constructor(private readonly callback: IntersectionObserverCallback, readonly options?: IntersectionObserverInit) { observers.push(this); }
   observe(element: Element) { this.elements.add(element); }
   unobserve(element: Element) { this.elements.delete(element); }
   disconnect() { this.elements.clear(); }
   reveal(elements = [...this.elements]) {
     act(() => this.callback(elements.map((target) => ({ target, isIntersecting: true }) as IntersectionObserverEntry), this as unknown as IntersectionObserver));
   }
+  hide(elements = [...this.elements]) {
+    act(() => this.callback(elements.map((target) => ({ target, isIntersecting: false }) as IntersectionObserverEntry), this as unknown as IntersectionObserver));
+  }
 }
 beforeEach(() => { observers.length = 0; vi.stubGlobal('IntersectionObserver', ViewportObserver); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); document.getSelection()?.removeAllRanges(); });
 const patch = (prefix: string, count = 300) => `@@ -0,0 +1,${count} @@\n${Array.from({ length: count }, (_, index) => `+${prefix}-${index}`).join('\n')}`;
 
 it('defers long diff content until it approaches the viewport and preserves the final line', () => {
@@ -32,13 +35,26 @@ it('defers long diff content until it approaches the viewport and preserves the 
 
 it('keeps every change target available before its content is mounted', () => {
   render(<DiffView patch={`${patch('first')}\n@@ -600 +600 @@\n-last-before\n+last-after`} path="hunks.txt" />);
-  const hunks = [...document.querySelectorAll('[data-diff-hunk]')];
-  expect(hunks.map((hunk) => hunk.textContent)).toEqual(['@@ -0,0 +1,300 @@', '@@ -600 +600 @@']);
+  const chunks = [...document.querySelectorAll<HTMLElement>('[data-diff-changes]')];
+  vi.spyOn(chunks[0]!, 'getBoundingClientRect').mockReturnValue({ top: 100, height: 64 * 22 } as DOMRect);
+  vi.spyOn(chunks[1]!, 'getBoundingClientRect').mockReturnValue({ top: 7000, height: 2 * 22 } as DOMRect);
+  expect(findDiffChange(document.body, 108, 1)).toBe(7000);
+  expect(findDiffChange(document.body, 6992, -1)).toBe(100);
   expect(screen.queryByText('last-after')).toBeNull();
   const observer = observers[0]!;
   observer.reveal([[...observer.elements].at(-1)!]);
   expect(screen.getByText('last-before')).toBeDefined();
   expect(screen.getByText('last-after')).toBeDefined();
+});
+
+it('navigates separate edits within the same deferred block by their actual line offsets', () => {
+  render(<DiffView patch={'@@ -1,4 +1,4 @@\n first\n-before-one\n+after-one\n between\n-before-two\n+after-two'} path="edits.txt" />);
+  const chunk = document.querySelector<HTMLElement>('[data-diff-changes]')!;
+  vi.spyOn(chunk, 'getBoundingClientRect').mockReturnValue({ top: 100, height: 6 * 22 } as DOMRect);
+  expect(findDiffChange(document.body, 108, 1)).toBe(122);
+  expect(findDiffChange(document.body, 130, 1)).toBe(188);
+  expect(findDiffChange(document.body, 180, -1)).toBe(122);
+  expect(findDiffChange(document.body, 196, 1)).toBeNull();
 });
 
 it('replaces revealed content on live patch updates and does not carry it into a different file', () => {
@@ -79,4 +95,46 @@ it('renders generated long code lines in full without dropping text', () => {
   const generated = `const generated = "${'x'.repeat(20_000)}";`;
   render(<DiffView patch={`@@ -0,0 +1 @@\n+${generated}`} path="generated.ts" />);
   expect(document.querySelector('code')?.textContent).toBe(generated);
+});
+
+it('recycles code while traversing a large full-file diff and can return to its beginning', () => {
+  render(<DiffView patch={patch('full-file', 20_000)} path="large.txt" split />);
+  const observer = observers[0]!;
+  const chunks = [...observer.elements];
+  for (const index of [0, 100, chunks.length - 1]) {
+    observer.hide();
+    observer.reveal([chunks[index]!]);
+    expect(document.querySelectorAll('code').length).toBeLessThanOrEqual(64);
+  }
+  expect(screen.getByText('full-file-19999')).toBeDefined();
+  expect(screen.queryByText('full-file-0')).toBeNull();
+  observer.hide();
+  observer.reveal([chunks[0]!]);
+  expect(screen.getByText('full-file-0')).toBeDefined();
+  expect(screen.queryByText('full-file-19999')).toBeNull();
+});
+
+it('retains a scrolled-away native text selection until the selection is cleared', () => {
+  render(<DiffView patch={patch('selectable')} path="large.txt" />);
+  const observer = observers[0]!;
+  const firstChunk = [...observer.elements][0]!;
+  observer.reveal([firstChunk]);
+  const range = document.createRange();
+  range.selectNodeContents(screen.getByText('selectable-0'));
+  document.getSelection()!.addRange(range);
+  observer.hide([firstChunk]);
+  expect(document.getSelection()!.toString()).toBe('selectable-0');
+  expect(screen.getByText('selectable-0')).toBeDefined();
+  act(() => { document.getSelection()!.removeAllRanges(); document.dispatchEvent(new Event('selectionchange')); });
+  expect(screen.queryByText('selectable-0')).toBeNull();
+});
+
+it('uses the enclosing vertical viewport instead of a horizontal-only diff scroller', () => {
+  const viewport = document.createElement('div');
+  viewport.style.overflowY = 'auto';
+  document.body.append(viewport);
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this === viewport ? 20_000 : 1_000; });
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return this === viewport ? 600 : 1_000; });
+  render(<DiffView patch={patch('viewport')} path="large.txt" />, { container: viewport });
+  expect(observers[0]!.options?.root).toBe(viewport);
 });

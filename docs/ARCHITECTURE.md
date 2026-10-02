@@ -399,13 +399,15 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - 主输入与历史编辑共用 `chat/useAttachmentIngress.ts`；开始读取即同步增加准备计数，
   提交入口查询 `isPreparing()`，界面渲染数值只负责展示。切会话/取消使旧读取失效，
   不能以一次渲染前的数字判断当前附件已经就绪；BTW 使用同样的同步查询原则。
-- Review Bridge 的 context 支持 all；普通比较从已有完整版本生成全上下文补丁。
-  recordedFileDiffs 使用原执行会话的 before/after 树核对同一会话的完整操作链；执行中
-  以当前文件核对重放终态，不把当前文件当作历史基线。缺快照时可从已确认的完整创建／
-  写入内容开始重放；撤销证据不足不阻止全文查看。还原不符则保留原补丁。全文只随 Review 请求
-  有界传递，不写入聊天历史。改动锚点独立于延迟渲染块，未渲染区也保留跳转位置。
-- 公共 `review/DiffView.tsx` 继续分块呈现完整补丁，Unified 隐藏测宽只取最长可打印
-  ASCII 行；Unicode/tab 行保留原生排版测量，不靠字符数推断不同字形宽度。
+- Review Bridge 的 context 支持 all，toolUseId 选择目标编辑。普通比较从已有完整版本
+  生成全上下文补丁；recordedFileDiffs 只重建并保留选中操作的 before/after，全文独立于
+  片段预算，2 MiB 预览与 8 MiB Native 比较分别有界。无完整历史证据时明确显示片段。
+  历史基线来自原执行会话快照或同源会话更早的完整写入和精确补丁，不读取当前磁盘
+  冒充历史。自动撤销资格独立核验，全文可读不等于可安全撤销。
+- 公共 review/DiffView.tsx 以固定行高分块，离屏代码回收且保留占位高度；修改位置保存为
+  每块元数据，避免大量零散修改为每个位置常驻一个 DOM 节点。原生选区涉及的块暂不回收；
+  两侧代码独立横向滚动，行号保持原位。列宽估计覆盖 ASCII、宽字符和 tab，避免
+  隐藏全文节点及折行导致的大量布局、测量与滚动位置变化。
 - 工具展示定义集中在 shared/transcript/toolCatalog.ts；Runtime 的 toolDetail 与
   toolResultPreview 分别从实际输入提取目标、从完整结果提取预览及诊断摘要，实时和
   history/toolResultHistory 共用。Bridge 沿 resultPreview 传递经验证的可选摘要，

@@ -12,15 +12,16 @@ import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { describeDiffBytes } from '../changes/diffDiagnostics';
 import { applySdkPatch } from './reviewSdkPatch';
 import { recordedOperationVersion } from './reviewOperationScope';
-import type { ReviewContext, ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
+import { MAX_REVIEW_PATCH_CHARS, type ReviewContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
 import { recordedFileContent } from './recordedFileContent';
 
 export interface ReviewContentSource {
   readonly snapshots: TurnSnapshotStore;
   readonly getWorkspaceRoot: () => string | undefined;
+  readonly readPriorFileOperations?: (sessionId: string, turnId: string, path: string) => NonNullable<ActiveScope['recordedOperations']>;
   readonly diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
 }
-export async function readReviewContents(source: ReviewContentSource, scope: ActiveScope, path: string, maxBytes = 512 * 1024) {
+export async function readReviewContents(source: ReviewContentSource, scope: ActiveScope, path: string, maxBytes = MAX_REVIEW_PATCH_CHARS) {
   const root = source.getWorkspaceRoot();
   if (!root || !scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
   if (scope.scopeKind === 'turn') {
@@ -76,12 +77,14 @@ export async function reviewFileVersion(source: ReviewContentSource, scope: Acti
   catch (error) { current = isNotFound(error) ? null : Buffer.from('unavailable'); }
   return digest([scope.baseline, path, current === null ? '<deleted>' : current]);
 }
-export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: ReviewContext) {
+export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: ReviewContext, toolUseId?: string) {
   if (scope.recordedOperations) {
     if (!scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
     const matching = scope.recordedOperations.filter((entry) => entry.path === path &&
       (scope.scopeKind === 'operations' || hasOperationChanges({ kind: entry.kind ?? 'modified', patch: entry.patch })));
     if (!matching.length) throw new Error('No saved before/after snapshot or recorded changes are available for this file. Open the current file to inspect it.');
+    if (toolUseId !== undefined && !matching.some(entry => entry.toolUseId === toolUseId))
+      throw new Error('The selected edit is no longer available for this file. Refresh Review.');
     const recordedOperations: NonNullable<ReviewPanelFile['recordedOperations']>[number][] = [];
     let units = 0;
     for (const { toolUseId, toolName, sequence, kind, patch, submittedContent, source, outcome, message } of matching) {
@@ -93,10 +96,12 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
       units += size;
     }
     if (context === 'all') {
-      const fullPatches = await recordedFileDiffs(source, scope, path, matching, 512_000 - units, recordedOperations.length);
+      const full = await recordedFileDiffs(source, scope, path, matching, MAX_REVIEW_PATCH_CHARS, recordedOperations.length, toolUseId);
       for (let index = 0; index < recordedOperations.length; index++) {
-        const fullPatch = fullPatches.get(index);
+        const fullPatch = full.patches.get(index);
         if (fullPatch !== undefined) recordedOperations[index] = { ...recordedOperations[index]!, fullPatch };
+        else if (index === full.selectedIndex && full.unavailableReason)
+          recordedOperations[index] = { ...recordedOperations[index]!, fullPatchUnavailableReason: full.unavailableReason };
       }
     }
     const content = recordedFileContent(matching);
@@ -129,7 +134,7 @@ function boundedPatch(version: string, full: string) {
   const kept: string[] = [];
   let units = 0;
   for (const line of lines) {
-    if (kept.length >= 10_000 || units + line.length + 1 > 512_000) break;
+    if (kept.length >= 100_000 || units + line.length + 1 > MAX_REVIEW_PATCH_CHARS) break;
     kept.push(line); units += line.length + 1;
   }
   return { version, patch: kept.join('\n'), truncated: kept.length < lines.length };

@@ -25,6 +25,7 @@ import { loadReviewSdkScope } from './reviewSdkDiff';
 import { isTurnActive } from '../chat/internals';
 import { SubagentReviewEvidence } from '../chat/subagents/SubagentReviewEvidence';
 import type { RecordedOperation } from './reviewOperationScope';
+import { priorFileOperations } from './recordedFileHistory';
 
 type UnsequencedReviewMessage = ReviewHostMessage extends infer Message
   ? Message extends { readonly sequence: number }
@@ -64,6 +65,11 @@ export function createReviewFeature(options: {
     () => coordinator,
   );
   coordinator = new ReviewCoordinator({
+    readPriorFileOperations(sessionId, turnId, path) {
+      const controller = options.getController();
+      if (controller.sessionState.sessionId !== sessionId) return [];
+      return priorFileOperations(controller.recoveryState.transcript.transcript, sessionId, turnId, path);
+    },
     isSessionCurrent: (sessionId) => options.getController().sessionState.sessionId === sessionId,
     isTurnWriting(sessionId, turnId) {
       const controller = options.getController();

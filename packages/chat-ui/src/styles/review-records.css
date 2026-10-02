@@ -13,7 +13,7 @@
   .review-recorded-patch > header { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 12px; border-block: 1px solid var(--panel-edge); background: var(--review-record-chrome); font-size: 12px; }
   .review-recorded-patch > header > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .review-recorded-patch > header > .review-file-stats { margin-left: auto; }
-  .review-recorded-patch > .review-diff { overflow-x: auto; }
+  .review-recorded-patch > .review-diff[data-layout='unified'] { overflow-x: auto; }
   .review-source-toolbar { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-bottom: 1px solid var(--panel-edge); background: var(--review-record-surface, var(--code-surface)); font-size: 11px; color: var(--muted-ink); user-select: none; }
   .review-source-toolbar > :first-child { flex: 1; font-weight: 400; }
   .review-source-toolbar button { width: 24px; height: 26px; min-height: 26px; }

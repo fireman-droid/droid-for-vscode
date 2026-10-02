@@ -56,7 +56,7 @@ function operationScope(turnId = 't1'): ReviewScopeState {
     currentIndex: 0, reviewedCount: 0, reviewableCount: 2 };
 }
 
-function intentFixture() {
+function intentFixture(transcript: ChatController['recoveryState']['transcript']['transcript'] = []) {
   type Listener = Parameters<ChatController['subscribe']>[0];
   type Publish = Parameters<ReviewCoordinator['replayTo']>[1];
   let listener: Listener = () => {};
@@ -68,7 +68,7 @@ function intentFixture() {
   const chat = { sessionState: state, handleMessage,
     subscribe: (next: Listener) => { listener = next; return { dispose() {} }; },
     effects: { readLatestConversationChanges: () => undefined },
-    recoveryState: { transcript: { transcript: [] } }, turnState: { turn: null } } as unknown as ChatController;
+    recoveryState: { transcript: { transcript } }, turnState: { turn: null } } as unknown as ChatController;
   const panel = new ReviewPanelController({} as never, chat, { replayTo } as unknown as ReviewCoordinator,
     { status: vi.fn(), commit: vi.fn() }, {} as SessionViewerPanelController);
   return { panel, state, handleMessage, replayTo,
@@ -80,6 +80,24 @@ function intentFixture() {
       replay.resolve();
     } };
 }
+
+it('opens a clicked chat edit through the full-file reader instead of pinning its excerpt', async () => {
+  const current = intentFixture([{ kind: 'tool', id: 'edit', turnId: 't1', toolUseId: 'edit-2',
+    toolName: 'Edit', action: '', status: 'completed', progressCount: 0, latestUpdateKind: null,
+    operationDiff: { status: 'ready', source: 'tool-result',
+      files: [{ path: 'b.ts', kind: 'modified', patch: '@@ -2 +2 @@\n-old\n+new', outcome: 'applied' }] } }]);
+  current.panel.open({ type: 'review.panel.open', sessionId: 's1', scopeKind: 'operations',
+    turnId: 't1', toolUseId: 'edit-2', path: 'b.ts' });
+  fake.receive({ type: 'reviewPanel.ready' });
+  expect(fake.panel.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'reviewPanel.context', operation: null, operationPath: 'b.ts', toolUseId: 'edit-2',
+  }));
+  await current.release(0);
+  current.finish(1, operationScope());
+  expect(current.handleMessage).toHaveBeenLastCalledWith({ type: 'review.selectFile', sessionId: 's1',
+    reviewScopeId: 'scope-t1', baseline: 'baseline-t1', path: 'b.ts' });
+  current.panel.dispose();
+});
 
 function serialReview(current: ReturnType<typeof intentFixture>, failedTurnId: string) {
   let queued = Promise.resolve();

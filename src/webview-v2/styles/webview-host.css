@@ -27,3 +27,14 @@ html[data-theme] :is(a, input, select, textarea):focus {
   outline: revert-layer;
   outline-offset: revert-layer;
 }
+
+/* Editor themes also style bare code elements. A diff owns the complete row
+   background, so inline-code fills must not cover its added/removed colors. */
+html[data-theme] .review-diff code {
+  color: inherit;
+  background: transparent;
+  padding: 0 16px 0 0;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+}

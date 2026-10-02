@@ -17,6 +17,7 @@ import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import type { ReviewGitScope } from './reviewGitComparison';
 import { loadTurnReviewScope } from './reviewTurnScope';
 import { readReviewContents, readReviewPatch, reviewFileVersion } from './reviewContent';
+import { recordedFileVersion } from './recordedFileDiffs';
 import {
   refreshScopeVersions,
   ReviewWatcherRefresh,
@@ -58,6 +59,7 @@ type CanonicalTurnFiles = (
   turnId: string,
 ) => readonly CommittedFileStat[] | undefined;
 export interface ReviewCoordinatorOptions {
+  readonly readPriorFileOperations?: import('./reviewContent').ReviewContentSource['readPriorFileOperations'];
   readonly isTurnWriting?: (sessionId: string, turnId: string) => boolean;
   readonly isOperationWriting?: (sessionId: string, turnId: string) => boolean;
   readonly readTurnOperations?: (
@@ -176,21 +178,26 @@ export class ReviewCoordinator implements vscode.Disposable {
         );
     });
   }
-  async readFile(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: ReviewContext }) {
+  async readFile(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: ReviewContext; toolUseId?: string }) {
     await this.operation;
     const scope = this.requireScope(message);
     if (!scope) throw new Error('The review scope changed. Refresh the review.');
-    return readReviewPatch(this.options, scope, message.path, message.context);
+    return readReviewPatch(this.options, scope, message.path, message.context, message.toolUseId);
   }
-  async openNative(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string }) {
+  async openNative(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; toolUseId?: string }) {
     await this.operation;
     const scope = this.requireScope(message);
     if (!scope) throw new Error('The review scope changed.');
-    if (scope.scopeKind === 'operations') throw new Error('Recorded operations do not have a full-file native comparison.');
-    const contents = await readReviewContents(this.options, scope, message.path, 8 * 1024 * 1024);
+    const recorded = scope.scopeKind === 'operations' ? await recordedFileVersion(this.options, scope, message.path,
+      scope.recordedOperations?.filter(entry => entry.path === message.path) ?? [], message.toolUseId, 8 * 1024 * 1024) : undefined;
+    if (scope.scopeKind === 'operations' && !recorded)
+      throw new Error('This edit has no complete saved file versions. Open the current file to inspect its present contents.');
+    const contents = recorded ?? await readReviewContents(this.options, scope, message.path, 8 * 1024 * 1024);
     return this.options.fileDiff.openDiff(message.path, { sessionId: scope.sessionId, turnId: scope.turnId ?? scope.reviewScopeId }, {
-      baselineLabel: scope.baselineLabel,
-      turnSnapshot: { before: contents.before.toString('utf8'), after: contents.after.toString('utf8'), phase: scope.lifecycle === 'writing' ? 'live' : 'settled' },
+      baselineLabel: recorded ? 'Before edit → after edit' : scope.baselineLabel,
+      turnSnapshot: { before: typeof contents.before === 'string' ? contents.before : contents.before.toString('utf8'),
+        after: typeof contents.after === 'string' ? contents.after : contents.after.toString('utf8'),
+        phase: recorded ? 'settled' : scope.lifecycle === 'writing' ? 'live' : 'settled' },
     });
   }
   openWritingTurn(sessionId: string, turnId: string, files: readonly CommittedFileStat[]): void {

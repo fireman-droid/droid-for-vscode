@@ -44,27 +44,23 @@ it('keeps navigation inside Review, rejects stale file responses and supports ra
     path: 'a.ts', version: 'a.ts', patch: '@@ -1 +1 @@\n-old\n+obsolete', truncated: false, error: null });
   expect(screen.getByText('selected')).toBeDefined();
   expect(screen.queryByText('obsolete')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Mark & next' }));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Mark viewed & next' }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.markReviewed', path: 'b.ts', version: 'b.ts', advance: true }));
   await user.click(screen.getByRole('combobox', { name: 'Comparison scope' }));
   await user.click(screen.getByRole('option', { name: 'Staged', exact: true }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'review.open', sessionId: 's1', scopeKind: 'staged' });
   send({ type: 'review.state', sequence: 3, state: scope });
-  expect(screen.getByText('Loading comparison…', { selector: '.review-rangebar span' })).toBeDefined();
+  expect(screen.getByText('Loading comparison…')).toBeDefined();
   send({ type: 'review.state', sequence: 4, state: { ...scope, scopeKind: 'staged', reviewScopeId: 'staged1', baseline: 'head:index' } });
   expect(screen.getByRole('combobox', { name: 'Comparison scope' }).textContent).toBe('Staged');
-  const context = screen.getByRole('combobox', { name: 'Context lines' });
-  context.focus();
-  await user.keyboard('{Enter}');
-  await user.keyboard('{ArrowDown}{Enter}');
+  const context = screen.getByRole('button', { name: 'More file actions' });
+  await user.click(context);
+  await user.click(screen.getByRole('menuitem', { name: '20 context lines' }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.readFile', context: 20 }));
   await user.click(context);
   await user.keyboard('{Escape}');
   expect(document.activeElement).toBe(context);
-  const width = screen.getByRole('slider', { name: 'File sidebar width' });
-  width.focus();
-  await user.keyboard('{ArrowRight}');
-  expect(width.getAttribute('aria-valuenow')).toBe('250');
   send({ ...target, valid: false });
   expect(screen.getByText(/no longer active/)).toBeDefined();
 });
@@ -113,7 +109,8 @@ it('offers undo only for AI operations and requires a conflict-free preview for 
     type: 'review.restoreFile', sessionId: 's1', reviewScopeId: 'scope1', baseline: 'operations-t1', previewId: 'preview1',
   });
 });
-it('shows historical excerpts with working change navigation instead of inapplicable actions', () => {
+it('shows historical excerpts with working change navigation instead of inapplicable actions', async () => {
+  const user = userEvent.setup();
   const port = { postMessage: vi.fn() };
   render(<ReviewApp port={port} />);
   send(target);
@@ -128,21 +125,26 @@ it('shows historical excerpts with working change navigation instead of inapplic
       { toolUseId: 'second', source: 'tool-input', patch: '@@ -1 +1 @@\n-middle\n+proposed' },
       { toolUseId: 'legacy', patch: '@@ -1 +1 @@\n-older\n+after' },
     ] });
-  expect(screen.getByText('Recorded operation 1 · confirmed tool result')).toBeDefined();
-  expect(screen.getByText('Recorded operation 2 · proposed edit, not confirmed')).toBeDefined();
-  expect(screen.getByText('Recorded operation 3 · legacy input excerpt, not verified execution')).toBeDefined();
+  expect(screen.getByText('Edit 1 of 3')).toBeDefined();
+  expect(screen.getByText(/Full file comparison unavailable/)).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Edit history' }));
+  expect(screen.getAllByText('Input only · Saved patch')).toHaveLength(2);
+  await user.click(screen.getByRole('menuitem', { name: 'Show all saved excerpts' }));
+  expect(screen.getByText(/Saved change excerpts in order/)).toBeDefined();
   expect(screen.getByText('before')).toBeDefined();
   expect(screen.getByText('after')).toBeDefined();
   for (const name of ['Native Diff', 'Undo file operations…', 'Undo turn operations…', 'Mark & next'])
     expect(screen.queryByRole('button', { name })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Context lines' })).toBeNull();
-  expect(screen.getByText('Saved operation excerpts · full turn snapshot unavailable')).toBeDefined();
-  const hunk = document.querySelector<HTMLElement>('[data-diff-hunk]')!;
-  hunk.getBoundingClientRect = () => ({ top: 100 } as DOMRect);
+  await user.click(screen.getByRole('radio', { name: 'Split view' }));
+  const hunk = document.querySelector<HTMLElement>('[data-diff-changes]')!;
+  hunk.getBoundingClientRect = () => ({ top: 100, height: 22 } as DOMRect);
   const scroller = hunk.closest<HTMLElement>('.review-code-scroll')!;
+  scroller.getBoundingClientRect = () => ({ top: 10 } as DOMRect);
+  scroller.querySelector<HTMLElement>('.review-split-labels')!.getBoundingClientRect = () => ({ height: 32 } as DOMRect);
   scroller.scrollBy = vi.fn();
   fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
-  expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 100, behavior: 'smooth' });
+  expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 58, behavior: 'smooth' });
   fireEvent.click(screen.getByRole('button', { name: 'Open current file' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.openPath', path: 'a.ts' });
 });

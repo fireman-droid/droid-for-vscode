@@ -4,42 +4,49 @@
 
 @layer components {
   .review-diff {
-    font: 12px/22px var(--font-mono); width: 100%; min-width: 0; outline: none;
+    --diff-line-height: 22px;
+    --diff-code-font-size: 12px;
+    font: var(--diff-code-font-size)/var(--diff-line-height) var(--font-mono); width: 100%; min-width: 0; outline: none;
     color: var(--ink); background: var(--code-surface);
-    --diff-add: light-dark(#edf6ee, #203329); --diff-remove: light-dark(#fbeeed, #3b2628);
+    --diff-add-ink: light-dark(#166534, #89e6a8);
+    --diff-remove-ink: light-dark(#a51d35, #ffadb5);
+    --diff-add: color-mix(in srgb, light-dark(#16a34a, #3fb96a) 22%, var(--code-surface));
+    --diff-remove: color-mix(in srgb, light-dark(#ef4561, #ef5269) 22%, var(--code-surface));
+    --syntax-keyword: light-dark(#7022a8, #d5b5ff);
+    --syntax-number: light-dark(#125c2c, #c0dfa9);
+    --link-ink: light-dark(#00528a, #91caff);
   }
   .review-diff-content { min-width: 100%; }
-  .review-diff[data-layout='unified'] .review-diff-content { width: max-content; }
+  .review-diff[data-layout='unified'] .review-diff-content { min-width: max(100%, calc((var(--diff-code-columns) + 13) * 1ch + 16px)); }
   .review-diff[data-layout='split'] .review-diff-content { width: 100%; }
-  [data-theme-preference='auto'] .review-diff {
-    --diff-add: color-mix(in srgb, light-dark(#218739, #81c995) 10%, var(--code-surface));
-    --diff-remove: color-mix(in srgb, light-dark(#b52c40, #f28b82) 10%, var(--code-surface));
-  }
   .review-workbench .review-diff {
-    font-size: 13px; line-height: 22px;
-    --diff-add: color-mix(in srgb, var(--diff-add-ink) 12%, var(--code-surface));
-    --diff-remove: color-mix(in srgb, var(--diff-remove-ink) 12%, var(--code-surface));
+    --diff-code-font-size: 13px;
   }
-  .review-workbench .review-unified-row, .review-workbench .review-diff-cell { min-height: 22px; }
   .review-workbench .diff-number { font-size: 11px; }
   .review-workbench .review-hunk { padding: 4px 12px; font-size: 11px; color: var(--secondary-ink); background: var(--review-chrome); }
-  .review-workbench .diff-add { box-shadow: inset 3px 0 0 var(--diff-add-ink); }
-  .review-workbench .diff-remove { box-shadow: inset 3px 0 0 var(--diff-remove-ink); }
-  .review-workbench .diff-add .diff-sign { color: var(--diff-add-ink); }
-  .review-workbench .diff-remove .diff-sign { color: var(--diff-remove-ink); }
+  .review-diff .diff-add { box-shadow: inset 3px 0 0 var(--diff-add-ink); }
+  .review-diff .diff-remove { box-shadow: inset 3px 0 0 var(--diff-remove-ink); }
+  .review-diff .diff-add :is(.diff-sign, .diff-number) { color: var(--diff-add-ink); }
+  .review-diff .diff-remove :is(.diff-sign, .diff-number) { color: var(--diff-remove-ink); }
   .review-hunk { padding: 5px 12px; color: var(--muted-ink); background: color-mix(in srgb, var(--soft-surface) 60%, var(--code-surface)); border-block: 1px solid var(--panel-edge); font-size: 10px; white-space: pre; }
   .review-diff[data-layout='split'] .review-hunk { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .review-unified-row { display: grid; grid-template-columns: 5ch 5ch 3ch minmax(0, 1fr); width: 100%; min-height: 22px; }
-  .review-unified-row code, .review-diff-cell code { white-space: pre; padding-right: 16px; font: inherit; }
+  .review-unified-row { display: grid; grid-template-columns: 5ch 5ch 3ch minmax(0, 1fr); width: 100%; height: var(--diff-line-height); }
+  .review-unified-row code, .review-diff-cell code { display: block; white-space: pre; padding: 0 16px 0 0; border: 0; border-radius: 0; color: inherit; background: transparent; font: inherit; }
   .diff-number { color: var(--muted-ink); text-align: right; user-select: none; font-size: 10px; padding-right: 6px; }
   .diff-sign { color: var(--muted-ink); text-align: center; user-select: none; }
   .diff-add { background: var(--diff-add); }
   .diff-remove { background: var(--diff-remove); }
-  .review-split-labels { display: grid; grid-template-columns: 1fr 1fr; color: var(--muted-ink); font: 10px var(--font-sans); }
-  .review-split-labels span { padding: 8px 12px; border-right: 1px solid var(--panel-edge); }
-  .review-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .review-diff-cell { display: grid; grid-template-columns: 5ch 2ch minmax(0, 1fr); border-right: 1px solid var(--panel-edge); min-height: 22px; overflow: hidden; }
-  .review-diff-cell code { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .review-split-labels { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); color: var(--secondary-ink); background: var(--code-surface); font: 11px var(--font-sans); }
+  .review-split-labels > div { min-width: 0; border-right: 1px solid var(--panel-edge); }
+  .review-split-labels span { display: block; padding: 6px 12px; }
+  .review-split-scrollbar { overflow-x: auto; overflow-y: hidden; margin-left: 7ch; font: var(--diff-code-font-size) var(--font-mono); }
+  .review-split-scrollbar:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .review-split-track { height: 1px; }
+  .review-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: var(--diff-line-height); }
+  .review-diff-cell { display: grid; grid-template-columns: 5ch 2ch minmax(0, 1fr); border-right: 1px solid var(--panel-edge); height: var(--diff-line-height); min-height: 0; overflow: hidden; }
+  .review-diff-code { min-width: 0; overflow: hidden; }
+  .review-diff-cell:first-child code { transform: translateX(var(--diff-before-scroll, 0px)); }
+  .review-diff-cell:last-child code { transform: translateX(var(--diff-after-scroll, 0px)); }
   .diff-empty { background: color-mix(in srgb, var(--soft-surface) 40%, transparent); }
   .review-muted { font-size: 11px; color: var(--muted-ink); }
   .review-empty { padding: 48px 24px; color: var(--muted-ink); font-size: 12px; text-align: center; }
@@ -101,7 +108,7 @@
   .operation-diff-file > header { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 10px; }
   .operation-diff-file > header > button:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; border-radius: 4px; }
   .operation-diff-file > header > span { color: var(--muted-ink); }
-  .operation-diff .review-diff { max-height: 360px; overflow: auto; font-size: 10.5px; line-height: 20px; }
+  .operation-diff .review-diff { max-height: 360px; overflow: auto; --diff-code-font-size: 10.5px; --diff-line-height: 20px; }
   .operation-diff .review-hunk { font-size: 9px; padding: 2px 8px; }
   .operation-diff footer { display: flex; gap: 8px; justify-content: space-between; padding: 5px 8px; color: var(--muted-ink); font-size: 9px; }
   .operation-diff footer button { color: var(--link-ink); border-radius: 4px; }

@@ -29,19 +29,28 @@ export function createDiffRefreshQueue<Result>(options: {
     dirty = false;
     const id = options.createId();
     active = { id, generation };
+    options.pending();
     timeout = setTimeout(() => finish(id, null), 35_000);
     options.send(id);
   };
   return {
-    refresh(delay = 200): void {
+    discardInFlight(): void {
+      if (!disposed) generation += 1;
+    },
+    refresh(delay = 200, discardInFlight = false): void {
       if (disposed) return;
-      generation += 1;
+      // A live invalidation schedules a newer read without starving the current
+      // preview. Only a phase boundary makes an in-flight response obsolete.
+      if (discardInFlight) generation += 1;
       dirty = true;
       options.pending();
-      clearTimeout(timer);
-      timer = undefined;
-      if (delay === 0) request();
-      else timer = setTimeout(() => { timer = undefined; request(); }, delay);
+      if (delay === 0) {
+        clearTimeout(timer);
+        timer = undefined;
+        request();
+      } else if (timer === undefined) {
+        timer = setTimeout(() => { timer = undefined; request(); }, delay);
+      }
     },
     receive(requestId: string, value: Result): void { finish(requestId, { value }); },
     dispose(): void {

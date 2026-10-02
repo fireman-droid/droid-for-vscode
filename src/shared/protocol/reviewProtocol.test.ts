@@ -2,12 +2,31 @@ import { describe, expect, it } from 'vitest';
 
 import { parseReviewHostMessage, parseReviewWebviewMessage } from './reviewProtocol';
 import { isSafeWorkspaceRelativePath } from '../validation/guards';
-import { isReviewPanelFile, parseReviewPanelRequest } from './reviewPanelProtocol';
+import { isReviewPanelFile, MAX_REVIEW_PATCH_CHARS, parseReviewPanelRequest } from './reviewPanelProtocol';
 
 const isId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
 describe('review protocol', () => {
+  it('routes a selected edit and budgets its full context independently from saved excerpts', () => {
+    const request = { type: 'reviewPanel.readFile', requestId: 'request-1', reviewScopeId: 'scope-1',
+      baseline: 'operations', path: 'src/main.ts', context: 'all', toolUseId: 'edit-20' };
+    expect(parseReviewPanelRequest(request)).toEqual(request);
+    expect(parseReviewPanelRequest({ ...request, type: 'reviewPanel.openNative' })).toBeDefined();
+    expect(parseReviewPanelRequest({ ...request, toolUseId: '' })).toBeUndefined();
+    const operation = { toolUseId: 'edit-20', patch: '', source: 'tool-result', outcome: 'applied',
+      fullPatch: ' '.repeat(MAX_REVIEW_PATCH_CHARS) };
+    const message = { type: 'reviewPanel.file', requestId: 'request-1', reviewScopeId: 'scope-1',
+      path: 'src/main.ts', version: 'v1', patch: '', truncated: false, error: null,
+      recordedOperations: [operation, { toolUseId: 'edit-19', patch: ' '.repeat(24_000) }] };
+    expect(isReviewPanelFile(message)).toBe(true);
+    expect(isReviewPanelFile({ ...message, recordedOperations: [operation, operation] })).toBe(false);
+    expect(isReviewPanelFile({ ...message, recordedOperations: [{ ...operation, fullPatch: `${operation.fullPatch}x` }] })).toBe(false);
+    const { fullPatch: _fullPatch, ...excerpt } = operation;
+    expect(isReviewPanelFile({ ...message, recordedOperations: [{ ...excerpt, fullPatchUnavailableReason: 'too-large' }] })).toBe(true);
+    expect(isReviewPanelFile({ ...message, recordedOperations: [{ ...operation, fullPatchUnavailableReason: 'too-large' }] })).toBe(false);
+  });
+
   it('accepts turn operation undo entry and rejects incompatible or unknown actions', () => {
     const request = { type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-1', action: 'undo' };
     expect(parseReviewPanelRequest(request)).toEqual(request);

@@ -31,7 +31,7 @@ it('loads only on expansion and opens the exact turn diff only when snapshots ar
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   reply();
   expect(screen.getByText('old code')).toBeDefined();
-  expect(screen.getByText('new code')).toBeDefined();
+  expect(screen.getByText((_text, element) => element?.tagName === 'CODE' && element.textContent === 'new code')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Open diff in editor' }));
   expect(postMessage).toHaveBeenLastCalledWith({ type: 'file.openTurnDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'app.ts' });
 });
@@ -44,14 +44,14 @@ it('ignores stale session responses and replaces the live preview on settlement'
   reply(stale);
   expect(screen.queryByText('old code')).toBeNull();
   reply(current, { status: 'ready', phase: 'live', patch: '@@ -1 +1 @@\n-old code\n+live code', truncated: false });
-  expect(screen.getByText('This turn · before → current')).toBeDefined();
+  expect(screen.getByText('Live workspace · before turn → current')).toBeDefined();
   act(() => window.dispatchEvent(new MessageEvent('message', { data: {
     type: 'changes.update', sequence: 2, sessionId: 'session-2', turnId: 'turn-1', state: 'settled', files: [{ path: 'app.ts', additions: 1, deletions: 1 }],
   } })));
   await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(3));
   reply(current);
-  expect(screen.queryByText('new code')).toBeNull();
+  expect(screen.queryByText((_text, element) => element?.tagName === 'CODE' && element.textContent === 'new code')).toBeNull();
   reply(request(), { status: 'ready', phase: 'settled', patch: '', truncated: true });
-  expect(screen.queryByText('No net text changes in this turn.')).toBeNull();
+  expect(screen.queryByText('No net workspace text changes in this turn.')).toBeNull();
   expect(screen.getByText(/Preview truncated/)).toBeDefined();
 });
