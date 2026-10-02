@@ -7,6 +7,7 @@ import { createGitChangeStatsReader } from '../../changes/changeStats';
 import { createTurnSnapshotStore } from '../../changes/turnSnapshots';
 import { watchWorkspaceChanges } from '../../changes/watchWorkspaceChanges';
 import { ChatController } from '../../chat/ChatController';
+import { emitIdeState, type NativeIdeBackend } from '../../chat/ideIntegration';
 import { RecentCommandsStore } from '../../chat/capabilities/RecentCommandsStore';
 import { PlanDocumentController } from '../../interactions/planDocumentController';
 import { SessionRecoveryStore, type SessionRecoveryPersistence } from '../../recovery/SessionRecoveryStore';
@@ -23,6 +24,7 @@ export function createAgentChatController(options: {
   readonly sessionViewer: SessionViewerPanelController;
   readonly createSdkSession: FactoryDroidSessionFactory;
   readonly target: { readonly sessionId: string; readonly cwd: string };
+  readonly nativeIde?: Pick<NativeIdeBackend, 'read'> & { subscribe(listener: () => void): () => void };
 }): {
   readonly controller: ChatController;
   openReview(message?: ReviewPanelOpen): void;
@@ -86,6 +88,10 @@ export function createAgentChatController(options: {
   controller.systemPromptStore = parent.systemPromptStore;
   controller.providerRegistry = parent.providerRegistry;
   controller.promptProviderApiKey = parent.promptProviderApiKey;
+  if (options.nativeIde) {
+    controller.nativeIde = { read: options.nativeIde.read };
+    subscriptions.push({ dispose: options.nativeIde.subscribe(() => emitIdeState(controller)) });
+  }
   preview.setFeedbackHandler((text) => controller.emit({ type: 'canvas.feedbackDraft', text }));
   const reviewPanel = new ReviewPanelController(
     context.extensionUri, controller, review.coordinator, gitWorkflow, options.sessionViewer);

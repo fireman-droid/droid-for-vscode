@@ -47,10 +47,9 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
   const actionHint = reconnect.pending ? 'Waiting for the extension to start reconnecting…'
     : busy ? 'Waiting for the IDE connection. No need to reconnect again.'
     : sessionId === null ? 'Open a chat to connect its IDE channel.'
-    : blocked || !ide.canReconnect ? 'Reconnect is available when the chat is idle and no session operation is in progress.'
+    : blocked || !ide.canReconnect ? 'IDE reconnection is not available from this chat right now.'
     : 'Reconnect IDE. Restarts the idle chat process and keeps its history.';
-  const statusHint = reconnect.error ?? (connected
-    ? 'Shares your current file, selection and diagnostics with this chat.' : message);
+  const statusHint = reconnect.error ?? message;
   const summary = `Chat: ${connection.status}. IDE: ${ideLabel}.`;
   const hint = [summary, connection.message, statusHint, missionLabel,
     offline ? 'Use Reconnect Droid session below to restore the chat.'

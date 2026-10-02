@@ -538,6 +538,10 @@ export function activate(context: vscode.ExtensionContext): void {
       createChild: (target) => createAgentChatController({
         context, persistence, diagnostics, parent: controller, sessionViewer,
         createSdkSession: daemonSessions.factory, target,
+        ...(windowDaemon ? { nativeIde: {
+          read: (sessionId: string | null) => windowDaemon.pool.readIde(sessionId, 'shared'),
+          subscribe: (listener: () => void) => windowDaemon.pool.onIdeChange(listener),
+        } } : {}),
       }),
     });
     context.subscriptions.push(agentChats);

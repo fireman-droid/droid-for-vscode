@@ -28,6 +28,21 @@ export interface SubagentOpenMessage {
   readonly toolUseId: string;
 }
 
+export interface SubagentOpenResultMessage extends Omit<SubagentOpenMessage, 'type'> {
+  readonly type: 'subagent.open.result';
+  readonly sequence: number;
+  readonly status: 'opening' | 'opened' | 'unavailable' | 'failed';
+}
+
+export function parseSubagentOpenResultMessage(value: unknown): SubagentOpenResultMessage | null {
+  if (!isRecord(value) || value.type !== 'subagent.open.result' ||
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'turnId', 'toolUseId', 'status']) ||
+    !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 0 ||
+    !isId(value.sessionId) || !isId(value.turnId) || !isId(value.toolUseId) ||
+    !['opening', 'opened', 'unavailable', 'failed'].includes(value.status as string)) return null;
+  return value as unknown as SubagentOpenResultMessage;
+}
+
 export interface SubagentActivityMessage {
   readonly type: 'subagent.activity';
   readonly sequence: number;

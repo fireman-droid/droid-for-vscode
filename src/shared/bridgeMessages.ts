@@ -169,6 +169,7 @@ import type { ReviewHostMessage, ReviewWebviewMessage } from './protocol/reviewP
 import type {
   SubagentActivityMessage,
   SubagentOpenMessage,
+  SubagentOpenResultMessage,
   SubagentPanelMessage,
 } from './protocol/subagentProtocol';
 import type { SessionTokenUsageState } from './protocol/tokenUsage';
@@ -210,7 +211,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v49 includes pending interactions in authoritative conversation snapshots.
 // v50 adds a session-scoped retry for the runtime model catalog.
 // v53 retains read-only result previews from ordinary external files.
-export const BRIDGE_PROTOCOL_VERSION = 53 as const;
+// v54 reports card-scoped child-chat opening feedback.
+export const BRIDGE_PROTOCOL_VERSION = 54 as const;
 
 export type WebviewToHostMessage =
   | SystemPromptRequest
@@ -416,6 +418,7 @@ export type HostToWebviewMessage =
   | UiThemeMessage
   | CustomModelsHostMessage
   | SubagentActivityMessage
+  | SubagentOpenResultMessage
   | CanvasFeedbackDraftMessage
   | MissionHostMessage
   | ReviewHostMessage;

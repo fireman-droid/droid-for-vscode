@@ -41,7 +41,7 @@ export function resumeRecoveredIdeReconnect(ctl: ChatController): void {
 }
 
 function eligible(ctl: ChatController): boolean {
-  return ctl.nativeIde !== undefined && !ctl.sessionState.disposed &&
+  return ctl.nativeIde?.reconnect !== undefined && !ctl.sessionState.disposed &&
     ctl.sessionState.sessionId !== null && ctl.sessionState.runtime !== null &&
     ctl.sessionState.connection.status === 'connected' &&
     ctl.btwSideChat?.isBusy() !== true &&
@@ -70,7 +70,7 @@ export function readControllerIde(ctl: ChatController): IdeState {
   return {
     ...state,
     canReconnect: eligible(ctl),
-    ...(state.status === 'reconnect-required' && isTurnActive(ctl.turnState.turn)
+    ...(state.status === 'reconnect-required' && ctl.nativeIde.reconnect !== undefined && isTurnActive(ctl.turnState.turn)
       ? { message: 'The background task is still running. IDE will reconnect after it finishes.' }
       : {}),
   };
@@ -85,12 +85,12 @@ export function emitIdeState(ctl: ChatController): void {
 }
 
 export async function reconnectControllerIde(ctl: ChatController, sessionId: string, deferIfBlocked = false): Promise<void> {
-  if (sessionId !== ctl.sessionState.sessionId || !eligible(ctl) ||
+  const backend = ctl.nativeIde;
+  if (backend?.reconnect === undefined || sessionId !== ctl.sessionState.sessionId || !eligible(ctl) ||
       !ensureActiveRuntimeWorkspaceCurrent(ctl)) {
     emitIdeState(ctl);
     return;
   }
-  const backend = ctl.nativeIde!;
   const runtime = ctl.sessionState.runtime!;
   const generation = ctl.sessionState.runtimeGeneration;
   let closingSource = false;

@@ -190,7 +190,8 @@ export async function activateRuntime(
       : undefined;
   // Explicit reconnect keeps transcript but acknowledges the old failed turn.
   const recoveredTurn = recoveredDisplay?.turn;
-  const ideStatus = ctl.nativeIde?.read(sessionId).status;
+  // A child observes its owner's IDE; restoring its chat does not reconnect that shared channel.
+  const ideStatus = target.kind === 'resume' && target.child === true ? undefined : ctl.nativeIde?.read(sessionId).status;
   const readyToAcknowledge = ideStatus === undefined || ideStatus === 'connected' || ideStatus === 'unavailable';
   const restoredTurn = readyToAcknowledge && recoveredTurn?.status === 'failed' &&
     recoveredTurn.turnId === options.acknowledgeFailedTurnId ? null : recoveredTurn ?? null;

@@ -21,7 +21,7 @@ import {
   isStrictRecord,
   type UnknownRecord,
 } from '../../shared/validation/strictValidation';
-import { parseSubagentActivityMessage } from '../../shared/protocol/subagentProtocol';
+import { parseSubagentActivityMessage, parseSubagentOpenResultMessage } from '../../shared/protocol/subagentProtocol';
 import {
   parseRewindInfo,
   parseSessionAttachmentsMessage,
@@ -106,6 +106,7 @@ const HOST_MESSAGE_PARSERS = {
   'tool.activity': parseToolActivity,
   'subagent.update': parseSubagentUpdate,
   'subagent.activity': (value) => parseSubagentActivityMessage(value) ?? undefined,
+  'subagent.open.result': (value) => parseSubagentOpenResultMessage(value) ?? undefined,
   'transcript.image': parseTranscriptImage,
   'changes.update': parseChangesUpdate,
   'file.diff': parseFileDiffMessage,

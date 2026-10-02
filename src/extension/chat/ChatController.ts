@@ -120,7 +120,7 @@ export class ChatController {
    */
   readonly metadata = new SessionMetadataState();
   sequence = -1;
-  nativeIde?: NativeIdeBackend;
+  nativeIde?: Pick<NativeIdeBackend, 'read'> & Partial<Pick<NativeIdeBackend, 'reconnect'>>;
   ideReconnectInProgress = false;
   ideReconnectError: { sessionId: string; message: string } | null = null;
   readIdeState() { return readControllerIde(this); }

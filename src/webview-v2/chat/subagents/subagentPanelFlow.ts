@@ -12,10 +12,11 @@ import {
   subscribeHostMessages,
   type DecodedHostMessage,
 } from '../../host/hostMessageSource';
-import { type SubagentActivityItem } from '../../../shared/protocol/subagentProtocol';
+import { type SubagentActivityItem, type SubagentOpenResultMessage } from '../../../shared/protocol/subagentProtocol';
 
 export interface SubagentRowExtras {
   readonly activities: readonly SubagentActivityItem[];
+  readonly openStatus?: SubagentOpenResultMessage['status'];
 }
 
 export interface SubagentActivityStore {
@@ -59,9 +60,11 @@ function createSubagentActivityStore(): MutableSubagentActivityStore {
       };
     },
     publish: (toolUseId, extras) => {
-      const previous = values.get(toolUseId)?.activities;
+      const current = values.get(toolUseId);
+      const previous = current?.activities;
       if (
         previous !== undefined &&
+        current?.openStatus === extras.openStatus &&
         previous.length === extras.activities.length &&
         previous.every((activity, index) => {
           const next = extras.activities[index];
@@ -110,9 +113,7 @@ export function useOpenSubagent(): (turnId: string, toolUseId: string) => void {
 }
 
 /**
- * Keeps only the live-activity feed used by inline Subagent cards.
- * Transcript sheets, aggregate popups, and Subagent actions are not
- * part of the presentation contract.
+ * Keeps session-scoped activity and opening feedback for inline cards.
  */
 export function useSubagentPanelFlow(
   vscode: SubagentPanelPort,
@@ -131,7 +132,13 @@ export function useSubagentPanelFlow(
     const handleMessage = (message: DecodedHostMessage): void => {
       if (message.type === 'subagent.activity' && message.sessionId === sessionId) {
         activityStore.publish(message.toolUseId, {
+          ...activityStore.get(message.toolUseId),
           activities: message.activities,
+        });
+      } else if (message.type === 'subagent.open.result' && message.sessionId === sessionId) {
+        activityStore.publish(message.toolUseId, {
+          activities: activityStore.get(message.toolUseId)?.activities ?? [],
+          openStatus: message.status,
         });
       }
     };

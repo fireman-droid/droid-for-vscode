@@ -135,6 +135,7 @@ function reduceHostMessage(
       return reduceTurnsMessage(state, event);
 
     case 'subagent.activity':
+    case 'subagent.open.result':
       return advance(state, event.sequence);
     case 'interaction.request':
     case 'interaction.closed':

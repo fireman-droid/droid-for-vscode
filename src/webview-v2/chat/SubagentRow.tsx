@@ -28,6 +28,10 @@ export const SubagentRow = memo(function SubagentRow({ item, variant = 'card' }:
     : subagent.durationMs !== undefined ? formatDuration(subagent.durationMs) : undefined;
   const task = subagent.description || `${subagent.type} subagent`;
   const latestActivity = extras?.activities[0];
+  const opening = extras?.openStatus === 'opening';
+  const openFeedback = opening ? 'Opening agent chat…' : extras?.openStatus === 'unavailable'
+    ? 'Child session is not linked yet. Click to retry.' : extras?.openStatus === 'failed'
+      ? 'Could not load the child session. Click to retry.' : null;
   return <Button variant="plain" size="none" disabled={!actions.openSubagent} onClick={() => actions.openSubagent?.(item.turnId, item.toolUseId)}
     className={`block w-full min-w-0 space-y-1 rounded px-2 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] active:bg-[var(--control-surface-active)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none ${variant === 'card' ? 'py-1.5' : 'py-2'}`}>
     <span className="flex items-start gap-1.5"><span className="min-w-0 flex-1 font-medium text-foreground [overflow-wrap:anywhere]">{task}</span><ChevronRight aria-hidden="true" className="mt-0.5 size-3 shrink-0" /></span>
@@ -42,5 +46,6 @@ export const SubagentRow = memo(function SubagentRow({ item, variant = 'card' }:
       : (subagent.toolUseCount ?? 0) > 0 || status === 'running' ? <span className="block text-[11px] text-muted-foreground">{(subagent.toolUseCount ?? 0) > 0
         ? 'Tool calls reported · Open to view activity'
         : 'Waiting for activity…'}</span> : null}
+    {openFeedback ? <span role="status" className="block text-[11px] text-muted-foreground">{openFeedback}</span> : null}
   </Button>;
 });

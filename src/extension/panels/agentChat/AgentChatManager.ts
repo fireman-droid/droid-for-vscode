@@ -9,6 +9,7 @@ import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics'
 import type { ReviewPanelOpen } from '../../../shared/protocol/reviewPanelProtocol';
 import { AgentChatPanel } from './AgentChatPanel';
 import { isTurnActive } from '../../chat/internals';
+import { stopAgentChat } from './stopAgentChat';
 
 export interface AgentNavigationPort {
   subscribe(listener: (message: AgentChatNavigationMessage) => void): vscode.Disposable;
@@ -21,6 +22,9 @@ interface Binding {
   sessionId?: string;
   turnId?: string;
   toolUseId?: string;
+  stopPending?: boolean;
+  stoppedTurnId?: string | null;
+  idleTurnId?: string | null;
 }
 interface Family {
   cwd: string;
@@ -67,7 +71,9 @@ export class AgentChatManager implements vscode.Disposable {
 
   openTask(target: { parentSessionId: string; childSessionId: string; toolUseId: string; title: string; cwd: string }): void {
     const controller = this.controllerFor(target.parentSessionId);
-    if (controller) this.scan(controller);
+    // The transcript service resolved this row and its saved cwd independently
+    // of the parent's runtime handshake, including read-only history recovery.
+    if (controller) this.scan(controller, target.cwd);
     const family = this.families.get(target.parentSessionId);
     const binding = family?.bindings.get(`task:${target.toolUseId}`);
     if (!family || !binding) {
@@ -105,48 +111,69 @@ export class AgentChatManager implements vscode.Disposable {
     }, 80);
   }
 
-  private scan(controller: ChatController): void {
+  private scan(controller: ChatController, historyCwd?: string): void {
     const id = controller.sessionState.sessionId;
-    const cwd = controller.sessionState.activeRuntimeCwd;
-    if (!id || !cwd) return;
+    const cwd = historyCwd ?? controller.sessionState.activeRuntimeCwd;
+    if (!id || !cwd || historyCwd === undefined && controller.sessionState.connection.status === 'connecting') return;
     let family = this.families.get(id);
     if (!family) {
       family = { cwd, controller, bindings: new Map() };
       this.families.set(id, family);
     }
+    const present = new Set<string>();
     for (const item of controller.recoveryState.transcript.transcript) {
       if (item.kind !== 'tool' || !item.subagent) continue;
       const identity = `task:${item.toolUseId}`;
+      present.add(identity);
       const existing = family.bindings.get(identity);
       const reported = item.subagent.status;
       const status: AgentChatStatus = reported === 'running' ? 'running'
         : reported === 'completed' ? 'completed' : reported === 'failed' ? 'failed'
           : reported === 'cancelled' ? 'cancelled' : 'unknown';
-      family.bindings.set(identity, { ...existing,
-        entry: { key: existing?.entry.key ?? randomUUID(),
+      const binding = existing ?? { entry: { key: randomUUID(), title: '', role: '', status } };
+      Object.assign(binding, {
+        entry: { key: binding.entry.key,
           title: label(item.subagent.description, 256, 'Subagent'),
           role: label(item.subagent.type, 80, 'Worker'), status },
         turnId: item.turnId, toolUseId: item.toolUseId });
+      family.bindings.set(identity, binding);
     }
     for (const worker of controller.missionState.missionRuntime?.workerConversations() ?? []) {
       const identity = `mission:${worker.sessionId}`;
+      present.add(identity);
       const existing = family.bindings.get(identity);
-      family.bindings.set(identity, {
-        entry: { key: existing?.entry.key ?? randomUUID(), title: label(worker.title, 256, 'Mission worker'),
+      const binding = existing ?? { entry: { key: randomUUID(), title: '', role: '', status: 'unknown' as const } };
+      Object.assign(binding, {
+        entry: { key: binding.entry.key, title: label(worker.title, 256, 'Mission worker'),
           role: worker.skillName?.includes('validator') ? 'Validator' : 'Worker',
           status: worker.status === 'finished' ? 'completed' : worker.status },
         sessionId: worker.sessionId,
       });
+      family.bindings.set(identity, binding);
     }
+    for (const key of family.bindings.keys()) if (!present.has(key)) family.bindings.delete(key);
   }
 
   private port(parent: () => string | null, current: () => string | null): AgentNavigationPort {
     const read = (): AgentChatNavigationMessage => {
       const parentId = parent();
       const family = parentId ? this.families.get(parentId) : undefined;
-      const entries = [...(family?.bindings.values() ?? [])].map(({ entry, sessionId }) => {
-        const child = sessionId ? this.children.get(sessionId)?.controller : undefined;
-        return child && isTurnActive(child.turnState.turn) ? { ...entry, status: 'running' as const } : entry;
+      const switching = current() === null && this.options.root.sessionState.connection.status === 'connecting';
+      const entries = [...(!switching ? family?.bindings.values() ?? [] : [])].map((binding) => {
+        const child = binding.sessionId ? this.children.get(binding.sessionId)?.controller : undefined;
+        const turn = child?.turnState.turn;
+        const resumed = isTurnActive(turn ?? null) && turn?.turnId !== binding.stoppedTurnId;
+        if (resumed) delete binding.stoppedTurnId;
+        if (isTurnActive(turn ?? null) && turn?.turnId !== binding.idleTurnId) delete binding.idleTurnId;
+        const terminal: AgentChatStatus | undefined = turn?.status === 'interrupted' ? 'cancelled'
+          : turn?.status === 'completed' ? 'completed' : turn?.status === 'failed' ? 'failed' : undefined;
+        const status: AgentChatStatus = binding.stoppedTurnId !== undefined ? 'cancelled'
+          : binding.idleTurnId !== undefined ? terminal ?? (binding.entry.status === 'running' ? 'unknown' : binding.entry.status)
+          : child && isTurnActive(turn ?? null) ? 'running'
+            : terminal ?? binding.entry.status;
+        return { ...binding.entry, status,
+          ...(status === 'running' && !binding.stopPending ? { canStop: true as const } : {}),
+          ...(binding.stopPending ? { stopPending: true as const } : {}) };
       });
       const selected = entries.find(({ key }) => key === current());
       const agents = entries.slice(-MAX_AGENT_CHAT_SESSIONS);
@@ -188,6 +215,10 @@ export class AgentChatManager implements vscode.Disposable {
         }
         const binding = [...family.bindings.values()].find(({ entry }) => entry.key === command.key);
         if (!binding) return true;
+        if (command.type === 'agent.chat.stop') {
+          void this.stop(command.parentSessionId, family, binding);
+          return true;
+        }
         if (binding.sessionId) this.open(command.parentSessionId, family, binding);
         else if (binding.turnId && binding.toolUseId) {
           if (family.controller.sessionState.sessionId === command.parentSessionId)
@@ -201,6 +232,12 @@ export class AgentChatManager implements vscode.Disposable {
   }
 
   private open(parentId: string, family: Family, binding: Binding): void {
+    const child = this.childFor(parentId, family, binding);
+    if (child) this.showChild(child);
+    this.publish();
+  }
+
+  private childFor(parentId: string, family: Family, binding: Binding): Child | undefined {
     const sessionId = binding.sessionId;
     if (!sessionId || this.disposed) return;
     const existing = this.children.get(sessionId);
@@ -208,9 +245,7 @@ export class AgentChatManager implements vscode.Disposable {
       existing.familyId = parentId;
       existing.key = binding.entry.key;
       existing.title = binding.entry.title;
-      this.showChild(existing);
-      this.publish();
-      return;
+      return existing;
     }
     const resources = this.options.createChild({ sessionId, cwd: family.cwd });
     resources.controller.subagentState.subagentTranscripts = this.options.root.subagentState.subagentTranscripts;
@@ -218,8 +253,37 @@ export class AgentChatManager implements vscode.Disposable {
     const child: Child = { controller: resources.controller, panel: null, resources,
       familyId: parentId, key: binding.entry.key, title: binding.entry.title };
     this.children.set(sessionId, child);
-    this.showChild(child);
+    return child;
+  }
+
+  private async stop(parentId: string, family: Family, binding: Binding): Promise<void> {
+    if (binding.stopPending || this.disposed) return;
+    binding.stopPending = true;
     this.publish();
+    try {
+      if (!binding.sessionId && binding.turnId && binding.toolUseId) {
+        const service = family.controller.subagentState.subagentTranscripts;
+        let target = service?.resolveSession(parentId, binding.turnId, binding.toolUseId);
+        if (!target && family.controller.sessionState.sessionId === parentId) {
+          await service?.ensureParentMapping(parentId, family.cwd, family.controller.recoveryState.transcript.transcript);
+          target = service?.resolveSession(parentId, binding.turnId, binding.toolUseId);
+        }
+        if (target) binding.sessionId = target.sessionId;
+      }
+      const child = this.childFor(parentId, family, binding);
+      if (!child || !binding.sessionId) throw new Error('The agent session has not been registered yet. Open its conversation and retry.');
+      const outcome = await stopAgentChat(child.controller, binding.sessionId);
+      if (outcome === 'stopped') binding.stoppedTurnId = child.controller.turnState.turn?.turnId ?? null;
+      else {
+        binding.idleTurnId = child.controller.turnState.turn?.turnId ?? null;
+        if (!this.disposed) void vscode.window.showInformationMessage('This agent is already idle. No stop request was sent.');
+      }
+    } catch (error) {
+      if (!this.disposed) void vscode.window.showWarningMessage(error instanceof Error ? error.message : 'The agent could not be stopped. Open its conversation and retry.');
+    } finally {
+      binding.stopPending = false;
+      if (!this.disposed) { this.scan(family.controller); this.publish(); }
+    }
   }
 
   private showChild(child: Child): void {

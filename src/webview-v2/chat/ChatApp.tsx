@@ -80,12 +80,14 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   const inlineDiff = useMemo(() => ({
     port, sessionId: state.sessionId, connected: state.connection.status === 'connected',
   }), [port, state.sessionId, state.connection.status]);
-  const toolActions = useMemo(() => state.sessionId !== null && state.connection.status === 'connected' ? {
+  const toolActions = useMemo(() => state.sessionId !== null ? {
+    openSubagent: subagents.openSubagent,
+    ...(state.connection.status === 'connected' ? {
     openPath: workspace.handleOpenPath,
     openFileDiff: workspace.handleOpenFileDiff,
     openReviewTurn: (turnId: string) => port.postMessage({ type: 'review.panel.open', sessionId: state.sessionId!, scopeKind: 'turn', turnId }),
     openTerminalMirror: workspace.handleOpenTerminalMirror,
-    openSubagent: subagents.openSubagent,
+    } : {}),
   } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.openSubagent]);
   const transition = useConversationTransition({
     sequence: state.sequence,
@@ -199,7 +201,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         <SessionRecovery state={state} blocked={transition.blocking && transition.overlay !== null} onReconnect={sessions.handleRetry} port={port} />
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
-        {!childChat ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />
         </div>

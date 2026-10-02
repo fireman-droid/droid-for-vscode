@@ -84,7 +84,7 @@ export class WindowDaemonPool {
     return unsubscribe;
   }
 
-  readIde(sessionId: string | null): Pick<IdeState, 'status' | 'message'> {
+  readIde(sessionId: string | null, attachment: 'root' | 'shared' = 'root'): Pick<IdeState, 'status' | 'message'> {
     if (!this.binding) return { status: 'preparing', message: 'Preparing the native IDE service.' };
     if (this.binding.port === null) return {
       status: 'unavailable', message: this.binding.detail ?? 'The native IDE service is unavailable. Chat remains available.',
@@ -92,11 +92,17 @@ export class WindowDaemonPool {
     if (!sessionId) return { status: 'disconnected', message: 'Open a chat to connect its native IDE channel.' };
     const entry = this.owners.get(sessionId);
     if (!entry) return { status: 'preparing', message: 'Connecting this chat to the native IDE service.' };
-    if (this.needsReconnect(sessionId)) return {
-      status: 'reconnect-required', message: 'This chat needs its own IDE connection. Reconnect when its background tasks finish.',
+    const shared = attachment === 'shared';
+    const sharesCurrentIde = shared && this.owned.has(entry.record.id) && entry.ide !== undefined &&
+      entry.record.idePort === this.binding.port;
+    if (this.needsReconnect(sessionId) && !sharesCurrentIde) return {
+      status: 'reconnect-required', message: shared
+        ? 'This agent uses its owning session’s IDE connection. Restore that connection from the parent chat; this agent can keep chatting.'
+        : 'This chat needs its own IDE connection. Reconnect when its background tasks finish.',
     };
     const state = entry.ide!.read();
-    return { ...state, status: state.status === 'connecting' ? 'preparing' : state.status };
+    return { ...state, status: state.status === 'connecting' ? 'preparing' : state.status,
+      ...(shared ? { message: `This agent shares its owning session’s IDE connection. ${state.message}` } : {}) };
   }
 
   async waitForIde(sessionId: string, signal: AbortSignal): Promise<void> {

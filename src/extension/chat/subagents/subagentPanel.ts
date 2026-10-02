@@ -3,7 +3,7 @@ import {
   type SubagentInvocationRecord,
 } from '../../../runtime/subagents/subagentSummary';
 import { type SessionTranscriptItem } from '../../../shared/protocol/transcript';
-import type { SubagentActivityItem } from '../../../shared/protocol/subagentProtocol';
+import type { SubagentActivityItem, SubagentOpenResultMessage } from '../../../shared/protocol/subagentProtocol';
 import type { SubagentPanelPort } from './subagentPanelPort';
 import type { SubagentViewerSnapshot } from './SubagentTranscriptService';
 
@@ -78,30 +78,26 @@ export function handleSubagentOpen(
   ) {
     return;
   }
+  const report = (status: SubagentOpenResultMessage['status']): void => {
+    if (!ctl.sessionState.disposed && ctl.sessionState.sessionId === sessionId) {
+      ctl.emit({ type: 'subagent.open.result', sessionId, turnId, toolUseId, status });
+    }
+  };
+  report('opening');
   void ensureMapping(ctl).then(() => {
     if (
       ctl.sessionState.disposed ||
-      ctl.sessionState.sessionId !== sessionId ||
-      ctl.subagentState.subagentTranscripts === null
+      ctl.sessionState.sessionId !== sessionId
     ) {
       return;
     }
-    const opened = ctl.subagentState.subagentTranscripts.open(
+    const opened = ctl.subagentState.subagentTranscripts?.open(
       sessionId,
       turnId,
       toolUseId,
     );
-    if (!opened) {
-      ctl.emit({
-        type: 'runtime.diagnostic',
-        sessionId,
-        turnId,
-        severity: 'warning',
-        code: 'subagent-transcript-unavailable',
-        message: 'This subagent transcript is unavailable.',
-      });
-    }
-  });
+    report(opened ? 'opened' : 'unavailable');
+  }).catch(() => report('failed'));
 }
 
 export function stopSubagentPanelPoll(ctl: SubagentPanelPort): void {

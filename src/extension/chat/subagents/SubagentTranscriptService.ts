@@ -192,7 +192,14 @@ export class SubagentTranscriptService {
         continue;
       }
       const record = matches.get(item.toolUseId);
-      if (record?.parentToolUseId === undefined && this.evidenceRows.has(key)) continue;
+      if (record?.parentToolUseId === undefined && this.evidenceRows.has(key)) {
+        const binding = this.byRow.get(key);
+        if (binding !== undefined) {
+          mappedEntries.add(this.register({ ...binding.row, childSessionId: binding.entry.childSessionId, turnId: item.turnId,
+            type: item.subagent.type, description: item.subagent.description, cwd }));
+        }
+        continue;
+      }
       if (record === undefined) {
         if (legacyIdentities.has(subagentIdentityKey(item.subagent.type, item.subagent.description))) {
           this.noteIssue({ turnId: item.turnId, toolUseId: item.toolUseId, reason: 'mapping-ambiguous',
@@ -316,11 +323,8 @@ export class SubagentTranscriptService {
   }
 
   open(parentSessionId: string, turnId: string, toolUseId: string): boolean {
-    const binding = this.byRow.get(rowKey(parentSessionId, toolUseId));
-    if (binding === undefined || binding.row.turnId !== turnId ||
-      this.rowIssues.get(rowKey(parentSessionId, toolUseId))?.reason === 'mapping-ambiguous') {
-      return false;
-    }
+    const binding = this.resolveBinding(parentSessionId, turnId, toolUseId);
+    if (binding === undefined) return false;
     this.options.openViewer({
       childSessionId: binding.entry.childSessionId,
       parentSessionId,
@@ -329,6 +333,18 @@ export class SubagentTranscriptService {
       cwd: binding.row.cwd,
     });
     return true;
+  }
+
+  resolveSession(parentSessionId: string, turnId: string, toolUseId: string): { sessionId: string; cwd: string } | null {
+    const binding = this.resolveBinding(parentSessionId, turnId, toolUseId);
+    return binding === undefined ? null : { sessionId: binding.entry.childSessionId, cwd: binding.row.cwd };
+  }
+
+  private resolveBinding(parentSessionId: string, turnId: string, toolUseId: string) {
+    const key = rowKey(parentSessionId, toolUseId);
+    const binding = this.byRow.get(key);
+    return binding?.row.turnId === turnId && this.rowIssues.get(key)?.reason !== 'mapping-ambiguous'
+      ? binding : undefined;
   }
 
   readViewer(childSessionId: string): SubagentViewerSnapshot | null {
