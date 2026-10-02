@@ -33,7 +33,7 @@ export function bindSessionIde(
     subscriptions.set(receive, current.onNotification(receive));
     return () => { subscriptions.get(receive)?.(); subscriptions.delete(receive); };
   };
-  const release = (method: 'close' | 'detach'): Promise<void> => {
+  const release = (method: 'close' | 'detach', options?: Parameters<DaemonSessionHandle['close']>[0]): Promise<void> => {
     if (releasing) return releasing;
     if (detached) return Promise.resolve();
     cancelPending();
@@ -41,7 +41,8 @@ export function bindSessionIde(
     // replacement finish attaching, then release the handle that actually owns it.
     const attempt = (async () => {
       await Promise.allSettled(preparations);
-      await current[method]();
+      if (method === 'close' && options !== undefined) await current.close(options);
+      else await current[method]();
       detached = true;
       for (const unsubscribe of subscriptions.values()) unsubscribe();
       subscriptions.clear();
@@ -94,7 +95,8 @@ export function bindSessionIde(
     get(_target, name) {
       if (name === 'stream') return stream;
       if (name === 'onNotification') return onNotification;
-      if (name === 'close' || name === 'detach') return () => release(name);
+      if (name === 'close') return (options?: Parameters<DaemonSessionHandle['close']>[0]) => release('close', options);
+      if (name === 'detach') return () => release('detach');
       if (name === 'interrupt') return async () => {
         // No prompt reached the daemon during preparation; cancelling it must
         // not interrupt child tasks or address a source that has already closed.

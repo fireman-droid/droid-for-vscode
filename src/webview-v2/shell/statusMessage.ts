@@ -3,10 +3,10 @@ import type { AssistantWebviewState } from '../state/types';
 
 export function getStatusMessage(state: Pick<AssistantWebviewState, 'turn' | 'connection'> & Partial<Pick<AssistantWebviewState, 'settings'>>, draft: string): string | undefined {
   if (state.connection.status === 'unavailable') return state.connection.message ?? 'The local Droid connection is unavailable.';
-  if (state.turn?.status === 'failed' && state.connection.status === 'connected') {
-    return 'Reply failed. Review the error above; you can change the model or its provider settings before sending again.';
-  }
   if (state.turn?.error !== undefined) return state.turn.error;
+  if (state.turn?.status === 'failed' && state.connection.status === 'connected') {
+    return 'Reply failed. No error details are available.';
+  }
   if (state.connection.message !== undefined) return state.connection.message;
   if (state.settings?.status === 'updating') return 'Updating session settings…';
   if (draft.length > MAX_TURN_TEXT_LENGTH) {

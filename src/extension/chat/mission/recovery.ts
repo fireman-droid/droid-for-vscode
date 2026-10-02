@@ -19,6 +19,8 @@ export function recoverMissionProjection(
     scrutinyEnabled: true,
     userTestingEnabled: true,
   });
+  const knownLifecycle = ctl.missionState.mission.state;
+  if (knownLifecycle) mission.apply({ type: 'mission-state', lifecycle: knownLifecycle });
   ctl.missionState.missionRuntime = mission;
   let emittedRevision = -1;
   const publish = (): void => {

@@ -190,7 +190,8 @@ export async function consumeTurn(
       if (recoverTransportTurn(ctl, runtime, runtimeGeneration, sessionId, turnId, error)) return;
       if (ctl.turnState.turn?.status === 'stopping' && error instanceof Error && error.name === 'AbortError')
         completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
-      else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed');
+      else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed',
+        error instanceof Error ? error.message : typeof error === 'string' ? error : undefined);
     }
   }
 

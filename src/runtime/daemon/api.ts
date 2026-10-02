@@ -32,6 +32,7 @@ export type DaemonStreamOptions = Omit<
 };
 
 export interface DaemonSessionHandle extends ConnectedDroidSession {
+  close(options?: Parameters<DaemonSessionController['closeSession']>[1]): Promise<void>;
   ensureLoaded(signal?: AbortSignal): Promise<void>;
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;
   readMissionSnapshot(): unknown;

@@ -131,8 +131,6 @@ export class WindowDaemonPool {
     const opened = await source.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     if (!opened.some((session) => session.id === sessionId) || busySessionTree(opened, sessionId)) return source;
     if ((await source.connection.droid.terminals.list(sessionId, {})).length > 0) return source;
-    const history = await source.connection.droid.sessions.getMessages(sessionId, { limit: 100 });
-    if (!hasDurablePrompt(history)) return source;
     await this.reconnectIdle(sessionId,
       () => !this.disposed && isCurrent() && this.owners.get(sessionId) === source, () => {});
     return this.owners.get(sessionId)!;
@@ -288,11 +286,6 @@ export class WindowDaemonPool {
     if ((await droid.terminals.list(sessionId, {})).length > 0) {
       return blocked('Close this session’s managed terminals before reconnecting IDE.');
     }
-    const history = await droid.sessions.getMessages(sessionId, { limit: 100 });
-    if (!hasDurablePrompt(history)) {
-      // Native close may delete an empty draft; do not risk its identity.
-      return blocked('Could not confirm durable user content. Use a new chat for IDE integration.');
-    }
     const handle = this.handles.get(sessionId);
     if (!handle) return blocked('The active session must be attached before reconnecting IDE.');
     if (!isCurrent()) return blocked('The selected session changed. IDE reconnection was cancelled.');
@@ -313,7 +306,8 @@ export class WindowDaemonPool {
       return blocked(unsafe);
     }
     onClosingSource();
-    await handle.close();
+    // Native close otherwise reaps empty drafts, making the same ID impossible to resume.
+    await handle.close({ preserveEmptyDraft: true });
     this.handles.delete(sessionId);
     if ((await droid.sessions.listOpened()).some(({ id }) => id === sessionId)) {
       throw new Error('The original daemon has not confirmed session closure. IDE reconnection was not started.');
@@ -555,10 +549,4 @@ function busySessionTree(
     for (const row of opened) if (row.parentSessionId && ids.has(row.parentSessionId)) ids.add(row.id);
   } while (ids.size !== previous);
   return opened.some((row) => ids.has(row.id) && String(row.workingState) !== 'idle');
-}
-
-function hasDurablePrompt(messages: Awaited<ReturnType<DaemonApi['sessions']['getMessages']>>): boolean {
-  return messages.some((message) => String(message.role) === 'user' &&
-    message.content.some((block) => block.type === 'text' ? block.text.trim().length > 0 :
-      block.type === 'image' || block.type === 'document'));
 }

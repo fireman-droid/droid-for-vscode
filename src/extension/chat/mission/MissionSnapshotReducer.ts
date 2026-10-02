@@ -30,6 +30,7 @@ interface WorkerState {
 export class MissionSnapshotReducer {
   private revision = 0;
   private lifecycle: MissionSnapshotMessage['lifecycle'];
+  private presentationPhase: NonNullable<MissionSnapshotMessage['presentationPhase']> = 'loading';
   private title: string | undefined;
   private features: readonly MissionRuntimeFeature[] = [];
   private progress: readonly MissionProgressSummary[] = [];
@@ -41,6 +42,15 @@ export class MissionSnapshotReducer {
   constructor(private readonly validator: MissionValidatorState) {}
 
   hydrate(value: unknown): boolean {
+    // A newly attached orchestrator has no Mission store until Droid publishes
+    // its plan. Missing data after a known lifecycle is still a recovery failure.
+    if (value === null && this.lifecycle === undefined) {
+      if (this.presentationPhase !== 'setup') {
+        this.presentationPhase = 'setup';
+        this.revision += 1;
+      }
+      return true;
+    }
     if (!isStrictRecord(value)) {
       return false;
     }
@@ -202,7 +212,7 @@ export class MissionSnapshotReducer {
       revision: this.revision,
       availability: this.availability,
       ...(this.lifecycle === undefined
-        ? { presentationPhase: 'loading' as const }
+        ? { presentationPhase: this.presentationPhase }
         : { lifecycle: this.lifecycle }),
       ...(this.title === undefined ? {} : { title: this.title }),
       features,

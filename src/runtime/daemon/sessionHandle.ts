@@ -242,9 +242,10 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     this.pendingCwd = undefined;
     this.unregister();
   }
-  async close(): Promise<void> {
+  async close(options?: Parameters<DaemonSessionController['closeSession']>[1]): Promise<void> {
     this.assertAttached();
-    await this.controller.closeSession(this.id);
+    if (options === undefined) await this.controller.closeSession(this.id);
+    else await this.controller.closeSession(this.id, options);
     await this.detach();
   }
   disconnect(): void {

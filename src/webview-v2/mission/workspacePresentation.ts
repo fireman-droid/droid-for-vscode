@@ -40,6 +40,7 @@ export function describeReadinessWarning(warning: NonNullable<MissionControlSetu
 }
 export function formatPhase(snapshot: MissionSnapshotMessage): string {
   if (snapshot.availability === 'detached') return 'Detached';
+  if (snapshot.presentationPhase === 'setup') return 'Waiting for a Mission plan';
   if (snapshot.lifecycle === undefined) return 'Loading Mission state…';
   if (snapshot.lifecycle === 'awaiting_input') return 'Awaiting input';
   if (snapshot.lifecycle === 'orchestrator_turn') return 'Orchestrating';

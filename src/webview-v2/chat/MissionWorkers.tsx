@@ -37,8 +37,10 @@ export function MissionWorkers({ mission, result, port, disabled }: {
   const workers = mission?.features.filter(feature => feature.workerViewAvailable === true) ?? [];
   const failed = request?.status === 'rejected' || request?.status === 'unconfirmed';
   const detached = mission?.availability === 'detached';
+  if (!detached && mission?.presentationPhase === 'setup') return null;
+  const loading = !mission || mission.presentationPhase === 'loading';
   return <Tool defaultOpen className="my-3 rounded-lg border border-[var(--panel-edge)] px-2 py-1">
-    <ToolHeader title="Mission · 子代理" status={detached ? '状态暂不可用' : mission ? `${mission.completedFeatureCount} / ${mission.features.length} features completed` : 'Loading…'} />
+    <ToolHeader title="Mission · 子代理" status={detached ? '状态暂不可用' : loading ? 'Loading…' : `${mission.completedFeatureCount} / ${mission.features.length} features completed`} />
     <ToolContent className="space-y-2 pl-0 pb-1">
       {mission && !detached ? <p className="px-2 text-[11px] text-muted-foreground">{formatPhase(mission)}</p> : null}
       {workers.map(feature => {
@@ -58,7 +60,7 @@ export function MissionWorkers({ mission, result, port, disabled }: {
           </div>
         </div>;
       })}
-      {workers.length === 0 && !detached ? <p role="status" className="px-2 text-xs text-muted-foreground">{mission ? '等待 Droid 提供 Worker 会话，分配后可在这里查看子代理活动。' : '正在读取 Mission 状态…'}</p> : null}
+      {workers.length === 0 && !detached ? <p role="status" className="px-2 text-xs text-muted-foreground">{loading ? '正在读取 Mission 状态…' : '等待 Droid 提供 Worker 会话，分配后可在这里查看子代理活动。'}</p> : null}
       {failed || detached ? <div role="status" className="flex flex-wrap items-center gap-2 px-2 text-xs text-muted-foreground">
         <span>{detached ? '未能读取 Mission 状态，暂时无法确认子代理信息，请刷新状态。' : request?.status === 'unconfirmed' ? '未收到操作结果，可以重新点击查看子代理。' : 'Worker 状态已变化或会话暂不可用，请刷新后重试。'}</span>
         <Button variant="ghost" size="sm" disabled={disabled || mission === null || request?.status === 'pending'} onClick={() => {

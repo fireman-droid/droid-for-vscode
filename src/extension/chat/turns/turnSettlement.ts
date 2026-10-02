@@ -7,7 +7,7 @@ import { finishSpecHandoff } from './specHandoff';
 import { STOP_TIMEOUT_MESSAGE } from './turnWatchdog';
 import { formatTurnErrorMessage } from './turnErrorMessage';
 
-export const TURN_FAILURE_MESSAGE = 'Droid could not complete this reply. Review the error details before sending again.';
+export const TURN_FAILURE_MESSAGE = 'Droid could not complete this reply.';
 
 export function handleTurnComplete(
   ctl: TurnCompletionPort,
@@ -122,10 +122,11 @@ export function failTurn(
   ctl.turnState.turn.compacting = false;
   const finalCause = formatTurnErrorMessage(errorMessage);
   const message = finalCause ?? ctl.turnState.turn.runtimeError ?? TURN_FAILURE_MESSAGE;
-  // Retain a final-result-only cause in history as well as the failed-turn snapshot.
-  if (finalCause !== undefined && finalCause !== ctl.turnState.turn.runtimeError) {
+  // turn.error updates the live view only. Persist every cause not already
+  // projected by a runtime error, including failures before the stream starts.
+  if (message !== ctl.turnState.turn.runtimeError) {
     ctl.emit({ type: 'runtime.diagnostic', sessionId, turnId, severity: 'error',
-      code: 'runtime-event-error', message });
+      code, message });
   }
   ctl.turnState.turn.error = message;
   ctl.emit({
