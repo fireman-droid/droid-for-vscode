@@ -46,7 +46,7 @@ import { useAnswerScroll } from './useAnswerScroll';
 import { ChatConnectionStatus } from './ChatConnectionStatus';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
 import { AppInfo } from './AppInfo';
-import { AgentChatHeading, useAgentChatNavigation } from './AgentNavigation';
+import { useAgentChatNavigation } from './AgentNavigation';
 import { ModelSourceProvider } from '../models/ModelSourceControl';
 import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 
@@ -177,20 +177,17 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={!childChat && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
-        <div className="flex min-w-0 items-center gap-1.5">{childChat && agentNavigation ? <AgentChatHeading navigation={agentNavigation} port={port} /> : <AppInfo />}
+        <div className="flex min-w-0 items-center gap-1.5">{!childChat ? <AppInfo /> : null}
           <ChatConnectionStatus connection={state.connection} ide={state.ide} sessionId={state.sessionId} port={port} working={running}
             missionLabel={state.mission ? `${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : undefined}
             blocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {!childChat && host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
-          <WorkingSubagents state={state} flow={subagents} navigation={childChat || agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} />
-          {!childChat ? <>
+        {!childChat ? <div className="flex shrink-0 items-center gap-1">
+          {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
             <Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-4" /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
-          </> : null}
-        </div>
+        </div> : null}
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
@@ -199,6 +196,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
         <SessionRecovery state={state} blocked={transition.blocking && transition.overlay !== null} onReconnect={sessions.handleRetry} port={port} />
         <div className="v2-composer-dock">
+        {!childChat ? <WorkingSubagents key={state.sessionId ?? 'none'} state={state} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">

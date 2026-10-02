@@ -14,7 +14,7 @@
   .v2-dialog-overlay[data-state='open'] { animation: v2-fade-in var(--motion-normal) var(--motion-ease); }
   .v2-dialog-overlay[data-state='closed'] { animation: v2-fade-in var(--motion-exit) ease-in reverse; }
   @keyframes v2-fade-in { from { opacity: 0; } to { opacity: 1; } }
-  /* Opt in at the shared overlay boundary; Popper keeps ownership of placement. */
+  /* Shared anchored overlays animate their surface; Popper keeps ownership of placement. */
   .dvx-overlay-surface[data-motion='anchored'] {
     --overlay-enter-x: 0px; --overlay-enter-y: 0px;
     transform-origin: var(--radix-select-content-transform-origin, var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, center)));
@@ -24,7 +24,7 @@
   .dvx-overlay-surface[data-motion='anchored'][data-side='left'] { --overlay-enter-x: 4px; }
   .dvx-overlay-surface[data-motion='anchored'][data-side='right'] { --overlay-enter-x: -4px; }
   .dvx-overlay-surface[data-motion='anchored'][data-state='open'] {
-    animation: dvx-anchored-in 160ms var(--motion-ease) both;
+    animation: dvx-anchored-in var(--motion-normal) var(--motion-ease) both;
   }
   .dvx-overlay-surface[data-motion='anchored'][data-state='closed'] {
     animation: dvx-anchored-out var(--motion-exit) ease-in both;

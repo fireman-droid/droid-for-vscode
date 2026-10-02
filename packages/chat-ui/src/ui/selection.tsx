@@ -36,6 +36,7 @@ export function SelectContent({ children, className, ...props }: ComponentProps<
       <SelectPrimitive.Content
         data-webview-overlay=""
         data-slot="select-content"
+        data-motion="anchored"
         position="popper"
         sideOffset={4}
         collisionPadding={8}

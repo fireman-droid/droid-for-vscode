@@ -32,6 +32,11 @@ const SESSION_REPLACEMENT_COMMANDS = new Set([
   'turn.editResend', 'rewind.info', 'editStage.begin', 'editStage.cancel',
 ]);
 
+function tabTitle(title: string): string {
+  const compact = title.replace(/\s+/gu, ' ').trim();
+  return compact.length > 60 ? `${compact.slice(0, 59).trimEnd()}…` : compact;
+}
+
 /** A retained ordinary chat surface whose controller is owned by one child session. */
 export class AgentChatPanel implements vscode.Disposable {
   readonly reveal: () => void;
@@ -39,7 +44,7 @@ export class AgentChatPanel implements vscode.Disposable {
 
   constructor(options: AgentChatPanelOptions) {
     const webviewDistUri = vscode.Uri.joinPath(options.extensionUri, 'dist', 'webview');
-    const panel = vscode.window.createWebviewPanel('droidvisx.agentChat', options.title, vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel('droidvisx.agentChat', tabTitle(options.title), vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [webviewDistUri, vscode.Uri.joinPath(options.extensionUri, 'resources')],
@@ -74,7 +79,7 @@ export class AgentChatPanel implements vscode.Disposable {
         if (disposed) return;
         const navigation = parseAgentChatNavigation(message);
         const current = navigation?.agents.find((agent) => agent.key === navigation.currentKey);
-        if (current) panel.title = current.title;
+        if (current) panel.title = tabTitle(current.title);
         post(message);
       }),
       panel.webview.onDidReceiveMessage((value: unknown) => {

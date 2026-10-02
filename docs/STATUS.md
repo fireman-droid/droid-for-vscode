@@ -5,6 +5,20 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子会话页头与 Agents 展示
+
+- 子会话页头仅保留连接状态，移除重复长标题与代理菜单；原任务身份和正文不变。
+  编辑器标签将长标题压缩到 60 字符，完整任务名仍保存在父聊天卡片和 Agents 行提示中。
+- Agents 移至父聊天输入框上方，与待发送队列、Files changed 使用相同折叠样式。
+  默认收起，显示总数与运行数；展开列表限高滚动，单行标题省略，点击仍打开原子会话。
+  process 模式的运行任务入口同样使用折叠区域。
+- 共享 Popover、Select、DropdownMenu 默认启用 180ms 展开／100ms 收起动画，保留
+  Radix 定位和键盘行为；系统减少动画时关闭过渡。未新增动画依赖。
+- `pnpm run package:vsix` 内类型检查、文件预算检查及生产构建通过；
+  `pnpm run verify:vsix` 校验 165 条目通过，已全局安装 Microsoft VS Code，162 个安装
+  载荷与新包一致。安装 CLI 的弃用提示未阻断安装。未新增、修改或运行测试，视觉由
+  用户在 VS Code Reload Window 后验收。
+
 ## 模型来源切换与 Mission 创建
 
 - 主聊天、子会话聊天、Spec、BTW 侧聊和 Mission 三个角色的模型菜单已接通
@@ -40,8 +54,8 @@
 ## 子会话交互与 Mission 模型选择
 
 - 按用户确认的 GUI 入口保留 `/mission` 和右侧创建卡片；daemon 模式下普通 Task 与
-  Mission Worker 卡片打开原会话的交互式 ChatApp。顶部显示标题、返回主聊天与代理列表，
-  列表包含已完成任务和 Mission 早期尝试；原父会话保持连接。
+  Mission Worker 卡片打开原会话的交互式 ChatApp。父聊天 Agents 列表包含已完成任务和
+  Mission 早期尝试；原父会话保持连接，子会话顶部仅显示连接状态。
 - 子会话复用正文、工具、输入、附件、模型设置、权限、队列、Stop 和 Review。启动／重连
   固定原 child ID，使用 SDK child attach 保留来源；Stop 只中断当前会话，不调用会使
   Mission 任务失败并重新排队的 killWorker。关闭标签保留控制器和待回答请求。

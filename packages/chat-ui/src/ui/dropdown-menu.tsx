@@ -8,7 +8,7 @@ export const DropdownMenuTrigger = MenuPrimitive.Trigger;
 export function DropdownMenuContent({ className, sideOffset = 4, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
   const container = usePortalContainer();
   return <MenuPrimitive.Portal container={container}>
-    <MenuPrimitive.Content data-webview-overlay="" data-slot="dropdown-menu-content" sideOffset={sideOffset} collisionPadding={8}
+    <MenuPrimitive.Content data-webview-overlay="" data-slot="dropdown-menu-content" data-motion="anchored" sideOffset={sideOffset} collisionPadding={8}
       className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)} {...props} />
   </MenuPrimitive.Portal>;
 }

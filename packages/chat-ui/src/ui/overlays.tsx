@@ -65,6 +65,7 @@ export function PopoverContent({
       <PopoverPrimitive.Content
         data-webview-overlay=""
         data-slot="popover-content"
+        data-motion="anchored"
         align={align}
         sideOffset={sideOffset}
         collisionPadding={8}
