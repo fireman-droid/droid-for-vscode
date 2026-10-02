@@ -34,6 +34,7 @@ export function QuestionCard({
   placeholder,
   placeholderHeight,
   canResend,
+  editAvailable = true,
   images = [],
   plan,
   planRunning = false,
@@ -46,6 +47,7 @@ export function QuestionCard({
   readonly placeholder?: boolean;
   readonly placeholderHeight?: number;
   readonly canResend: boolean;
+  readonly editAvailable?: boolean;
   readonly images?: readonly ImageTranscriptItem[];
   readonly plan?: PlanAnchorState;
   readonly planRunning?: boolean;
@@ -71,7 +73,7 @@ export function QuestionCard({
   </>;
   const displayEditor = draft && edit.preparing > 0 ? { ...editor, draft: { ...draft, notice: 'Preparing attachments…' } } : editor;
   return <QuestionCardView item={item} editor={displayEditor} quote={parseSelectionQuotes(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
-    canResend={canResend && edit.preparing === 0} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
+    canResend={canResend && edit.preparing === 0} editAvailable={editAvailable} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
     stagedAttachments={stage === null ? originalAttachments : stage.attachments.length ? <StagedAttachments stage="edit" attachments={stage.attachments} images={edit.images} actions={edit.actions} disabled={attachmentDisabled} /> : null}
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}
     onPaste={edit.onPaste} onDrop={edit.onDrop} onDragOver={edit.onDragOver}

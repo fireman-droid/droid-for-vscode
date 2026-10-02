@@ -1,4 +1,4 @@
-import type { DaemonApi, DaemonSessionHandle } from './api';
+import type { DaemonApi, DaemonCreateSessionOptions, DaemonSessionHandle } from './api';
 import { randomUUID } from 'node:crypto';
 
 import type { MissionReasoningEffort } from '../../shared/protocol/missionProtocol';
@@ -10,6 +10,7 @@ export interface MissionOrchestratorCreateOptions {
   readonly systemPrompt?: import('../../shared/protocol/systemPromptProtocol').SessionSystemPrompt;
   readonly modelId: string;
   readonly reasoningEffort: MissionReasoningEffort;
+  readonly missionSettings?: DaemonCreateSessionOptions['missionSettings'];
   /**
    * Generated once by the Host and kept Host-side. It is never a Bridge
    * scope or a Webview-controlled target.
@@ -41,6 +42,7 @@ export async function createMissionOrchestrator(
     ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
     modelId: options.modelId,
     reasoningEffort: options.reasoningEffort as never,
+    ...(options.missionSettings === undefined ? {} : { missionSettings: options.missionSettings }),
     tags: [
       { name: 'mission-orchestrator' },
       {

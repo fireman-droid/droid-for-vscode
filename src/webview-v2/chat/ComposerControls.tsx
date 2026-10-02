@@ -93,8 +93,8 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
           onAttach={(source) => { close(); ({ files: attachments.handleAttachFiles, editor: attachments.handleAttachEditor, selection: attachments.handleAttachSelection, problems: attachments.handleAttachProblems, 'git-changes': attachments.handleAttachGitChanges })[source](); }} /> : null}
         {kind === 'context' ? <ContextPopover id={`${id}-context`} context={state.context} tokenUsage={state.tokenUsage}
           disabled={disabled || state.context.status === 'loading'} compactPending={compactPending ?? false}
-          onRefresh={actions.handleContextRefresh} onCompact={onCompact ?? (() => {})} onClose={close} /> : null}
-        {kind === 'mode' ? <ModePopover id={`${id}-mode`} settings={state.settings} shownMode={mode ?? 'auto'} disabled={settingsDisabled}
+          onRefresh={actions.handleContextRefresh} onCompact={onCompact} onClose={close} /> : null}
+        {kind === 'mode' ? <ModePopover id={`${id}-mode`} settings={state.settings} shownMode={mode ?? 'auto'} disabled={settingsDisabled} allowMission={onMissionOpen !== undefined}
           onSelect={(value) => { close(); if (value === 'mission') onMissionOpen?.(); else if (value !== confirmed?.interactionMode) pickSetting({ field: 'interactionMode', value }); }} /> : null}
         {kind === 'model' ? <ModelPopover id={`${id}-model`} settings={state.settings} modelCatalog={state.modelCatalog} disabled={settingsDisabled}
           refreshDisabled={disabled} onRefresh={actions.handleModelCatalogRefresh}

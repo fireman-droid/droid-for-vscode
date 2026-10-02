@@ -95,9 +95,12 @@ export async function createDaemonDroidSession(options: {
         throw leaseConflictError(outcome.heldByPid);
       }
       leaseOwned = true;
-      attachment = await droid.sessions.resume(options.target.sessionId, {
-        ...callbacks,
-      });
+      if (options.target.child) {
+        if (!droid.sessions.attachChild) throw new Error('This Droid connection cannot attach worker conversations.');
+        attachment = await droid.sessions.attachChild(options.target.sessionId, callbacks);
+      } else {
+        attachment = await droid.sessions.resume(options.target.sessionId, callbacks);
+      }
       const adapted = adaptDaemonSession(
         droid,
         attachment,

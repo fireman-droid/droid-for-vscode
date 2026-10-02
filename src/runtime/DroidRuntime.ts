@@ -135,6 +135,8 @@ export type RuntimeSessionTarget =
       readonly kind: 'resume';
       readonly cwd: string;
       readonly sessionId: string;
+      /** Attach a delegated session without changing its daemon-owned origin. */
+      readonly child?: true;
     };
 
 export const MAX_RUNTIME_SKILL_ITEMS = 200;

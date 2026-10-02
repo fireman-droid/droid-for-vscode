@@ -71,7 +71,7 @@ export function readMissionControlSetupAuthority(
       status: ctl.metadata.modelCatalog.status,
       items:
         ctl.metadata.modelCatalog.status === 'ready'
-          ? ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(({ id, displayName, supportedReasoningEfforts }) => ({ id, displayName, supportedReasoningEfforts }))
+          ? ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(projectSetupModel)
           : [],
     },
   );
@@ -129,7 +129,7 @@ export function emitMissionSetupCapabilities(ctl: SetupProjectionPort): void {
     ctl.metadata.modelCatalog.status === 'ready'
       ? {
           status: 'ready',
-          items: ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(({ id, displayName, supportedReasoningEfforts }) => ({ id, displayName, supportedReasoningEfforts })),
+          items: ctl.metadata.modelCatalog.items.filter((model) => !model.disabled).map(projectSetupModel),
         }
       : {
           status: ctl.metadata.modelCatalog.status,
@@ -209,4 +209,8 @@ function setupAuthorityKey(ctl: SetupProjectionPort): readonly unknown[] {
 
 function sameAuthorityKey(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.every((value, index) => Object.is(value, right[index]));
+}
+
+function projectSetupModel({ id, displayName, supportedReasoningEfforts, defaultReasoningEffort, isCustom }: SetupProjectionPort['metadata']['modelCatalog']['items'][number]) {
+  return { id, displayName, supportedReasoningEfforts, defaultReasoningEffort, isCustom };
 }

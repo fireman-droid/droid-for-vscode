@@ -74,6 +74,8 @@ export function useHostMessageFlow(
     };
     const unsubscribe = subscribeHostMessages((message) => {
       switch (message.type) {
+        case 'agent.chat.navigation':
+          return;
         case 'missionControl.route':
           setMissionWorkspace((current) => ({
             route: message.route === 'catalog' ? null : message.route,

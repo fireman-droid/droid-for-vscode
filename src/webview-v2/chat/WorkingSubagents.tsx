@@ -6,10 +6,15 @@ import { ToolActionsContext } from '../content/toolActions';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
 import { SubagentRow } from './SubagentRow';
+import type { AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
+import type { ChatPort } from '../host/chatIntent';
+import { AgentNavigation } from './AgentNavigation';
 
-export function WorkingSubagents({ state, flow }: {
+export function WorkingSubagents({ state, flow, navigation, port }: {
   readonly state: Pick<AssistantWebviewState, 'sessionId' | 'turn' | 'transcript'>;
   readonly flow: ReturnType<typeof useSubagentPanelFlow>;
+  readonly navigation?: AgentChatNavigationMessage | null;
+  readonly port?: ChatPort;
 }) {
   const live = useRef({ sessionId: state.sessionId, turns: new Set<string>() });
   if (live.current.sessionId !== state.sessionId) live.current = { sessionId: state.sessionId, turns: new Set() };
@@ -21,6 +26,7 @@ export function WorkingSubagents({ state, flow }: {
     flow.onPanelToggle(present);
     return () => flow.onPanelToggle(false);
   }, [flow.onPanelToggle, present]);
+  if (navigation && port) return <AgentNavigation navigation={navigation} port={port} />;
   if (!present) return null;
   const ids = new Set(working.map((item) => item.toolUseId));
   return <Popover>

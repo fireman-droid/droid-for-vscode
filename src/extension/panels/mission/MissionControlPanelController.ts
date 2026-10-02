@@ -578,6 +578,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     const authority = this.readSetupAuthority();
     if (
       this.route !== 'new-mission' ||
+      (this.setupPhase !== 'draft' && this.setupPhase !== 'indeterminate') ||
       message.setupRevision !== this.setupRevision ||
       message.workspaceAuthorityRevision !== authority.workspaceAuthorityRevision ||
       message.chatOwnerRevision !== authority.chatOwnerRevision
@@ -717,6 +718,9 @@ export class MissionControlPanelController implements vscode.Disposable {
       return;
     }
     this.pendingMissionStart = message;
+    this.setupDraft = { task: message.task, orchestrator: message.orchestrator,
+      worker: message.worker, validator: message.validator,
+      scrutinyEnabled: message.scrutinyEnabled, userTestingEnabled: message.userTestingEnabled };
     this.setupPhase = 'inspecting';
     this.readiness = null;
     const revision = this.setupRevision;

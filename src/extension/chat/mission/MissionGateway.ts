@@ -1,6 +1,8 @@
 import type { DaemonApi, DaemonSessionHandle } from '../../../runtime/daemon/api';
 
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
+import type { FactoryDroidSession } from '../../../runtime/session/sessionTypes';
+import { hasSavedMissionModelSettings } from '../../../runtime/daemon/missionSettingsFile';
 import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionCallbacks,
@@ -100,7 +102,7 @@ export type MissionReadinessResult =
 
 /**
  * Extension-Host Mission entry boundary. It validates every effective model
- * pair before creating a session, then applies and verifies the six-property
+ * pair before creating a session, then initializes and verifies the six-property
  * SDK settings object while retaining the original attached handle.
  */
 export class MissionGateway {
@@ -182,6 +184,7 @@ export class MissionGateway {
       return { status: 'rejected', code: 'daemon-unavailable' };
     }
     const settings = toMissionSettings(effective.value);
+    const missionId = createMissionOrchestratorIdentity();
     let session: DaemonSessionHandle | undefined;
     let adopted = false;
     try {
@@ -199,18 +202,19 @@ export class MissionGateway {
         modelId: input.message.orchestrator.modelId,
         reasoningEffort: input.message.orchestrator
           .reasoningEffort as MissionReasoningEffort,
-        missionId: createMissionOrchestratorIdentity(),
+        missionSettings: settings as never,
+        missionId,
         callbacks: interactions.callbacks,
       });
-      // Bridge reasoning values are catalog-validated. The SDK's public
-      // daemon facade narrows this enum more than its actual 0.7.0 Mission
-      // settings schema, so retain the exact verified six-property object.
-      await droid.sessions.updateSettings(session.id, {
-        missionSettings: settings as never,
-      });
-      if (!(await hasDurableMissionSettings(session, settings))) {
+      // A settings update acknowledged before the first planning turn does not
+      // initialize Droid's Mission profile. Supply it with session creation so
+      // workers cannot start from the global model defaults.
+      if (!(await hasMissionSettings(session, settings))) {
         return { status: 'rejected', code: 'settings-mismatch' };
       }
+      // Before plan approval Droid keeps profiles in memory only. Retain this
+      // exact session's choices until its official model-settings file exists.
+      await this.options.preferences.saveStartup(session.id, missionId, effective.value);
 
       const runtime = this.options.createRuntime(
         session,
@@ -233,7 +237,26 @@ export class MissionGateway {
     } finally {
       if (session !== undefined && !adopted) {
         await session.detach().catch(() => undefined);
+        await this.options.preferences.clearStartup(session.id);
       }
+    }
+  }
+
+  async restorePlanningSettings(session: FactoryDroidSession): Promise<void> {
+    const startup = this.options.preferences.readStartup(session.id);
+    if (!startup) return;
+    if (await hasSavedMissionModelSettings(startup.missionId)) {
+      await this.options.preferences.clearStartup(session.id);
+      return;
+    }
+    const catalog = session.readAvailableModels ? await session.readAvailableModels() : session.availableModels;
+    if (!catalog || !validatePreferences(startup.preferences, catalog.filter((model) => !model.disabled)).valid) {
+      throw new Error('The selected Mission Worker or Validator model is no longer available.');
+    }
+    const settings = toMissionSettings(startup.preferences);
+    await session.updateSettings({ missionSettings: settings as never });
+    if (!sameMissionSettings(session.settings.missionSettings, settings)) {
+      throw new Error('The selected Mission Worker and Validator settings could not be restored.');
     }
   }
 
@@ -335,7 +358,7 @@ function sameMissionSettings(actual: unknown, expected: MissionSettings): boolea
   );
 }
 
-async function hasDurableMissionSettings(
+async function hasMissionSettings(
   session: DaemonSessionHandle,
   expected: MissionSettings,
 ): Promise<boolean> {

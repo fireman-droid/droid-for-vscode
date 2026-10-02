@@ -34,9 +34,11 @@ export function useComposerFlow(
     readonly navigate: (target: SlashNavTarget) => void;
     readonly openBtw: () => void;
     readonly askBtw: (question: string) => void;
+    readonly allowSessionNavigation?: boolean;
   },
 ) {
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
+  const [commandNotice, setCommandNotice] = useState<string | null>(null);
   const draftValue = useRef(draft);
   const [draftCommand, setDraftCommand] = useState({ id: 0, text: draft });
   const [sendSignal, setSendSignal] = useState(0);
@@ -54,6 +56,7 @@ export function useComposerFlow(
       draftRevision.current += 1;
       draftValue.current = text;
       setDraft(text);
+      setCommandNotice(null);
       if (replaceComposer) setDraftCommand((command) => ({ id: command.id + 1, text }));
       // Queue edits are temporary; reloading must still restore the ordinary draft.
       persistDraft(vscode, previousDraft.current ?? text);
@@ -109,7 +112,7 @@ export function useComposerFlow(
   const connectionStatus = state.connection.status;
   const interactionCount = state.interactions.length;
   const settingsUpdating = state.settings.status === 'updating';
-  const { blocked, compact, navigate, openBtw, askBtw } = routes;
+  const { blocked, compact, navigate, openBtw, askBtw, allowSessionNavigation = true } = routes;
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
       if (blocked || settingsUpdating) return;
@@ -132,6 +135,10 @@ export function useComposerFlow(
       }
       const builtin = resolveBuiltinSlash(text, { btwEnabled: state.btwAvailable });
       if (builtin !== null) {
+        if (!allowSessionNavigation && (builtin.kind === 'new' || builtin.kind === 'compact' || builtin.kind === 'navigate' && builtin.target === 'sessions')) {
+          setCommandNotice('Return to the main chat to switch sessions, start a new task, or compact the conversation.');
+          return;
+        }
         if (builtin.kind === 'compact') compact();
         else if (builtin.kind === 'new') post(vscode, { type: 'session.new' });
         else if (builtin.kind === 'navigate') navigate(builtin.target);
@@ -194,6 +201,7 @@ export function useComposerFlow(
     },
     [
       blocked,
+      allowSessionNavigation,
       settingsUpdating,
       finishQueueEdit,
       queueEditingId,
@@ -290,6 +298,7 @@ export function useComposerFlow(
   );
   return {
     draft,
+    commandNotice,
     draftCommand,
     sendSignal,
     appendCanvasDraft,

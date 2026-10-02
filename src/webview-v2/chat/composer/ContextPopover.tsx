@@ -49,7 +49,7 @@ export function ContextPopover({
   readonly disabled: boolean;
   readonly compactPending: boolean;
   readonly onRefresh: () => void;
-  readonly onCompact: () => void;
+  readonly onCompact?: () => void;
   /** Cursor's top-right ×; omitted hosts fall back to Esc/outside. */
   readonly onClose?: () => void;
 }): React.JSX.Element {
@@ -98,7 +98,7 @@ export function ContextPopover({
           {context.message}
         </p>
       ) : null}
-      <div className="dvx-context-compact">
+      {onCompact !== undefined ? <div className="dvx-context-compact">
         <Button variant="plain" size="none"
           type="button"
           className="dvx-context-compact-button"
@@ -116,7 +116,7 @@ export function ContextPopover({
             'Compact conversation'
           )}
         </Button>
-      </div>
+      </div> : null}
     </div>
   );
 }

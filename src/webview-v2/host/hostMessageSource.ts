@@ -1,10 +1,12 @@
 import { parseMissionControlPanelHostMessage } from '../../shared/protocol/missionControlPanelProtocol';
+import { parseAgentChatNavigation } from '../../shared/protocol/agentChatProtocol';
 import { readHostMessage } from '../bridge/vscode';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { readStringDataProperty } from '../bridge/host/guards';
 
 export type DecodedHostMessage =
   | NonNullable<ReturnType<typeof readHostMessage>>
+  | NonNullable<ReturnType<typeof parseAgentChatNavigation>>
   | NonNullable<ReturnType<typeof parseMissionControlPanelHostMessage>>;
 
 type Listener = (message: DecodedHostMessage) => void;
@@ -17,7 +19,7 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set([
 
 function receive(event: MessageEvent<unknown>): void {
   const message =
-    parseMissionControlPanelHostMessage(event.data) ?? readHostMessage(event.data);
+    parseAgentChatNavigation(event.data) ?? parseMissionControlPanelHostMessage(event.data) ?? readHostMessage(event.data);
   if (message !== null && message !== undefined) {
     for (const listener of listeners) listener.receive(message);
   } else if (isStrictRecord(event.data)) {

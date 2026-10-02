@@ -1,9 +1,36 @@
 # 当前状态
 
-更新：2026-09-30。扩展显示名为 Droid，安装标识仍为 `droidvisx.droidvisx@0.8.0`。
+更新：2026-10-02。扩展显示名为 Droid，安装标识仍为 `droidvisx.droidvisx@0.8.0`。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 子会话交互与 Mission 模型选择
+
+- 按用户确认的 GUI 入口保留 `/mission` 和右侧创建卡片；daemon 模式下普通 Task 与
+  Mission Worker 卡片打开原会话的交互式 ChatApp。顶部显示标题、返回主聊天与代理列表，
+  列表包含已完成任务和 Mission 早期尝试；原父会话保持连接。
+- 子会话复用正文、工具、输入、附件、模型设置、权限、队列、Stop 和 Review。启动／重连
+  固定原 child ID，使用 SDK child attach 保留来源；Stop 只中断当前会话，不调用会使
+  Mission 任务失败并重新排队的 killWorker。关闭标签保留控制器和待回答请求。
+- 会创建后继会话的 Fork、Compact、编辑重发，以及 New、History、Mission 创建在子会话
+  中不提供，Host 同步拒绝；显式 process 模式仍使用只读查看器。已运行轮次通过现有历史
+  对账更新，新发送使用正常流式通路。本轮未实际操作用户会话，尚待 VS Code 人工验收。
+- 真实日志中角色 custom/xhigh 设置已获 SDK 确认，但计划批准前重载丢失了内存配置，
+  后来首次 Worker 使用了全局内置模型。创建现在把角色设置直接传入 initializeSession；
+  Host 保存按会话绑定的启动配置，规划恢复时核对并恢复，官方配置持久化后停止恢复。
+- 创建表单同步 Host 草稿，Worker／Validator 从正在编辑的 Orchestrator 继承；选择器
+  标明 Custom/Built-in，并按所选模型保留兼容推理档位或采用其默认值。
+- 依据官方 [App Mission 使用](https://docs.factory.com/missions/running-app)、
+  [角色配置参考](https://docs.factory.com/missions/reference) 和安装 SDK 0.9.1 实际调用链。
+  官方文档明确 Worker 查看与角色模型配置；自由聊天通路依据 SDK child attach、
+  指定会话发送／中断接口及用户 App 行为说明，不把未记载的 App 行为当成文档承诺。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 和
+  `pnpm run verify:vsix` 通过；统一包校验 165 条目，已全局安装 Microsoft VS Code，
+  162 个安装载荷 SHA-256 与新包一致。首次类型检查修正了目标 JS 库不支持的 findLast；
+  Node 22 构建在 cpSync 复制 WASM 时失败，移开旧生成缓存后仍异常，换本机 Node 24.20.0
+  完成构建，未修改项目构建脚本。未新增、修改或运行测试，未调用模型；需 Reload Window
+  人工验收，本轮不宣称真实交互已通过。
 
 ## 编辑重发后子代理对话被阻断
 
@@ -12,7 +39,7 @@
   对话入口不可用；父会话中复制的同一次旧调用也被当作冲突。
 - 修复以明确 Task／child 记录接通跨父会话续用，将同一次调用在父历史中的副本视为
   同一 prompt 边界。不同调用继续分段保存活动和文件操作；活动所有权依据真实 prompt
-  顺序更新，旧历史不夺回新一轮运行状态。查看器继续打开该子会话的完整只读对话。
+  顺序更新，旧历史不夺回新一轮运行状态。daemon 模式对话入口现由上面的交互式子会话接管。
 - 首次构建发现绑定表的旧类型缺少调用边界字段，已改为实际的调用记录类型；最终
   `pnpm run package:vsix` 内的类型／预算检查、公共 UI 与生产构建通过，
   `pnpm run verify:vsix` 校验 165 条目及扩展入口通过。已全局安装到 Microsoft VS Code，

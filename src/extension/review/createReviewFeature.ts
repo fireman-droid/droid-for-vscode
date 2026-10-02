@@ -35,17 +35,18 @@ type UnsequencedReviewMessage = ReviewHostMessage extends infer Message
 export function createReviewFoundation(
   changeStats: ChangeStatsReader,
   diagnostics: RuntimeDiagnosticSink,
+  baselineScheme?: string,
 ) {
   const selections = new DiffSelectionRegistry();
   return {
     attachmentSources: createVscodeAttachmentSources(selections),
-    fileDiff: createVscodeFileDiffOpener(changeStats, diagnostics, selections),
+    fileDiff: createVscodeFileDiffOpener(changeStats, diagnostics, selections, baselineScheme),
     gitWorkflow: createVscodeGitWorkflow(),
   };
 }
 
 export function createReviewFeature(options: {
-  readonly context: vscode.ExtensionContext;
+  readonly context: Pick<vscode.ExtensionContext, 'subscriptions' | 'globalStorageUri'>;
   readonly snapshots: TurnSnapshotStore;
   readonly fileDiff: FileDiffOpener;
   readonly persistence: ChangeStatsPersistence;

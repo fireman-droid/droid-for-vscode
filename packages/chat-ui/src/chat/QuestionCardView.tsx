@@ -21,6 +21,7 @@ export interface QuestionCardViewProps {
   readonly placeholder?: boolean;
   readonly placeholderHeight?: number;
   readonly canResend: boolean;
+  readonly editAvailable?: boolean;
   readonly originalAttachments?: ReactNode;
   readonly stagedAttachments?: ReactNode;
   readonly editSettings?: ReactNode;
@@ -35,14 +36,14 @@ export interface QuestionCardViewProps {
   readonly onDrop?: DragEventHandler;
   readonly onDragOver?: DragEventHandler;
 }
-export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, originalAttachments, stagedAttachments, editSettings, restoreFiles, plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
+export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, editAvailable = true, originalAttachments, stagedAttachments, editSettings, restoreFiles, plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
   const draft = editor.draft?.messageId === item.messageId ? editor.draft : null;
   const draftQuote = draft ? parseSelectionQuotes(draft.text) : null;
   const draftBody = draftQuote?.body ?? draft?.text ?? '';
   const draftPrefixLength = formatSelectionQuotes(draftQuote?.quotes ?? [], '').length;
 
   const editing = draft?.phase === 'editing' && !placeholder;
-  const editable = item.messageId !== undefined && editor.draft?.phase !== 'resending';
+  const editable = editAvailable && item.messageId !== undefined && editor.draft?.phase !== 'resending';
   const input = useRef<HTMLTextAreaElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const messageId = item.messageId;

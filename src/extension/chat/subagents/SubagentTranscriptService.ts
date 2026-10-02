@@ -110,6 +110,8 @@ export interface SubagentTranscriptServiceOptions {
   ) => SubagentParentRow | null;
   readonly openViewer: (entry: {
     readonly childSessionId: string;
+    readonly parentSessionId: string;
+    readonly toolUseId: string;
     readonly title: string;
     readonly cwd: string;
   }) => void;
@@ -321,6 +323,8 @@ export class SubagentTranscriptService {
     }
     this.options.openViewer({
       childSessionId: binding.entry.childSessionId,
+      parentSessionId,
+      toolUseId,
       title: viewerTitle(binding.row.type, binding.row.description),
       cwd: binding.row.cwd,
     });

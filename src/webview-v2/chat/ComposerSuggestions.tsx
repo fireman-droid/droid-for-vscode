@@ -8,7 +8,7 @@ import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
 import { SkillSuggestion } from './composer/SkillSuggestion';
 
-export function useComposerSuggestions({ state, draft, disabled, onChange, onFileSearch, onAttachPath, onCommandsRefresh, onSkillsRefresh, onNavigate, onBtwOpen }: {
+export function useComposerSuggestions({ state, draft, disabled, onChange, onFileSearch, onAttachPath, onCommandsRefresh, onSkillsRefresh, onNavigate, onBtwOpen, allowSessionNavigation = true }: {
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands' | 'skills' | 'btwAvailable'>;
   readonly draft: string;
   readonly disabled: boolean;
@@ -19,6 +19,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
   readonly onSkillsRefresh: () => void;
   readonly onNavigate: (page: SlashNavTarget) => void;
   readonly onBtwOpen: () => void;
+  readonly allowSessionNavigation?: boolean;
 }) {
   const listId = useId();
   const [mention, setMention] = useState<MentionToken | null>(null);
@@ -51,7 +52,9 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     if (current.state.commands.status === 'idle' || current.state.commands.status === 'error') current.onCommandsRefresh();
     if (current.state.skills.status === 'idle') current.onSkillsRefresh();
   }, [slashOpen]);
-  const matches = getSlashMatches(state.commands, state.skills.items, slash, state.btwAvailable, true);
+  const allMatches = getSlashMatches(state.commands, state.skills.items, slash, state.btwAvailable, true);
+  const matches = allowSessionNavigation ? allMatches : { ...allMatches, entries: allMatches.entries.filter((entry) =>
+    !(entry.kind === 'builtin' && (entry.name === 'new' || entry.name === 'clear' || entry.name === 'compact') || entry.kind === 'nav' && entry.name === 'sessions')) };
   const results = mention !== null && request !== null && state.fileSearch?.requestId === request ? state.fileSearch.files : [];
   const searchPending = mention !== null && (request === null || state.fileSearch?.requestId !== request);
   const activeIndex = Math.max(0, Math.min(index, (slash !== null ? matches.entries.length : results.length) - 1));

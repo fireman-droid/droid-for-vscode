@@ -28,6 +28,15 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
     }
 
     ctl.sessionState.connection = { status: 'connecting' };
+    if (ctl.childSession) {
+      // Delegated sessions are intentionally absent from the main chat catalog.
+      // Open the verified child directly; catalog failures must not create a chat.
+      await ctl.recoveryStore.load();
+      if (ctl.sessionState.disposed) return;
+      const target = await resolveStartupTarget(ctl, workspace.cwd);
+      await activateInitialRuntime(ctl, target, ctl.childSession.sessionId);
+      return;
+    }
     const catalogRequest = ctl.effects.beginCatalogLoad(workspace.cwd);
     const catalogPromise = ctl.effects.loadCatalog(workspace.cwd);
     if (!recoveryLoaded) {
@@ -136,6 +145,7 @@ export async function replaceRuntime(
   target: RuntimeSessionTarget,
   options: RuntimeReplacementOptions = {},
 ): Promise<void> {
+  if (ctl.childSession) target = { kind: 'resume', ...ctl.childSession, child: true };
   const phases = createSessionSwitchTimings(target.kind);
   // Captured before any state reset: a live daemon-backed turn
   // survives the switch. Disposal then detaches instead of

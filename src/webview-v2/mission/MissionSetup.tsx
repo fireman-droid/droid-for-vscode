@@ -39,8 +39,8 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
         </Button></CollapsibleTrigger>
         <CollapsibleContent className="v2-mission-settings-content">
           <div className="v2-mission-settings-fields">
-            <ProfileFields name="Worker" profile={flow.worker} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setWorker} />
-            <ProfileFields name="Validator" profile={flow.validator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setValidator} />
+            <ProfileFields name="Worker" profile={flow.worker} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setWorker} />
+            <ProfileFields name="Validator" profile={flow.validator} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setValidator} />
             <fieldset className="v2-mission-checks min-w-0"><legend className="font-medium">Validation checks</legend>
               <p className="mt-1 mb-3 text-xs text-muted-foreground">Both checks use the shared Validator profile configured above.</p>
               <MissionToggle label="Run Scrutiny" description="Review the completed feature for implementation risks." checked={flow.scrutinyEnabled} disabled={flow.controlsDisabled} onChange={flow.setScrutinyEnabled} />
@@ -70,18 +70,27 @@ function PairFields({ name, pair, capabilities, disabled, onChange }: {
   readonly name: string; readonly pair: MissionPair; readonly capabilities: MissionSetupCapabilities;
   readonly disabled: boolean; readonly onChange: (value: MissionPair) => void;
 }) {
-  const efforts = capabilities.catalog.find((model) => model.id === pair.modelId)?.supportedReasoningEfforts ?? [];
+  const model = capabilities.catalog.find((item) => item.id === pair.modelId);
+  const efforts = model?.supportedReasoningEfforts.length ? model.supportedReasoningEfforts
+    : model?.defaultReasoningEffort ? [model.defaultReasoningEffort] : [];
+  const modelOptions = capabilities.catalog.map((item) => ({ value: item.id,
+    label: `${item.displayName}${item.isCustom === undefined ? '' : item.isCustom ? ' · Custom' : ' · Built-in'}${capabilities.catalog.some((other) => other.id !== item.id && other.displayName === item.displayName && other.isCustom === item.isCustom) ? ` · ${item.id}` : ''}` }));
   return <div className="mission-pair">
-    <MissionSelect label={`${name} model`} value={pair.modelId} options={capabilities.catalog.map((model) => ({ value: model.id, label: model.displayName }))}
-      disabled={disabled} onChange={(modelId) => onChange({ ...pair, modelId })} placeholder="Choose an available model" />
+    <MissionSelect label={`${name} model`} value={pair.modelId} options={modelOptions}
+      disabled={disabled} onChange={(modelId) => {
+        const selected = capabilities.catalog.find((item) => item.id === modelId);
+        onChange({ modelId, reasoningEffort: selected?.supportedReasoningEfforts.includes(pair.reasoningEffort)
+          ? pair.reasoningEffort : selected?.defaultReasoningEffort ?? selected?.supportedReasoningEfforts[0] ?? pair.reasoningEffort });
+      }} placeholder="Choose an available model" />
     <MissionSelect label={`${name} reasoning`} value={efforts.includes(pair.reasoningEffort) ? pair.reasoningEffort : ''}
-      options={efforts.map((effort) => ({ value: effort, label: effortLabel(effort) }))} disabled={disabled}
+      options={efforts.map((effort) => ({ value: effort, label: effortLabel(effort) }))} disabled={disabled || model?.supportedReasoningEfforts.length === 0}
       onChange={(value) => onChange({ ...pair, reasoningEffort: value as MissionReasoningEffort })} placeholder="Choose available reasoning" />
   </div>;
 }
 
-function ProfileFields({ name, profile, capabilities, disabled, onChange }: {
+function ProfileFields({ name, profile, orchestrator, capabilities, disabled, onChange }: {
   readonly name: 'Worker' | 'Validator'; readonly profile: MissionProfile; readonly capabilities: MissionSetupCapabilities;
+  readonly orchestrator: MissionPair;
   readonly disabled: boolean; readonly onChange: (value: MissionProfile) => void;
 }) {
   return <fieldset className="v2-mission-profile min-w-0"><legend className="font-medium">{name}</legend>
@@ -89,7 +98,7 @@ function ProfileFields({ name, profile, capabilities, disabled, onChange }: {
     <p className="text-xs text-muted-foreground">{name === 'Worker' ? 'Executes one feature at a time under the Orchestrator.' : 'Provides the shared profile for all quality checks.'}</p>
     <MissionSelect label={`${name} inheritance`} fieldLabel="Configuration" value={profile.mode} disabled={disabled}
       options={[{ value: 'same-as-orchestrator', label: 'Same as orchestrator' }, { value: 'override', label: 'Choose independently' }]}
-      onChange={(value) => onChange(value === 'same-as-orchestrator' ? { mode: value, ...capabilities.currentChat } : { ...profile, mode: 'override' })} />
+      onChange={(value) => onChange({ mode: value === 'same-as-orchestrator' ? value : 'override', ...orchestrator })} />
     {profile.mode === 'override' ? <PairFields name={name} pair={profile} capabilities={capabilities} disabled={disabled} onChange={(pair) => onChange({ ...profile, ...pair })} /> : null}
     </div>
   </fieldset>;

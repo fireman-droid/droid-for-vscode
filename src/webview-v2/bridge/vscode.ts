@@ -3,6 +3,7 @@ import {
   type WebviewToHostMessage,
 } from '../../shared/bridgeMessages';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
+import type { AgentChatCommand } from '../../shared/protocol/agentChatProtocol';
 
 export { readHostMessage } from './validateHostMessage';
 
@@ -12,7 +13,7 @@ export interface PersistedWebviewState {
 
 interface VsCodeApi {
   getState(): unknown;
-  postMessage(message: WebviewToHostMessage): void;
+  postMessage(message: WebviewToHostMessage | AgentChatCommand): void;
   setState(state: PersistedWebviewState): void;
 }
 

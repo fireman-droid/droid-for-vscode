@@ -58,11 +58,14 @@ import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
 import { applyModelToChat, readModelApplyState } from './models/modelChatApply';
 import { MissionGateway } from './chat/mission/MissionGateway';
+import { withMissionPlanningSettings } from './chat/mission/withMissionPlanningSettings';
 import { openCatalogMission } from './chat/mission/catalogSession';
 import { MissionPreferenceStore } from './chat/mission/MissionPreferences';
 import { createMissionRuntime } from './chat/mission/MissionRuntime';
 import { createMissionControlSetupProjection } from './chat/mission/setupProjection';
 import { SessionViewerPanelController } from './panels/sessionViewer/SessionViewerPanelController';
+import { AgentChatManager } from './panels/agentChat/AgentChatManager';
+import { createAgentChatController } from './panels/agentChat/createAgentChatController';
 import { MissionControlPanelController } from './panels/mission/MissionControlPanelController';
 import { ReviewPanelController } from './panels/review/ReviewPanelController';
 import { SubagentTranscriptService } from './chat/subagents/SubagentTranscriptService';
@@ -191,6 +194,7 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const subagentSource = createSubagentEventSource();
   let subagentTranscripts: SubagentTranscriptService | null = null;
+  let agentChats: AgentChatManager | undefined;
   const getDaemonDroid = async (): Promise<DaemonApi> => {
     const droid = await daemonSidecar.droid();
     subagentSource.bindDaemon(droid);
@@ -284,16 +288,16 @@ export function activate(context: vscode.ExtensionContext): void {
   subagentTranscripts = new SubagentTranscriptService(historyLoader, {
     source: subagentSource,
     resolveParentRow: (parentSessionId, toolUseId) => {
-      if (controller?.sessionState.sessionId !== parentSessionId) {
-        return null;
-      }
-      const item = controller.recoveryState.transcript.transcript.find(
+      const parent = controller?.sessionState.sessionId === parentSessionId ? controller
+        : agentChats?.controllerFor(parentSessionId);
+      if (!parent) return null;
+      const item = parent.recoveryState.transcript.transcript.find(
         (candidate) =>
           candidate.kind === 'tool' &&
           candidate.toolUseId === toolUseId &&
           candidate.subagent !== undefined,
       );
-      const cwd = controller.sessionState.activeRuntimeCwd;
+      const cwd = parent.sessionState.activeRuntimeCwd;
       return item?.kind === 'tool' && item.subagent !== undefined && cwd !== null
         ? {
             parentSessionId,
@@ -305,7 +309,9 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         : null;
     },
-    openViewer: ({ childSessionId, title, cwd }) => {
+    openViewer: (target) => {
+      if (agentChats) { agentChats.openTask(target); return; }
+      const { childSessionId, title, cwd } = target;
       sessionViewer.open({
         kind: 'daemon-session',
         mode: 'subagent-readonly',
@@ -350,6 +356,7 @@ export function activate(context: vscode.ExtensionContext): void {
         sessionLease,
       ),
     openWorkerViewer: ({ sessionId, title }) => {
+      if (agentChats) { agentChats.openMission({ sessionId, title }); return; }
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (cwd === undefined) return;
       sessionViewer.open({
@@ -375,7 +382,10 @@ export function activate(context: vscode.ExtensionContext): void {
             }
           : {}),
         createSdkSession: withSystemPromptDefaults(
-          daemonSessions?.factory ?? ((options) => createLocalDroidSession({ ...options, observability: diagnostics.observability })),
+          withMissionPlanningSettings(
+            daemonSessions?.factory ?? ((options) => createLocalDroidSession({ ...options, observability: diagnostics.observability })),
+            missionGateway,
+          ),
           systemPromptStore,
         ),
       }),
@@ -522,6 +532,16 @@ export function activate(context: vscode.ExtensionContext): void {
   activeBrowserDevBridge = browserDevBridge;
   const reviewPanel = new ReviewPanelController(context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer);
   controller.subagentState.subagentTranscripts = subagentTranscripts;
+  if (daemonSessions) {
+    agentChats = new AgentChatManager({
+      extensionUri: context.extensionUri, root: controller, diagnostics,
+      createChild: (target) => createAgentChatController({
+        context, persistence, diagnostics, parent: controller, sessionViewer,
+        createSdkSession: daemonSessions.factory, target,
+      }),
+    });
+    context.subscriptions.push(agentChats);
+  }
   const parentFollowup = new ParentFollowup(controller, subagentSource);
   const provider = new DroidViewProvider(
     context.extensionUri,
@@ -544,6 +564,7 @@ export function activate(context: vscode.ExtensionContext): void {
     runtimeMode === 'daemon' ? (name, sessionId) => {
       if (controller.sessionState.sessionId === sessionId) void droidManagement.open('mcp', name);
     } : undefined,
+    agentChats?.navigation,
   );
   activeController = controller;
 

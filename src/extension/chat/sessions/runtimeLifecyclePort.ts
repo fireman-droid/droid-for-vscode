@@ -73,7 +73,7 @@ export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
 /** Coordinates startup/replacement; feature internals are reachable only through named effects. */
 export interface RuntimeLifecyclePort extends RuntimeActivationPort,
   Pick<HostOperations, 'sessionCatalog' | 'emit' | 'reviewCoordinator' | 'planDocuments' |
-    'diagnostics' | 'handleWorkspaceContextChanged'> {
+    'diagnostics' | 'handleWorkspaceContextChanged' | 'childSession'> {
   readonly metadata: Pick<HostOperations['metadata'], 'settingsUpdate' | 'tokenUsage'>;
   readonly sessionState: RuntimeActivationPort['sessionState'] & Pick<SessionLifecycleState,
     'runtimeGeneration' | 'initialization' | 'workspaceTransition' | 'sessionOperationInProgress'>;

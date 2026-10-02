@@ -128,6 +128,21 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
           throw error;
         }
       },
+      async attachChild(id, handlers) {
+        // A delegated session stays on its existing daemon. The normal resume
+        // path may allocate a root worker or rebind its native IDE connection.
+        const entry = await pool.forSession(id);
+        const sessions = entry.connection.droid.sessions;
+        if (!sessions.attachChild) throw new Error('This Droid connection cannot attach worker conversations.');
+        const handle = await sessions.attachChild(id, handlers);
+        try {
+          await pool.remember(id, entry, handle);
+          return handle;
+        } catch (error) {
+          await handle.detach();
+          throw error;
+        }
+      },
       async resumeReplacement(id, options) {
         const entry = await pool.forSession(id, true);
         // Files and history have already been rewound. Adopt this session now;

@@ -30,6 +30,7 @@ export function createVscodeFileDiffOpener(
   changeStats: ChangeStatsReader,
   diagnostics: RuntimeDiagnosticSink,
   selectionRegistry?: DiffSelectionRegistry,
+  baselineScheme = TURN_BASELINE_SCHEME,
 ): FileDiffOpener {
   const baselineDocuments = new Map<string, BaselineDocument>();
   const baselineIds = new Map<string, string>();
@@ -71,13 +72,13 @@ export function createVscodeFileDiffOpener(
       baselineBytes += bytes;
     }
     return vscode.Uri.from({
-      scheme: TURN_BASELINE_SCHEME,
+      scheme: baselineScheme,
       path: `/${id}-${basename(path)}`,
       query: id,
     });
   };
   const provider = vscode.workspace.registerTextDocumentContentProvider(
-    TURN_BASELINE_SCHEME,
+    baselineScheme,
     {
       provideTextDocumentContent(uri): string | undefined {
         return baselineDocuments.get(uri.query)?.text;
@@ -85,7 +86,7 @@ export function createVscodeFileDiffOpener(
     },
   );
   const closeListener = vscode.workspace.onDidCloseTextDocument((document) => {
-    if (document.uri.scheme === TURN_BASELINE_SCHEME) {
+    if (document.uri.scheme === baselineScheme) {
       removeBaselineDocument(document.uri.query);
     }
   });

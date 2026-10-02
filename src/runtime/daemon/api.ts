@@ -19,6 +19,10 @@ export type DaemonHandlers = Pick<
   ConnectToDaemonOptions,
   'permissionHandler' | 'askUserHandler'
 >;
+/** Mission profiles must reach initialization before Droid starts planning. */
+export type DaemonCreateSessionOptions = CreateDaemonSessionOptions & Pick<
+  Parameters<DaemonSessionController['initializeSession']>[0], 'missionSettings'
+>;
 export type DaemonStreamOptions = Omit<
   NonNullable<Parameters<ConnectedDroidSession['stream']>[1]>,
   'includePartialMessages'
@@ -55,11 +59,13 @@ export interface DaemonApi {
     listPage(
       options?: Parameters<ConnectedDroid['sessions']['list']>[0],
     ): ReturnType<DaemonSessionController['listAvailableSessions']>;
-    create(options: CreateDaemonSessionOptions): Promise<DaemonSessionHandle>;
+    create(options: DaemonCreateSessionOptions): Promise<DaemonSessionHandle>;
     resume(
       id: string,
       options?: ResumeDaemonSessionOptions,
     ): Promise<DaemonSessionHandle>;
+    /** Attach a worker on the same daemon; retain its parent and source metadata. */
+    attachChild?(id: string, handlers: DaemonHandlers): Promise<DaemonSessionHandle>;
     /** A committed rewind must be adopted before waiting for IDE readiness. */
     resumeReplacement?(
       id: string,

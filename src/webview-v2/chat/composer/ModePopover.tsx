@@ -16,6 +16,7 @@ export function ModePopover({
   settings,
   shownMode,
   disabled,
+  allowMission = true,
   onSelect,
 }: {
   readonly id: string;
@@ -23,6 +24,7 @@ export function ModePopover({
   /** Optimistically shown mode (useOptimisticSetting). */
   readonly shownMode: SessionInteractionMode;
   readonly disabled: boolean;
+  readonly allowMission?: boolean;
   readonly onSelect: (value: SessionInteractionMode) => void;
 }): React.JSX.Element {
   return (
@@ -34,7 +36,7 @@ export function ModePopover({
     >
       <RadioGroup className="dvx-option-list" aria-label="Mode options" value={shownMode} disabled={disabled}
         onValueChange={(value) => onSelect(value as SessionInteractionMode)}>
-        {MODE_OPTIONS.map((option) => (
+        {MODE_OPTIONS.filter((option) => allowMission || option.value !== 'mission').map((option) => (
           <label
             key={option.value}
             className="dvx-option-row dvx-mode-option"

@@ -4,6 +4,7 @@ import type { MissionControlSetupSnapshotMessage } from '../../shared/protocol/m
 import { LayoutList, MessageSquare, TriangleAlert, X } from 'lucide-react';
 import { createMissionRequestId, describeReadinessWarning, describeSetupStatus, formatPhase, phaseTone } from './workspacePresentation';
 import { MissionSetup } from './MissionSetup';
+import { useMissionDraftSync } from './useMissionDraftSync';
 import { MissionDetails } from './MissionDetails';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
@@ -20,6 +21,7 @@ export function MissionWorkspace({ route, setup, mission, result, inputNeeded, v
   readonly onShowChat: () => void;
 }) {
   const starting = setup?.phase === 'starting';
+  const onDraftChange = useMissionDraftSync(setup, vscode);
   const configuring = route === 'new-mission';
   const readinessNotice = setup?.phase === 'advisory' && setup.readiness ? <section role="alert" data-tone="attention" className="v2-mission-banner space-y-3 p-3 text-xs">
     <h2 className="flex items-center gap-2 text-[13px] font-medium"><TriangleAlert aria-hidden="true" className="size-4" />Repository readiness warning</h2>
@@ -48,7 +50,7 @@ export function MissionWorkspace({ route, setup, mission, result, inputNeeded, v
     </header>
     <div className={configuring && setup?.capabilities ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4'}>
       {route === 'new-mission' ? <>
-        {setup?.capabilities ? <MissionSetup capabilities={setup.capabilities} initialTask={setup.draft.task} onDismiss={onClose}
+        {setup?.capabilities ? <MissionSetup capabilities={setup.capabilities} initialTask={setup.draft.task} initialDraft={setup.draft} onDraftChange={onDraftChange} onDismiss={onClose}
           startHint={describeSetupStatus(setup)} notice={readinessNotice}
           result={result?.action === 'start' ? { requestId: result.requestId, status: result.status } : null}
           startDisabled={setup.availability !== 'ready' || (setup.phase !== 'draft' && setup.phase !== 'indeterminate')}

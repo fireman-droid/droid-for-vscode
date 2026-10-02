@@ -64,6 +64,9 @@ export async function createLocalDroidSession(
   },
   dependencies: LocalSessionDependencies = localSessionDependencies,
 ): Promise<FactoryDroidSession> {
+  if (target.kind === 'resume' && target.child) {
+    throw new Error('Worker conversations require the daemon runtime mode.');
+  }
   if (target.kind === 'new' && target.worktree === true) {
     // Only the daemon has the native create-worktree-and-run channel;
     // reaching this factory with a worktree target is a wiring bug and

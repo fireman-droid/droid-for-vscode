@@ -155,6 +155,7 @@ export class ChatController {
     readonly turnSnapshots?: TurnSnapshotStore,
     readonly planDocuments: PlanDocumentGateway = createUnavailablePlanDocumentGateway(),
     readonly reviewCoordinator?: ReviewCoordinator,
+    readonly childSession?: { readonly sessionId: string; readonly cwd: string },
   ) {
     this.sessionState = new SessionLifecycleState({ ...this.getWorkspaceContext() });
     this.recoveryStore.setBackgroundFlushFailureReporter(() => {

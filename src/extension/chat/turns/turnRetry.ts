@@ -20,6 +20,10 @@ export function handleRetry(ctl: TurnRetryPort, sessionId: string | null): void 
   }
   const retryOptions = ctl.turnState.turn?.status === 'failed'
     ? { acknowledgeFailedTurnId: ctl.turnState.turn.turnId } : {};
+  if (ctl.childSession) {
+    ctl.effects.startReplacement({ kind: 'resume', ...ctl.childSession, child: true }, retryOptions);
+    return;
+  }
   if (
     ctl.catalogState.sessions.status === 'idle' ||
     ctl.catalogState.sessions.status === 'error' ||
@@ -54,6 +58,13 @@ export async function retryAfterWorkspaceBecomesAvailable(
   cwd: string,
   retryOptions: { readonly acknowledgeFailedTurnId?: string } = {},
 ): Promise<void> {
+  if (ctl.childSession) {
+    await ctl.recoveryStore.load();
+    if (!ctl.sessionState.disposed) {
+      await ctl.effects.replaceRuntime({ kind: 'resume', ...ctl.childSession, child: true }, retryOptions);
+    }
+    return;
+  }
   const catalogRequest = ctl.effects.beginCatalogLoad(cwd);
   ctl.emitSnapshot();
   const [, catalog] = await Promise.all([

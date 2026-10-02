@@ -8,6 +8,7 @@ import {
 } from '../../../shared/protocol/missionProtocol';
 
 const STORAGE_KEY = 'droidvisx.mission.preferences.v1';
+const STARTUP_KEY = 'droidvisx.mission.startup.v1';
 
 export interface MissionPreferencePersistence {
   get<T>(key: string): T | undefined;
@@ -29,6 +30,7 @@ export interface MissionWorkspacePreferences {
 export interface MissionCatalogModel {
   readonly id: string;
   readonly supportedReasoningEfforts: readonly string[];
+  readonly defaultReasoningEffort?: string;
 }
 
 export type MissionPreferenceValidation =
@@ -44,6 +46,32 @@ export type MissionPreferenceValidation =
  */
 export class MissionPreferenceStore {
   constructor(private readonly persistence: MissionPreferencePersistence) {}
+
+  readStartup(sessionId: string): { missionId: string; preferences: MissionWorkspacePreferences } | undefined {
+    const raw = this.persistence.get<Record<string, unknown>>(STARTUP_KEY)?.[sessionId];
+    if (raw === undefined) return undefined;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid pending Mission settings.');
+    const value = raw as { missionId?: unknown; preferences?: unknown };
+    const preferences = parsePreferences(value.preferences);
+    if (typeof value.missionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.missionId) || !preferences) {
+      throw new Error('Invalid pending Mission settings.');
+    }
+    return { missionId: value.missionId, preferences };
+  }
+
+  async saveStartup(sessionId: string, missionId: string, preferences: MissionWorkspacePreferences): Promise<void> {
+    await this.persistence.update(STARTUP_KEY, {
+      ...this.persistence.get<Record<string, unknown>>(STARTUP_KEY),
+      [sessionId]: { missionId, preferences: clonePreferences(preferences) },
+    });
+  }
+
+  async clearStartup(sessionId: string): Promise<void> {
+    const saved = { ...this.persistence.get<Record<string, unknown>>(STARTUP_KEY) };
+    if (!(sessionId in saved)) return;
+    delete saved[sessionId];
+    await this.persistence.update(STARTUP_KEY, saved);
+  }
 
   read(
     workspaceId: string,

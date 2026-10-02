@@ -370,6 +370,14 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   的真实 prompt 顺序推进，旧父历史刷新不能退回已经结束的调用。
 - Viewer 消费 Host 核验的只读身份，不持有另一套执行器。缺映射、部分历史、未知时间
   明确说明；不能根据相似文本猜 child 或把迟到工具事件改成新的运行状态。
+- daemon Task／Mission 卡片经 `panels/agentChat/AgentChatManager` 打开独立 ChatController
+  与普通 ChatApp，使用现有 history／recovery／turn／interaction 链路。导航采用独立版本
+  的 `agentChatProtocol`，仅 Host 保存 child 身份映射；主 Bridge 和转录不保存导航状态。
+  child target 始终固定，启动不依赖主会话目录，routed daemon 经原 owner 的 attachChild
+  保留来源。面板关闭保留控制器，扩展关闭释放独立恢复、Review、Diff 和快照资源。
+- Mission 所选角色配置随 initializeSession 传入并核对；Host 按精确 orchestrator ID
+  保存规划启动配置，恢复仅补官方模型文件产生前的持久化缺口，之后服从官方配置。
+  文件是否存在由 Runtime 只读检查，不编辑 Droid 管理的 Mission 文件。
 
 ### 页面状态和性能
 

@@ -34,6 +34,7 @@ import type { CustomModelDiscoveryGateway } from './models/modelDiscovery';
 import { type UserPanelRequestDropReason } from './operationEligibility';
 import { SessionMetadataState } from './capabilities/sessionMetadataState';
 export interface HostOperations {
+  readonly childSession?: { readonly sessionId: string; readonly cwd: string };
   readonly metadata: SessionMetadataState;
   readonly recoveryStore: SessionRecoveryStore;
   readonly getWorkspaceContext: WorkspaceContextProvider;

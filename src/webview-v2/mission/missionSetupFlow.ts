@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MAX_MISSION_TASK_LENGTH, isMissionTaskText, missionPairError, resolveMissionProfile, type MissionProfile, type MissionReasoningEffort, type MissionSetupCapabilities } from '../../shared/protocol/missionProtocol';
 import type { MissionSetupSubmission } from './missionStart';
+import type { MissionControlSetupDraft } from '../../shared/protocol/missionControlSetupProtocol';
 
 export interface MissionSetupResult {
   readonly requestId: string;
@@ -9,6 +10,8 @@ export interface MissionSetupResult {
 export interface MissionSetupProps {
   readonly capabilities: MissionSetupCapabilities;
   readonly initialTask: string;
+  readonly initialDraft?: MissionControlSetupDraft;
+  readonly onDraftChange?: (draft: MissionControlSetupDraft) => void;
   readonly onStart: (submission: MissionSetupSubmission) => string | null;
   readonly onDismiss: () => void;
   readonly result?: MissionSetupResult | null;
@@ -41,15 +44,18 @@ export function validateMissionSetupSubmission(capabilities: MissionSetupCapabil
   }
   return errors;
 }
-export function useMissionSetupFlow({ capabilities, initialTask, onStart, result = null, startDisabled = false }: MissionSetupProps) {
+export function useMissionSetupFlow({ capabilities, initialTask, initialDraft, onDraftChange, onStart, result = null, startDisabled = false }: MissionSetupProps) {
   const [task, setTask] = useState(initialTask);
-  const [orchestrator, setOrchestrator] = useState<MissionPair>(capabilities.currentChat);
-  const [worker, setWorker] = useState<MissionProfile>(capabilities.preferences.worker);
-  const [validator, setValidator] = useState<MissionProfile>(capabilities.preferences.validator);
-  const [scrutinyEnabled, setScrutinyEnabled] = useState(capabilities.preferences.scrutinyEnabled);
-  const [userTestingEnabled, setUserTestingEnabled] = useState(capabilities.preferences.userTestingEnabled);
+  const [orchestrator, setOrchestrator] = useState<MissionPair>(initialDraft?.orchestrator ?? capabilities.currentChat);
+  const [worker, setWorker] = useState<MissionProfile>(initialDraft?.worker ?? capabilities.preferences.worker);
+  const [validator, setValidator] = useState<MissionProfile>(initialDraft?.validator ?? capabilities.preferences.validator);
+  const [scrutinyEnabled, setScrutinyEnabled] = useState(initialDraft?.scrutinyEnabled ?? capabilities.preferences.scrutinyEnabled);
+  const [userTestingEnabled, setUserTestingEnabled] = useState(initialDraft?.userTestingEnabled ?? capabilities.preferences.userTestingEnabled);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [settlement, setSettlement] = useState('');
+  useEffect(() => {
+    onDraftChange?.({ task, orchestrator, worker, validator, scrutinyEnabled, userTestingEnabled });
+  }, [onDraftChange, task, orchestrator, worker, validator, scrutinyEnabled, userTestingEnabled]);
   useEffect(() => {
     if (pendingRequestId !== null && result?.requestId === pendingRequestId && result.status === 'rejected') {
       setPendingRequestId(null);

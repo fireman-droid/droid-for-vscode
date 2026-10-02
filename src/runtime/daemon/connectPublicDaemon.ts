@@ -8,11 +8,11 @@ import {
   SDK_TAG,
   SessionPlatform,
   type ConnectToDaemonOptions,
-  type CreateDaemonSessionOptions,
   type ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
 import type {
   DaemonApi,
+  DaemonCreateSessionOptions,
   DaemonHandlers,
   DaemonNotification,
   DaemonSessionHandle,
@@ -150,7 +150,7 @@ export function retainDaemonController(
     return handle;
   };
   const create = async (
-    input: CreateDaemonSessionOptions,
+    input: DaemonCreateSessionOptions,
   ): Promise<DaemonSessionHandle> => {
     await recovery.waitUntilReady();
     const {
@@ -216,11 +216,39 @@ export function retainDaemonController(
       throw error;
     }
   };
+  const attachChild = async (
+    id: string,
+    handlers: DaemonHandlers,
+  ): Promise<DaemonSessionHandle> => {
+    await recovery.waitUntilReady();
+    // SDK child hydration registers a state manager, not a retained handle.
+    // Register our interactions before loading, which can replay pending prompts.
+    const handle = register(id, handlers);
+    try {
+      if (controller.isSessionLoadInFlight(id)) await controller.ensureChildSessionAttached(id);
+      const params = controller.getSessionStateManager().getSessionLoadOptions(id) ?? {};
+      reloadOptions.set(id, params);
+      // Match ensureChildSessionAttached: preserve worker spawn options without
+      // replacing the parent-owned session's origin with an API session source.
+      const result = await controller.loadSession({
+        ...params,
+        sessionId: id,
+        sessionOriginHint: undefined,
+        sessionSource: undefined,
+      });
+      assertConnected();
+      handle.initialize(result.settings, result.cwd);
+      return handle;
+    } catch (error) {
+      await handle.detach();
+      throw error;
+    }
+  };
   const resources = createDaemonResources(controller, assertConnected, () => recovery.waitUntilReady());
   return {
     ...resources,
     waitUntilReady: (signal) => recovery.waitUntilReady(signal),
-    sessions: { ...resources.sessions, create, resume },
+    sessions: { ...resources.sessions, create, resume, attachChild },
     notifications: {
       subscribeRecovery: (listener) => recovery.subscribe(listener),
       subscribeTerminal(listener) {

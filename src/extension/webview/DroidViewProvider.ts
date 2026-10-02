@@ -8,6 +8,7 @@ import { routeWebviewMessage } from './webviewMessageRouter';
 import { readWebviewBootTheme, readWebviewThemePreference } from './webviewTheme';
 import type { ReviewPanelOpen } from '../../shared/protocol/reviewPanelProtocol';
 import { createWebviewStateDelivery } from './webviewStateDelivery';
+import type { AgentNavigationPort } from '../panels/agentChat/AgentChatManager';
 
 export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'droidvisx.chat';
@@ -19,6 +20,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   private colorThemeListener: vscode.Disposable | undefined;
   private missionSetupListener: vscode.Disposable | undefined;
   private controllerSubscription: vscode.Disposable | undefined;
+  private agentSubscription: vscode.Disposable | undefined;
   private stateDelivery: ReturnType<typeof createWebviewStateDelivery> | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -39,6 +41,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     private readonly openModels?: () => void,
     private readonly openReview?: (message: ReviewPanelOpen) => void,
     private readonly authenticateMcp?: (serverName: string, sessionId: string) => void,
+    private readonly agentNavigation?: AgentNavigationPort,
   ) {}
 
   resolveWebviewView(
@@ -113,8 +116,12 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     });
     this.stateDelivery = delivery;
     this.controllerSubscription = this.controller.subscribe(delivery.post);
+    this.agentSubscription = this.agentNavigation?.subscribe((message) => {
+      if (this.webviewView === webviewView) void webviewView.webview.postMessage(message);
+    });
     this.messageListener = webviewView.webview.onDidReceiveMessage(
       (untrustedMessage: unknown) => {
+        if (this.agentNavigation?.handleMessage(untrustedMessage)) return;
         if (handleWebviewClipboard(untrustedMessage, webviewView.webview)) return;
         routeWebviewMessage(untrustedMessage, {
           controller: this.controller,
@@ -129,7 +136,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
           ...(this.openModels === undefined ? {} : { openModels: this.openModels }),
           ...(this.openReview === undefined ? {} : { openReview: this.openReview }),
           ...(this.authenticateMcp === undefined ? {} : { authenticateMcp: this.authenticateMcp }),
-          onReady: delivery.onReady,
+          onReady: (message) => { this.agentNavigation?.replay(); delivery.onReady(message); },
           onStateApplied: delivery.onStateApplied,
         });
       },
@@ -158,6 +165,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       });
       if (webviewView.visible) {
         postTheme();
+        this.agentNavigation?.replay();
         delivery.onVisible();
       }
     });
@@ -200,5 +208,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
     this.missionSetupListener = undefined;
     this.controllerSubscription?.dispose();
     this.controllerSubscription = undefined;
+    this.agentSubscription?.dispose();
+    this.agentSubscription = undefined;
   }
 }

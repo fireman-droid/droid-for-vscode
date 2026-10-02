@@ -63,13 +63,15 @@ export function missionPairError(
   catalog: readonly {
     readonly id: string;
     readonly supportedReasoningEfforts: readonly string[];
+    readonly defaultReasoningEffort?: string;
   }[],
 ): 'unavailable-model' | 'unsupported-reasoning' | undefined {
   const model = catalog.find((candidate) => candidate.id === pair.modelId);
   if (model === undefined) {
     return 'unavailable-model';
   }
-  return model.supportedReasoningEfforts.includes(pair.reasoningEffort)
+  return (model.supportedReasoningEfforts.includes(pair.reasoningEffort) ||
+    (model.supportedReasoningEfforts.length === 0 && model.defaultReasoningEffort === pair.reasoningEffort))
     ? undefined
     : 'unsupported-reasoning';
 }
@@ -170,6 +172,8 @@ export interface MissionSetupCatalogItem {
   readonly id: string;
   readonly displayName: string;
   readonly supportedReasoningEfforts: readonly MissionReasoningEffort[];
+  readonly defaultReasoningEffort?: MissionReasoningEffort;
+  readonly isCustom?: boolean;
 }
 
 /**
@@ -784,10 +788,12 @@ function parseSetupPreferences(
 function parseSetupCatalogItem(value: unknown): MissionSetupCatalogItem | undefined {
   if (
     !isStrictRecord(value) ||
-    !hasExactKeys(value, ['id', 'displayName', 'supportedReasoningEfforts']) ||
+    !hasExactKeys(value, ['id', 'displayName', 'supportedReasoningEfforts'], ['defaultReasoningEffort', 'isCustom']) ||
     !isMissionModelId(value.id) ||
     !isPresentationText(value.displayName, 256) ||
-    !isExactArray(value.supportedReasoningEfforts, 0, MISSION_REASONING_EFFORTS.length)
+    !isExactArray(value.supportedReasoningEfforts, 0, MISSION_REASONING_EFFORTS.length) ||
+    (value.defaultReasoningEffort !== undefined && !isReasoningEffort(value.defaultReasoningEffort)) ||
+    (value.isCustom !== undefined && typeof value.isCustom !== 'boolean')
   ) {
     return undefined;
   }
@@ -798,10 +804,14 @@ function parseSetupCatalogItem(value: unknown): MissionSetupCatalogItem | undefi
     }
     efforts.push(effort);
   }
+  if (value.defaultReasoningEffort !== undefined && efforts.length > 0 &&
+      !efforts.includes(value.defaultReasoningEffort as MissionReasoningEffort)) return undefined;
   return {
     id: value.id,
     displayName: value.displayName,
     supportedReasoningEfforts: efforts,
+    ...(value.defaultReasoningEffort === undefined ? {} : { defaultReasoningEffort: value.defaultReasoningEffort as MissionReasoningEffort }),
+    ...(value.isCustom === undefined ? {} : { isCustom: value.isCustom as boolean }),
   };
 }
 

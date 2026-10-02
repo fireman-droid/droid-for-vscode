@@ -651,6 +651,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
         kind: 'resume',
         cwd: this.sessionTarget.cwd,
         sessionId: nextSession.id,
+        ...(this.sessionTarget.kind === 'resume' && this.sessionTarget.child ? { child: true as const } : {}),
       };
     }
     this.armSubagentWatch();

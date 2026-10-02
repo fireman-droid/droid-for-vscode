@@ -166,6 +166,28 @@ export class MissionSnapshotReducer {
     return matches.length === 1 ? matches[0]![0] : null;
   }
 
+  /** Host navigation includes earlier attempts, not only the feature's latest worker. */
+  workerConversations() {
+    const workers = new Map(this.workers);
+    for (const feature of this.features) {
+      for (const id of [feature.currentWorkerSessionId, feature.completedWorkerSessionId,
+        ...(feature.workerSessionIds ?? [])]) {
+        if (id) workers.set(id, { ...workers.get(id), featureId: feature.id,
+          active: workers.get(id)?.active ?? id === feature.currentWorkerSessionId });
+      }
+    }
+    return [...workers].map(([sessionId, worker]) => {
+      const feature = this.features.find(({ id }) => id === worker.featureId);
+      const latest = [...this.progress].reverse().find((entry) => entry.workerSessionId === sessionId);
+      const status = feature ? missionWorkerStatus(sessionId, worker.active, this.lifecycle, feature, this.progress)
+        : latest?.type === 'worker_failed' ? 'failed' : latest?.type === 'worker_completed' ? 'finished'
+          : latest?.type === 'worker_paused' || this.lifecycle === 'paused' ? 'paused'
+            : worker.active ? 'running' : 'unknown';
+      return { sessionId, title: feature?.description ?? 'Mission worker',
+        skillName: feature?.skillName, status };
+    });
+  }
+
   snapshot(): Omit<MissionSnapshotMessage, 'sequence'> {
     const currentFeatureId = this.currentFeatureId();
     const features = this.features.map((feature, order) =>

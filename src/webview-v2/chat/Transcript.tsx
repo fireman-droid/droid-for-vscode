@@ -40,6 +40,7 @@ export function Transcript({
   interaction,
   onEditBegin,
   onDraftSuggestion,
+  historyEditable = true,
   ref,
 }: {
   readonly state: AssistantWebviewState;
@@ -53,6 +54,7 @@ export function Transcript({
   readonly interaction?: ReactNode;
   readonly onEditBegin?: () => void;
   readonly onDraftSuggestion?: (prompt: string) => void;
+  readonly historyEditable?: boolean;
   readonly ref?: Ref<TranscriptHandle>;
 }) {
   const items = state.transcript;
@@ -91,7 +93,7 @@ export function Transcript({
     onResend: actions.handleEditResend,
   });
   const canResend =
-    editor.draft?.phase !== 'resending' && !blocked && !running && state.turn?.status !== 'stopping' &&
+    historyEditable && editor.draft?.phase !== 'resending' && !blocked && !running && state.turn?.status !== 'stopping' &&
     state.connection.status === 'connected' && state.sessionId !== null &&
     state.interactions.length === 0 && state.settings.status !== 'updating';
   const currentStage = state.editAttachments?.messageId === editor.draft?.messageId ? state.editAttachments : null;
@@ -156,7 +158,7 @@ export function Transcript({
         const plan = plans.get(message.item.id);
         const expanded = plan && currentPlanChoices?.get(plan.anchorToolUseId);
         return <QuestionCard item={message.item} images={message.images} editor={editor} edit={edit}
-          placeholder={presentation.placeholder} placeholderHeight={presentation.placeholderHeight} canResend={canResend}
+          placeholder={presentation.placeholder} placeholderHeight={presentation.placeholderHeight} canResend={canResend} editAvailable={historyEditable}
           plan={plan} planRunning={plan !== undefined && isPlanLive(plan, running, state.turn?.turnId ?? null)}
           planChoice={plan && expanded !== undefined ? { id: plan.anchorToolUseId, expanded } : null} onPlanToggle={togglePlan} />;
       }
