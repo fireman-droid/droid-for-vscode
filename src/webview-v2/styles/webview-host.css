@@ -28,6 +28,11 @@ html[data-theme] :is(a, input, select, textarea):focus {
   outline-offset: revert-layer;
 }
 
+html[data-theme] blockquote {
+  margin: revert-layer;
+  border: revert-layer;
+}
+
 /* Editor themes also style bare code elements. A diff owns the complete row
    background, so inline-code fills must not cover its added/removed colors. */
 html[data-theme] .review-diff code {

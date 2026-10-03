@@ -164,12 +164,8 @@
   .v2-chat-surface .markdown-prose li > :is(ul, ol) { margin: 0; }
   .v2-chat-surface .markdown-prose ul ul { list-style-type: circle; }
   .v2-chat-surface .markdown-prose strong { font-weight: 600; }
-  .v2-chat-surface .markdown-prose blockquote {
-    margin: 12px 0;
-    padding-left: 12px;
-    border-left: 2px solid var(--edge);
-    color: var(--muted-ink);
-  }
+  .v2-chat-surface .markdown-prose blockquote > :first-child { margin-top: 0; }
+  .v2-chat-surface .markdown-prose blockquote > :last-child { margin-bottom: 0; }
   .v2-chat-surface .markdown-prose hr { margin: 16px 0; border-color: var(--chat-edge); }
   .v2-chat-surface .markdown-prose > :first-child { margin-top: 0; }
   .v2-chat-surface .markdown-prose > :last-child { margin-bottom: 0; }

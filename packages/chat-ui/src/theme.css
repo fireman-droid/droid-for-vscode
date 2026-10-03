@@ -37,7 +37,18 @@
   .markdown-prose ol { list-style-type: decimal; }
   .markdown-prose li + li { margin-top: 8px; }
   .markdown-prose strong { font-weight: 700; }
-  .markdown-prose blockquote { padding-left: 12px; }
+  .markdown-content blockquote {
+    margin: 12px 0;
+    padding: 6px 12px;
+    border: 0;
+    border-left: 2px solid color-mix(in srgb, var(--muted-ink) 45%, var(--surface));
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .markdown-content blockquote > :first-child { margin-top: 0; }
+  .markdown-content blockquote > :last-child { margin-bottom: 0; }
   .markdown-prose > :first-child { margin-top: 0; }
   .markdown-prose > :last-child { margin-bottom: 0; }
 
