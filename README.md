@@ -13,12 +13,17 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
 2. 按 [Droid CLI 快速开始](https://docs.factory.ai/droid-cli/quickstart.md)
    安装官方 CLI，并在本机完成认证。模型可用性和费用由 Factory／模型服务商决定；
    BYOK 见 [官方说明](https://docs.factory.ai/model-independence/byok.md)。
-3. 在 Microsoft VS Code 扩展面板选择 **Install from VSIX**，安装 `main` 构建的
-   `dist/droidvisx.vsix`。聊天、模型管理、智能补全与 Next Edit 使用同一个包，
-   默认安装到当前用户扩展目录，适用于该用户打开的工作区。
-   当前是发布准备阶段，没有可承诺的 Marketplace 或 GitHub Release 下载入口。
+3. 公开版本将通过 [GitHub Releases](https://github.com/fireman-droid/droid-for-vscode/releases)
+   提供。在版本页面的 **Assets** 下载 `droidvisx-x.y.z.vsix`，然后在 Microsoft
+   VS Code 扩展面板的 `…` 菜单选择 **Install from VSIX**。不要下载 Source code
+   压缩包来安装扩展。聊天、模型管理、智能补全与 Next Edit 使用同一个包。
+   当前 `0.8.1` 尚在发布准备阶段；首次发布前可按下文从源码构建 `dist/droidvisx.vsix`。
 4. 执行 **Developer: Reload Window**，打开 Droid 侧栏，选择工作区和模型。
-   仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
+  仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
+
+GitHub 下载版更新时重新安装新版 VSIX，不依赖插件市场自动更新。下载文件的 SHA256
+应与同一版本 Assets 中的 `SHA256SUMS.txt` 一致；Windows 可运行
+`Get-FileHash .\droidvisx-x.y.z.vsix -Algorithm SHA256` 核对。
 
 展示名称已改为 Droid；扩展标识 `droidvisx.droidvisx`、命令／配置前缀与安装包
 路径保持原样，覆盖安装继续使用既有设置与会话。
@@ -100,7 +105,7 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 
 ## 当前状态
 
-- 当前版本：`0.8.0`；具体已安装版本与源码改动状态见 `docs/STATUS.md`
+- 当前源码版本：`0.8.1`，准备发布；具体已安装版本与源码改动状态见 `docs/STATUS.md`
 - 主聊天、会话恢复、权限、AskUser、计划、附件、Review、Canvas、
   Skills、MCP、自定义模型和子代理展示已接入
 - Mission Control 已接通聊天、独立 Session、readiness、进度和 Worker
@@ -153,7 +158,7 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 - pnpm `10.2.0`，与 `package.json` 的 `packageManager` 一致。
   未安装时可执行 `npm install --global pnpm@10.2.0`。
 - Cursor 或 VS Code；扩展要求 VS Code API `^1.108.0`。
-- 运行真实会话还需官方 Droid CLI；本机版本为 `0.211.0`，这不是全版本兼容保证。
+- 运行真实会话还需官方 Droid CLI；已验证版本见 `docs/STATUS.md`，不保证所有 CLI 版本兼容。
   通过 [官方 CLI 快速开始](https://docs.factory.ai/droid-cli/quickstart.md) 安装并完成本机认证；
   BYOK 参考 [官方配置说明](https://docs.factory.ai/model-independence/byok.md)。
   先在新电脑终端确认 `droid --version`，并能正常使用所选模型。
@@ -178,11 +183,13 @@ pnpm install --frozen-lockfile
 
 ```powershell
 pnpm run package:vsix
-cursor --install-extension dist/droidvisx.vsix --force
+pnpm run verify:vsix
+code --install-extension dist/droidvisx.vsix --force
 ```
 
-VS Code 使用 `code --install-extension dist/droidvisx.vsix --force`；如果编辑器
-命令不在 PATH，也可通过扩展面板的 **Install from VSIX** 选择生成文件。
+确认 `code` 来自 Microsoft VS Code；Cursor 使用 `cursor --install-extension
+dist/droidvisx.vsix --force`。如果编辑器命令不在 PATH，也可通过扩展面板的
+**Install from VSIX** 选择生成文件。
 随后执行 **Developer: Reload Window**。
 
 `package:vsix` 的 `vscode:prepublish` 会串行执行 typecheck、文件预算检查、
@@ -191,59 +198,48 @@ VSIX 都是可重新生成的产物，不纳入 Git。
 
 `pnpm run package:vsix:preview` 生成带预发布标记的同名本地 VSIX，不执行发布。
 `pnpm run package:chat-ui` 生成独立 UI tarball。发布前还需许可证来源复核、
-拟公开内容审阅、完整源码提交、干净 VS Code 验收及发布者权限确认；
+拟公开内容审阅、完整源码提交及干净 VS Code 验收；
 详见 `docs/STATUS.md`。`pnpm run verify:vsix` 检查包内文件与 manifest；
 自动化测试须按项目规则另行获得许可，不属于默认发布工作流。
 
-### 双市场自动发布
+### GitHub Releases 分发
 
-`.github/workflows/release.yml` 为 VS Code Marketplace 和 Open VSX 共用一个
-经过类型、预算、构建和包内容校验的 VSIX。Cursor 使用 Open VSX 的第三方扩展库。
-工作流已通过 GitHub Actions 的 Windows 仅构建验收，产物可从运行页面下载；
-正式上架前仍需完成以下发布者与凭据配置。
+`.github/workflows/release.yml` 从 `main` 或已合入 `main` 的版本标签构建同一份 VSIX，
+完成类型、预算、构建与包内容校验，再生成版本附件。此流程不调用 Marketplace／
+Open VSX，不需要两平台的发布者账号或 PAT；创建草稿使用仓库自带的 `GITHUB_TOKEN`。
 
-首次启用需要完成以下配置：
-
-1. 在 [Visual Studio Marketplace](https://marketplace.visualstudio.com/manage/publishers/)
-   建立或确认 `droidvisx` 发布者及发布权限；按
-   [官方发布说明](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
-   配置发布凭据。
-2. 按 [Open VSX 发布说明](https://github.com/eclipse-openvsx/openvsx/wiki/Publishing-Extensions)
-   注册并关联账号、接受 Publisher Agreement、建立 `droidvisx` namespace。
-   两边的扩展 ID 均应为 `droidvisx.droidvisx`；命名空间占用情况须先在平台确认。
-3. 在仓库 **Settings → Environments** 创建 `marketplace`，添加 Environment Secrets
-   `VSCE_PAT` 和 `OVSX_PAT`。密钥只填平台 Secrets，不写入代码、命令参数或聊天。
-   可在该环境配置发布审批；工作流本身不会自动创建审批规则。
-4. 将工作流与依赖锁文件提交到默认分支。当前源码仓库仍为私有，发布前须确认
-   Marketplace 展示的 README、仓库及问题反馈链接对目标用户可用；工作流不会
-   自动改变仓库可见性。首次只构建验收通过后，在仓库 Actions Variables 设置
-   `MARKETPLACE_AUTO_PUBLISH=true` 才启用标签自动上传；未设置时标签只构建。
-
-每次正式发版先修改根 `package.json` 的版本，并将对应变更整理到
-`CHANGELOG.md` 的 `## x.y.z` 段落。可用以下命令只递增补丁版本，不自动提交或打标签：
+先完成 [STATUS](docs/STATUS.md#发布与能力缺口) 中的公开前待办，再将准备好的源码、
+版本与变更记录提交到 `main`。本轮准备版本为 `0.8.1`，尚未创建正式标签或公开 Release。
+本地生成下载附件的命令如下，均不上传：
 
 ```powershell
-npm version patch --no-git-tag-version
 pnpm run release:check
+pnpm run package:vsix
+pnpm run verify:vsix
+pnpm run release:assets
 ```
 
-确认版本及改动提交后，创建并推送同名标签，例如 `v0.8.1`。**启用自动上传后，推送
-版本标签会触发公开发布**：先构建，再由两个独立发布任务上传相同 VSIX。标签必须与 package.json
-版本完全一致，并且有对应版本的变更记录。已发布版本不能覆盖或移动标签，修复应发
-新版本。普通分支 push 不触发发布。
+附件位于 `dist/release/v0.8.1/`：`droidvisx-0.8.1.vsix`、`SHA256SUMS.txt`、
+`RELEASE_NOTES.txt` 和 `build-info.json`。构建信息包含源码提交、工作区是否有未提交
+改动以及安装包摘要；本地脏工作区产物只作准备包，正式附件使用标签的干净构建。
 
-需要只构建时，在 Actions 的 **Release extension → Run workflow** 保持 `publish=false`，
-标签留空便构建所选分支，也可填写已有版本标签。构建产物 `droidvisx-vx.y.z` 保留
-30 天，运行摘要显示 SHA256。上传必须填写已有版本标签并显式设置 `publish=true`；
-缺少标签时明确失败，一次运行始终只构建一份安装包。首次直接试构建 main 即可，
-无需提前创建正式版本标签。
-不要用正式版本标签推送去试跑已启用的自动发布入口。
+GitHub 上的操作顺序：
 
-一个市场失败时，在原运行中选择 **Re-run failed jobs**，复用原构建产物；
-成功市场不回滚，也不重新打包。不要使用 **Re-run all jobs** 或重新手动发起工作流
-补发已部分发布的版本。上传工具跳过已存在的版本，其他错误正常报失败。
-如果原产物已过期，重新准备新版本；不要另开一次构建给同一版本补发不同的安装包。
-手动模式只支持稳定版，现有 `package:vsix:preview` 仍仅生成本地预发布包。
+1. **只构建**：Actions → **Build Droid release → Run workflow**，选 `main`，
+   `tag` 留空、`draft_release` 不勾选。下载运行页面的 `droidvisx-vx.y.z` artifact，
+   保存期限为 30 天。这不创建 Release，也不改变仓库可见性。
+2. **准备版本草稿**：确认所有待发布源码已提交、版本和 `CHANGELOG.md` 对应后，
+   创建并推送同名版本标签，例如 `v0.8.1`。标签推送会构建并创建 Draft Release；
+   也可手动填写已有标签并勾选 `draft_release`。普通分支 push 不触发该工作流。
+3. **公开发布**：人工检查草稿的说明与附件，确认仓库公开范围，最后点击
+   **Publish release**。工作流始终使用
+   [`gh release create --draft --verify-tag`](https://cli.github.com/manual/gh_release_create)，
+   不自动公开版本或修改仓库可见性。私有仓库的 Release 不对无权限用户开放。
+
+标签必须与根 `package.json` 版本及非空的 `CHANGELOG.md` 版本段落完全一致。
+已存在同标签 Release 时工作流会报错，不覆盖附件；如果上传中断留下草稿，先核对
+已有附件，缺失附件从原运行的 artifact 补齐。不要重新构建同一版本后混用产物。
+已公开版本发现问题应递增版本，不能移动标签或替换已发布安装包。
 
 pnpm 10 可能提示忽略部分依赖的安装脚本；本次 Windows 干净安装在该提示下
 仍成功构建和打包，不需要为此默认批准所有脚本。

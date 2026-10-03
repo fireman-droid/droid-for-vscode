@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid",
   "description": "An unofficial local workspace UI for the Factory Droid CLI.",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
@@ -329,6 +329,7 @@
     "package:vsix:preview": "pnpm run package:vsix --pre-release",
     "verify:vsix": "node src/integration/verifyVsix.mjs dist/droidvisx.vsix",
     "release:check": "node scripts/checkRelease.mjs",
+    "release:assets": "node scripts/checkRelease.mjs --prepare-assets",
     "vscode:prepublish": "pnpm run package:prepare",
     "build:webview": "node scripts/buildWebviewV2.mjs"
   },

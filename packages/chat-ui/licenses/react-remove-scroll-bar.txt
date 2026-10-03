@@ -5,6 +5,11 @@ https://github.com/theKashey/react-remove-scroll-bar/blob/8ca9ba5ea52de03308fe8c
 Provenance limitation: the upstream repository manifest at this revision says
 2.3.7 and no 2.3.8 tag was found. This is the repository's license, not a
 claim that the exact npm publication source revision has been verified.
+The npm registry metadata for 2.3.8 (checked 2026-10-03) declares MIT and
+gitHead b3b1287aad81def2e2ae707274b74531b61ddbaf:
+https://registry.npmjs.org/react-remove-scroll-bar/2.3.8
+The LICENSE and package.json raw URLs for that gitHead returned HTTP 404.
+This metadata therefore does not resolve the source-revision limitation above.
 
 MIT License
 
