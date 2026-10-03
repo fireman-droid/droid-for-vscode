@@ -1,7 +1,8 @@
 # 当前状态
 
-更新：2026-10-03。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；源码准备版本
-为 `0.8.1`，尚未公开发布。本地准备包已安装到 Microsoft VS Code 当前用户目录。
+更新：2026-10-03。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；`0.8.1`
+已生成 GitHub Release 草稿，仓库仍私有。已校验并将草稿中的同一 VSIX 安装到 Microsoft
+VS Code 当前用户目录，Reload Window 后生效；没有公开发布。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
@@ -1218,8 +1219,16 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - 准备版本为 `0.8.1`，本地 `release:assets` 生成带版本 VSIX、SHA256、说明与构建信息。
   `sourceDirty` 明确记录未提交改动；GitHub 草稿拒绝使用脏源码产物。模型、Agents 与引用
   样式已分别完成实现、构建和独立提交，正式附件从干净标签重新构建。
-- 新工作流尚未远端运行；此前仅构建通过的是旧双市场流程，不能沿用为新流程验收。
-  当前仓库仍私有，无 Release；扩展未公开上架，UI 包未 npm 发布。
+- 新流程的[仅构建运行](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37127873608)
+  与 [v0.8.1 标签构建及草稿创建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37128056864)
+  均通过。标签固定在 `c4d564998051722ec918e67709a1a679b69df219`，附件记录
+  `sourceDirty=false`。[Release 草稿](https://github.com/fireman-droid/droid-for-vscode/releases/tag/untagged-ed533ccd618b938ce297)
+  包含 VSIX、SHA256SUMS.txt、build-info.json 及安装／更新说明；仍为 `isDraft=true`。
+  仓库保持私有，扩展未公开上架，公共 UI 包未 npm 发布。
+- 已重新下载草稿附件，核对校验和、构建信息和 165 条目包校验后全局安装 Microsoft VS Code。
+  `droidvisx-0.8.1.vsix` 为 10,583,613 bytes，SHA256：
+  `3df57a77522ed06060ddae4ad92864bed7b3869d7c606ef3df78970feed91f13`。
+  本地 `dist/droidvisx.vsix` 与 `dist/release/v0.8.1` 同步保留这份 GitHub 构建产物。
 - 本轮 `release:check`、`package:vsix`（含 typecheck、lint:budgets）、`verify:vsix`
   和 `release:assets` 已通过；引用样式修改后的 165 条目 VSIX 已全局安装 Microsoft VS Code。
   YAML 与内嵌 PowerShell 语法检查通过；仅经许可同步两份现有模型测试数据，未新增或
