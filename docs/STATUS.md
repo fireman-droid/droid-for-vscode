@@ -5,6 +5,19 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子代理任务卡片
+
+- 正文子代理卡片改为轻边框、圆角和图标布局；任务标题、状态、角色／耗时／工具数、
+  最新活动分层展示。长标题限制两行并保留全文提示；底部列表仍采用紧凑行。
+- 打开反馈置于独立底栏，暂未关联和打开失败提供 Retry；隐藏重复的等待占位，仍
+  保留真实最新活动。任务生命周期与打开结果分开，后台运行、终态及未知状态沿用原数据。
+- 展示复用公共 `AgentTask` 和共享 Button；会话身份、活动订阅与打开动作由 Droid
+  适配层提供，公共包不依赖 Host／Bridge。原有 Task details、错误和 Diff 入口保留。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 和
+  `pnpm run verify:vsix` 通过。165 条目 VSIX 已全局安装 Microsoft VS Code，162 个
+  安装载荷与新包一致；CLI 弃用提示未阻断安装。未新增、修改或运行测试及自动截图，
+  真实视觉由用户 Reload Window 后验收。
+
 ## Review 完整文件与长 Diff
 
 - 截图对应会话先完整创建 `racing-3d.html`，后续跨多轮修改；仅当前轮片段不能构成

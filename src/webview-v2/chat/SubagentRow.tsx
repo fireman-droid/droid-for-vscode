@@ -4,8 +4,7 @@ import { useSubagentActivity } from './subagents/subagentPanelFlow';
 import { formatElapsed } from './subagents/subagentWorking';
 import { formatDuration } from './thread/readers';
 import { useToolActions } from '../content/toolActions';
-import { ChevronRight, LoaderCircle } from 'lucide-react';
-import { Button } from '../ui/button';
+import { AgentTask } from '@droidvisx/chat-ui/ai-elements/agent-task';
 
 export const SubagentRow = memo(function SubagentRow({ item, variant = 'card' }: {
   readonly item: ToolTranscriptItem;
@@ -30,22 +29,14 @@ export const SubagentRow = memo(function SubagentRow({ item, variant = 'card' }:
   const latestActivity = extras?.activities[0];
   const opening = extras?.openStatus === 'opening';
   const openFeedback = opening ? 'Opening agent chat…' : extras?.openStatus === 'unavailable'
-    ? 'Child session is not linked yet. Click to retry.' : extras?.openStatus === 'failed'
-      ? 'Could not load the child session. Click to retry.' : null;
-  return <Button variant="plain" size="none" disabled={!actions.openSubagent} onClick={() => actions.openSubagent?.(item.turnId, item.toolUseId)}
-    className={`block w-full min-w-0 space-y-1 rounded px-2 text-left text-xs outline-none hover:bg-[var(--control-surface-hover)] active:bg-[var(--control-surface-active)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none ${variant === 'card' ? 'py-1.5' : 'py-2'}`}>
-    <span className="flex items-start gap-1.5"><span className="min-w-0 flex-1 font-medium text-foreground [overflow-wrap:anywhere]">{task}</span><ChevronRight aria-hidden="true" className="mt-0.5 size-3 shrink-0" /></span>
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-      <span>{subagent.type} subagent{subagent.toolUseCount !== undefined ? ` · ${subagent.toolUseCount} tools` : ''}</span>
-      <span className={`ml-auto inline-flex items-center gap-1 ${status === 'failed' ? 'text-destructive' : ''}`}>
-        {status === 'running' ? <LoaderCircle aria-hidden="true" className="size-3 shrink-0 motion-safe:animate-spin" /> : null}
-        <span>{label}{elapsed !== undefined ? ` · ${elapsed}` : ''}</span>
-      </span>
-    </span>
-    {latestActivity ? <span className="block truncate text-[11px] text-muted-foreground" title={[latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')}>{latestActivity.action}{latestActivity.target ? ` · ${latestActivity.target}` : ''}</span>
-      : (subagent.toolUseCount ?? 0) > 0 || status === 'running' ? <span className="block text-[11px] text-muted-foreground">{(subagent.toolUseCount ?? 0) > 0
-        ? 'Tool calls reported · Open to view activity'
-        : 'Waiting for activity…'}</span> : null}
-    {openFeedback ? <span role="status" className="block text-[11px] text-muted-foreground">{openFeedback}</span> : null}
-  </Button>;
+    ? 'Agent chat is not linked yet.' : extras?.openStatus === 'failed'
+      ? 'Could not open agent chat.' : undefined;
+  const activity = latestActivity ? [latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')
+    : openFeedback ? undefined : (subagent.toolUseCount ?? 0) > 0
+      ? 'Open to view activity' : status === 'running' ? 'Waiting for activity…' : undefined;
+  return <AgentTask title={task} role={subagent.type} statusLabel={label}
+    tone={status === 'running' || status === 'completed' || status === 'failed' ? status : 'idle'}
+    variant={variant} elapsed={elapsed} toolCount={subagent.toolUseCount} activity={activity}
+    feedback={openFeedback ? { text: openFeedback, opening, failed: extras?.openStatus === 'failed' } : undefined}
+    onOpen={actions.openSubagent ? () => actions.openSubagent?.(item.turnId, item.toolUseId) : undefined} />;
 });

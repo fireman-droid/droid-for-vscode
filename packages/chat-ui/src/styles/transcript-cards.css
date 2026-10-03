@@ -1,4 +1,51 @@
 @layer components {
+  .dvx-agent-task {
+    min-width: 0; margin-block: 4px; border: 1px solid var(--panel-edge); border-radius: 10px;
+    background: color-mix(in srgb, var(--well-surface) 55%, var(--surface));
+    transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
+  }
+  .dvx-agent-task:has(.dvx-agent-task-open:enabled:hover) { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
+  .dvx-agent-task-open {
+    display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 10px; padding: 12px;
+    border-radius: inherit; text-align: left; color: var(--ink); cursor: pointer;
+  }
+  .dvx-agent-task-open:active:not(:disabled) { background: var(--control-surface-active); }
+  .dvx-agent-task-open:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .dvx-agent-task-icon {
+    display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: 7px;
+    background: var(--control-surface-hover); color: var(--muted-ink);
+  }
+  .dvx-agent-task-icon > svg { width: 15px; height: 15px; }
+  .dvx-agent-task-body { display: block; min-width: 0; flex: 1; }
+  .dvx-agent-task-heading { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 10px; }
+  .dvx-agent-task-title {
+    display: -webkit-box; min-width: 0; flex: 1 1 150px; overflow: hidden; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; line-height: 19px; color: var(--strong-ink);
+  }
+  .dvx-agent-task-status {
+    display: inline-flex; flex: none; max-width: 100%; align-items: center; gap: 4px; padding: 1px 6px;
+    border-radius: 5px; background: var(--control-surface-hover); color: var(--muted-ink); font-size: 11px; line-height: 17px;
+  }
+  .dvx-agent-task-status > svg { width: 12px; height: 12px; flex: none; }
+  .dvx-agent-task[data-tone='running'] .dvx-agent-task-status { color: var(--link-ink); background: color-mix(in srgb, var(--link-ink) 8%, transparent); }
+  .dvx-agent-task[data-tone='failed'] .dvx-agent-task-status { color: var(--error-ink); background: color-mix(in srgb, var(--error-ink) 8%, transparent); }
+  .dvx-agent-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 3px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  .dvx-agent-task-meta > span { min-width: 0; overflow-wrap: anywhere; }
+  .dvx-agent-task-meta > span + span { border-left: 1px solid var(--panel-edge); padding-left: 8px; }
+  .dvx-agent-task-role { text-transform: capitalize; }
+  .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
+  .dvx-agent-task-activity { display: block; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  .dvx-agent-task-chevron { width: 14px; height: 14px; flex: none; align-self: center; color: var(--muted-ink); }
+  .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 10px 6px 12px; border-top: 1px solid var(--panel-edge); }
+  .dvx-agent-task-feedback-message { display: flex; min-width: 0; flex: 1 1 140px; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
+  .dvx-agent-task-feedback-message > svg { width: 13px; height: 13px; flex: none; }
+  .dvx-agent-task-feedback[data-failed='true'] .dvx-agent-task-feedback-message { color: var(--error-ink); }
+  .dvx-agent-task-retry { margin-left: auto; }
+  .dvx-agent-task[data-variant='row'] { margin: 0; border: 0; border-radius: 5px; background: transparent; }
+  .dvx-agent-task[data-variant='row'] .dvx-agent-task-open { gap: 8px; padding: 8px; }
+  .dvx-agent-task[data-variant='row'] .dvx-agent-task-icon { width: 16px; height: 19px; background: transparent; }
+  .dvx-agent-task[data-variant='row'] .dvx-agent-task-feedback { padding-inline: 8px; }
+  @media (prefers-reduced-motion: reduce) { .dvx-agent-task { transition: none; } }
   .v2-chat-choice,
   .v2-session-row {
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
