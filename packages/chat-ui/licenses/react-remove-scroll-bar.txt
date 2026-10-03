@@ -1,15 +1,26 @@
-Supplemental upstream license for react-remove-scroll-bar@2.3.8.
-The installed npm manifest declares MIT but omits LICENSE.
-Source:
+Supplemental upstream MIT license for react-remove-scroll-bar@2.3.8.
+The npm package declares MIT but omits LICENSE. License text source:
 https://github.com/theKashey/react-remove-scroll-bar/blob/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE
-Provenance limitation: the upstream repository manifest at this revision says
-2.3.7 and no 2.3.8 tag was found. This is the repository's license, not a
-claim that the exact npm publication source revision has been verified.
-The npm registry metadata for 2.3.8 (checked 2026-10-03) declares MIT and
-gitHead b3b1287aad81def2e2ae707274b74531b61ddbaf:
+
+Distribution provenance checked on 2026-10-03:
+- Both npm 2.3.7 and 2.3.8 declare MIT and the same author/repository.
+- Both tarballs were verified against the registry SHA512 integrity values.
+- All 26 files other than the root package.json are byte-identical, including
+  all distributed JavaScript and declarations. The manifest changes only the
+  package version and the react-style-singleton dependency range.
+- Upstream v2.3.7 resolves to 29e9fcd1eecf7d3b77a767941c4a57fe461fc1e4.
+  Comparing it with the license-source revision above changes only LICENSE.
+- The text below exactly matches that upstream LICENSE.
+
+Registry records:
+https://registry.npmjs.org/react-remove-scroll-bar/2.3.7
 https://registry.npmjs.org/react-remove-scroll-bar/2.3.8
-The LICENSE and package.json raw URLs for that gitHead returned HTTP 404.
-This metadata therefore does not resolve the source-revision limitation above.
+Upstream comparison:
+https://github.com/theKashey/react-remove-scroll-bar/compare/29e9fcd1eecf7d3b77a767941c4a57fe461fc1e4...8ca9ba5ea52de03308fe8ced94f7b159a44d28ff
+
+The npm 2.3.8 gitHead is not available upstream. The evidence above identifies
+the distributed code and its license; it does not claim a reproducible build
+from that unavailable gitHead.
 
 MIT License
 

@@ -1202,32 +1202,32 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 ## 发布与能力缺口
 
 - 原创代码根包/公共 UI 包使用 MIT，并保留非官方声明；第三方许可按实际构建依赖
-  收集。`react-remove-scroll-bar@2.3.8` 的 npm MIT 声明已复核，但登记的 gitHead
-  `b3b1287aad81def2e2ae707274b74531b61ddbaf` 对应 LICENSE/package.json 返回 404；
-  现有补充许可文本保留来源限制，仍未确认精确发布源码与上游条款的对应。
-- 公开前仍须人工确认 3 处测试 Bearer 字面量及历史值来源；位置在
-  `src/extension/diagnostics/LocalDiagnostics.test.ts` 的现有用例；旧提交 `2237053`
-  中路径为 `src/extension/LocalDiagnostics.test.ts`，其值与当前版本不完全相同。
-  不在文档复制其值。先前检查有明确文件/历史范围，未覆盖所有旧历史、忽略文件、
-  二进制和私人截图，不能称为完整秘密/版权审计。
-- 当前跟踪文件的有界凭据格式检查覆盖 1,281 个文本文件；命中集中在现有测试数据，
-  个人邮箱格式命中为第三方许可作者署名。两张跟踪 PNG 已核对：一张为现用标识，
-  一张为旧聊天原型，未见密钥/账号信息；未将该检查扩大表述为全历史审计。
+  收集。`react-remove-scroll-bar@2.3.8` 已核对 npm 发布包：2.3.7/2.3.8 均通过
+  registry SHA512，27 个文件中仅 package.json 不同，26 个代码／声明等文件逐字节相同；
+  2.3.7 标签至许可来源提交只新增 LICENSE，现有 MIT 文本与上游一致。证据保存在
+  `packages/chat-ui/licenses/react-remove-scroll-bar.txt`，不宣称可从缺失的 2.3.8 gitHead 重建。
+- Gitleaks 8.30.1（发行压缩包 SHA256 已核对）检查截至 `83bda0c` 的全部 576 个可达
+  提交及 1,283 个当前跟踪文件。历史 4 条、当前 3 条命中均逐项核实为脱敏测试合成字符串；
+  未确认真实凭据命中，未改写历史、替换测试凭据或增加忽略规则。本轮后续增量另经差异检查。
+- 历史 73 份图片（含 17 份 Git LFS 对象）完成本地 OCR 与凭据格式扫描，两次旧 Actions
+  日志也已扫描，未命中；当前两张 PNG 已做视觉检查。OCR 不保证识别全部文字，格式扫描
+  也不等于不存在任何私人信息或完成全面版权审计。未读取本机凭据配置，审计文件不进入 Git。
 - 分发已改为 GitHub Releases。Windows/Node 24 工作流统一构建、校验并上传 artifact；
   标签或显式请求只创建 Draft Release，发布任务独立授予 `contents: write`，不再
   调用插件市场，也不需要市场 PAT。普通分支推送不发布，仓库可见性不自动变化。
 - 准备版本为 `0.8.1`，本地 `release:assets` 生成带版本 VSIX、SHA256、说明与构建信息。
-  `sourceDirty` 明确记录未提交改动；GitHub 草稿拒绝使用脏源码产物。已有模型/Agents
-  修改不纳入本轮提交，待其独立完成后从干净标签重新构建正式附件。
+  `sourceDirty` 明确记录未提交改动；GitHub 草稿拒绝使用脏源码产物。模型、Agents 与引用
+  样式已分别完成实现、构建和独立提交，正式附件从干净标签重新构建。
 - 新工作流尚未远端运行；此前仅构建通过的是旧双市场流程，不能沿用为新流程验收。
   当前仓库仍私有，无 Release；扩展未公开上架，UI 包未 npm 发布。
 - 本轮 `release:check`、`package:vsix`（含 typecheck、lint:budgets）、`verify:vsix`
-  和 `release:assets` 已通过；包内 165 条目校验通过，准备包为 10,582,931 bytes，
-  已全局安装 Microsoft VS Code。YAML 与内嵌 PowerShell 语法检查通过；未新增、
-  修改或运行测试、浏览器验收、模型请求。首次沙箱构建因父目录访问受限失败，
+  和 `release:assets` 已通过；引用样式修改后的 165 条目 VSIX 已全局安装 Microsoft VS Code。
+  YAML 与内嵌 PowerShell 语法检查通过；仅经许可同步两份现有模型测试数据，未新增或
+  运行测试、浏览器验收、模型请求。首次沙箱构建因父目录访问受限失败，
   正常权限重跑成功；npm/VS Code CLI 的弃用提示未阻断构建或安装。
-- Factory 官网标识的公开分发授权未记录，已向用户确认保留或替换选择。公开发布、
-  改变仓库可见性及涉及历史清理的操作须本次目标授权；普通 push 许可不等于公开发布许可。
+- 用户明确要求保留风车；SVG、PNG 和 PinwheelIcon 均未修改，README 补充来源、
+  非官方声明及标识不按本项目 MIT 重新授权的说明，未取得新的商标许可。公开发布、改变
+  仓库可见性及涉及历史清理的操作仍须明确授权；普通 push 许可不等于公开发布许可。
 - 不可用或未完成：稳定 Session Delete、统一 Undo All、任意工具后台进程控制、
   Worktree 清理/合并/删除、完整账号计费/组织后台、MCP resources/prompts 稳定发现。
 - 云同步开关不等于跨设备恢复；SDK 远端会话分页需独立 API Key，尚未接入目录，

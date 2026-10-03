@@ -13,13 +13,13 @@ Droid 是 Factory Droid CLI 在 Cursor / VS Code 中的非官方本地可视化�
 2. 按 [Droid CLI 快速开始](https://docs.factory.ai/droid-cli/quickstart.md)
    安装官方 CLI，并在本机完成认证。模型可用性和费用由 Factory／模型服务商决定；
    BYOK 见 [官方说明](https://docs.factory.ai/model-independence/byok.md)。
-3. 公开版本将通过 [GitHub Releases](https://github.com/fireman-droid/droid-for-vscode/releases)
+3. 安装包通过 [GitHub Releases](https://github.com/fireman-droid/droid-for-vscode/releases)
    提供。在版本页面的 **Assets** 下载 `droidvisx-x.y.z.vsix`，然后在 Microsoft
    VS Code 扩展面板的 `…` 菜单选择 **Install from VSIX**。不要下载 Source code
    压缩包来安装扩展。聊天、模型管理、智能补全与 Next Edit 使用同一个包。
-   当前 `0.8.1` 尚在发布准备阶段；首次发布前可按下文从源码构建 `dist/droidvisx.vsix`。
+   若 Releases 尚无可下载版本，可按下文从源码构建 `dist/droidvisx.vsix`。
 4. 执行 **Developer: Reload Window**，打开 Droid 侧栏，选择工作区和模型。
-  仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
+   仅在理解执行范围后批准工具权限；交互终端的直接输入不经过模型权限流程。
 
 GitHub 下载版更新时重新安装新版 VSIX，不依赖插件市场自动更新。下载文件的 SHA256
 应与同一版本 Assets 中的 `SHA256SUMS.txt` 一致；Windows 可运行
@@ -105,7 +105,7 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 
 ## 当前状态
 
-- 当前源码版本：`0.8.1`，准备发布；具体已安装版本与源码改动状态见 `docs/STATUS.md`
+- 当前源码版本：`0.8.1`；公开下载以 Releases 为准，能力与验证状态见 `docs/STATUS.md`
 - 主聊天、会话恢复、权限、AskUser、计划、附件、Review、Canvas、
   Skills、MCP、自定义模型和子代理展示已接入
 - Mission Control 已接通聊天、独立 Session、readiness、进度和 Worker
@@ -141,6 +141,10 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 `dist/extension/THIRD_PARTY_LICENSES.txt` 与 `dist/webview/THIRD_PARTY_LICENSES.txt`
 包含对应构建的第三方条款，公共 UI 包附带独立声明。
 构建会阻止缺少许可证材料的分发，但不替代法律或供应链审查。
+
+界面保留的风车标识取自 [Factory 官网](https://factory.com/)，来源记录见
+[设计说明](docs/DESIGN.md#分发标识)。该标识及相关商标不按本项目 MIT 许可证重新授权，
+保留标识不表示本项目获得 Factory 官方背书。
 
 仓库公开后可通过 [GitHub Issues](https://github.com/fireman-droid/droid-for-vscode/issues)
 提交去敏后的问题，格式见 [`docs/FEEDBACK.md`](docs/FEEDBACK.md)。
@@ -187,8 +191,8 @@ pnpm run verify:vsix
 code --install-extension dist/droidvisx.vsix --force
 ```
 
-确认 `code` 来自 Microsoft VS Code；Cursor 使用 `cursor --install-extension
-dist/droidvisx.vsix --force`。如果编辑器命令不在 PATH，也可通过扩展面板的
+确认 `code` 来自 Microsoft VS Code；Cursor 使用
+`cursor --install-extension dist/droidvisx.vsix --force`。如果编辑器命令不在 PATH，也可通过扩展面板的
 **Install from VSIX** 选择生成文件。
 随后执行 **Developer: Reload Window**。
 
@@ -209,7 +213,7 @@ VSIX 都是可重新生成的产物，不纳入 Git。
 Open VSX，不需要两平台的发布者账号或 PAT；创建草稿使用仓库自带的 `GITHUB_TOKEN`。
 
 先完成 [STATUS](docs/STATUS.md#发布与能力缺口) 中的公开前待办，再将准备好的源码、
-版本与变更记录提交到 `main`。本轮准备版本为 `0.8.1`，尚未创建正式标签或公开 Release。
+版本与变更记录提交到 `main`。以下以 `0.8.1` 为例；创建 Draft 不等于公开发布。
 本地生成下载附件的命令如下，均不上传：
 
 ```powershell
