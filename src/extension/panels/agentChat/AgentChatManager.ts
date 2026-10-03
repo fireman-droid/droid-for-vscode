@@ -95,7 +95,14 @@ export class AgentChatManager implements vscode.Disposable {
 
   private observe(controller: ChatController): void {
     this.subscriptions.set(controller, controller.subscribe((message) => {
-      if (message.type === 'host.snapshot' || message.type === 'mission.snapshot' ||
+      if (message.type === 'host.snapshot') {
+        // Session replacement is an identity boundary, not a throttled activity update.
+        // Publish an empty/new family together with the authoritative chat snapshot.
+        this.scan(controller);
+        this.publish();
+        return;
+      }
+      if (message.type === 'mission.snapshot' ||
           message.type === 'subagent.activity' || message.type.startsWith('tool.') ||
           message.type.startsWith('subagent.') || message.type === 'turn.state') this.schedule();
     }));
@@ -155,6 +162,7 @@ export class AgentChatManager implements vscode.Disposable {
   }
 
   private port(parent: () => string | null, current: () => string | null): AgentNavigationPort {
+    let lastProjection: string | undefined;
     const read = (): AgentChatNavigationMessage => {
       const parentId = parent();
       const family = parentId ? this.families.get(parentId) : undefined;
@@ -178,6 +186,14 @@ export class AgentChatManager implements vscode.Disposable {
       const selected = entries.find(({ key }) => key === current());
       const agents = entries.slice(-MAX_AGENT_CHAT_SESSIONS);
       if (selected && !agents.includes(selected)) agents[0] = selected;
+      const scope = { parentSessionId: parentId ?? '', currentKey: selected?.key ?? '',
+        activeSessionId: this.options.root.sessionState.sessionId ?? '',
+        conversationId: this.options.root.sessionState.conversationId ?? '', agents: agents.length };
+      const projection = JSON.stringify(scope);
+      if (projection !== lastProjection) {
+        lastProjection = projection;
+        this.options.diagnostics.record({ level: 'info', name: 'host.agents.navigation', attributes: scope });
+      }
       return { type: 'agent.chat.navigation', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION,
         parentSessionId: parentId, currentKey: selected?.key ?? null, agents };
     };

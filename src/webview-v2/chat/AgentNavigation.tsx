@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronRight, Users } from 'lucide-react';
 import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage, type AgentChatStatus } from '../../shared/protocol/agentChatProtocol';
 import { subscribeHostMessages } from '../host/hostMessageSource';
@@ -11,12 +11,18 @@ const STATUS_LABELS: Record<AgentChatStatus, string> = {
   running: 'Running', paused: 'Paused', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped', unknown: 'Status unavailable',
 };
 
-export function useAgentChatNavigation(): AgentChatNavigationMessage | null {
+export function useAgentChatNavigation(sessionId: string | null): AgentChatNavigationMessage | null {
   const [navigation, setNavigation] = useState<AgentChatNavigationMessage | null>(null);
+  const snapshotSequence = useRef(-1);
   useEffect(() => subscribeHostMessages((message) => {
     if (message.type === 'agent.chat.navigation') setNavigation(message);
+    else if (message.type === 'host.snapshot' && message.sequence > snapshotSequence.current) {
+      snapshotSequence.current = message.sequence;
+      setNavigation((current) => current?.currentKey != null ||
+        current?.parentSessionId === message.sessionId ? current : null);
+    }
   }), []);
-  return navigation;
+  return navigation?.currentKey != null || navigation?.parentSessionId === sessionId ? navigation : null;
 }
 
 export function AgentSection({ count, running, children }: {
@@ -28,7 +34,7 @@ export function AgentSection({ count, running, children }: {
   const id = useId();
   return <Collapsible open={expanded} onOpenChange={setExpanded} asChild>
     <section className="v2-composer-changes" aria-label="Agent conversations">
-      <div className="v2-composer-changes-header">
+      <div className="v2-composer-changes-header v2-composer-agents-header">
         <CollapsibleTrigger asChild>
           <Button variant="plain" size="none" className="v2-composer-changes-toggle" aria-controls={id}>
             <ChevronRight aria-hidden="true" className={expanded ? 'rotate-90' : undefined} />
