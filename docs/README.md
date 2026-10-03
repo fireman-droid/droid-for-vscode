@@ -17,6 +17,7 @@
 | [`CAPABILITIES.md`](./CAPABILITIES.md) | Droid 能力来源与产品支持矩阵 |
 | [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) | 日志位置和排障步骤 |
 | [`FEEDBACK.md`](./FEEDBACK.md) | Bug、样式和功能反馈模板 |
+| [`OPEN_SOURCE_POST.md`](./OPEN_SOURCE_POST.md) | LINUX DO 开源推广文案草稿与配图位置 |
 | [`RUNTIME_CORRECTNESS_REVIEW.md`](./RUNTIME_CORRECTNESS_REVIEW.md) | 旧基线审查与未复核候选；当前结论以 `STATUS.md` 为准 |
 
 换电脑的依赖安装、构建、静态预览与本机配置边界见根目录 [`README.md`](../README.md)。
