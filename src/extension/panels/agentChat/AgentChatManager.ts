@@ -30,6 +30,7 @@ interface Family {
   cwd: string;
   controller: ChatController;
   bindings: Map<string, Binding>;
+  latestPromptTasks: Set<string>;
 }
 interface Child {
   controller: ChatController;
@@ -124,11 +125,14 @@ export class AgentChatManager implements vscode.Disposable {
     if (!id || !cwd || historyCwd === undefined && controller.sessionState.connection.status === 'connecting') return;
     let family = this.families.get(id);
     if (!family) {
-      family = { cwd, controller, bindings: new Map() };
+      family = { cwd, controller, bindings: new Map(), latestPromptTasks: new Set() };
       this.families.set(id, family);
     }
     const present = new Set<string>();
+    family.latestPromptTasks.clear();
     for (const item of controller.recoveryState.transcript.transcript) {
+      // Message order survives history reloads; live and recovered turn IDs can differ.
+      if (item.kind === 'user') family.latestPromptTasks.clear();
       if (item.kind !== 'tool' || !item.subagent) continue;
       const identity = `task:${item.toolUseId}`;
       present.add(identity);
@@ -144,6 +148,7 @@ export class AgentChatManager implements vscode.Disposable {
           role: label(item.subagent.type, 80, 'Worker'), status },
         turnId: item.turnId, toolUseId: item.toolUseId });
       family.bindings.set(identity, binding);
+      family.latestPromptTasks.add(binding.entry.key);
     }
     for (const worker of controller.missionState.missionRuntime?.workerConversations() ?? []) {
       const identity = `mission:${worker.sessionId}`;
@@ -165,9 +170,10 @@ export class AgentChatManager implements vscode.Disposable {
     let lastProjection: string | undefined;
     const read = (): AgentChatNavigationMessage => {
       const parentId = parent();
+      const currentKey = current();
       const family = parentId ? this.families.get(parentId) : undefined;
-      const switching = current() === null && this.options.root.sessionState.connection.status === 'connecting';
-      const entries = [...(!switching ? family?.bindings.values() ?? [] : [])].map((binding) => {
+      const switching = currentKey === null && this.options.root.sessionState.connection.status === 'connecting';
+      const entries = [...(!switching ? family?.bindings.values() ?? [] : [])].flatMap((binding) => {
         const child = binding.sessionId ? this.children.get(binding.sessionId)?.controller : undefined;
         const turn = child?.turnState.turn;
         const resumed = isTurnActive(turn ?? null) && turn?.turnId !== binding.stoppedTurnId;
@@ -179,11 +185,16 @@ export class AgentChatManager implements vscode.Disposable {
           : binding.idleTurnId !== undefined ? terminal ?? (binding.entry.status === 'running' ? 'unknown' : binding.entry.status)
           : child && isTurnActive(turn ?? null) ? 'running'
             : terminal ?? binding.entry.status;
-        return { ...binding.entry, status,
+        // Only the main composer drops finished work from earlier prompts. Keep the
+        // bindings for history cards, and resolve live child status before filtering.
+        if (currentKey === null && binding.toolUseId !== undefined && !binding.stopPending &&
+          !family?.latestPromptTasks.has(binding.entry.key) &&
+          (status === 'completed' || status === 'failed' || status === 'cancelled')) return [];
+        return [{ ...binding.entry, status,
           ...(status === 'running' && !binding.stopPending ? { canStop: true as const } : {}),
-          ...(binding.stopPending ? { stopPending: true as const } : {}) };
+          ...(binding.stopPending ? { stopPending: true as const } : {}) }];
       });
-      const selected = entries.find(({ key }) => key === current());
+      const selected = entries.find(({ key }) => key === currentKey);
       const agents = entries.slice(-MAX_AGENT_CHAT_SESSIONS);
       if (selected && !agents.includes(selected)) agents[0] = selected;
       const scope = { parentSessionId: parentId ?? '', currentKey: selected?.key ?? '',
