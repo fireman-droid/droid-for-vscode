@@ -7,8 +7,9 @@ import { PopoverContent } from '../ui/overlays';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
 import { SkillSuggestion } from './composer/SkillSuggestion';
+import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
 
-export function useComposerSuggestions({ state, draft, disabled, onChange, onFileSearch, onAttachPath, onCommandsRefresh, onSkillsRefresh, onNavigate, onBtwOpen, allowSessionNavigation = true }: {
+export function useComposerSuggestions({ state, draft, disabled, onChange, onFileSearch, onAttachPath, onCommandsRefresh, onSkillsRefresh, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands' | 'skills' | 'btwAvailable'>;
   readonly draft: string;
   readonly disabled: boolean;
@@ -19,7 +20,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
   readonly onSkillsRefresh: () => void;
   readonly onNavigate: (page: SlashNavTarget) => void;
   readonly onBtwOpen: () => void;
-  readonly allowSessionNavigation?: boolean;
+  readonly capabilities?: ChatSurfaceCapabilities;
 }) {
   const listId = useId();
   const [mention, setMention] = useState<MentionToken | null>(null);
@@ -53,8 +54,13 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     if (current.state.skills.status === 'idle') current.onSkillsRefresh();
   }, [slashOpen]);
   const allMatches = getSlashMatches(state.commands, state.skills.items, slash, state.btwAvailable, true);
-  const matches = allowSessionNavigation ? allMatches : { ...allMatches, entries: allMatches.entries.filter((entry) =>
-    !(entry.kind === 'builtin' && (entry.name === 'new' || entry.name === 'clear' || entry.name === 'compact') || entry.kind === 'nav' && entry.name === 'sessions')) };
+  const matches = { ...allMatches, entries: allMatches.entries.filter((entry) => {
+    if (entry.kind === 'builtin' && entry.name === 'compact') return capabilities.compactSession;
+    if (entry.kind === 'builtin' && (entry.name === 'new' || entry.name === 'clear') || entry.kind === 'nav' && entry.name === 'sessions') {
+      return capabilities.navigateSessions;
+    }
+    return true;
+  }) };
   const results = mention !== null && request !== null && state.fileSearch?.requestId === request ? state.fileSearch.files : [];
   const searchPending = mention !== null && (request === null || state.fileSearch?.requestId !== request);
   const activeIndex = Math.max(0, Math.min(index, (slash !== null ? matches.entries.length : results.length) - 1));

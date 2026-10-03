@@ -91,8 +91,8 @@ describe('ChatController', () => {
     });
     // Attachments are consumed by the send.
     expect(attachmentsMessages(messages).at(-1)?.attachments).toHaveLength(0);
-    // The image bytes cross the Bridge exactly once: as the bounded
-    // user-origin transcript echo, never inside attachment metadata.
+    // The live user-origin image is echoed once. Later snapshots replay that
+    // bounded transcript image; attachment metadata never carries its bytes.
     const imageEchoes = messages.filter((message) => message.type === 'transcript.image');
     expect(imageEchoes).toHaveLength(1);
     expect(imageEchoes[0]).toMatchObject({
@@ -108,7 +108,11 @@ describe('ChatController', () => {
       },
     });
     expect(
-      JSON.stringify(messages.filter((message) => message.type !== 'transcript.image')),
+      JSON.stringify(messages
+        .filter((message) => message.type !== 'transcript.image')
+        .map((message) => message.type === 'host.snapshot'
+          ? { ...message, transcript: message.transcript.filter((item) => item.kind !== 'image') }
+          : message)),
     ).not.toContain('aW1n');
   });
 

@@ -20,16 +20,16 @@ export interface EditResendPort
   readonly sessionState: Readonly<
     Pick<
       SessionLifecycleState,
-      'runtime' | 'connection' | 'runtimeGeneration' | 'activeRuntimeCwd'
+      'runtime' | 'connection' | 'runtimeGeneration' | 'activeRuntimeCwd' | 'conversationId' | 'sessionId'
     >
   > &
     Pick<
       SessionLifecycleState,
-      'conversationId' | 'sessionId' | 'sessionOperationInProgress'
+      'sessionOperationInProgress'
     >;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>> &
     Pick<SessionDirectoryState, 'sessions'>;
-  readonly turnState: Pick<TurnState, 'turn'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly attachmentState: Readonly<Pick<AttachmentStagingState, 'sentAttachments'>> &
     Pick<AttachmentStagingState, 'editStage' | 'attachmentIdCounter'>;
   readonly queueState: Readonly<Pick<QueueState, 'queuedPrompts'>>;
@@ -37,10 +37,10 @@ export interface EditResendPort
   readonly effects: Pick<
     ChatEffects,
     | 'ensureActiveRuntimeWorkspaceCurrent'
+    | 'commitSessionBinding'
     | 'handleSend'
     | 'createDurableForkConversation'
     | 'clearPendingAttachments'
-    | 'withActiveSession'
     | 'emitEditAttachments'
     | 'armReplayedSubagentWatch'
   >;

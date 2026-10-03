@@ -18,8 +18,7 @@ import {
   MAX_SESSION_TITLE_LENGTH,
   MAX_TURN_TEXT_LENGTH,
 } from './protocol/bounds';
-import { isWebviewToHostMessage } from './validation/guards';
-import { parseWebviewMessage } from './validateMessage';
+import { isWebviewToHostMessage, parseWebviewMessage } from './validateMessage';
 
 describe('parseWebviewMessage', () => {
   it('accepts only exact Plan document open identities', () => {

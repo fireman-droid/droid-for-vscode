@@ -109,15 +109,19 @@ export async function performCompact(
   // The compacted session stays in the catalog: its file remains on
   // disk with the full pre-compaction history, and the compaction
   // divider's "View full history" jump needs it selectable.
-  ctl.sessionState.sessionId = compactedSessionId;
-  ctl.turnState.turn = null;
-  ctl.catalogState.sessions = ctl.effects.withActiveSession(ctl.catalogState.sessions, {
-    id: compactedSessionId,
-    title: previousTitle,
-    messageCount: 0,
-    modifiedTime: new Date().toISOString(),
-    active: true,
-    isFavorite: false,
+  ctl.effects.commitSessionBinding({
+    sessionId: compactedSessionId,
+    conversationId,
+    transcript: ctl.recoveryState.transcript,
+    turn: null,
+    catalogEntry: {
+      id: compactedSessionId,
+      title: previousTitle,
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+      isFavorite: false,
+    },
   });
 
   let mission: SessionMissionSummary | null = null;

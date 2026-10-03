@@ -5,6 +5,34 @@ import {
 } from './bounds';
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
 import { hasExactKeys, isStrictRecord as isRecord } from '../validation/strictValidation';
+import {
+  CUSTOM_MODEL_PROVIDERS,
+  MAX_CUSTOM_MODEL_IMPORT_ITEMS,
+  MAX_CUSTOM_MODEL_KEY_LENGTH,
+  MAX_CUSTOM_MODEL_MASK_LENGTH,
+  MAX_CUSTOM_MODEL_OUTPUT_TOKENS,
+  MAX_CUSTOM_MODEL_PROVIDER_LENGTH,
+  MAX_CUSTOM_MODEL_URL_LENGTH,
+  MAX_CUSTOM_MODELS_MESSAGE_LENGTH,
+  isCustomModelBaseUrl,
+  isSafeText,
+  type CustomModelProvider,
+  type DiscoveredCustomModel,
+} from './customModelValues';
+export {
+  CUSTOM_MODEL_PROVIDERS,
+  MAX_CUSTOM_MODEL_IMPORT_ITEMS,
+  MAX_CUSTOM_MODEL_KEY_LENGTH,
+  MAX_CUSTOM_MODEL_MASK_LENGTH,
+  MAX_CUSTOM_MODEL_OUTPUT_TOKENS,
+  MAX_CUSTOM_MODEL_PROVIDER_LENGTH,
+  MAX_CUSTOM_MODEL_URL_LENGTH,
+  MAX_CUSTOM_MODELS_MESSAGE_LENGTH,
+  isCustomModelBaseUrl,
+  isSafeText,
+  type CustomModelProvider,
+  type DiscoveredCustomModel,
+} from './customModelValues';
 /**
  * BYOK custom-models bridge contract.
  *
@@ -16,8 +44,8 @@ import { hasExactKeys, isStrictRecord as isRecord } from '../validation/strictVa
  * strictly validated here so `validateMessage.ts` (host inbound) and
  * `validateHostMessage.ts` (webview inbound) can delegate without
  * duplicating shape rules. `bridgeMessages.ts` must only
- * `import type` from this module: the runtime dependency points the
- * other way (shared model bounds come from the main contract).
+ * `import type` from this module: bounds and common model values live
+ * in leaf modules, independent of either message parser.
  *
  * Credential red line: `apiKey` plaintext travels only on request-scoped
  * webview→host save/discover/import messages and is handed to the provider
@@ -26,26 +54,6 @@ import { hasExactKeys, isStrictRecord as isRecord } from '../validation/strictVa
  * daemon-masked `apiKeyMask` (probe: `••••` + last 4 chars) — never
  * key material.
  */
-export const MAX_CUSTOM_MODEL_URL_LENGTH = 2048;
-export const MAX_CUSTOM_MODEL_KEY_LENGTH = 512;
-export const MAX_CUSTOM_MODEL_MASK_LENGTH = 32;
-export const MAX_CUSTOM_MODEL_PROVIDER_LENGTH = 64;
-export const MAX_CUSTOM_MODEL_OUTPUT_TOKENS = 100_000_000;
-export const MAX_CUSTOM_MODELS_MESSAGE_LENGTH = 512;
-export const MAX_CUSTOM_MODEL_IMPORT_ITEMS = 32;
-/**
- * Providers the save form offers. The upsert RPC accepts an open
- * string, but the GUI only writes the three documented BYOK values
- * (docs.factory.ai/cli/byok); Bedrock and other providers stay
- * settings.json-managed. List items keep provider as an open string
- * so existing entries with other providers still display.
- */
-export const CUSTOM_MODEL_PROVIDERS = [
-  'anthropic',
-  'openai',
-  'generic-chat-completion-api',
-] as const;
-export type CustomModelProvider = (typeof CUSTOM_MODEL_PROVIDERS)[number];
 /**
  * One custom model as the daemon lists it — already key-scrubbed.
  * `rawIndex` is the live array position in settings.json (probed:
@@ -96,11 +104,6 @@ export const IDLE_CUSTOM_MODELS_STATE: CustomModelsUiState = {
 export interface CustomModelsRefreshMessage {
   readonly type: 'customModels.refresh';
   readonly sessionId: string;
-}
-/** One provider-returned model projected without arbitrary metadata. */
-export interface DiscoveredCustomModel {
-  readonly model: string;
-  readonly displayName?: string;
 }
 export type CustomModelDiscoveryState =
   | { readonly status: 'loading' }
@@ -240,41 +243,12 @@ function isId(value: unknown): value is string {
     typeof value === 'string' && value.length > 0 && value.length <= MAX_BRIDGE_ID_LENGTH
   );
 }
-/** Non-empty, trimmed, bounded, control-character-free text. */
-export function isSafeText(value: unknown, maximumLength: number): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= maximumLength &&
-    value.trim() === value &&
-    // eslint-disable-next-line no-control-regex
-    !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-  );
-}
 function isRawIndex(value: unknown): value is number {
   return (
     Number.isSafeInteger(value) &&
     (value as number) >= 0 &&
     (value as number) < MAX_MODEL_CATALOG_ITEMS
   );
-}
-export function isCustomModelBaseUrl(value: unknown): boolean {
-  if (!isSafeText(value, MAX_CUSTOM_MODEL_URL_LENGTH) || /\s/u.test(value)) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      url.hostname.length > 0 &&
-      url.username.length === 0 &&
-      url.password.length === 0 &&
-      url.search.length === 0 &&
-      url.hash.length === 0
-    );
-  } catch {
-    return false;
-  }
 }
 export function parseCustomModelsRefreshMessage(
   value: unknown,

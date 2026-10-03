@@ -3,6 +3,7 @@ import { mountWebview } from '../shell/mount';
 import { ChatApp } from './ChatApp';
 
 const port = getVsCodeApi();
-mountWebview(<ChatApp port={port} />, (detail) =>
+const role = document.documentElement.dataset.chatRole === 'child' ? 'child' : 'main';
+mountWebview(<ChatApp port={port} role={role} />, (detail) =>
   port.postMessage({ type: 'webview.diagnostic', kind: 'error', detail }),
 );

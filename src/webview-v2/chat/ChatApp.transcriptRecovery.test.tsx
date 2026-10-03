@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HostSnapshotMessage, HostToWebviewMessage, ToolActivityMessage, ToolTranscriptItem } from '../../shared/bridgeMessages';
 import { initialAssistantWebviewState } from '../state/initialState';
 import { ChatApp } from './ChatApp';
+import type { ChatSurfaceRole } from '../../shared/chatSurfacePolicy';
+import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
+import { TooltipProvider } from '../ui/overlays';
 
 const sessionId = 'session-recovery';
 const turnId = 'turn-recovery';
@@ -63,19 +66,54 @@ function tool(sequence: number, status: ToolActivityMessage['status']): ToolActi
   };
 }
 
-function receive(message: HostToWebviewMessage) {
+function receive(message: HostToWebviewMessage | AgentChatNavigationMessage) {
   act(() => window.dispatchEvent(new MessageEvent('message', { data: message })));
 }
 
-function mountChat() {
+function mountChat(role: ChatSurfaceRole = 'main') {
   const port = { postMessage: vi.fn(), getState: () => ({ draft }), setState: vi.fn() };
   render(<UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => undefined }}>
-    <ChatApp port={port} />
+    <TooltipProvider><ChatApp port={port} role={role} /></TooltipProvider>
   </UiEnvironmentProvider>);
   return port;
 }
 
 describe('ChatApp transcript delivery recovery', () => {
+  it('keeps a connected child chat usable without exposing parent actions when navigation is absent or removed', async () => {
+    const port = mountChat('child');
+    receive(snapshot({ turn: { turnId, status: 'completed' } }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false));
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull();
+
+    receive({ type: 'agent.chat.navigation', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION,
+      parentSessionId: 'parent-session', currentKey: 'child-key',
+      agents: [{ key: 'child-key', title: 'Child work', role: 'worker', status: 'completed' }],
+    });
+    receive({ type: 'agent.chat.navigation', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION,
+      parentSessionId: 'parent-session', currentKey: null, agents: [],
+    });
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull();
+    const editor = screen.getByRole('textbox', { name: 'Message Droid' });
+    port.postMessage.mockClear();
+    for (const command of ['/new', '/compact', '/sessions']) {
+      fireEvent.change(editor, { target: { value: command } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await screen.findByText('Return to the main chat to switch sessions, start a new task, or compact the conversation.');
+    }
+    expect(port.postMessage.mock.calls.some(([message]) =>
+      ['session.new', 'session.compact', 'session.select', 'turn.send'].includes(message.type))).toBe(false);
+
+    fireEvent.change(editor, { target: { value: 'Continue the child task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({
+      type: 'turn.send', sessionId, turnId: expect.any(String), text: 'Continue the child task',
+    }));
+    const sent = port.postMessage.mock.calls.map(([message]) => message).find((message) => message.type === 'turn.send');
+    receive({ type: 'turn.state', sequence: 2, sessionId, turnId: sent.turnId, status: 'streaming' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.stop', sessionId, turnId: sent.turnId });
+  });
+
   it.each(['completed', 'failed'] as const)('renders follow-up prose after a %s terminal tool', async (status) => {
     mountChat();
     receive(snapshot());

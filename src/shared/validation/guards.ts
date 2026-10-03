@@ -1,4 +1,4 @@
-import { MAX_BRIDGE_ID_LENGTH, type WebviewToHostMessage } from '../bridgeMessages';
+import { MAX_BRIDGE_ID_LENGTH } from '../protocol/interactionProtocol';
 import {
   MAX_COMMAND_NAME_LENGTH,
   MAX_MODEL_DISPLAY_NAME_LENGTH,
@@ -9,11 +9,6 @@ import {
   PREVIEWABLE_FILE_EXTENSIONS,
 } from '../protocol/bounds';
 import { type UnknownRecord } from './strictValidation';
-import { parseWebviewMessage } from '../validateMessage';
-
-export function isWebviewToHostMessage(value: unknown): value is WebviewToHostMessage {
-  return parseWebviewMessage(value) !== undefined;
-}
 
 /**
  * Accepts bounded absolute (drive-letter or POSIX) and relative paths

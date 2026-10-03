@@ -16,7 +16,6 @@ import type { HostTranscriptState } from '../../recovery/hostTranscriptState';
 import { historyWithLocalChanges } from '../../recovery/historyWithLocalChanges';
 import { dataValue, parseTranscriptItem } from '../../recovery/sessionRecoveryItems';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../../recovery/SessionRecoveryStore';
-import { createTurnActivityState } from '../turns/turnActivityState';
 import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
@@ -131,13 +130,12 @@ export function reconcileDaemonTurn(
     const failedTurnId = recoveredFailureTurnId(ctl, sessionId);
     if (!live && failedTurnId !== null) {
       ctl.interactions.endTurn(sessionId, turnId);
-      ctl.turnState.turn = {
+      ctl.effects.restoreTurn({
         turnId: failedTurnId,
         status: 'failed',
         error: TURN_FAILURE_MESSAGE,
-        activity: createTurnActivityState(),
         recovery: true,
-      };
+      });
       ctl.effects.setSessionRunning(sessionId, false);
       ctl.emitSnapshot();
       if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
@@ -170,19 +168,10 @@ export function reconcileDaemonTurn(
       return;
     }
 
-    const turnGeneration =
-      existingRecoveryTurn === null
-        ? ++ctl.turnState.turnGeneration
-        : ctl.turnState.turnGeneration;
+    const turnGeneration = existingRecoveryTurn === null
+      ? ctl.effects.beginTurn({ turnId, status: 'streaming', recovery: true })
+      : ctl.turnState.turnGeneration;
     if (existingRecoveryTurn === null) {
-      ctl.diagnostics?.beginTurnScope?.(turnId);
-      ctl.turnState.turnIo = { counts: new Map(), bytes: 0 };
-      ctl.turnState.turn = {
-        turnId,
-        status: 'streaming',
-        activity: createTurnActivityState(),
-        recovery: true,
-      };
       void captureSnapshotBeforeInBackground(ctl, sessionId, turnId).then(() => {
         ctl.effects.startLiveChanges(sessionId, turnId);
       });
@@ -438,15 +427,14 @@ export async function finishRecoveredTurn(
         ctl.recoveryStore.readConversation(ctl.sessionState.conversationId),
       ctl.recoveryState.transcript.transcript), loaded.messageAncestry);
   } else if (!interrupted) {
-    ctl.emitSessionDiagnostic(
+    ctl.effects.failTurn(
+      sessionId,
+      turnId,
       RECOVERED_HISTORY_FAILED_CODE,
       RECOVERED_HISTORY_FAILED_MESSAGE,
-      turnId,
     );
-    ctl.effects.failTurn(sessionId, turnId, RECOVERED_HISTORY_FAILED_CODE);
     ctl.emitSnapshot();
     flushRecoveryCheckpointInBackground(ctl);
-    ctl.effects.refreshContextAfterTurn(sessionId);
     return;
   }
   const transportRecovery = ctl.turnState.turn?.transportRecovery;

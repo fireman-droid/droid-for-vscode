@@ -7,7 +7,6 @@ import { createGitChangeStatsReader } from '../../changes/changeStats';
 import { createTurnSnapshotStore } from '../../changes/turnSnapshots';
 import { watchWorkspaceChanges } from '../../changes/watchWorkspaceChanges';
 import { ChatController } from '../../chat/ChatController';
-import { bindModelAvailability } from '../../models/bindModelAvailability';
 import { emitIdeState, type NativeIdeBackend } from '../../chat/ideIntegration';
 import { RecentCommandsStore } from '../../chat/capabilities/RecentCommandsStore';
 import { PlanDocumentController } from '../../interactions/planDocumentController';
@@ -58,38 +57,29 @@ export function createAgentChatController(options: {
     createSdkSession: options.createSdkSession,
     sessionViewer: options.sessionViewer,
   });
-  controller = new ChatController(
-    parent.createRuntime,
-    () => ({ cwd: target.cwd, trusted: vscode.workspace.isTrusted }),
-    parent.sessionCatalog,
-    recovery,
-    parent.sessionHistory,
+  controller = new ChatController({
+    createRuntime: parent.createRuntime,
+    getWorkspaceContext: () => ({ cwd: target.cwd, trusted: vscode.workspace.isTrusted }),
+    sessionCatalog: parent.sessionCatalog,
+    recoveryStore: recovery,
+    sessionHistory: parent.sessionHistory,
     attachmentSources,
     fileDiff,
     changeStats,
-    parent.externalUrl,
-    new RecentCommandsStore(childPersistence),
+    externalUrl: parent.externalUrl,
+    recentCommands: new RecentCommandsStore(childPersistence),
     diagnostics,
-    parent.daemonSessions,
-    parent.pathOpener,
-    preview,
+    daemonSessions: parent.daemonSessions,
+    pathOpener: parent.pathOpener,
+    prototypePreview: preview,
     gitWorkflow,
-    undefined,
-    undefined,
-    parent.daemonPlugins,
-    undefined,
-    undefined,
-    snapshots,
+    daemonPlugins: parent.daemonPlugins,
+    turnSnapshots: snapshots,
     planDocuments,
-    review.coordinator,
-    target,
-  );
-  controller.daemonCustomModels = parent.daemonCustomModels;
-  controller.modelDiscovery = parent.modelDiscovery;
-  controller.systemPromptStore = parent.systemPromptStore;
-  controller.providerRegistry = parent.providerRegistry;
-  if (parent.modelAvailability) subscriptions.push(bindModelAvailability(controller, parent.modelAvailability));
-  controller.promptProviderApiKey = parent.promptProviderApiKey;
+    reviewCoordinator: review.coordinator,
+    childSession: target,
+    sharedServices: parent.sharedServices,
+  });
   if (options.nativeIde) {
     controller.nativeIde = { read: options.nativeIde.read };
     subscriptions.push({ dispose: options.nativeIde.subscribe(() => emitIdeState(controller)) });

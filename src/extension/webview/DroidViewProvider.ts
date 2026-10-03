@@ -183,6 +183,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       },
       undefined,
       readWebviewBootTheme(),
+      'main',
     );
   }
 

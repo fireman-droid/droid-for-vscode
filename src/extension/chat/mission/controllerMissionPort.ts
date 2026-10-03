@@ -19,22 +19,20 @@ export interface ControllerPort
     | 'emitSessionDiagnostic'
   > {
   readonly sessionState: Readonly<
-    Pick<SessionLifecycleState, 'connection' | 'managedRuntimes' | 'disposed'>
+    Pick<SessionLifecycleState, 'connection' | 'managedRuntimes' | 'disposed' | 'conversationId' | 'sessionId'>
   > &
     Pick<
       SessionLifecycleState,
       | 'runtime'
-      | 'conversationId'
-      | 'sessionId'
       | 'runtimeGeneration'
       | 'activeRuntimeCwd'
     >;
   readonly catalogState: Pick<SessionDirectoryState, 'sessions'>;
-  readonly turnState: Pick<TurnState, 'turn'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<
     MissionSessionState,
     'mission' | 'missionRuntime' | 'missionStartInProgress' | 'stopMissionSubscription'
   >;
-  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata'>;
+  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata' | 'commitSessionBinding'>;
 }

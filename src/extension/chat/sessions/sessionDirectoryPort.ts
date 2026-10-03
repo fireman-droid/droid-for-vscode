@@ -24,12 +24,12 @@ export interface SessionDirectoryPort
   readonly sessionState: Readonly<
     Pick<
       SessionLifecycleState,
-      'runtime' | 'runtimeGeneration' | 'activeRuntimeCwd' | 'disposed'
+      'runtime' | 'runtimeGeneration' | 'activeRuntimeCwd' | 'disposed' | 'conversationId' | 'sessionId'
     >
   > &
     Pick<
       SessionLifecycleState,
-      'conversationId' | 'sessionId' | 'sessionOperationInProgress' | 'connection'
+      'sessionOperationInProgress' | 'connection'
     >;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'runningSessionIds'>> &
     Pick<
@@ -41,12 +41,13 @@ export interface SessionDirectoryPort
       | 'worktreeCreateAvailable'
       | 'worktreeAvailabilityCwd'
     >;
-  readonly turnState: Pick<TurnState, 'turn'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<MissionSessionState, 'mission'>;
   readonly effects: Pick<
     ChatEffects,
     | 'canReplaceSession'
+    | 'commitSessionBinding'
     | 'emitWorkspaceUnavailable'
     | 'startReplacement'
     | 'ensureActiveRuntimeWorkspaceCurrent'

@@ -7,7 +7,6 @@ import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import type { PendingAttachment } from '../internals';
 import { evaluateTurnStart } from '../operationEligibility';
 import { recoverTransportTurn } from '../recovery/recoverTransportTurn';
-import { createTurnActivityState } from './turnActivityState';
 import type { TurnFlowPort } from './turnFlowPort';
 import { isCurrentTurn } from './turnIdentity';
 import { handleRuntimeEvent } from './turnRuntimeEvents';
@@ -41,10 +40,7 @@ export function handleSend(
   const runtime = eligibility.runtime;
 
   const runtimeGeneration = ctl.sessionState.runtimeGeneration;
-  const turnGeneration = ++ctl.turnState.turnGeneration;
-  ctl.effects.discardPendingThinking();
-  ctl.diagnostics?.beginTurnScope?.(turnId);
-  ctl.turnState.turnIo = { counts: new Map(), bytes: 0 };
+  const turnGeneration = ctl.effects.beginTurn({ turnId, status: 'submitting' });
   ctl.recordHost({
     level: 'info',
     name: 'host.turn.accepted',
@@ -55,11 +51,6 @@ export function handleSend(
     },
     detail: text,
   });
-  ctl.turnState.turn = {
-    turnId,
-    status: 'submitting',
-    activity: createTurnActivityState(),
-  };
   const beforeSnapshot = captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
   ctl.effects.armTurnWatchdog(sessionId, turnId);
   ctl.interactions.beginTurn(sessionId, turnId);

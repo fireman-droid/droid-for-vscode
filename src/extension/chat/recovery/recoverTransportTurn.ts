@@ -15,9 +15,9 @@ export function recoverTransportTurn(
       ctl.sessionState.activeRuntimeCwd === null) return false;
   ctl.recoveryState.transcript = attachUserMessageId(ctl.recoveryState.transcript, turnId, error.messageId);
   ctl.effects.retainSentAttachments(turnId, error.messageId);
-  ctl.turnState.turn = { ...ctl.turnState.turn, recovery: true, backendTurnId: error.messageId,
+  ctl.effects.attachTurnRecovery({ backendTurnId: error.messageId,
     transportRecovery: { messageId: error.messageId, get completion() { return error.completion; },
-      dispose: error.dispose } };
+      dispose: error.dispose } });
   ctl.effects.clearTurnWatchdog();
   ctl.effects.scheduleRecoveryCheckpoint();
   ctl.effects.reconcileDaemonTurn(runtime, generation, sessionId, ctl.sessionState.activeRuntimeCwd);

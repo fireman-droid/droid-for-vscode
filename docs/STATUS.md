@@ -1,11 +1,29 @@
 # 当前状态
 
 更新：2026-10-03。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；`0.8.1`
-已生成 GitHub Release 草稿，仓库仍私有。已校验并将草稿中的同一 VSIX 安装到 Microsoft
-VS Code 当前用户目录，Reload Window 后生效；没有公开发布。
+已生成 GitHub Release 草稿，仓库仍私有。当前源码已完成聊天分层整理及定向回归，
+本轮安装状态见下文；GitHub 草稿仍保留之前已校验的安装包，没有公开发布。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 聊天分层与复用
+
+- 主／子聊天使用同一具名控制器接口和共享服务装配；各自拥有会话资源与模型偏好订阅。
+- Host 固定面板主／子身份，导航关联被移除不再使子聊天显示主聊天入口；UI 与 Host
+  共用能力策略。Agent 列表和工具卡片共用状态展示，取消状态统一为 `Stopped`。
+- 会话绑定与回合初始化集中到明确操作，保留恢复、后台续写、压缩及编辑重发的语义。
+- Shared 的基础校验不再反向依赖总解析器；模型协议共用叶子定义，消息格式保持不变。
+- 恢复历史读取失败时只发布一次诊断，具体原因保留到回合错误及重载后的记录；Mission
+  候选恢复记录先准备再切换会话，关闭失败或归属变化时清理未使用记录。
+- 授权范围内 18 个文件、541 项定向回归通过，覆盖协议校验、主／子共享服务、恢复顺序、
+  压缩／Fork／重发、附件、持久化、Mission 归属和子聊天固定角色。同步了旧构造调用、
+  校验入口及已过时的测试断言；未调用模型、运行浏览器或操作用户 VS Code 窗口。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 与
+  `pnpm run verify:vsix` 通过。从 `main` 构建的统一 VSIX 包含 165 条目，已全局安装
+  Microsoft VS Code；162 个安装载荷的 SHA-256 及清单与包一致，包大小 10,584,478 字节。
+  安装 CLI 的 `url.parse()` 弃用提示未阻断安装。需 Reload Window 加载新版，真实使用
+  由用户验收；GitHub Release 草稿未更新或公开发布。
 
 ## Markdown 引用正文
 

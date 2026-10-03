@@ -3,6 +3,7 @@ import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics'
 import type { ReviewPanelOpen } from '../../../shared/protocol/reviewPanelProtocol';
 import { parseAgentChatNavigation } from '../../../shared/protocol/agentChatProtocol';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
+import { isChatSurfaceCommandAllowed } from '../../../shared/chatSurfacePolicy';
 import type { ChatController } from '../../chat/ChatController';
 import { getWebviewHtml } from '../../webview/webviewHtml';
 import { handleWebviewClipboard } from '../../webview/webviewClipboard';
@@ -26,11 +27,6 @@ export interface AgentChatPanelOptions {
   readonly openModels?: () => void;
   readonly authenticateMcp?: (serverName: string, sessionId: string) => void;
 }
-
-const SESSION_REPLACEMENT_COMMANDS = new Set([
-  'session.new', 'session.select', 'session.fork', 'session.compact', 'worktree.createSession',
-  'turn.editResend', 'rewind.info', 'editStage.begin', 'editStage.cancel',
-]);
 
 function tabTitle(title: string): string {
   const compact = title.replace(/\s+/gu, ' ').trim();
@@ -85,10 +81,9 @@ export class AgentChatPanel implements vscode.Disposable {
       panel.webview.onDidReceiveMessage((value: unknown) => {
         if (disposed || modelSourcePreference.handleMessage(value) || options.navigation.handleMessage(value)) return;
         if (handleWebviewClipboard(value, panel.webview)) return;
-        if (isStrictRecord(value) && typeof value.type === 'string' && (
-          SESSION_REPLACEMENT_COMMANDS.has(value.type) || value.type.startsWith('mission.') || value.type.startsWith('missionControl.') ||
-          value.type === 'session.setting.update' && value.field === 'interactionMode' && value.value === 'mission'
-        )) {
+        if (isStrictRecord(value) && typeof value.type === 'string' && !isChatSurfaceCommandAllowed('child', {
+          type: value.type, field: value.field, value: value.value,
+        })) {
           options.diagnostics?.record({ level: 'warn', name: 'host.agentChat.session-replacement-rejected', attributes: { type: value.type } });
           void vscode.window.showWarningMessage('This action replaces the agent conversation. Return to the main chat to start or switch tasks.');
           return;
@@ -122,7 +117,7 @@ export class AgentChatPanel implements vscode.Disposable {
     panel.webview.html = getWebviewHtml(panel.webview, {
       script: vscode.Uri.joinPath(webviewDistUri, 'webview.js'),
       style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
-    }, undefined, readWebviewBootTheme());
+    }, undefined, readWebviewBootTheme(), 'child');
     this.reveal = () => { if (!disposed) panel.reveal(undefined, false); };
     this.dispose = () => { if (!disposed) { panel.dispose(); cleanup(); } };
   }

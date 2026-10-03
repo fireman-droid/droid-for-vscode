@@ -50,15 +50,17 @@ import { AppInfo } from './AppInfo';
 import { useAgentChatNavigation } from './AgentNavigation';
 import { ModelSourceProvider } from '../models/ModelSourceControl';
 import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
+import { getChatSurfaceCapabilities, type ChatSurfaceRole } from '../../shared/chatSurfacePolicy';
 
-export function ChatApp({ port }: { readonly port: ChatPort }) {
+export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; readonly role?: ChatSurfaceRole }) {
   const [store] = useState(createChatStore);
   const transcript = useRef<TranscriptHandle>(null);
   // Stream text has its own subscriber; controls observe arrivals and domain state.
   useStore(store, useShallow(selectChatShell));
   const state = store.getState().state;
   const agentNavigation = useAgentChatNavigation(state.sessionId);
-  const childChat = agentNavigation?.currentKey != null;
+  const childChat = role === 'child';
+  const capabilities = getChatSurfaceCapabilities(role);
   const getSequence = useCallback(() => store.getState().state.sequence, [store]);
   const dispatch = store.getState().dispatch;
   const persistTheme = useCallback((preference: ThemePreference) => {
@@ -98,9 +100,9 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   });
   const [navigation, setNavigationState] = useState<{ page: string | null; id: number }>({ page: null, id: 0 });
   const setNavigation = useCallback((page: string | null) => {
-    if (childChat && page === 'sessions') return;
+    if (!capabilities.navigateSessions && page === 'sessions') return;
     setNavigationState((current) => ({ page, id: current.id + 1 }));
-  }, [childChat]);
+  }, [capabilities.navigateSessions]);
   const ideReconnecting = state.ide.status === 'reconnecting';
   const operationsBlocked = transition.blocking || ideReconnecting;
   const sessions = useSessionActions({
@@ -120,8 +122,8 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
     navigate: setNavigation,
     openBtw,
     askBtw,
-    allowSessionNavigation: !childChat,
-  }), [operationsBlocked, compact, openBtw, askBtw, setNavigation, childChat]);
+    capabilities,
+  }), [operationsBlocked, compact, openBtw, askBtw, setNavigation, capabilities]);
   const composer = useComposerFlow(port, state, dispatch, routes);
   const currentComposer = useRef(composer);
   currentComposer.current = composer;
@@ -173,12 +175,12 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
   }} />, [state.interactions, messageActions.handlePermissionRespond, answer, port]);
   const footerInteraction = isFooterInteraction(state.interactions[0]);
   const renderEditorSettings = useCallback((owner: string) => <ComposerControls editorOwner={owner} state={state} port={port} blocked={operationsBlocked}
-    theme={theme.context} onMissionOpen={childChat ? undefined : openMission} missionActive={!childChat && host.missionWorkspaceRoute === 'detail'} />,
-  [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute, childChat]);
+    theme={theme.context} onMissionOpen={capabilities.openMission ? openMission : undefined} missionActive={capabilities.openMission && host.missionWorkspaceRoute === 'detail'} />,
+  [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute, capabilities.openMission]);
   return (
     <ModelSourceProvider postMessage={postModelSource}>
     <ContentProvider value={content}>
-    <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={!childChat && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
+    <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={capabilities.openMission && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
         <div className="flex min-w-0 items-center gap-1.5">{!childChat ? <AppInfo /> : null}
@@ -187,7 +189,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
             blocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
         </div>
-        {!childChat ? <div className="flex shrink-0 items-center gap-1">
+        {capabilities.navigateSessions ? <div className="flex shrink-0 items-center gap-1">
           {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
             <Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-4" /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
@@ -209,10 +211,10 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
         </div>}
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
-          allowSessionNavigation={!childChat}
+          capabilities={capabilities}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
-          renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={childChat ? undefined : compact} compactPending={sessions.compactPending} theme={theme.context} onNewSession={childChat ? undefined : sessions.handleNewSession}
-            onMissionOpen={childChat ? undefined : openMission} missionActive={!childChat && host.missionWorkspaceRoute === 'detail'} />} />
+          renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={capabilities.compactSession ? compact : undefined} compactPending={sessions.compactPending} theme={theme.context} onNewSession={capabilities.navigateSessions ? sessions.handleNewSession : undefined}
+            onMissionOpen={capabilities.openMission ? openMission : undefined} missionActive={capabilities.openMission && host.missionWorkspaceRoute === 'detail'} />} />
         </div>
       </>}
       overlay={<>
@@ -224,9 +226,9 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
         <ToolActionsContext.Provider value={toolActions}>
           <InlineDiffContext.Provider value={inlineDiff}>
             <SubagentActivityStoreContext.Provider value={subagents.activityStore}>
-              <SelectSessionContext.Provider value={childChat ? null : sessions.handleSelectSession}>
-              <LiveTranscript ref={transcript} store={store} port={port} blocked={operationsBlocked} sendSignal={composer.sendSignal} onFork={childChat ? undefined : sessions.handleForkCurrentSession}
-                historyEditable={!childChat}
+              <SelectSessionContext.Provider value={capabilities.navigateSessions ? sessions.handleSelectSession : null}>
+              <LiveTranscript ref={transcript} store={store} port={port} blocked={operationsBlocked} sendSignal={composer.sendSignal} onFork={capabilities.navigateSessions ? sessions.handleForkCurrentSession : undefined}
+                historyEditable={capabilities.editHistory}
                 onEditBegin={composer.queueEditingId === null ? undefined : composer.handleQueueEditCancel}
                 onDraftSuggestion={!operationsBlocked && !composer.draft.trim() && composer.queueEditingId === null && !running && state.interactions.length === 0
                   ? composer.appendCanvasDraft : undefined}
@@ -239,7 +241,7 @@ export function ChatApp({ port }: { readonly port: ChatPort }) {
           </InlineDiffContext.Provider>
         </ToolActionsContext.Provider>
     </ChatLayout>
-    {!childChat && host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
+    {capabilities.openMission && host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
       inputNeeded={state.mission?.role === 'orchestrator' && state.interactions.length > 0} onShowChat={() => host.setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
     {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
       modelCatalog={state.modelCatalog} images={btw.images} selectedModel={btw.selectedModel}

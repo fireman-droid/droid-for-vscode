@@ -1,15 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronRight, Users } from 'lucide-react';
-import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage, type AgentChatStatus } from '../../shared/protocol/agentChatProtocol';
+import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import type { ChatPort } from '../host/chatIntent';
 import { Button } from '../ui/button';
 import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
 import type { ReactNode } from 'react';
-
-const STATUS_LABELS: Record<AgentChatStatus, string> = {
-  running: 'Running', paused: 'Paused', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped', unknown: 'Status unavailable',
-};
+import { presentNavigationAgent } from './subagents/agentPresentation';
 
 export function useAgentChatNavigation(sessionId: string | null): AgentChatNavigationMessage | null {
   const [navigation, setNavigation] = useState<AgentChatNavigationMessage | null>(null);
@@ -58,23 +55,29 @@ export function AgentNavigation({ navigation, port }: {
   const parentSessionId = navigation.parentSessionId;
   const running = navigation.agents.filter((agent) => agent.status === 'running').length;
   return <AgentSection count={navigation.agents.length} running={running}>
-    {navigation.agents.map((agent) => <li key={agent.key} className="flex min-w-0 items-center">
-      <Button variant="plain" size="none" className="v2-composer-changes-file min-w-0 flex-1"
-        aria-current={agent.key === navigation.currentKey ? 'page' : undefined}
-        title={`${agent.title}\n${agent.role} · ${STATUS_LABELS[agent.status]}`}
-        onClick={() => { if (agent.key !== navigation.currentKey) port.postMessage({ type: 'agent.chat.open', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key }); }}>
-        {agent.key === navigation.currentKey ? <Check aria-hidden="true" /> : <Users aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate">{agent.title}</span>
-        <span className={`shrink-0 text-[11px] ${agent.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{STATUS_LABELS[agent.status]}</span>
-      </Button>
-      {agent.canStop || agent.stopPending ? <Button variant="plain" size="none"
-        className="v2-composer-changes-stop min-h-7 w-[68px] shrink-0 whitespace-nowrap"
-        disabled={agent.stopPending} aria-busy={agent.stopPending}
-        aria-label={`${agent.stopPending ? 'Stopping' : 'Stop'} agent task: ${agent.title}`}
-        title={`${agent.stopPending ? 'Stopping' : 'Stop'} ${agent.title}`}
-        onClick={() => port.postMessage({ type: 'agent.chat.stop', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key })}>
-        {agent.stopPending ? 'Stopping…' : 'Stop'}
-      </Button> : null}
-    </li>)}
+    {navigation.agents.map((agent) => {
+      const row = presentNavigationAgent(agent, navigation.currentKey, {
+        open: () => port.postMessage({ type: 'agent.chat.open', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key }),
+        stop: () => port.postMessage({ type: 'agent.chat.stop', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key }),
+      });
+      return <li key={agent.key} className="flex min-w-0 items-center">
+        <Button variant="plain" size="none" className="v2-composer-changes-file min-w-0 flex-1"
+          aria-current={row.selected ? 'page' : undefined}
+          title={`${row.title}\n${row.role} · ${row.statusLabel}`}
+          onClick={row.onOpen}>
+          {row.selected ? <Check aria-hidden="true" /> : <Users aria-hidden="true" />}
+          <span className="min-w-0 flex-1 truncate">{row.title}</span>
+          <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{row.statusLabel}</span>
+        </Button>
+        {row.onStop ? <Button variant="plain" size="none"
+          className="v2-composer-changes-stop min-h-7 w-[68px] shrink-0 whitespace-nowrap"
+          disabled={row.stopPending} aria-busy={row.stopPending || undefined}
+          aria-label={`${row.stopPending ? 'Stopping' : 'Stop'} agent task: ${row.title}`}
+          title={`${row.stopPending ? 'Stopping' : 'Stop'} ${row.title}`}
+          onClick={row.onStop}>
+          {row.stopPending ? 'Stopping…' : 'Stop'}
+        </Button> : null}
+      </li>;
+    })}
   </AgentSection>;
 }

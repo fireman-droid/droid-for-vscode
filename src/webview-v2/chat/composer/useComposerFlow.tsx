@@ -11,6 +11,7 @@ import {
   type SlashNavTarget,
 } from './slashBuiltins';
 import { type AssistantWebviewAction, type AssistantWebviewState } from '../../state/types';
+import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../../shared/chatSurfacePolicy';
 
 type InputState = Pick<
   AssistantWebviewState,
@@ -34,7 +35,7 @@ export function useComposerFlow(
     readonly navigate: (target: SlashNavTarget) => void;
     readonly openBtw: () => void;
     readonly askBtw: (question: string) => void;
-    readonly allowSessionNavigation?: boolean;
+    readonly capabilities?: ChatSurfaceCapabilities;
   },
 ) {
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
@@ -112,7 +113,7 @@ export function useComposerFlow(
   const connectionStatus = state.connection.status;
   const interactionCount = state.interactions.length;
   const settingsUpdating = state.settings.status === 'updating';
-  const { blocked, compact, navigate, openBtw, askBtw, allowSessionNavigation = true } = routes;
+  const { blocked, compact, navigate, openBtw, askBtw, capabilities = getChatSurfaceCapabilities('main') } = routes;
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
       if (blocked || settingsUpdating) return;
@@ -135,7 +136,8 @@ export function useComposerFlow(
       }
       const builtin = resolveBuiltinSlash(text, { btwEnabled: state.btwAvailable });
       if (builtin !== null) {
-        if (!allowSessionNavigation && (builtin.kind === 'new' || builtin.kind === 'compact' || builtin.kind === 'navigate' && builtin.target === 'sessions')) {
+        if (!capabilities.navigateSessions && (builtin.kind === 'new' || builtin.kind === 'navigate' && builtin.target === 'sessions') ||
+          !capabilities.compactSession && builtin.kind === 'compact') {
           setCommandNotice('Return to the main chat to switch sessions, start a new task, or compact the conversation.');
           return;
         }
@@ -201,7 +203,7 @@ export function useComposerFlow(
     },
     [
       blocked,
-      allowSessionNavigation,
+      capabilities,
       settingsUpdating,
       finishQueueEdit,
       queueEditingId,

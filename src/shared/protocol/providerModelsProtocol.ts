@@ -14,7 +14,7 @@ import {
   isSafeText,
   type CustomModelProvider,
   type DiscoveredCustomModel,
-} from './customModelsProtocol';
+} from './customModelValues';
 
 export interface ProviderModelTestResult {
   readonly model: string;

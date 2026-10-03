@@ -75,10 +75,10 @@ export type TurnStopPort = TurnStatusPort & TurnIdentityPort & Pick<HostOperatio
 export type TurnFlowPort = TurnRuntimeEventPort & TurnCompletionPort & TurnIdentityPort & Pick<HostOperations, 'modelAvailability' | 'missionGateway'> & {
   readonly metadata: Readonly<Pick<HostOperations['metadata'], 'settings'>>;
   readonly sessionState: Readonly<Pick<SessionLifecycleState, 'runtimeGeneration'>>;
-  readonly turnState: Pick<TurnState, 'turn' | 'turnGeneration'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;
   readonly attachmentState: Pick<AttachmentStagingState, 'pendingSentAttachments'>;
   readonly effects: Pick<ChatEffects,
-    'discardPendingThinking' | 'armTurnWatchdog' | 'takePendingAttachments' | 'touchActiveSession' |
+    'beginTurn' | 'attachTurnRecovery' | 'armTurnWatchdog' | 'takePendingAttachments' | 'touchActiveSession' |
     'recordRecentCommand' | 'echoUserImageAttachments' | 'startLiveChanges' | 'capturePreToolBaseline' | 'reconcileDaemonTurn'>;
 };
 
@@ -96,11 +96,12 @@ export interface TurnRetryPort extends Pick<HostOperations, 'getWorkspaceContext
 export type CompactPort = TurnContextPort & Pick<HostOperations,
   'emit' | 'emitSnapshot' | 'emitSessionDiagnostic' | 'isCurrentSessionOperation' | 'interactions' | 'recoveryStore'> & {
   readonly metadata: Readonly<Pick<HostOperations['metadata'], 'settingsUpdate'>> & Pick<HostOperations['metadata'], 'tokenUsage'>;
-  readonly sessionState: Readonly<Pick<SessionLifecycleState, 'conversationId'>> &
-    Pick<SessionLifecycleState, 'sessionId' | 'sessionOperationInProgress' | 'connection'>;
+  readonly sessionState: Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> &
+    Pick<SessionLifecycleState, 'sessionOperationInProgress' | 'connection'>;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>> & Pick<SessionDirectoryState, 'sessions'>;
-  readonly turnState: Pick<TurnState, 'turn'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
+  readonly recoveryState: Readonly<Pick<ConversationRecoveryState, 'transcript'>>;
   readonly missionState: Pick<MissionSessionState, 'mission'>;
   readonly effects: Pick<ChatEffects, 'ensureActiveRuntimeWorkspaceCurrent' | 'adoptDurableSuccessor' |
-    'activeSessionSummary' | 'withActiveSession' | 'loadHistoryTimed' | 'flushRecoveryCheckpointOrReport'>;
+    'activeSessionSummary' | 'commitSessionBinding' | 'loadHistoryTimed' | 'flushRecoveryCheckpointOrReport'>;
 };

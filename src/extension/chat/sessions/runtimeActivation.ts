@@ -3,7 +3,7 @@ import type { RuntimeAvailability } from '../../../runtime/runtimeEvents';
 import type { HostTranscriptState } from '../../recovery/hostTranscriptState';
 import { recordCreatedWorktreeSession } from '../../workspace/worktreeSessions';
 import { isSafeBridgeId, type CurrentTurn } from '../internals';
-import { createTurnActivityState } from '../turns/turnActivityState';
+import { createRestoredTurn } from '../turns/turnLifecycle';
 import { SESSION_NEW_FAILED_MESSAGE } from './sessionDirectory';
 import { SESSION_RESUME_FAILED_MESSAGE, unavailableMessage } from './sessionErrors';
 import { closeRuntime } from './sessionCleanup';
@@ -27,10 +27,10 @@ export async function prepareHistory(
         ctl.sessionState.connection.status === 'connecting') {
       // Show verified history while the native handshake continues. No runtime
       // ownership or recovery checkpoint is committed at this display boundary.
-      ctl.sessionState.sessionId = target.sessionId;
-      ctl.sessionState.conversationId = ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId;
-      ctl.recoveryState.transcript = transcript;
-      ctl.turnState.turn = null;
+      ctl.effects.showSessionHistory({
+        sessionId: target.sessionId,
+        conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId,
+      }, transcript);
       ctl.recordHost({ level: 'info', name: 'host.perf.history-visible', attributes: {
         sessionId: target.sessionId, items: transcript.transcript.length,
         durationMs: phases ? elapsedMs(phases.startedAt) : 0,
@@ -41,8 +41,10 @@ export async function prepareHistory(
   } catch {
     if (isCurrentRuntimeGeneration(ctl, generation) && isTargetWorkspaceCurrent(ctl, target.cwd)) {
       if (ctl.sessionState.sessionId === null && target.kind === 'resume') {
-        ctl.sessionState.sessionId = target.sessionId;
-        ctl.sessionState.conversationId = ctl.recoveryStore.resolveConversationId(target.sessionId) ?? null;
+        ctl.effects.bindSessionIdentity({
+          sessionId: target.sessionId,
+          conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? null,
+        });
       }
       ctl.sessionState.connection = {
         status: 'unavailable',
@@ -221,33 +223,25 @@ export async function activateRuntime(
 
   ctl.sessionState.runtime = runtime;
   ctl.sessionState.activeRuntimeCwd = target.cwd;
-  ctl.sessionState.conversationId =
-    ctl.recoveryStore.resolveConversationId(sessionId) ?? sessionId;
-  ctl.sessionState.sessionId = sessionId;
-  ctl.turnState.turn =
-    restoredTurn === null
-      ? null
-      : {
-          ...restoredTurn,
-          activity: createTurnActivityState(),
-          ...(isTurnActiveStatus(restoredTurn.status)
-            ? { recovery: true as const }
-            : {}),
-        };
-  ctl.recoveryState.transcript = transcript;
-  ctl.catalogState.sessions = ctl.effects.withActiveSession(
-    ctl.catalogState.sessions,
-    target.kind === 'new'
-      ? {
-          id: sessionId,
-          title: 'New session',
-          messageCount: 0,
-          modifiedTime: new Date().toISOString(),
-          active: true,
-          isFavorite: false,
-        }
-      : undefined,
-  );
+  ctl.effects.commitSessionBinding({
+    conversationId: ctl.recoveryStore.resolveConversationId(sessionId) ?? sessionId,
+    sessionId,
+    transcript,
+    turn: createRestoredTurn(restoredTurn === null ? null : {
+      ...restoredTurn,
+      ...(isTurnActiveStatus(restoredTurn.status) ? { recovery: true as const } : {}),
+    }),
+    ...(target.kind === 'new' ? {
+      catalogEntry: {
+        id: sessionId,
+        title: 'New session',
+        messageCount: 0,
+        modifiedTime: new Date().toISOString(),
+        active: true,
+        isFavorite: false,
+      },
+    } : {}),
+  });
   ctl.sessionState.connection = { status: 'connected' };
   if (phases) ctl.recordHost({ level: 'info', name: 'host.perf.activation-ready', attributes: {
     kind: target.kind, sessionId, durationMs: elapsedMs(phases.startedAt),

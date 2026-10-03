@@ -1,4 +1,6 @@
 import type { ChatController } from './ChatController';
+import { bindSessionIdentity, commitSessionBinding, showSessionHistory } from './sessions/sessionBinding';
+import { attachTurnRecovery, beginTurn, clearTurn, restoreTurn } from './turns/turnLifecycle';
 import { reconnectRecoveredIde, resumeRecoveredIdeReconnect } from './ideIntegration';
 import {
   loadHistoryTimed,
@@ -105,6 +107,13 @@ type BoundEffect<F> = F extends (owner: never, ...args: infer A) => infer R
   ? (...args: A) => R
   : never;
 export interface ChatEffects {
+  bindSessionIdentity: BoundEffect<typeof bindSessionIdentity>;
+  commitSessionBinding: BoundEffect<typeof commitSessionBinding>;
+  showSessionHistory: BoundEffect<typeof showSessionHistory>;
+  beginTurn: BoundEffect<typeof beginTurn>;
+  clearTurn: BoundEffect<typeof clearTurn>;
+  restoreTurn: BoundEffect<typeof restoreTurn>;
+  attachTurnRecovery: BoundEffect<typeof attachTurnRecovery>;
   startup: BoundEffect<typeof startup>;
   resetSessionMetadata: BoundEffect<typeof resetSessionMetadata>;
   checkpointRecoveryTranscript: BoundEffect<typeof checkpointRecoveryTranscript>;
@@ -207,6 +216,13 @@ export interface ChatEffects {
 }
 export function createChatEffects(controller: ChatController): ChatEffects {
   return {
+    bindSessionIdentity: (...args) => bindSessionIdentity(controller, ...args),
+    commitSessionBinding: (...args) => commitSessionBinding(controller, ...args),
+    showSessionHistory: (...args) => showSessionHistory(controller, ...args),
+    beginTurn: (...args) => beginTurn(controller, ...args),
+    clearTurn: () => clearTurn(controller),
+    restoreTurn: (...args) => restoreTurn(controller, ...args),
+    attachTurnRecovery: (...args) => attachTurnRecovery(controller, ...args),
     startup: () => startup(controller),
     resetSessionMetadata: (...args) => resetSessionMetadata(controller, ...args),
     checkpointRecoveryTranscript: () => checkpointRecoveryTranscript(controller),

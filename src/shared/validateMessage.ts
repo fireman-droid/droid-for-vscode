@@ -252,6 +252,10 @@ export function parseWebviewMessage(value: unknown): WebviewToHostMessage | unde
   }
 }
 
+export function isWebviewToHostMessage(value: unknown): value is WebviewToHostMessage {
+  return parseWebviewMessage(value) !== undefined;
+}
+
 export {
   isPreviewableFilePath,
   isSafeCommandName,
@@ -259,6 +263,5 @@ export {
   isSafeModelId,
   isSafeOpenPath,
   isSafeWorkspaceRelativePath,
-  isWebviewToHostMessage,
   sanitizeSessionTitle,
 } from './validation/guards';

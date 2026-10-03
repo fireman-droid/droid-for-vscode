@@ -33,7 +33,7 @@ export function handleWorkspaceContextChanged(ctl: WorkspaceLifecyclePort): void
   }
   ctl.sessionState.runtime = null;
   ctl.sessionState.activeRuntimeCwd = null;
-  ctl.turnState.turn = null;
+  ctl.effects.clearTurn();
   ctl.interactions.cancelAll();
   if (isUsableWorkspace(workspace)) {
     ctl.effects.bindCatalogViewToWorkspace(workspace.cwd);

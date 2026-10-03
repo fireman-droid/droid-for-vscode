@@ -194,21 +194,20 @@ export function createController(
   btwSidecarFactory?: BtwSidecarFactory,
   missionGateway?: MissionGateway,
 ) {
-  const controller = new ChatController(
+  const controller = new ChatController({
     createRuntime,
-    () =>
+    getWorkspaceContext: () =>
       workspace ?? {
         cwd: 'C:\\workspace',
         trusted: true,
       },
-    catalog,
-    recovery,
-    history,
-    attachments,
+    sessionCatalog: catalog,
+    recoveryStore: recovery,
+    sessionHistory: history,
+    attachmentSources: attachments,
     fileDiff,
     changeStats,
     externalUrl,
-    undefined,
     diagnostics,
     daemonSessions,
     pathOpener,
@@ -219,7 +218,7 @@ export function createController(
     daemonPlugins,
     btwSidecarFactory,
     missionGateway,
-  );
+  });
   const messages: ControllerHostMessage[] = [];
   controller.subscribe((message) => {
     messages.push(message);

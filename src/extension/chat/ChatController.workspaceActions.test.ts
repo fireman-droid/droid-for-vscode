@@ -926,7 +926,10 @@ describe('ChatController', () => {
   });
 
   it('streams a live changes ledger and settles it with git line stats', async () => {
+    const finishTurn = deferred<void>();
+    const measurement = deferred<ReadonlyMap<string, FileChangeStat>>();
     const runtime = createMockRuntime(async function* () {
+      yield { type: 'user-message', messageId: 'message-1' };
       yield {
         type: 'tool-start',
         toolName: 'Edit',
@@ -957,12 +960,14 @@ describe('ChatController', () => {
         action: 'Created workspace files',
         isError: false,
       };
+      await finishTurn.promise;
       yield successfulTurn();
     });
+    const stats = new Map([['src/app.ts', { additions: 3, deletions: 1 }]]);
     const read = vi.fn(
       async (): Promise<ReadonlyMap<string, FileChangeStat>> =>
-        new Map([['src/app.ts', { additions: 3, deletions: 1 }]]),
-    );
+        stats,
+    ).mockImplementationOnce(() => measurement.promise);
     const captureTurnBaseline = vi.fn(async () => {});
     const { controller, messages } = createController(
       () => runtime,
@@ -974,78 +979,52 @@ describe('ChatController', () => {
       undefined,
       { read, captureTurnBaseline },
     );
-    ready(controller);
-    await waitForConnected(messages);
+    try {
+      ready(controller);
+      await waitForConnected(messages);
+      send(controller, 'session-1', 'turn-1', 'Change files');
+      await vi.waitFor(() => expect(read).toHaveBeenCalled(), { timeout: 2_000 });
 
-    send(controller, 'session-1', 'turn-1', 'Change files');
-    await vi.waitFor(() => {
-      expect(
-        messages.some(
-          (message) => message.type === 'changes.update' && message.state === 'settled',
-        ),
-      ).toBe(true);
-    });
+      // Completed tools name candidates; no row is attributed before measurement.
+      expect(messages.filter((message) => message.type === 'changes.update')).toEqual([]);
+      measurement.resolve(stats);
+      await vi.waitFor(() => expect(lastMessage(messages, 'changes.update')).toMatchObject({
+        sessionId: 'session-1', turnId: 'turn-1', state: 'writing',
+        files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+      }));
+      expect(turnStates(messages).at(-1)?.status).toBe('streaming');
+      expect(captureTurnBaseline.mock.calls.slice(0, 2)).toEqual([
+        [{ sessionId: 'session-1', turnId: 'turn-1' }, ['src/app.ts']],
+        [{ sessionId: 'session-1', turnId: 'turn-1' }, ['docs/new.md']],
+      ]);
 
-    const updates = messages.filter((message) => message.type === 'changes.update');
-    expect(captureTurnBaseline.mock.calls).toEqual([
-      [{ sessionId: 'session-1', turnId: 'turn-1' }, ['src/app.ts']],
-      [{ sessionId: 'session-1', turnId: 'turn-1' }, ['docs/new.md']],
-    ]);
-    // Each completed file tool published its row immediately: first
-    // frame with one file, second with both, all pre-git (null
-    // counts) because the per-file stat read is debounced.
-    expect(updates[0]).toMatchObject({
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      state: 'writing',
-      files: [{ path: 'src/app.ts', additions: null, deletions: null }],
-    });
-    expect(updates[1]).toMatchObject({
-      state: 'writing',
-      files: [
-        { path: 'src/app.ts', additions: null, deletions: null },
-        { path: 'docs/new.md', additions: null, deletions: null },
-      ],
-    });
-    // Paths and their owning turn are reconciled together.
-    expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md'], {
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-    });
-    expect(updates.at(-1)).toMatchObject({
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      state: 'settled',
-      files: [
-        { path: 'src/app.ts', additions: 3, deletions: 1 },
-        { path: 'docs/new.md', additions: null, deletions: null },
-      ],
-    });
-    expect(
-      controller.recoveryState.transcript.transcript.find(
+      finishTurn.resolve();
+      await vi.waitFor(() => expect(lastMessage(messages, 'changes.update')).toMatchObject({
+        sessionId: 'session-1', turnId: 'turn-1', state: 'settled',
+        files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+      }));
+      expect(read).toHaveBeenCalledWith(['src/app.ts', 'docs/new.md'], {
+        sessionId: 'session-1', turnId: 'turn-1',
+      });
+      // The unreadable candidate was never measured and must not become a changed file.
+      const updates = messages.filter((message) => message.type === 'changes.update');
+      expect(updates.every((update) => update.files.every((file) => file.path !== 'docs/new.md'))).toBe(true);
+      expect(controller.recoveryState.transcript.transcript.find(
         (item) => item.kind === 'changes' && item.turnId === 'turn-1',
-      ),
-    ).toMatchObject({
-      files: [
-        { path: 'src/app.ts', additions: 3, deletions: 1 },
-        { path: 'docs/new.md', additions: null, deletions: null },
-      ],
-    });
-    expect(
-      controller.recoveryStore.readLatestChanges(controller.sessionState.conversationId!),
-    ).toMatchObject({
-      turnId: 'turn-1',
-      prompt: 'Change files',
-      changesSettled: true,
-      files: [
-        { path: 'src/app.ts', additions: 3, deletions: 1 },
-        { path: 'docs/new.md', additions: null, deletions: null },
-      ],
-    });
-    expect(snapshots(messages).at(-1)?.latestChanges).toMatchObject({
-      turnId: 'turn-1',
-      prompt: 'Change files',
-    });
+      )).toMatchObject({ files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }] });
+      // Only the message identity is persisted; the visible prompt comes from the live transcript.
+      expect(controller.recoveryStore.readLatestChanges(controller.sessionState.conversationId!)).toMatchObject({
+        turnId: 'turn-1', messageId: 'message-1', prompt: null, changesSettled: true,
+        files: [{ path: 'src/app.ts', additions: 3, deletions: 1 }],
+      });
+      expect(snapshots(messages).at(-1)?.latestChanges).toMatchObject({
+        turnId: 'turn-1', prompt: 'Change files',
+      });
+    } finally {
+      measurement.resolve(stats);
+      finishTurn.resolve();
+      await controller.dispose();
+    }
   });
 
   it('persists an empty canonical settlement when no net change remains', async () => {
@@ -1219,40 +1198,36 @@ describe('ChatController', () => {
       );
       const settleWritingTurn = vi.fn();
       Object.defineProperty(controller, 'reviewCoordinator', {
-        value: { settleWritingTurn, replay: vi.fn(async () => {}) },
+        value: { settleWritingTurn, replay: vi.fn(async () => {}), dispose: vi.fn() },
       });
-      ready(controller);
-      await waitForConnected(messages);
-      settlementWrites = true;
+      try {
+        ready(controller);
+        await waitForConnected(messages);
+        settlementWrites = true;
 
-      send(controller, 'session-1', 'turn-1', 'Change file');
-      await vi.waitFor(() => {
-        expect(writes).toBe(outcome === 'pending' ? 1 : 2);
-      });
-      expect(
-        messages.some(
+        send(controller, 'session-1', 'turn-1', 'Change file');
+        await vi.waitFor(() => expect(writes).toBe(outcome === 'pending' ? 1 : 2));
+        expect(messages.some(
           (message) => message.type === 'changes.update' && message.state === 'settled',
-        ),
-      ).toBe(false);
-      expect(settleWritingTurn).not.toHaveBeenCalled();
+        )).toBe(false);
+        expect(settleWritingTurn).not.toHaveBeenCalled();
 
-      if (outcome === 'pending') {
+        // A successful pending write can include all metadata in one revision.
+        // A rejected write needs the retry; neither may publish before it resolves.
+        if (outcome === 'pending') firstWrite.resolve();
+        else retryWrite.resolve();
+        await vi.waitFor(() => expect(messages.filter(
+          (message) => message.type === 'changes.update' && message.state === 'settled',
+        )).toHaveLength(1));
+        expect(settleWritingTurn).toHaveBeenCalledWith('session-1', 'turn-1', [
+          { path: 'src/app.ts', additions: 4, deletions: 2 },
+        ]);
+      } finally {
+        settlementWrites = false;
         firstWrite.resolve();
+        retryWrite.resolve();
+        await controller.dispose();
       }
-      await vi.waitFor(() => {
-        expect(writes).toBe(2);
-      });
-      retryWrite.resolve();
-      await vi.waitFor(() => {
-        expect(
-          messages.filter(
-            (message) => message.type === 'changes.update' && message.state === 'settled',
-          ),
-        ).toHaveLength(1);
-      });
-      expect(settleWritingTurn).toHaveBeenCalledWith('session-1', 'turn-1', [
-        { path: 'src/app.ts', additions: 4, deletions: 2 },
-      ]);
     },
   );
 

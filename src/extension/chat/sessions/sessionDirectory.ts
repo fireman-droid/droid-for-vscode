@@ -650,18 +650,21 @@ export async function performFork(
 
   // Unlike compaction, the forked-from session remains valid and
   // stays in the catalog; only the active marker moves to the fork.
-  ctl.sessionState.conversationId = forkedConversationId;
-  ctl.sessionState.sessionId = forkedSessionId;
-  ctl.turnState.turn = null;
-  ctl.effects.clearPendingAttachments();
-  ctl.catalogState.sessions = withActiveSession(ctl, ctl.catalogState.sessions, {
-    id: forkedSessionId,
-    title: forkTitle,
-    messageCount: 0,
-    modifiedTime: new Date().toISOString(),
-    active: true,
-    isFavorite: false,
+  ctl.effects.commitSessionBinding({
+    conversationId: forkedConversationId,
+    sessionId: forkedSessionId,
+    transcript: ctl.recoveryState.transcript,
+    turn: null,
+    catalogEntry: {
+      id: forkedSessionId,
+      title: forkTitle,
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+      isFavorite: false,
+    },
   });
+  ctl.effects.clearPendingAttachments();
 
   // The fork copies the conversation, but message IDs may differ, so
   // reload its history; keep the current transcript if that fails.

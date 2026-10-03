@@ -33,6 +33,28 @@ Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queu
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
 
+### 主／子聊天的装配与状态归属
+
+主面板和子代理面板加载同一个 `ChatApp`，各自持有独立 `ChatController`。控制器通过
+`ChatControllerDependencies` 具名装配；窗口共用的模型目录、禁用偏好、系统提示及
+Provider 服务集中在 `chatSharedServices`，每个控制器独立订阅和退订。恢复存储、附件、
+Review、快照和 Runtime 的释放仍属于各自聊天，关闭子标签不会释放父聊天订阅。
+
+Host 在生成 HTML 时固定 `main`／`child` 角色，`chatSurfacePolicy` 集中导航、压缩、
+编辑历史及 Mission 的能力。前端按角色显示入口，Host 按自身角色校验命令。Agent 导航
+只负责列表与选中项，关联被移除不会改变已打开面板的角色；`agentPresentation` 为导航
+条目和工具卡片适配状态、文案及回调，分别保留历史列表和工具活动／耗时的语义。
+
+`sessions/sessionBinding` 集中提交会话身份、正文、回合和目录投影；显示已读历史与
+接管可用 Runtime 分开。异步准备、持久化、代次校验由调用流程负责。压缩沿用原
+conversationId，Fork／编辑重发建立新 conversation；恢复不再次提交消息。
+`turns/turnLifecycle` 集中回合的代次、活动、诊断和 IO 初始化，传输恢复保留原活动与
+后端回合 ID；结束继续走既有完成／失败结算。相关 Port 对身份及整个回合只暴露读取，
+通过命名操作请求变更。
+
+共享消息解析依赖基础校验，基础校验不反向调用总解析器。两种模型协议共用
+`customModelValues` 的常量、类型与校验规则，消息格式和公开解析入口保持不变。
+
 ### SDK 0.9.1 设置与恢复
 
 模型元数据由 Runtime 的正式 `listModels` 目录投影到共享契约，禁用检查保留在 Host

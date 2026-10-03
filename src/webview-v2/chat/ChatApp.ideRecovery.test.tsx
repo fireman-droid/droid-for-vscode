@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { HostSnapshotMessage, HostToWebviewMessage } from '../../shared/bridgeMessages';
 import { initialAssistantWebviewState } from '../state/initialState';
 import { ChatApp } from './ChatApp';
+import { TooltipProvider } from '../ui/overlays';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -16,7 +17,7 @@ it('blocks session mutations during IDE preparation while retaining a sendable d
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
   const port = { postMessage: vi.fn(), getState: () => ({ draft: 'Continue with my changes' }), setState: vi.fn() };
   render(<UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => undefined }}>
-    <ChatApp port={port} />
+    <TooltipProvider><ChatApp port={port} /></TooltipProvider>
   </UiEnvironmentProvider>);
   const initial = initialAssistantWebviewState;
   const snapshot: HostSnapshotMessage = {

@@ -17,11 +17,9 @@ export interface RecoveryPort
     | 'metadata'
     | 'emitSessionDiagnostic'
   > {
-  readonly sessionState: Pick<
-    SessionLifecycleState,
-    'connection' | 'conversationId' | 'sessionId'
-  >;
-  readonly turnState: Pick<TurnState, 'turn' | 'turnGeneration' | 'turnIo'>;
+  readonly sessionState: Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> &
+    Pick<SessionLifecycleState, 'connection'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;
   readonly recoveryState: Pick<
     ConversationRecoveryState,
     'transcript' | 'pendingRecoveryCheckpoint' | 'recoveryCheckpointTimer'
@@ -30,6 +28,8 @@ export interface RecoveryPort
   readonly effects: Pick<
     ChatEffects,
     | 'setSessionRunning'
+    | 'beginTurn'
+    | 'restoreTurn'
     | 'isCurrentTurn'
     | 'failTurn'
     | 'loadHistoryTimed'

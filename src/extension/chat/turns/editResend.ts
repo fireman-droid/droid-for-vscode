@@ -272,19 +272,21 @@ export async function performEditResend(
     return null;
   }
 
-  ctl.sessionState.conversationId = forkedConversationId;
-  ctl.sessionState.sessionId = forkedSessionId;
-  ctl.recoveryState.transcript = truncated;
-  ctl.turnState.turn = null;
-  ctl.effects.clearPendingAttachments();
-  ctl.catalogState.sessions = ctl.effects.withActiveSession(ctl.catalogState.sessions, {
-    id: forkedSessionId,
-    title: forkTitleFromText(text),
-    messageCount: 0,
-    modifiedTime: new Date().toISOString(),
-    active: true,
-    isFavorite: false,
+  ctl.effects.commitSessionBinding({
+    conversationId: forkedConversationId,
+    sessionId: forkedSessionId,
+    transcript: truncated,
+    turn: null,
+    catalogEntry: {
+      id: forkedSessionId,
+      title: forkTitleFromText(text),
+      messageCount: 0,
+      modifiedTime: new Date().toISOString(),
+      active: true,
+      isFavorite: false,
+    },
   });
+  ctl.effects.clearPendingAttachments();
   pendingRewinds.delete(runtime);
   ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, truncated);
   return forkedSessionId;

@@ -53,6 +53,7 @@ import { replayControllerTo } from './browserReplay';
 import { RecentCommandsStore } from './capabilities/RecentCommandsStore';
 import { SessionMetadataState } from './capabilities/sessionMetadataState';
 import { createChatEffects } from './chatEffects';
+import { bindChatSharedServices, type ChatSharedServices } from './chatSharedServices';
 import { dispatchChatMessage } from './dispatchChatMessage';
 import { buildHostSnapshot } from './hostSnapshot';
 import { readControllerIde, type NativeIdeBackend } from './ideIntegration';
@@ -101,6 +102,33 @@ export type {
   WorkspaceContext,
   WorkspaceContextProvider,
 } from './hostTypes';
+export interface ChatControllerDependencies {
+  readonly createRuntime: DroidRuntimeFactory;
+  readonly getWorkspaceContext: WorkspaceContextProvider;
+  readonly sessionCatalog?: SessionCatalog;
+  readonly recoveryStore?: SessionRecoveryStore;
+  readonly sessionHistory?: SessionHistoryLoader;
+  readonly attachmentSources?: AttachmentSources;
+  readonly fileDiff?: FileDiffOpener;
+  readonly changeStats?: ChangeStatsReader;
+  readonly externalUrl?: ExternalUrlOpener;
+  readonly recentCommands?: RecentCommandsStore;
+  readonly diagnostics?: RuntimeDiagnosticSink;
+  readonly daemonSessions?: () => Promise<DaemonSessionCatalog>;
+  readonly pathOpener?: PathOpener;
+  readonly prototypePreview?: PrototypePreviewOpener;
+  readonly gitWorkflow?: GitWorkflow;
+  readonly worktreeSessions?: WorktreeSessionsFeature;
+  readonly terminalMirror?: TerminalMirror;
+  readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>;
+  readonly btwSidecarFactory?: BtwSidecarFactory;
+  readonly missionGateway?: MissionGateway;
+  readonly turnSnapshots?: TurnSnapshotStore;
+  readonly planDocuments?: PlanDocumentGateway;
+  readonly reviewCoordinator?: ReviewCoordinator;
+  readonly childSession?: { readonly sessionId: string; readonly cwd: string };
+  readonly sharedServices?: ChatSharedServices;
+}
 export class ChatController {
   readonly sessionState: SessionLifecycleState;
   readonly catalogState = new SessionDirectoryState();
@@ -133,32 +161,58 @@ export class ChatController {
   promptProviderApiKey?: () => Thenable<string | undefined>;
   /** Hidden-fork side chat; null when no sidecar factory is wired. */
   readonly btwSideChat: BtwSideChat | null;
-  constructor(
-    readonly createRuntime: DroidRuntimeFactory,
-    readonly getWorkspaceContext: WorkspaceContextProvider,
-    readonly sessionCatalog: SessionCatalog = createEmptySessionCatalog(),
-    readonly recoveryStore: SessionRecoveryStore = createTransientRecoveryStore(),
-    readonly sessionHistory: SessionHistoryLoader = createUnavailableSessionHistoryLoader(),
-    readonly attachmentSources: AttachmentSources = createUnavailableAttachmentSources(),
-    readonly fileDiff: FileDiffOpener = createUnavailableFileDiffOpener(),
-    readonly changeStats: ChangeStatsReader = createUnavailableChangeStatsReader(),
-    readonly externalUrl: ExternalUrlOpener = createUnavailableExternalUrlOpener(),
-    readonly recentCommands: RecentCommandsStore = new RecentCommandsStore(),
-    readonly diagnostics?: RuntimeDiagnosticSink,
-    readonly daemonSessions?: () => Promise<DaemonSessionCatalog>,
-    readonly pathOpener: PathOpener = createUnavailablePathOpener(),
-    readonly prototypePreview: PrototypePreviewOpener = createUnavailablePrototypePreviewOpener(),
-    readonly gitWorkflow: GitWorkflow = createUnavailableGitWorkflow(),
-    readonly worktreeSessions?: WorktreeSessionsFeature,
-    readonly terminalMirror?: TerminalMirror,
-    readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>,
-    btwSidecarFactory?: BtwSidecarFactory,
-    readonly missionGateway?: MissionGateway,
-    readonly turnSnapshots?: TurnSnapshotStore,
-    readonly planDocuments: PlanDocumentGateway = createUnavailablePlanDocumentGateway(),
-    readonly reviewCoordinator?: ReviewCoordinator,
-    readonly childSession?: { readonly sessionId: string; readonly cwd: string },
-  ) {
+  readonly createRuntime: DroidRuntimeFactory;
+  readonly getWorkspaceContext: WorkspaceContextProvider;
+  readonly sessionCatalog: SessionCatalog;
+  readonly recoveryStore: SessionRecoveryStore;
+  readonly sessionHistory: SessionHistoryLoader;
+  readonly attachmentSources: AttachmentSources;
+  readonly fileDiff: FileDiffOpener;
+  readonly changeStats: ChangeStatsReader;
+  readonly externalUrl: ExternalUrlOpener;
+  readonly recentCommands: RecentCommandsStore;
+  readonly diagnostics?: RuntimeDiagnosticSink;
+  readonly daemonSessions?: () => Promise<DaemonSessionCatalog>;
+  readonly pathOpener: PathOpener;
+  readonly prototypePreview: PrototypePreviewOpener;
+  readonly gitWorkflow: GitWorkflow;
+  readonly worktreeSessions?: WorktreeSessionsFeature;
+  readonly terminalMirror?: TerminalMirror;
+  readonly daemonPlugins?: () => Promise<DaemonPluginCatalog>;
+  readonly missionGateway?: MissionGateway;
+  readonly turnSnapshots?: TurnSnapshotStore;
+  readonly planDocuments: PlanDocumentGateway;
+  readonly reviewCoordinator?: ReviewCoordinator;
+  readonly childSession?: { readonly sessionId: string; readonly cwd: string };
+  readonly sharedServices: ChatSharedServices;
+  private readonly sharedServicesSubscription?: DisposableSubscription;
+
+  constructor(dependencies: ChatControllerDependencies) {
+    this.createRuntime = dependencies.createRuntime;
+    this.getWorkspaceContext = dependencies.getWorkspaceContext;
+    this.sessionCatalog = dependencies.sessionCatalog ?? createEmptySessionCatalog();
+    this.recoveryStore = dependencies.recoveryStore ?? createTransientRecoveryStore();
+    this.sessionHistory = dependencies.sessionHistory ?? createUnavailableSessionHistoryLoader();
+    this.attachmentSources = dependencies.attachmentSources ?? createUnavailableAttachmentSources();
+    this.fileDiff = dependencies.fileDiff ?? createUnavailableFileDiffOpener();
+    this.changeStats = dependencies.changeStats ?? createUnavailableChangeStatsReader();
+    this.externalUrl = dependencies.externalUrl ?? createUnavailableExternalUrlOpener();
+    this.recentCommands = dependencies.recentCommands ?? new RecentCommandsStore();
+    this.diagnostics = dependencies.diagnostics;
+    this.daemonSessions = dependencies.daemonSessions;
+    this.pathOpener = dependencies.pathOpener ?? createUnavailablePathOpener();
+    this.prototypePreview = dependencies.prototypePreview ?? createUnavailablePrototypePreviewOpener();
+    this.gitWorkflow = dependencies.gitWorkflow ?? createUnavailableGitWorkflow();
+    this.worktreeSessions = dependencies.worktreeSessions;
+    this.terminalMirror = dependencies.terminalMirror;
+    this.daemonPlugins = dependencies.daemonPlugins;
+    this.missionGateway = dependencies.missionGateway;
+    this.turnSnapshots = dependencies.turnSnapshots;
+    this.planDocuments = dependencies.planDocuments ?? createUnavailablePlanDocumentGateway();
+    this.reviewCoordinator = dependencies.reviewCoordinator;
+    this.childSession = dependencies.childSession;
+    this.sharedServices = dependencies.sharedServices ?? {};
+    const { btwSidecarFactory } = dependencies;
     this.sessionState = new SessionLifecycleState({ ...this.getWorkspaceContext() });
     this.recoveryStore.setBackgroundFlushFailureReporter(() => {
       this.recordHost({
@@ -232,6 +286,7 @@ export class ChatController {
       (sessionId) => sessionId === this.sessionState.sessionId
         ? this.metadata.settings.value?.autonomyLevel : undefined,
     );
+    this.sharedServicesSubscription = bindChatSharedServices(this, this.sharedServices);
   }
   subscribe(listener: ChatControllerListener): DisposableSubscription {
     if (this.sessionState.disposed) {
@@ -274,6 +329,7 @@ export class ChatController {
     checkpointRecoveryTranscript(this);
     this.interactions.cancelAll();
     this.btwSideChat?.reset();
+    this.sharedServicesSubscription?.dispose();
     this.metadata.dispose();
     clearZombieSubagentWatch(this);
     clearTurnWatchdog(this);

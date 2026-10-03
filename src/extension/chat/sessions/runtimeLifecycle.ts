@@ -220,7 +220,7 @@ export async function replaceRuntime(
       // The turn now runs unattended on the daemon: drop the local
       // projection without a terminal turn.state (the turn did not
       // end) and flag the row for the background watcher.
-      ctl.turnState.turn = null;
+      ctl.effects.clearTurn();
       ctl.diagnostics?.endTurnScope?.();
       ctl.effects.setSessionRunning(detachedSessionId, true);
       ctl.effects.ensureBackgroundRunningPoll();
@@ -320,19 +320,17 @@ export async function activateInitialRuntime(
   }
   if (activation.status === 'failed') {
     if (failedResumeId) {
-      ctl.sessionState.conversationId =
-        ctl.recoveryStore.resolveConversationId(failedResumeId) ?? failedResumeId;
-      ctl.sessionState.sessionId = failedResumeId;
-      ctl.recoveryState.transcript = transcript;
-      ctl.catalogState.sessions = ctl.effects.withActiveSession(
-        ctl.catalogState.sessions,
-      );
+      ctl.effects.commitSessionBinding({
+        conversationId: ctl.recoveryStore.resolveConversationId(failedResumeId) ?? failedResumeId,
+        sessionId: failedResumeId,
+        transcript,
+        turn: ctl.turnState.turn,
+      });
     } else {
-      ctl.sessionState.conversationId = null;
-      ctl.sessionState.sessionId = null;
+      ctl.effects.showSessionHistory({ conversationId: null, sessionId: null },
+        createHostTranscriptState('unavailable'));
       ctl.missionState.mission = null;
       ctl.metadata.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
-      ctl.recoveryState.transcript = createHostTranscriptState('unavailable');
     }
     ctl.sessionState.connection = {
       status: 'unavailable',

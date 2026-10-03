@@ -11,8 +11,9 @@ import { StagedAttachments } from './EditAttachments';
 import { useAttachmentIngress } from './useAttachmentIngress';
 import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestions';
 import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
+import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
 
-export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen, allowSessionNavigation = true }: {
+export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: AssistantWebviewState;
   readonly port: ChatPort;
   readonly flow: ReturnType<typeof useComposerFlow>;
@@ -22,11 +23,11 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
   readonly onFileSearch: (id: string, query: string) => void;
   readonly onNavigate: (page: SlashNavTarget) => void;
   readonly onBtwOpen: () => void;
-  readonly allowSessionNavigation?: boolean;
+  readonly capabilities?: ChatSurfaceCapabilities;
 }) {
   const [notice, setNotice] = useState<string | null>(null);
   const attachments = useAttachmentActions(port, state.sessionId, state.connection.status);
-  const capabilities = useCapabilityActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status });
+  const capabilityActions = useCapabilityActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status });
   const disabled = blocked || state.sessionId === null || state.connection.status !== 'connected' || state.interactions.length > 0;
   const ingress = useAttachmentIngress({
     owner: state.sessionId, conversationId: state.conversationId,
@@ -40,8 +41,8 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
   const suggestions = useComposerSuggestions({
     state, draft: body, disabled, onChange: changeBody,
     onFileSearch, onAttachPath: attachments.handleAttachPath,
-    onCommandsRefresh: capabilities.handleCommandsRefresh, onSkillsRefresh: capabilities.handleSkillsRefresh,
-    onNavigate, onBtwOpen, allowSessionNavigation,
+    onCommandsRefresh: capabilityActions.handleCommandsRefresh, onSkillsRefresh: capabilityActions.handleSkillsRefresh,
+    onNavigate, onBtwOpen, capabilities,
   });
   useEffect(() => { suggestions.dismiss(); setNotice(null); }, [flow.sendSignal, flow.draftCommand.id]);
   useEffect(() => {

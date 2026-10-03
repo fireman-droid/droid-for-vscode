@@ -58,15 +58,17 @@ export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
   Pick<HostOperations, 'recoveryStore' | 'interactions' | 'createRuntime' | 'recordHost' |
     'worktreeSessions' | 'isCurrentSessionOperation'> {
   readonly nativeIde?: Pick<NativeIdeBackend, 'read'>;
-  readonly sessionState: SessionGuardPort['sessionState'] & Pick<SessionLifecycleState,
-    'runtime' | 'activeRuntimeCwd' | 'conversationId' | 'sessionId' | 'connection' |
+  readonly sessionState: SessionGuardPort['sessionState'] &
+    Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> & Pick<SessionLifecycleState,
+    'runtime' | 'activeRuntimeCwd' | 'connection' |
     'closeRuntime' | 'managedRuntimes'>;
-  readonly turnState: Pick<TurnState, 'turn'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly catalogState: Pick<SessionDirectoryState, 'sessions'>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly effects: Pick<ChatEffects,
+    'bindSessionIdentity' | 'showSessionHistory' | 'commitSessionBinding' |
     'prepareActivationTranscript' | 'markRecoveryCheckpointUnavailable' | 'recoveryTurnId' |
-    'persistActivationRecoveryCheckpoint' | 'withActiveSession' | 'recoverMissionProjection' |
+    'persistActivationRecoveryCheckpoint' | 'recoverMissionProjection' |
     'loadSessionMetadata' | 'restoreQueuedPrompts' | 'reconcileDaemonTurn' | 'armReplayedSubagentWatch'>;
 }
 
@@ -83,7 +85,7 @@ export interface RuntimeLifecyclePort extends RuntimeActivationPort,
   readonly missionState: Pick<MissionSessionState, 'mission'> &
     Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
   readonly effects: RuntimeActivationPort['effects'] & Pick<ChatEffects,
-    'clearCatalog' | 'bindCatalogViewToWorkspace' | 'beginCatalogLoad' | 'loadCatalog' | 'isCurrentCatalogRequest' |
+    'clearTurn' | 'clearCatalog' | 'bindCatalogViewToWorkspace' | 'beginCatalogLoad' | 'loadCatalog' | 'isCurrentCatalogRequest' |
     'discardCatalogRequest' | 'seedBackgroundRunning' | 'hasCatalogSession' |
     'flushRecoveryCheckpoint' | 'setSessionRunning' | 'ensureBackgroundRunningPoll' |
     'markSessionSwitchReady' | 'resumeRecoveredIdeReconnect' | 'resetSessionMetadata'>;
@@ -95,10 +97,10 @@ export interface WorkspaceLifecyclePort extends WorkspaceFeedbackPort,
   readonly sessionState: SessionGuardPort['sessionState'] & Pick<SessionLifecycleState,
     'runtime' | 'activeRuntimeCwd' | 'runtimeGeneration' | 'connection' | 'closeRuntime' |
     'workspaceContext' | 'workspaceContextGeneration' | 'workspaceTransition' | 'initialization'>;
-  readonly turnState: Pick<TurnState, 'turn' | 'turnGeneration'>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn'>> & Pick<TurnState, 'turnGeneration'>;
   readonly recoveryState: Readonly<Pick<ConversationRecoveryState,
     'recoveryCheckpointTimer' | 'pendingRecoveryCheckpoint'>>;
-  readonly effects: Pick<ChatEffects, 'startup' | 'resetSessionMetadata' |
+  readonly effects: Pick<ChatEffects, 'startup' | 'resetSessionMetadata' | 'clearTurn' |
     'checkpointRecoveryTranscript' | 'bindCatalogViewToWorkspace' | 'clearCatalog' |
     'markRecoveryCheckpointUnavailable'>;
 }

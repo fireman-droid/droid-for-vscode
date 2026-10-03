@@ -21,6 +21,7 @@ import {
   releaseSessionLease,
 } from '../runtime/daemon/sessionLease';
 import { ChatController } from './chat/ChatController';
+import type { ChatSharedServices } from './chat/chatSharedServices';
 import { registerAutocomplete } from './autocomplete/registerAutocomplete';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
@@ -54,7 +55,6 @@ import { createHttpCustomModelDiscovery } from './chat/models/modelDiscovery';
 import { ProviderRegistry } from './chat/models/providerRegistry';
 import { createModelManagementGateway } from '../runtime/models/modelManagement';
 import { DisabledModelsStore } from './models/DisabledModelsStore';
-import { bindModelAvailability } from './models/bindModelAvailability';
 import { ModelManager } from './models/ModelManager';
 import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
@@ -374,8 +374,22 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     },
   });
-  controller = new ChatController(
-    (interactionHandler) =>
+  const sharedChatServices = {
+    modelAvailability,
+    // Model management uses the lazy daemon sidecar shared with archive/search.
+    daemonCustomModels: async () => (await daemonSidecar.droid()).customModels,
+    modelDiscovery: createHttpCustomModelDiscovery(),
+    systemPromptStore,
+    providerRegistry: new ProviderRegistry(context.globalState, context.secrets),
+    promptProviderApiKey: () => vscode.window.showInputBox({
+      title: 'Save provider API key',
+      prompt: 'Stored in VS Code SecretStorage and copied to Droid settings for configured models.',
+      password: true,
+      ignoreFocusOut: true,
+    }),
+  } satisfies ChatSharedServices;
+  controller = new ChatController({
+    createRuntime: (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,
         diagnostics,
@@ -395,27 +409,27 @@ export function activate(context: vscode.ExtensionContext): void {
           systemPromptStore,
         ),
       }),
-    () => ({
+    getWorkspaceContext: () => ({
       cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
       trusted: vscode.workspace.isTrusted,
     }),
     sessionCatalog,
     recoveryStore,
-    historyLoader,
+    sessionHistory: historyLoader,
     attachmentSources,
     fileDiff,
     changeStats,
-    createVscodeExternalUrlOpener(),
-    new RecentCommandsStore(persistence),
+    externalUrl: createVscodeExternalUrlOpener(),
+    recentCommands: new RecentCommandsStore(persistence),
     diagnostics,
-    daemonSidecar.provider,
-    createVscodePathOpener(),
-    previewController,
+    daemonSessions: daemonSidecar.provider,
+    pathOpener: createVscodePathOpener(),
+    prototypePreview: previewController,
     gitWorkflow,
     // Worktree sessions ride the daemon's native create channel; in
     // process mode (including a fallback from the daemon default) the
     // gate reads false and worktree entry points fail closed.
-    withDaemonGate(
+    worktreeSessions: withDaemonGate(
       createWorktreeSessionsFeature({
         enabled: runtimeMode === 'daemon',
         persistence,
@@ -423,11 +437,11 @@ export function activate(context: vscode.ExtensionContext): void {
       daemonSessionsActive,
     ),
     terminalMirror,
-    daemonSidecar.plugins,
+    daemonPlugins: daemonSidecar.plugins,
     // `/btw` side chat: hidden fork over the daemon connection in
     // daemon mode (probe: artifacts/probe-btw-daemon.mjs), over a
     // short-lived private CLI client in explicit process mode.
-    (cwd, mainSessionId) =>
+    btwSidecarFactory: (cwd, mainSessionId) =>
       daemonSessionsActive()
         ? createDaemonBtwSidecar({
             mainSessionId,
@@ -438,7 +452,8 @@ export function activate(context: vscode.ExtensionContext): void {
     turnSnapshots,
     planDocuments,
     reviewCoordinator,
-  );
+    sharedServices: sharedChatServices,
+  });
   reviewFeature.start();
   const missionSetupProjection = createMissionControlSetupProjection(controller);
   if (windowDaemon) {
@@ -498,37 +513,18 @@ export function activate(context: vscode.ExtensionContext): void {
   previewController.setFeedbackHandler((text) => {
     controller.emit({ type: 'canvas.feedbackDraft', text });
   });
-  // BYOK custom-model management rides the same lazy daemon sidecar
-  // as archive/search; the SDK resource satisfies the gateway shape
-  // structurally (byok-add-model-design.md §2.3, probed 2026-08-13).
-  controller.daemonCustomModels = async () => (await daemonSidecar.droid()).customModels;
-  controller.modelDiscovery = createHttpCustomModelDiscovery();
-  controller.systemPromptStore = systemPromptStore;
-  controller.providerRegistry = new ProviderRegistry(
-    context.globalState,
-    context.secrets,
-  );
-  controller.promptProviderApiKey = () =>
-    vscode.window.showInputBox({
-      title: 'Save provider API key',
-      prompt:
-        'Stored in VS Code SecretStorage and copied to Droid settings for configured models.',
-      password: true,
-      ignoreFocusOut: true,
-    });
   const modelsPanel = new ModelsPanelController(
     context.extensionUri,
     new ModelManager({
       gateway: modelManagementGateway,
       availability: modelAvailability,
-      registry: controller.providerRegistry,
-      discovery: controller.modelDiscovery,
-      promptKey: controller.promptProviderApiKey,
+      registry: sharedChatServices.providerRegistry,
+      discovery: sharedChatServices.modelDiscovery,
+      promptKey: sharedChatServices.promptProviderApiKey,
       readApplyState: () => readModelApplyState(controller),
       apply: (runtimeId, signal) => applyModelToChat(controller, runtimeId, signal),
     }),
   );
-  context.subscriptions.push(bindModelAvailability(controller, modelAvailability));
   const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon', modelAvailability);
   const browserDevBridge = new BrowserDevBridge(
     controller,

@@ -37,8 +37,7 @@ import {
   writeRecoverySession,
 } from '../recovery/recoveryStoreTestSupport';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
-import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS } from './recovery/recovery';
-import { TURN_FAILURE_MESSAGE } from './turns/turnSettlement';
+import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS, RECOVERED_HISTORY_FAILED_MESSAGE } from './recovery/recovery';
 
 describe('ChatController', () => {
   it('contains a rejected recovered-turn snapshot before capture', async () => {
@@ -228,7 +227,7 @@ describe('ChatController', () => {
     expect(snapshotsStore.read).not.toHaveBeenCalled();
   });
 
-  it('keeps recovered content and sends blocked until authoritative history and runtime activation complete', async () => {
+  it('shows authoritative history while connecting and blocks sends until runtime activation completes', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     writeRecoverySession(
@@ -256,7 +255,13 @@ describe('ChatController', () => {
     ready(controller);
 
     await vi.waitFor(() => expect(runtime.initialize).toHaveBeenCalled());
-    expect(snapshots(messages)).toHaveLength(0);
+    await vi.waitFor(() => expect(snapshots(messages)).toHaveLength(1));
+    expect(snapshots(messages)[0]).toMatchObject({
+      sessionId: 'saved-session',
+      connection: { status: 'connecting' },
+      turn: null,
+      transcript: [expect.objectContaining({ kind: 'user', text: 'Public history prompt' })],
+    });
 
     // Neither stored metadata nor an initialized history source unlocks sends.
     send(controller, 'saved-session', 'turn-early', 'too soon');
@@ -272,11 +277,12 @@ describe('ChatController', () => {
     });
   });
 
-  it('does not emit an early snapshot without a recovered checkpoint transcript', async () => {
+  it('waits for authoritative history before publishing a resumed session even when its runtime is ready', async () => {
     const persistence = createMemoryPersistence();
     const seed = new SessionRecoveryStore(persistence, 'recovery', 0);
     selectRecoverySession(seed, 'saved-session');
     await seed.flush();
+    const history = deferred<Awaited<ReturnType<SessionHistoryLoader['loadHistory']>>>();
     const runtime = createMockRuntime();
     runtime.initialize.mockResolvedValue(available('saved-session'));
     const { controller, messages } = createController(
@@ -284,14 +290,25 @@ describe('ChatController', () => {
       undefined,
       createCatalog([catalogEntry('saved-session')]),
       new SessionRecoveryStore(persistence, 'recovery', 0),
-      authoritativeHistory(),
+      { loadHistory: () => history.promise },
     );
 
     ready(controller);
+    await vi.waitFor(() => expect(runtime.initialize).toHaveBeenCalled());
+    expect(snapshots(messages)).toHaveLength(0);
+    send(controller, 'saved-session', 'turn-early', 'too soon');
+    expect(runtime.sendTurn).not.toHaveBeenCalled();
+
+    history.resolve(recoveredInitialHistory());
     await waitForConnected(messages);
 
     expect(snapshots(messages)[0]).toMatchObject({
+      connection: { status: 'connecting' },
+      transcript: recoveredInitialHistory().state.transcript,
+    });
+    expect(snapshots(messages).at(-1)).toMatchObject({
       connection: { status: 'connected' },
+      transcript: recoveredInitialHistory().state.transcript,
     });
   });
 
@@ -533,6 +550,20 @@ describe('ChatController', () => {
             message.code === 'recovered-turn-history-failed',
         ),
       ).toHaveLength(1);
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'runtime.diagnostic',
+        code: 'recovered-turn-history-failed',
+        message: RECOVERED_HISTORY_FAILED_MESSAGE,
+      }));
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'turn.error',
+        code: 'recovered-turn-history-failed',
+        message: RECOVERED_HISTORY_FAILED_MESSAGE,
+      }));
+      expect(snapshots(messages).at(-1)?.turn).toMatchObject({
+        status: 'failed',
+        error: RECOVERED_HISTORY_FAILED_MESSAGE,
+      });
     },
   );
 
@@ -728,7 +759,7 @@ describe('ChatController', () => {
       expect(snapshots(resumed.messages).at(-1)?.turn).toMatchObject({
         turnId: 'recovery-1',
         status: 'failed',
-        error: TURN_FAILURE_MESSAGE,
+        error: RECOVERED_HISTORY_FAILED_MESSAGE,
       });
     });
     expect(turnStates(resumed.messages)).toHaveLength(0);

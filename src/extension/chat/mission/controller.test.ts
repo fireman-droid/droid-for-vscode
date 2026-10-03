@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MissionStartMessage } from '../../../shared/protocol/missionProtocol';
 import { handleMissionStart } from './controller';
+import { commitSessionBinding } from '../sessions/sessionBinding';
+import { withActiveSession } from '../sessions/sessionCatalog';
 
 const message: MissionStartMessage = {
   type: 'mission.start',
@@ -83,8 +85,10 @@ describe('handleMissionStart', () => {
     expect(activateInteractions).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('activates Mission interactions only after adoption (previous close fails: %s)', async closeFails => {
+  it.each(['ready', 'close-failed', 'owner-changed', 'recovery-rejected'] as const)(
+    'adopts Mission identity only after preparation and releases an unused candidate (%s)', async outcome => {
     const order: string[] = [];
+    let ownerCurrent = true;
     const oldRuntime = { dispose: vi.fn(async () => {}) };
     const missionRuntime = { dispose: vi.fn(async () => {}) };
     const activateInteractions = vi.fn(() => { order.push('activate'); });
@@ -100,6 +104,7 @@ describe('handleMissionStart', () => {
       },
       sessionState: {
         connection: { status: 'connected' }, runtime: oldRuntime, sessionId: 'chat-1',
+        conversationId: 'chat-conversation', activeRuntimeCwd: 'D:/repo',
         runtimeGeneration: 1, disposed: false, managedRuntimes: new Set(),
       },
       metadata: { modelCatalog: { status: 'ready', items: [] } },
@@ -107,17 +112,22 @@ describe('handleMissionStart', () => {
       interactions: { hasPending: () => false },
       missionState: { missionStartInProgress: false },
       recoveryState: {},
-      catalogState: { sessions: { status: 'ready', items: [] } },
+      catalogState: { sessions: { status: 'ready', items: [] }, catalogCwd: 'D:/repo' },
       recoveryStore: {
-        createConversation: () => 'conversation-1', selectConversation: vi.fn(), flush: async () => {},
+        createConversation: () => outcome === 'recovery-rejected' ? undefined : 'conversation-1',
+        discardConversation: vi.fn(), selectConversation: vi.fn(), flush: async () => {},
       },
-      isCurrentSessionOperation: () => true,
+      isCurrentSessionOperation: () => ownerCurrent,
       effects: {
         loadSessionMetadata: vi.fn(),
+        commitSessionBinding: (binding: Parameters<typeof commitSessionBinding>[1]) => commitSessionBinding(ctl as never, binding),
+        withActiveSession: (sessions: Parameters<typeof withActiveSession>[1], entry?: Parameters<typeof withActiveSession>[2]) =>
+          withActiveSession(ctl as never, sessions, entry),
         closeRuntime: async (runtime: typeof oldRuntime) => {
           if (runtime === oldRuntime) {
             order.push('close');
-            if (closeFails) throw new Error('close failed');
+            if (outcome === 'close-failed') throw new Error('close failed');
+            if (outcome === 'owner-changed') ownerCurrent = false;
           }
           await runtime.dispose();
         },
@@ -127,8 +137,15 @@ describe('handleMissionStart', () => {
     };
     handleMissionStart(ctl as never, message);
     await vi.waitFor(() => expect(ctl.missionState.missionStartInProgress).toBe(false));
-    expect(order).toEqual(closeFails ? ['close'] : ['close', 'activate', 'send']);
-    expect(ctl.sessionState.runtime).toBe(closeFails ? oldRuntime : missionRuntime);
-    expect(missionRuntime.dispose).toHaveBeenCalledTimes(closeFails ? 1 : 0);
+    const adopted = outcome === 'ready';
+    expect(order).toEqual(adopted ? ['close', 'activate', 'send'] : outcome === 'recovery-rejected' ? [] : ['close']);
+    expect(ctl.sessionState.runtime).toBe(adopted ? missionRuntime : oldRuntime);
+    expect(ctl.sessionState).toMatchObject(adopted
+      ? { sessionId: 'mission-1', conversationId: 'conversation-1' }
+      : { sessionId: 'chat-1', conversationId: 'chat-conversation' });
+    expect(missionRuntime.dispose).toHaveBeenCalledTimes(adopted ? 0 : 1);
+    expect(ctl.recoveryStore.discardConversation).toHaveBeenCalledTimes(
+      outcome === 'close-failed' || outcome === 'owner-changed' ? 1 : 0,
+    );
   });
 });

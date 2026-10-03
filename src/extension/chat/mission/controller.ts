@@ -4,6 +4,7 @@ import {
   type MissionStartMessage,
 } from '../../../shared/protocol/missionProtocol';
 import type { ControllerPort } from './controllerMissionPort';
+import { createHostTranscriptState } from '../../recovery/hostTranscriptState';
 import { recoverMissionProjection } from './recovery';
 
 export { handleMissionCommand } from './controls';
@@ -67,17 +68,27 @@ export function handleMissionStart(
       }
       const oldRuntime = ctl.sessionState.runtime;
       if (oldRuntime === null) {
+        await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
+        emitRejected(ctl, message.requestId, 'unavailable');
+        return;
+      }
+      const transcript = createHostTranscriptState('unavailable');
+      const conversationId = ctl.recoveryStore.createConversation(result.sessionId, transcript);
+      if (conversationId === undefined) {
+        await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
       try {
         await ctl.effects.closeRuntime(oldRuntime);
       } catch {
+        ctl.recoveryStore.discardConversation(conversationId);
         await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         emitRejected(ctl, message.requestId, 'unavailable');
         return;
       }
       if (!ownerIsCurrent()) {
+        ctl.recoveryStore.discardConversation(conversationId);
         await ctl.effects.closeRuntime(result.runtime.runtime).catch(() => undefined);
         return;
       }
@@ -87,45 +98,26 @@ export function handleMissionStart(
       ctl.sessionState.runtime = result.runtime.runtime;
       ctl.sessionState.managedRuntimes.add(result.runtime.runtime);
       ctl.sessionState.activeRuntimeCwd = ownerCwd;
-      ctl.sessionState.sessionId = result.sessionId;
-      ctl.turnState.turn = null;
+      ctl.effects.commitSessionBinding({
+        sessionId: result.sessionId,
+        conversationId,
+        transcript,
+        turn: null,
+        catalogEntry: {
+          id: result.sessionId,
+          title: 'New Mission',
+          messageCount: 0,
+          modifiedTime: new Date().toISOString(),
+          active: true,
+          isFavorite: false,
+          missionRole: 'orchestrator',
+        },
+      });
       ctl.missionState.mission = { state: null, role: 'orchestrator' };
       recoverMissionProjection(ctl, result.runtime.runtime,
         ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
       ctl.effects.loadSessionMetadata(result.runtime.runtime,
         ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
-      ctl.recoveryState.transcript = {
-        transcript: [],
-        historyStatus: 'unavailable',
-        truncated: false,
-      };
-      const conversationId = ctl.recoveryStore.createConversation(
-        result.sessionId,
-        ctl.recoveryState.transcript,
-      );
-      if (conversationId === undefined) {
-        emitRejected(ctl, message.requestId, 'unavailable');
-        return;
-      }
-      ctl.sessionState.conversationId = conversationId;
-      ctl.catalogState.sessions = {
-        status: ctl.catalogState.sessions.status,
-        items: [
-          ...ctl.catalogState.sessions.items.map((entry) => ({
-            ...entry,
-            active: false,
-          })),
-          {
-            id: result.sessionId,
-            title: 'New Mission',
-            messageCount: 0,
-            modifiedTime: new Date().toISOString(),
-            active: true,
-            isFavorite: false,
-            missionRole: 'orchestrator',
-          },
-        ],
-      };
       ctl.recoveryStore.selectConversation(conversationId);
       await ctl.recoveryStore.flush();
       if (ctl.sessionState.disposed || ctl.sessionState.sessionId !== result.sessionId) {

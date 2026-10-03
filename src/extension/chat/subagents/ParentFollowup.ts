@@ -4,7 +4,6 @@ import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
 import { reconcileSessionHistory } from '../../recovery/reconcileSessionHistory';
 import type { ChatController } from '../ChatController';
 import { isTurnActive } from '../internals';
-import { createTurnActivityState } from '../turns/turnActivityState';
 import { handleRuntimeEvent } from '../turns/turnRuntimeEvents';
 import { handleTurnComplete } from '../turns/turnSettlement';
 
@@ -112,17 +111,15 @@ export class ParentFollowup {
     const ctl = this.ctl;
     const active: ObservedTurn = { backendId, turnId: randomUUID(), recovering: false };
     this.active = active;
-    ctl.effects.discardPendingThinking();
-    ctl.turnState.turnGeneration += 1;
-    ctl.turnState.turn = {
-      turnId: active.turnId, status: 'streaming', activity: createTurnActivityState(), recovery: true,
+    ctl.effects.beginTurn({
+      turnId: active.turnId, status: 'streaming', recovery: true,
       ...(backendId === null ? {} : { backendTurnId: backendId }),
       transportRecovery: {
         messageId: backendId ?? active.turnId,
         get completion() { return active.completion; },
         dispose() {},
       },
-    };
+    });
     ctl.interactions.beginTurn(this.sessionId!, active.turnId);
     ctl.effects.setSessionRunning(this.sessionId!, true);
     ctl.effects.scheduleRecoveryCheckpoint();
