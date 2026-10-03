@@ -173,7 +173,7 @@ function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
           name={alias.kind === 'provider' ? alias.name : alias.model.displayName} label={alias.kind === 'provider' ? '服务商别名' : '模型别名'}
           maxLength={alias.kind === 'provider' ? 80 : 160} busy={busy} onCancel={closePanel} onSave={(name) => {
             void run(alias.kind === 'provider' ? { kind: 'renameProvider', providerHost: alias.host, name }
-              : { kind: 'renameModel', rawIndex: alias.model.rawIndex, expectedModel: alias.model.model, name })
+              : { kind: 'renameModel', rawIndex: alias.model.rawIndex, expectedModel: alias.model.model, connectionId: alias.model.connectionId, name })
               .then((result) => { if (result.ok) closePanel(); });
           }} />
         : page.connectionForm !== null ? <>
@@ -207,7 +207,7 @@ function modelApplyMessage(message: string): string {
 function ModelsFeedback({ page }: { readonly page: ModelsPageState }) {
   const { pending, notice, cancel } = page.manager;
   const labels: Record<string, string> = {
-    refresh: '正在读取模型配置…', saveConnection: '正在保存接口，请留意 Cursor 的输入提示…',
+    refresh: '正在读取模型配置…', saveConnection: '正在保存接口，请留意 VS Code 的输入提示…',
     renameProvider: '正在保存服务商别名…', renameModel: '正在保存模型别名…',
     discover: '正在获取模型列表…', importModels: '正在添加所选模型…',
     saveModel: '正在保存模型…', deleteModel: '正在删除模型…', deleteConnection: '正在移除接口…',

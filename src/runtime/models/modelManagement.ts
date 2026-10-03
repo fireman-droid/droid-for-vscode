@@ -52,6 +52,9 @@ export interface ModelManagementGateway {
 
 export function createModelManagementGateway(
   getDaemon: () => Promise<DaemonApi>,
+  // Verification uses the shared daemon without allocating an IDE-bound daemon
+  // rooted in its temporary directory, which would keep that directory locked.
+  getVerificationDaemon: () => Promise<DaemonApi> = getDaemon,
 ): ModelManagementGateway {
   return {
     list: async () => (await getDaemon()).customModels.list(),
@@ -79,13 +82,26 @@ export function createModelManagementGateway(
       if (!result.success) throw new Error('Droid did not confirm the model deletion.');
     },
     verify: async (runtimeId, signal) =>
-      verifyThroughDroid(await getDaemon(), runtimeId, signal),
+      verifyThroughDroid(await getVerificationDaemon(), runtimeId, signal),
   };
 }
 
 /** Classify only known failure signals; never publish upstream bodies or credentials. */
 export function modelFailureMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
+  const configurationErrors = [
+    ['Custom model entry not found', '模型配置已被删除或移动，请刷新模型列表后重试。'],
+    ['Custom models changed on disk; refresh and try again', 'Droid 设置已被其他操作修改，请刷新后重新保存。'],
+    ['Custom model configuration is invalid', 'Droid 判定该模型的完整配置无效，修改别名也会被拒绝。请检查 settings.json 中该模型的接口和额外参数。'],
+    ['Base URL is required', '此模型缺少接口地址，请先补充 Base URL。'],
+    ['Base URL must be a valid URL', '此模型的接口地址无效，请修正 Base URL。'],
+    ['Invalid custom model request; check field names and values', 'Droid 未接受模型配置字段，请检查配置并确认 CLI 与扩展版本。'],
+    ['Custom models are disabled by your organization policy', '组织策略禁止使用自定义模型，无法保存此配置。'],
+    ['Base URL is not allowed by your organization policy', '组织策略不允许此接口地址，无法保存此配置。'],
+  ] as const;
+  for (const [cause, message] of configurationErrors) {
+    if (text.includes(cause)) return message;
+  }
   if (/\b401\b|unauthori[sz]ed|invalid.api.key/i.test(text))
     return 'Authentication failed. Check the API key.';
   if (/\b403\b|forbidden|permission.denied/i.test(text))
@@ -192,16 +208,18 @@ async function verifyThroughDroid(
       latencyMs: 0,
     };
   } finally {
+    // Cleanup has a separate outcome from the completed model request. Keep
+    // its warning visible without misreporting a working model as unavailable.
     if (session !== undefined) {
       try {
         await session.close();
-        await daemon.sessions.archive(session.id);
+        const archived = await daemon.sessions.archive(session.id);
+        if (!archived.success) throw new Error('Droid did not confirm verification-session archival.');
       } catch {
         await session.detach().catch(() => undefined);
         result = {
-          status: 'failed',
-          message: 'Verification ended, but Droid did not confirm test-session cleanup.',
-          latencyMs: 0,
+          ...result,
+          message: `${result.message} Droid did not confirm verification-session cleanup.`,
         };
       }
     }
@@ -209,9 +227,8 @@ async function verifyThroughDroid(
       await rm(cwd, { recursive: true, force: true });
     } catch {
       result = {
-        status: 'failed',
-        message: 'Verification ended, but its temporary directory could not be removed.',
-        latencyMs: 0,
+        ...result,
+        message: `${result.message} The verification temporary directory could not be removed.`,
       };
     }
   }

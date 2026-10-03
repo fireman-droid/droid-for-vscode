@@ -169,6 +169,9 @@ export class ModelManager {
       );
       if (row === undefined)
         throw new ModelManagerError('This model changed elsewhere. Refresh and retry.');
+      if ('connectionId' in action && action.connectionId !== undefined) {
+        this.assertModelConnection(row, connections, action.connectionId);
+      }
       if (action.kind === 'setModelEnabled') {
         if (!row.baseUrl || connectionKey(row.provider, row.baseUrl) !== connectionKey(action.provider, action.baseUrl)) {
           throw new ModelManagerError('模型的所属接口已变化，请刷新后重试。');
@@ -190,7 +193,7 @@ export class ModelManager {
           ...(row.noImageSupport === undefined ? {} : { noImageSupport: row.noImageSupport }),
         });
         this.tests.delete(modelRevision(row));
-        return { message: '模型别名已保存。Model ID、接口和已保存密钥保持不变。' };
+        return { message: `已保存别名“${displayName}”${displayName !== action.name.trim() ? '（同名配置已自动添加渠道标识）' : ''}。` };
       }
       if (action.kind === 'deleteModel') {
         await this.deps.gateway.delete(row.rawIndex, row.model);
@@ -239,6 +242,12 @@ export class ModelManager {
           connectionKey(connection.protocol, connection.baseUrl),
     );
   }
+  private assertModelConnection(row: SavedModel, connections: readonly ModelConnection[], id: string): void {
+    const expected = this.connection(connections, id);
+    if (!this.connectionRows(expected, [row]).length) {
+      throw new ModelManagerError('模型的所属接口已变化，请刷新后重试。');
+    }
+  }
   private async connectionKey(
     connection: ModelConnection,
     required: boolean,
@@ -269,6 +278,15 @@ export class ModelManager {
     if (draft.setApiKey && (key === undefined || key.trim() === '')) {
       throw new ModelManagerError('API key entry cancelled. Connection was not saved.');
     }
+    const endpointChanged = old !== undefined &&
+      connectionKey(old.protocol, old.baseUrl) !== connectionKey(draft.protocol, draft.baseUrl);
+    const affectedRows = old === undefined ? [] : this.connectionRows(old, rows);
+    if (endpointChanged && key === undefined &&
+      (old.hasKey || affectedRows.some((row) => row.hasApiKey))) {
+      throw new ModelManagerError(
+        '修改带密钥接口的地址或协议时，请同时设置目标接口的 API Key；原密钥不会迁移到其他接口。如目标无需密钥，请新建接口和模型。',
+      );
+    }
     const saved = await this.deps.registry.save({
       ...(old === undefined || old.imported ? {} : { id: old.id }),
       displayName: draft.name,
@@ -276,10 +294,9 @@ export class ModelManager {
       rootUrl: draft.baseUrl,
       ...(key === undefined ? {} : { apiKey: key.trim() }),
     });
-    if (old !== undefined && (old.protocol !== draft.protocol ||
-      normalizeProviderRoot(old.baseUrl) !== normalizeProviderRoot(draft.baseUrl) || key !== undefined)) {
+    if (old !== undefined && (endpointChanged || key !== undefined)) {
       let updated = 0;
-      for (const row of this.connectionRows(old, rows)) {
+      for (const row of affectedRows) {
         try {
           signal.throwIfAborted();
           await this.deps.gateway.save({
@@ -329,6 +346,9 @@ export class ModelManager {
     if (draft.rawIndex !== undefined && previous === undefined) {
       throw new ModelManagerError('This model changed elsewhere. Refresh and retry.');
     }
+    if (previous && draft.expectedConnectionId !== undefined) {
+      this.assertModelConnection(previous, connections, draft.expectedConnectionId);
+    }
     const displayName = this.uniqueName(draft.displayName.trim() || draft.model.slice(0, 160), draft.rawIndex, rows, connection.name);
     if (
       this.connectionRows(connection, rows).some(
@@ -339,10 +359,19 @@ export class ModelManager {
         'This Model ID already exists on the connection. Edit its existing row.',
       );
     }
-    const key =
-      apiKeyOverride ??
-      (await this.connectionKey(connection, previous === undefined, signal));
+    const sameEndpoint = previous !== undefined &&
+      typeof previous.baseUrl === 'string' && isCustomModelBaseUrl(previous.baseUrl) &&
+      connectionKey(previous.provider, previous.baseUrl) === connectionKey(connection.protocol, connection.baseUrl);
+    // Omitting apiKey on edit preserves this row's own Droid credential.
+    // A connection-level key may belong to another model on the same endpoint.
+    const key = sameEndpoint ? undefined :
+      apiKeyOverride ?? await this.connectionKey(connection, true, signal);
     signal.throwIfAborted();
+    if (previous?.hasApiKey && !sameEndpoint && key === undefined) {
+      throw new ModelManagerError(
+        '迁移带密钥的模型前，请先设置目标接口的 API Key；原密钥不会迁移到其他接口。如目标无需密钥，请在该接口新建模型。',
+      );
+    }
     await this.deps.gateway.save({
       ...(previous === undefined
         ? {}

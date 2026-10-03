@@ -19,7 +19,7 @@ export function ModelList({ models, snapshot, disabled, onAction, onEdit, onRena
       const loaded = model.runtimeId !== null;
       const unavailable = !loaded ? model.loadMessage || 'Droid 尚未加载此模型，请检查配置后刷新。' : null;
       const act = (kind: 'useModel' | 'verifyModel' | 'deleteModel') =>
-        onAction({ kind, rawIndex: model.rawIndex, expectedModel: model.model });
+        onAction({ kind, rawIndex: model.rawIndex, expectedModel: model.model, connectionId: model.connectionId });
       const setEnabled = () => {
         if (connection) onAction({ kind: 'setModelEnabled', rawIndex: model.rawIndex, expectedModel: model.model,
           provider: connection.protocol, baseUrl: connection.baseUrl, enabled: !enabled });

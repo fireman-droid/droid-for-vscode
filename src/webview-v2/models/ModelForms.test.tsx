@@ -113,7 +113,7 @@ describe('ModelForm identity, advanced settings, and focus', () => {
     const save = vi.fn();
     render(<ModelForm model={existing} connection={connection} existingModels={[existing]} busy={false} onSave={save} onCancel={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
-    expect(save).toHaveBeenCalledWith({ connectionId: connection.id, rawIndex: existing.rawIndex, expectedModel: existing.model, model: existing.model, displayName: existing.displayName, maxOutputTokens: null, noImageSupport: false }, false);
+    expect(save).toHaveBeenCalledWith({ connectionId: connection.id, rawIndex: existing.rawIndex, expectedModel: existing.model, expectedConnectionId: existing.connectionId, model: existing.model, displayName: existing.displayName, maxOutputTokens: null, noImageSupport: false }, false);
   });
 
   it.each(['0', '1.5', '100000001', 'not a number'])('reveals a collapsed invalid Token value %s and focuses it', (tokens) => {

@@ -9,7 +9,7 @@ import {
 import { MAX_MODEL_CATALOG_ITEMS, MAX_MODEL_ID_LENGTH } from './bounds';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 
-export const MODEL_MANAGER_VERSION = 3 as const;
+export const MODEL_MANAGER_VERSION = 4 as const;
 export interface ModelsOpenMessage {
   readonly type: 'models.open';
 }
@@ -66,6 +66,8 @@ export interface ManagedModelDraft {
   readonly connectionId: string;
   readonly rawIndex?: number;
   readonly expectedModel?: string;
+  /** Required on the wire when editing an existing model. */
+  readonly expectedConnectionId?: string;
   readonly model: string;
   readonly displayName: string;
   readonly maxOutputTokens: number | null;
@@ -79,7 +81,7 @@ export type ModelsAction =
   | { readonly kind: 'discover'; readonly connectionId: string }
   | { readonly kind: 'deleteConnection'; readonly connectionId: string }
   | { readonly kind: 'renameProvider'; readonly providerHost: string; readonly name: string }
-  | { readonly kind: 'renameModel'; readonly rawIndex: number; readonly expectedModel: string; readonly name: string }
+  | { readonly kind: 'renameModel'; readonly rawIndex: number; readonly expectedModel: string; readonly connectionId?: string; readonly name: string }
   | { readonly kind: 'saveModel'; readonly draft: ManagedModelDraft }
   | { readonly kind: 'setModelEnabled'; readonly rawIndex: number; readonly expectedModel: string; readonly enabled: boolean; readonly provider: CustomModelProvider; readonly baseUrl: string }
   | {
@@ -91,6 +93,8 @@ export type ModelsAction =
       readonly kind: 'deleteModel' | 'verifyModel' | 'useModel';
       readonly rawIndex: number;
       readonly expectedModel: string;
+      /** Required for Webview requests; internal commands may use a fresh row. */
+      readonly connectionId?: string;
     };
 
 export interface ModelsRequest {
@@ -170,7 +174,7 @@ function parseModelDraft(value: unknown): ManagedModelDraft | undefined {
     !hasExactKeys(
       value,
       ['connectionId', 'model', 'displayName', 'maxOutputTokens', 'noImageSupport'],
-      ['rawIndex', 'expectedModel'],
+      ['rawIndex', 'expectedModel', 'expectedConnectionId'],
     ) ||
     !id(value.connectionId) ||
     !isSafeText(value.model, MAX_MODEL_ID_LENGTH) ||
@@ -178,8 +182,8 @@ function parseModelDraft(value: unknown): ManagedModelDraft | undefined {
     (value.displayName !== '' && !isSafeText(value.displayName, 160)) ||
     !tokens(value.maxOutputTokens) ||
     typeof value.noImageSupport !== 'boolean' ||
-    ((value.rawIndex !== undefined || value.expectedModel !== undefined) &&
-      (!index(value.rawIndex) || !isSafeText(value.expectedModel, MAX_MODEL_ID_LENGTH)))
+    ((value.rawIndex !== undefined || value.expectedModel !== undefined || value.expectedConnectionId !== undefined) &&
+      (!index(value.rawIndex) || !isSafeText(value.expectedModel, MAX_MODEL_ID_LENGTH) || !id(value.expectedConnectionId)))
   ) {
     return undefined;
   }
@@ -194,6 +198,7 @@ function parseModelDraft(value: unknown): ManagedModelDraft | undefined {
       : {
           rawIndex: value.rawIndex as number,
           expectedModel: value.expectedModel as string,
+          expectedConnectionId: value.expectedConnectionId as string,
         }),
   };
 }
@@ -235,11 +240,11 @@ export function parseModelsRequest(value: unknown): ModelsRequest | undefined {
     parsed = { kind: action.kind, providerHost: action.providerHost, name: action.name };
   } else if (
     action.kind === 'renameModel' &&
-    hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel', 'name']) &&
+    hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel', 'connectionId', 'name']) &&
     index(action.rawIndex) && isSafeText(action.expectedModel, MAX_MODEL_ID_LENGTH) &&
-    isSafeText(action.name, 160)
+    id(action.connectionId) && isSafeText(action.name, 160)
   ) {
-    parsed = { kind: action.kind, rawIndex: action.rawIndex, expectedModel: action.expectedModel, name: action.name };
+    parsed = { kind: action.kind, rawIndex: action.rawIndex, expectedModel: action.expectedModel, connectionId: action.connectionId, name: action.name };
   } else if (
     action.kind === 'setModelEnabled' &&
     hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel', 'enabled', 'provider', 'baseUrl']) &&
@@ -278,7 +283,7 @@ export function parseModelsRequest(value: unknown): ModelsRequest | undefined {
     };
   } else if (
     ['deleteModel', 'verifyModel', 'useModel'].includes(String(action.kind)) &&
-    hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel']) &&
+    hasExactKeys(action, ['kind', 'rawIndex', 'expectedModel', 'connectionId']) && id(action.connectionId) &&
     index(action.rawIndex) &&
     isSafeText(action.expectedModel, MAX_MODEL_ID_LENGTH)
   ) {
@@ -286,6 +291,7 @@ export function parseModelsRequest(value: unknown): ModelsRequest | undefined {
       kind: action.kind as 'deleteModel' | 'verifyModel' | 'useModel',
       rawIndex: action.rawIndex,
       expectedModel: action.expectedModel,
+      connectionId: action.connectionId,
     };
   }
   return parsed === undefined

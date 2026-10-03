@@ -203,7 +203,8 @@ export function activate(context: vscode.ExtensionContext): void {
     return droid;
   };
   const sessionLease = createSessionLeaseHooks();
-  const modelManagementGateway = createModelManagementGateway(getDaemonDroid);
+  const modelManagementGateway = createModelManagementGateway(getDaemonDroid, async () =>
+    windowDaemon ? (await windowDaemon.pool.current()).connection.droid : getDaemonDroid());
   const modelAvailability = new DisabledModelsStore(context.globalState, modelManagementGateway);
   const daemonSessions =
     runtimeMode !== 'daemon'

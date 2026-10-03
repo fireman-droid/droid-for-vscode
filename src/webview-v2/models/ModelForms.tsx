@@ -165,7 +165,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
     }
     onSave({
       connectionId: connection.id,
-      ...(model === null ? {} : { rawIndex: model.rawIndex, expectedModel: model.model }),
+      ...(model === null ? {} : { rawIndex: model.rawIndex, expectedModel: model.model, expectedConnectionId: model.connectionId }),
       model: id.trim(), displayName: name.trim(), maxOutputTokens: tokens.trim() === '' ? null : Number(tokens), noImageSupport: noImages,
     }, model?.enabled !== false && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'verify');
   }}>

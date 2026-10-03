@@ -50,6 +50,7 @@ const vscodeMock = vi.hoisted(() => {
 vi.mock('vscode', () => vscodeMock);
 import { ModelsPanelController } from './ModelsPanelController';
 import type { ModelManager } from './ModelManager';
+import { MODEL_MANAGER_VERSION } from '../../shared/protocol/modelManagerProtocol';
 
 afterEach(() => vi.clearAllMocks());
 function fixture() {
@@ -69,7 +70,7 @@ function fixture() {
   const send = (requestId: string, action: unknown) =>
     vscodeMock.receive({
       type: 'models.request',
-      version: 1,
+      version: MODEL_MANAGER_VERSION,
       requestId,
       action,
     });
@@ -78,7 +79,7 @@ function fixture() {
 describe('Models panel operation lifetime', () => {
   it('releases ownership after native cancellation and refreshes before confirming the next request', async () => {
     const { controller, execute, send } = fixture();
-    send('cancelled', { kind: 'verifyModel', rawIndex: 0, expectedModel: 'model' });
+    send('cancelled', { kind: 'verifyModel', rawIndex: 0, expectedModel: 'model', connectionId: 'gateway' });
     await vi.waitFor(() =>
       expect(vscodeMock.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({

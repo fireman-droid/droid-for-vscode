@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   CUSTOM_MODEL_PROVIDERS,
   isCustomModelBaseUrl,
@@ -21,13 +22,16 @@ export async function projectConnections(
   registry: ProviderRegistry,
   rows: readonly SavedModel[],
 ): Promise<ModelConnection[]> {
+  const keyedEndpoints = new Set(rows.flatMap((row) =>
+    row.hasApiKey && typeof row.baseUrl === 'string' && isCustomModelBaseUrl(row.baseUrl)
+      ? [connectionKey(row.provider, row.baseUrl)] : []));
   const connections: ModelConnection[] = await Promise.all(
     registry.list().map(async (row) => ({
       id: row.id,
       name: row.displayName,
       protocol: row.protocol,
       baseUrl: row.rootUrl,
-      hasKey: await registry.hasApiKey(row.id),
+      hasKey: await registry.hasApiKey(row.id) || keyedEndpoints.has(connectionKey(row.protocol, row.rootUrl)),
       imported: false,
       ...(registry.providerName(row.rootUrl) ? { providerName: registry.providerName(row.rootUrl) } : {}),
     })),
@@ -46,17 +50,11 @@ export async function projectConnections(
     if (known.has(key)) continue;
     known.add(key);
     connections.push({
-      id: `imported:${row.rawIndex}`,
+      id: `imported:${createHash('sha256').update(key).digest('hex')}`,
       name: new URL(row.baseUrl).host,
       protocol: row.provider as CustomModelProvider,
       baseUrl: row.baseUrl,
-      hasKey: (await registry.apiKeyForEndpoint(row.provider as CustomModelProvider, row.baseUrl)) !== undefined || rows.some(
-        (item) =>
-          typeof item.baseUrl === 'string' &&
-          isCustomModelBaseUrl(item.baseUrl) &&
-          connectionKey(item.provider, item.baseUrl) === key &&
-          item.hasApiKey,
-      ),
+      hasKey: (await registry.apiKeyForEndpoint(row.provider as CustomModelProvider, row.baseUrl)) !== undefined || keyedEndpoints.has(key),
       imported: true,
       ...(registry.providerName(row.baseUrl) ? { providerName: registry.providerName(row.baseUrl) } : {}),
     });

@@ -75,7 +75,7 @@ export function useModelsPage(transport: ModelsTransport) {
       manager.setNotice({ ok: true, message: '配置已保存。此模型已禁用，恢复后才能验证。' });
       return true;
     }
-    await manager.run({ kind: 'verifyModel', rawIndex: saved.rawIndex, expectedModel: saved.model });
+    await manager.run({ kind: 'verifyModel', rawIndex: saved.rawIndex, expectedModel: saved.model, connectionId: saved.connectionId });
     return true;
   };
   const discoverModels = async (connectionId: string): Promise<void> => {
