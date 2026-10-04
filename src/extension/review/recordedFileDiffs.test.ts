@@ -92,3 +92,110 @@ describe('complete recorded edit versions', () => {
     expect(patches.get(0)).toContain('-before\n+after');
   });
 });
+
+describe('saved ApplyPatch context recovery', () => {
+  const baseline = 'header\nbefore\nfooter\n\nend\n';
+  const updated = 'header\nafter\nfooter\n\nend\n';
+  const trimmed = {
+    ...edit('trimmed', '@@ -2,3 +2,3 @@\n-before\n+after\n footer'),
+    toolName: 'ApplyPatch', reversible: false,
+    message: 'The tool reported this file as changed, but its diff line counts are inconsistent.',
+  };
+
+  it('recovers persisted trimmed context only when the saved complete after image agrees', async () => {
+    const input = source(baseline.replace(/\n/g, '\r\n'), updated.replace(/\n/g, '\r\n'));
+    expect(await recordedFileVersion(input, scope(), path, [trimmed]))
+      .toEqual({ index: 0, before: baseline, after: updated });
+    const result = await recordedFileDiffs(input, scope(), path, [trimmed], 512_000, 1);
+    expect(result.patches.get(0)).toContain(' header');
+    expect(result.patches.get(0)).toContain(' end');
+    expect(result.patches.get(0)).toContain('-before\n+after');
+  });
+
+  it.each(['writing', 'settled'] as const)('requires an after image when the turn is %s', async lifecycle => {
+    expect(await recordedFileVersion(source(baseline), scope(lifecycle), path, [trimmed])).toBeUndefined();
+  });
+
+  it('does not verify recovered context against an after image while the turn is still writing', async () => {
+    expect(await recordedFileVersion(source(baseline, updated), scope('writing'), path, [trimmed])).toBeUndefined();
+  });
+
+  it('rejects a missing edit even if its missing old line was blank', async () => {
+    const unrecordedChange = updated.replace('footer\n\n', 'footer\nmissing new content\n');
+    expect(await recordedFileVersion(source(baseline, unrecordedChange), scope(), path, [trimmed])).toBeUndefined();
+  });
+
+  it('does not invent missing nonblank context or removal lines', async () => {
+    const missing = { ...trimmed, patch: '@@ -2,2 +2,2 @@\n-before\n+after' };
+    expect(await recordedFileVersion(source(baseline, updated), scope(), path, [missing])).toBeUndefined();
+  });
+
+  it('requires every recorded context line to match the saved baseline', async () => {
+    const mismatch = { ...trimmed, patch: trimmed.patch.replace(' footer', ' not-footer') };
+    expect(await recordedFileVersion(source(baseline, updated), scope(), path, [mismatch])).toBeUndefined();
+  });
+
+  it('does not treat another tool as a trimmed ApplyPatch result', async () => {
+    expect(await recordedFileVersion(source(baseline, updated), scope(), path, [{ ...trimmed, toolName: 'Edit' }]))
+      .toBeUndefined();
+  });
+
+  it('rejects a recovered selected version if a later gap breaks after-image verification', async () => {
+    const gap = { ...edit('unknown'), outcome: 'failed' as const, patch: '' };
+    const write = { ...edit('write'), submittedContent: updated, patch: '' };
+    expect(await recordedFileVersion(source(baseline, updated), scope(), path, [trimmed, gap, write], 'trimmed'))
+      .toBeUndefined();
+  });
+
+  it.each(['write', 'delete'] as const)('starts a new trusted baseline after a full %s without validating overwritten recovery', async operation => {
+    const replacement = operation === 'write'
+      ? { ...edit('overwrite'), submittedContent: 'fresh\n', patch: '' }
+      : { ...edit('overwrite'), kind: 'deleted' as const, patch: '' };
+    const next = operation === 'write'
+      ? edit('next', '@@ -1 +1 @@\n-fresh\n+final')
+      : { ...edit('next', '@@ -0,0 +1,1 @@\n+final'), kind: 'added' as const };
+    const entries = [trimmed, replacement, next];
+    const input = source(baseline, 'final\n');
+    expect(await recordedFileVersion(input, scope(), path, entries, 'trimmed')).toBeUndefined();
+    expect(await recordedFileVersion(input, scope(), path, entries, 'overwrite')).toBeUndefined();
+    expect(await recordedFileVersion(input, scope(), path, entries, 'next'))
+      .toEqual({ index: 2, before: operation === 'write' ? 'fresh\n' : '', after: 'final\n' });
+  });
+
+  it('verifies recovery through later exact edits for either selected version', async () => {
+    const final = updated.replace('after\n', 'final\n');
+    const next = edit('next', '@@ -2 +2 @@\n-after\n+final');
+    expect(await recordedFileVersion(source(baseline, final), scope(), path, [trimmed, next], 'trimmed'))
+      .toEqual({ index: 0, before: baseline, after: updated });
+    expect(await recordedFileVersion(source(baseline, final), scope(), path, [trimmed, next], 'next'))
+      .toEqual({ index: 1, before: updated, after: final });
+  });
+
+  it('keeps an earlier exact version when later recovered context cannot be verified', async () => {
+    const exact = edit('exact', '@@ -1 +1 @@\n-header\n+title');
+    const next = baseline.replace('header\n', 'title\n');
+    expect(await recordedFileVersion(source(baseline), scope(), path, [exact, trimmed], 'exact'))
+      .toEqual({ index: 0, before: baseline, after: next });
+  });
+
+  it('recovers only the final hunk and preserves earlier insertions and removals', async () => {
+    const original = 'header\nbefore\nkeep\nremove\nfooter\n\nend\n';
+    const result = 'header\nafter\nadded\nkeep\nfooter\n\nend\n';
+    const entry = { ...trimmed, patch:
+      '@@ -2,1 +2,2 @@\n-before\n+after\n+added\n@@ -4,3 +5,2 @@\n-remove\n footer' };
+    expect(await recordedFileVersion(source(original, result), scope(), path, [entry]))
+      .toEqual({ index: 0, before: original, after: result });
+    const earlierTruncation = { ...entry, patch: entry.patch.replace('@@ -2,1 +2,2 @@', '@@ -2,2 +2,3 @@') };
+    expect(await recordedFileVersion(source(original, result), scope(), path, [earlierTruncation])).toBeUndefined();
+  });
+
+  it.each([
+    { kind: 'added' as const, before: '', after: 'new\n', patch: '@@ -0,0 +1,1 @@\n+new' },
+    { kind: 'deleted' as const, before: 'old\n', after: '', patch: '@@ -1,1 +0,0 @@\n-old' },
+    { kind: 'modified' as const, before: 'old\nkeep\n', after: 'new\nadded\n',
+      patch: '@@ -1 +1,2 @@\n-old\n+new\n+added\n@@ -2 +2,0 @@\n-keep' },
+  ])('keeps exact $kind patches usable without an after snapshot', async sample => {
+    expect(await recordedFileVersion(source(sample.before), scope(), path, [{ ...trimmed, kind: sample.kind, patch: sample.patch }]))
+      .toEqual({ index: 0, before: sample.before, after: sample.after });
+  });
+});

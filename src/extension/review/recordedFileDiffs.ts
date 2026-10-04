@@ -2,6 +2,8 @@ import type { ReviewContentSource } from './reviewContent';
 import type { ActiveScope } from './reviewCoordinatorSupport';
 import { diffBytes, isText } from '../changes/inlineDiff';
 import { applySdkPatch } from './reviewSdkPatch';
+import { recoverRecordedPatchContext } from './recordedPatchRecovery';
+import { operationToolName } from '../../runtime/tools/operationDiff';
 import { isRestrictedToolContent } from '../../runtime/tools/toolResultPreview';
 import { MAX_REVIEW_PATCH_CHARS } from '../../shared/protocol/reviewPanelProtocol';
 
@@ -63,6 +65,8 @@ async function rebuildRecordedFileVersion(
   const history = prior.slice(-200);
   const chain = [...history, ...entries];
   let selected: { index: number; before: string; after: string } | undefined;
+  let recoveredContext = false;
+  let selectedNeedsVerification = false;
   let lastGap = -1;
   for (let chainIndex = 0; chainIndex < chain.length; chainIndex++) {
     const entry = chain[chainIndex]!;
@@ -71,6 +75,7 @@ async function rebuildRecordedFileVersion(
     if (entry.outcome === 'failed' && entry.executionPhase === 'settled_without_execution') continue;
     if (entry.sessionId !== entries[0]!.sessionId || entry.source !== 'tool-result' || entry.outcome !== 'applied' || entry.previousPath || entry.contentRestricted) {
       current = undefined;
+      recoveredContext = false;
       blockedBySize = false;
       lastGap = chainIndex;
       continue;
@@ -79,6 +84,7 @@ async function rebuildRecordedFileVersion(
     // Its submitted content proves the after image, not what was overwritten.
     if (current === undefined && entry.submittedContent !== undefined) {
       current = entry.submittedContent.replace(/\r\n/g, '\n');
+      recoveredContext = false;
       blockedBySize = Buffer.byteLength(current) > maxBytes;
       if (!usableText(current, maxBytes)) current = undefined;
       continue;
@@ -86,12 +92,15 @@ async function rebuildRecordedFileVersion(
     // ApplyPatch's confirmed create result contains the complete newly created file.
     if (current === undefined && entry.kind === 'added' && /^@@ -0,0 \+1,\d+ @@/u.test(entry.patch)) current = '';
     if (current === undefined) continue;
-    let after: string;
+    const replacesUnverifiedBefore = recoveredContext &&
+      (entry.submittedContent !== undefined || entry.kind === 'deleted' && entry.patch === '');
+    let after: string | undefined;
     if (entry.submittedContent !== undefined) after = entry.submittedContent.replace(/\r\n/g, '\n');
     else if (entry.kind === 'deleted' && entry.patch === '') after = '';
     else {
       if (!/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/m.test(entry.patch)) {
         current = undefined;
+        recoveredContext = false;
         blockedBySize = false;
         lastGap = chainIndex;
         continue;
@@ -101,8 +110,17 @@ async function rebuildRecordedFileVersion(
           beforePath: entry.kind === 'added' ? null : path,
           afterPath: entry.kind === 'deleted' ? null : path, binary: false });
       } catch {
+        if (operationToolName(entry.toolName) === 'applypatch' && entry.kind === 'modified') {
+          after = recoverRecordedPatchContext(current, {
+            patch: entry.patch, beforePath: path, afterPath: path, binary: false,
+          });
+          if (after !== undefined) recoveredContext = true;
+        }
+      }
+      if (after === undefined) {
         // A later gap does not erase an already reconstructed earlier edit.
         current = undefined;
+        recoveredContext = false;
         blockedBySize = false;
         lastGap = chainIndex;
         continue;
@@ -112,17 +130,30 @@ async function rebuildRecordedFileVersion(
       blockedBySize = Buffer.byteLength(after) > maxBytes;
       if (index === target && blockedBySize) selectedTooLarge = true;
       current = undefined;
+      recoveredContext = false;
       lastGap = chainIndex;
       continue;
     }
-    if (index === target) selected = { index, before: current, after };
+    if (replacesUnverifiedBefore) {
+      // A full overwrite proves a new baseline, but cannot verify the recovered
+      // bytes it replaced through the final turn snapshot.
+      recoveredContext = false;
+      lastGap = chainIndex;
+    }
+    if (index === target && !replacesUnverifiedBefore) {
+      selected = { index, before: current, after };
+      selectedNeedsVerification = recoveredContext;
+    }
     current = after;
   }
+  if (selected && selectedNeedsVerification && (scope.lifecycle === 'writing' ||
+    selected.index + history.length <= lastGap)) return undefined;
   if (selected && selected.index + history.length > lastGap && scope.lifecycle !== 'writing') {
     const expected = savedText(await source.snapshots.readTreeBytes(snapshotScope, path, 'after'), maxBytes);
     // A completed snapshot can disprove the assumed edit chain. A missing
-    // snapshot cannot, and a moving worktree is never a historical authority.
-    if (expected !== undefined && current !== expected) return undefined;
+    // snapshot cannot, unless omitted context was recovered and needs proof.
+    // A moving worktree is never a historical authority.
+    if (selectedNeedsVerification && expected === undefined || expected !== undefined && current !== expected) return undefined;
   }
   return selected ?? (selectedTooLarge ? { index: target, unavailableReason: 'too-large' } : undefined);
 }
