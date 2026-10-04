@@ -17,6 +17,7 @@ export interface GitCommitFlowState {
   readonly statusTurnId: string | null;
   readonly branch: string | null;
   readonly files: readonly GitStatusFile[];
+  readonly snapshotId?: string | null;
   readonly committedHash: string | null;
   readonly commitPending: boolean;
   /** Changes-card turn whose panel submitted the last commit. */
@@ -31,6 +32,7 @@ export const initialGitCommitFlowState: GitCommitFlowState = {
   statusTurnId: null,
   branch: null,
   files: [],
+  snapshotId: null,
   committedHash: null,
   commitPending: false,
   commitTurnId: null,

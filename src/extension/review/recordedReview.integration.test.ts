@@ -16,6 +16,8 @@ import { createOperationDiffCollector } from '../../runtime/tools/operationDiff'
 import { parseOperationResult } from '../../runtime/tools/operationResult';
 import { enrichOperationDiff, isOperationDiff, MAX_OPERATION_CONTENT_UNITS } from '../../shared/protocol/operationDiff';
 import { loadOperationReviewScope } from './reviewOperationScope';
+import { summarizeOperationBodies } from '../../runtime/tools/operationBodyReference';
+import type { ReviewContentSource } from './reviewContent';
 
 function operation(index: number): RecordedOperation {
   return { sequence: index, sessionId: 'session', toolUseId: `edit-${index}`, toolName: 'Edit',
@@ -26,10 +28,11 @@ function operation(index: number): RecordedOperation {
 }
 const controllers: ReviewCoordinator[] = [];
 afterEach(() => controllers.splice(0).forEach(controller => controller.dispose()));
-async function open(before: string | undefined, operations: RecordedOperation[], prior: RecordedOperation[] = []) {
+async function open(before: string | undefined, operations: RecordedOperation[], prior: RecordedOperation[] = [], readOperationBody?: ReviewContentSource['readOperationBody']) {
   const states: Extract<ReviewHostMessage, { type: 'review.state' }>[] = [];
   const openDiff = vi.fn<FileDiffOpener['openDiff']>(async () => 'opened-diff');
   const coordinator = new ReviewCoordinator({
+    ...(readOperationBody === undefined ? {} : { readOperationBody }),
     getWorkspaceRoot: () => 'Z:/not-read-for-recorded-review',
     snapshots: { readTreeBytes: async (_scope: unknown, _path: string, phase: string) => phase === 'before' && before !== undefined ? Buffer.from(before) : undefined } as unknown as TurnSnapshotStore,
     fileDiff: { openDiff }, persistence: { get: () => undefined, update: async () => {} },
@@ -48,6 +51,59 @@ async function open(before: string | undefined, operations: RecordedOperation[],
 }
 
 describe('recorded Review host requests', () => {
+  it('loads only the selected large edit while keeping the other history as references', async () => {
+    const patches = ['a', 'b'].map(text => `@@ -1 +1 @@\n-${text.repeat(20_000)}\n+${text.repeat(20_000)}changed`);
+    const operations = patches.map((patch, index) => ({ ...operation(index), operationDiff: summarizeOperationBodies({
+      status: 'ready', source: 'tool-result', callId: `edit-${index}`, sourceSessionId: 'session',
+      files: [{ path: 'file.txt', kind: 'modified', outcome: 'applied', patch }],
+    }) }));
+    const reader = vi.fn<NonNullable<ReviewContentSource['readOperationBody']>>(async request =>
+      ({ patch: patches[Number(request.callId.slice(-1))]! }));
+    const { coordinator, request } = await open(undefined, operations, [], reader);
+    const result = await coordinator.readFile({ ...request, context: 3, toolUseId: 'edit-0' });
+    if (!('recordedOperations' in result)) throw new Error('Recorded operation missing');
+    expect(reader).toHaveBeenCalledTimes(1);
+    expect(reader.mock.calls[0]?.[0]).toMatchObject({ sourceSessionId: 'session', callId: 'edit-0', file: { path: 'file.txt' } });
+    expect(result.recordedOperations?.[0]?.patch).toBe(patches[0]);
+    expect(result.recordedOperations?.[1]).toMatchObject({ patch: '', bodyRef: expect.any(Object) });
+    expect(isReviewPanelFile({ ...result, type: 'reviewPanel.file', requestId: 'request', reviewScopeId: request.reviewScopeId,
+      path: request.path, error: null })).toBe(true);
+    const next = await coordinator.readFile({ ...request, context: 3, toolUseId: 'edit-1' });
+    expect(next.version).toBe(result.version);
+    if (!('recordedOperations' in next)) throw new Error('Recorded operation missing');
+    expect(next.recordedOperations?.[1]?.patch).toBe(patches[1]);
+    expect(next.recordedOperations?.[0]?.patch).toBe('');
+  });
+  it('keeps the explicitly opened edit beyond the history count limit', async () => {
+    const { coordinator, request } = await open(undefined, Array.from({ length: 205 }, (_, index) => operation(index)));
+    const result = await coordinator.readFile({ ...request, context: 3, toolUseId: 'edit-204' });
+    if (!('recordedOperations' in result)) throw new Error('Recorded review payload was not returned.');
+    expect(result.truncated).toBe(true);
+    expect(result.recordedOperations).toHaveLength(200);
+    expect(result.recordedOperations?.find(entry => entry.toolUseId === 'edit-204')?.patch)
+      .toBe('@@ -1 +1 @@\n-value 204\n+value 205');
+    expect(isReviewPanelFile({ ...result, type: 'reviewPanel.file', requestId: 'request', reviewScopeId: request.reviewScopeId,
+      path: request.path, error: null })).toBe(true);
+  });
+  it('reserves the selected edit before filling the character budget', async () => {
+    const operations = Array.from({ length: 30 }, (_, index) => {
+      const entry = operation(index);
+      return entry.operationDiff.status === 'ready' ? { ...entry, operationDiff: {
+        ...entry.operationDiff, files: entry.operationDiff.files.map(file => ({ ...file,
+          patch: `@@ -1 +1 @@\n-${'a'.repeat(11_000)}${index}\n+${'b'.repeat(11_000)}${index}`,
+        })),
+      } } : entry;
+    });
+    const { coordinator, request } = await open(undefined, operations);
+    for (const toolUseId of ['edit-29', undefined]) {
+      const result = await coordinator.readFile({ ...request, context: 3, ...(toolUseId ? { toolUseId } : {}) });
+      if (!('recordedOperations' in result)) throw new Error('Recorded review payload was not returned.');
+      expect(result.truncated).toBe(true);
+      expect(result.recordedOperations?.at(-1)?.toolUseId).toBe('edit-29');
+      expect(isReviewPanelFile({ ...result, type: 'reviewPanel.file', requestId: 'request', reviewScopeId: request.reviewScopeId,
+        path: request.path, error: null })).toBe(true);
+    }
+  });
   it('keeps a full Create larger than the snippet budget for later edits and history reloads', async () => {
     const content = 'value 0\n' + Array.from({ length: 1_000 }, (_, index) => `unchanged full file context ${index}`).join('\n') + '\n';
     expect(content.length).toBeGreaterThan(24_000);

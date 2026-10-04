@@ -13,6 +13,7 @@ import {
   type GitApiLike,
   type GitChangeLike,
   type GitRepositoryLike,
+  type GitWorkflow,
 } from './gitWorkflow';
 
 const ROOT = path.resolve('git-workflow-test-root');
@@ -75,7 +76,14 @@ function createRepository(
 }
 
 function workflowFor(api: GitApiLike | undefined) {
-  return createGitWorkflow(() => Promise.resolve(api));
+  return createGitWorkflow(() => Promise.resolve(api), {
+    head: async () => 'head', identity: async () => 'index', file: async (_root, path) => path, stagedMatches: async () => true,
+  });
+}
+async function commitPreview(workflow: GitWorkflow, paths: readonly string[], message: string) {
+  const status = await workflow.status(ROOT, new Set());
+  if (!status.available) throw new Error('Expected an available preview');
+  return workflow.commit(ROOT, paths, message, undefined, { snapshotId: status.snapshotId });
 }
 
 function repositoryApi(repository: GitRepositoryLike): GitApiLike {
@@ -247,7 +255,7 @@ describe('gitWorkflow.status', () => {
     expect(result.branch).toBeNull();
   });
 
-  it('caps the file list with in-turn files kept first', async () => {
+  it('keeps the complete file list with in-turn files first', async () => {
     const workingTreeChanges = Array.from(
       { length: MAX_GIT_STATUS_FILES + 20 },
       (_, index) => change(`file-${String(index).padStart(4, '0')}.ts`, 5),
@@ -263,7 +271,7 @@ describe('gitWorkflow.status', () => {
     if (!result.available) {
       return;
     }
-    expect(result.files).toHaveLength(MAX_GIT_STATUS_FILES);
+    expect(result.files).toHaveLength(MAX_GIT_STATUS_FILES + 20);
     expect(result.files[0]?.path).toBe(inTurnPath);
     expect(result.files[0]?.inTurn).toBe(true);
   });
@@ -288,9 +296,9 @@ describe('gitWorkflow.commit', () => {
   it('stages the resolved paths then commits and echoes a short hash', async () => {
     const repository = createRepository({
       commitHash: '0123456789abcdef0123456789abcdef01234567',
+      workingTreeChanges: [change('src/a.ts', 5), change('docs/readme.md', 5)],
     });
-    const result = await workflowFor(repositoryApi(repository)).commit(
-      ROOT,
+    const result = await commitPreview(workflowFor(repositoryApi(repository)),
       ['src/a.ts', 'docs/readme.md'],
       'feat: add commit panel\n\nvia DroidVisX, 2 files',
     );
@@ -308,9 +316,9 @@ describe('gitWorkflow.commit', () => {
     const stderr = `pre-commit hook failed ${'x'.repeat(3000)}`;
     const repository = createRepository({
       commitError: { stderr, message: 'unused' },
+      workingTreeChanges: [change('src/a.ts', 5)],
     });
-    const result = await workflowFor(repositoryApi(repository)).commit(
-      ROOT,
+    const result = await commitPreview(workflowFor(repositoryApi(repository)),
       ['src/a.ts'],
       'fix: something',
     );
@@ -350,13 +358,45 @@ describe('gitWorkflow.commit', () => {
   it('still reports success with an empty hash when the hash read fails', async () => {
     const repository = createRepository({
       getCommitError: new Error('rev-parse failed'),
+      workingTreeChanges: [change('src/a.ts', 5)],
     });
-    const result = await workflowFor(repositoryApi(repository)).commit(
-      ROOT,
+    const result = await commitPreview(workflowFor(repositoryApi(repository)),
       ['src/a.ts'],
       'msg',
     );
     expect(result).toEqual({ ok: true, hash: '' });
+  });
+
+  it('requires a preview and refuses changed file bytes or an updated index before staging', async () => {
+    const repository = createRepository({ workingTreeChanges: [change('a.ts', 5)] });
+    let content = 'reviewed';
+    let index = 'original index';
+    const workflow = createGitWorkflow(async () => repositoryApi(repository), {
+      head: async () => 'head', identity: async () => index, file: async () => content, stagedMatches: async () => true,
+    });
+    expect((await workflow.commit(ROOT, ['a.ts'], 'msg')).ok).toBe(false);
+    const status = await workflow.status(ROOT, new Set());
+    if (!status.available) throw new Error('Expected preview');
+    content = 'later worker edit';
+    expect(await workflow.commit(ROOT, ['a.ts'], 'msg', undefined, { snapshotId: status.snapshotId })).toMatchObject({ ok: false, error: expect.stringContaining('changed') });
+    content = 'reviewed'; index = 'different staged content';
+    expect(await workflow.commit(ROOT, ['a.ts'], 'msg', undefined, { snapshotId: status.snapshotId })).toMatchObject({ ok: false, error: expect.stringContaining('changed') });
+    expect(repository.add).not.toHaveBeenCalled();
+    expect(repository.commit).not.toHaveBeenCalled();
+  });
+
+  it('commits all selected staged files without adding their unstaged edits', async () => {
+    const repository = createRepository({ indexChanges: [change('a.ts', 0)], workingTreeChanges: [change('a.ts', 5)] });
+    let content = 'unstaged';
+    const workflow = createGitWorkflow(async () => repositoryApi(repository), {
+      head: async () => 'head', identity: async () => 'index', file: async () => content, stagedMatches: async () => true,
+    });
+    const status = await workflow.status(ROOT, new Set());
+    if (!status.available) throw new Error('Expected preview');
+    content = 'more unstaged edits';
+    expect((await workflow.commit(ROOT, ['a.ts'], 'index only', undefined, { snapshotId: status.snapshotId, mode: 'staged' })).ok).toBe(true);
+    expect(repository.add).not.toHaveBeenCalled();
+    expect(repository.commit).toHaveBeenCalledWith('index only');
   });
 });
 

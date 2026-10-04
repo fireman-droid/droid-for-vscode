@@ -40,6 +40,7 @@ export function reduceOptimisticIntent(
       git: {
         ...state.git,
         statusPending: true,
+        snapshotId: null,
         statusTurnId: action.turnId,
       },
     };

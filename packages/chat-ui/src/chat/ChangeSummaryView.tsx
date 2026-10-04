@@ -10,6 +10,7 @@ export type { ChangeFile } from './changePresentation';
 export interface ChangeSummaryViewProps {
   readonly files: readonly ChangeFile[];
   readonly onReview?: () => void;
+  readonly onReviewEdits?: () => void;
   readonly onUndo?: () => void;
   readonly undoDisabled?: boolean;
   readonly undoReason?: string;
@@ -22,7 +23,7 @@ export interface ChangeSummaryViewProps {
 const INITIAL_FILE_COUNT = 3;
 
 export function ChangeSummaryView({
-  files, onReview, onUndo, undoDisabled, undoReason, onSelectFile, renderFileDetails, note, onInteract,
+  files, onReview, onReviewEdits, onUndo, undoDisabled, undoReason, onSelectFile, renderFileDetails, note, onInteract,
 }: ChangeSummaryViewProps) {
   const [expanded, setExpanded] = useState(false);
   if (files.length === 0) return null;
@@ -32,8 +33,10 @@ export function ChangeSummaryView({
   const deletions = hasCompleteStats ? files.reduce((total, file) => total + file.deletions!, 0) : null;
   const remaining = files.length - INITIAL_FILE_COUNT;
   const renderFile = (file: ChangeFile) => {
-    if (!onSelectFile && renderFileDetails) {
-      return <FileChangeView key={file.path} file={file} label="" onInteract={onInteract}>
+    if (renderFileDetails) {
+      return <FileChangeView key={file.path} file={file} label="" onInteract={onInteract}
+        actions={onSelectFile ? <Button variant="plain" size="none" className="dvx-change-action" aria-label={`Review changes to ${file.path}`}
+          onClick={() => { onInteract?.(); onSelectFile(file.path); }}>Review</Button> : undefined}>
         {renderFileDetails(file.path)}
       </FileChangeView>;
     }
@@ -56,7 +59,9 @@ export function ChangeSummaryView({
           <span className="dvx-change-summary-title">Edited {countLabel}</span>
           <ChangeLineStats additions={additions} deletions={deletions} />
         </div>
-        {(onUndo || onReview) && <div className="dvx-change-summary-actions">
+        {(onUndo || onReview || onReviewEdits) && <div className="dvx-change-summary-actions">
+          {onReviewEdits && <Button variant="plain" size="none" className="dvx-change-action" aria-label={`View recorded edits in ${countLabel}`}
+            onClick={() => { onInteract?.(); onReviewEdits(); }}>Edits</Button>}
           {onUndo && <span title={undoReason}>
             <Button variant="plain" size="none" className="dvx-change-action" disabled={undoDisabled}
               aria-label={`Undo changes in ${countLabel}`} aria-description={undoReason}

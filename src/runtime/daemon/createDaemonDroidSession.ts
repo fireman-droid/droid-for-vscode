@@ -14,6 +14,7 @@ import {
 import type { RuntimeSessionTarget } from '../DroidRuntime';
 import { RewindAnchorConflictError, RewindAttachmentError } from '../session/rewindErrors';
 import { projectCommandRows } from '../commands/FactoryCommandCatalog';
+import { readOperationBody } from '../tools/operationBody';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import {
   createRuntimeInteractionCallbacks,
@@ -447,6 +448,9 @@ function adaptDaemonSession(
 
   return {
     onNotification: (listener) => session.onNotification(listener),
+    readOperationBody: (request) => readOperationBody(request, {
+      readMessagePage: (sessionId, options) => droid.sessions.getMessages(sessionId, options),
+    }),
     readMissionSnapshot: () => session.readMissionSnapshot(),
     ...(session.refreshMissionSnapshot === undefined ? {} : {
       refreshMissionSnapshot: () => session.refreshMissionSnapshot!(),

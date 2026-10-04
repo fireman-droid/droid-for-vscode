@@ -15,6 +15,7 @@ export const GIT_FILE_STATUSES = [
 ] as const;
 
 export type GitFileStatus = (typeof GIT_FILE_STATUSES)[number];
+export type GitCommitMode = 'files' | 'staged';
 
 /**
  * Why `git.status` carries no file list. The webview hides the commit
@@ -29,6 +30,8 @@ export const GIT_UNAVAILABLE_REASONS = [
   'unsupported-workspace',
   /** The status read itself failed. */
   'status-failed',
+  /** The complete selection exceeds the bounded commit operation. */
+  'too-many-files',
 ] as const;
 
 export type GitUnavailableReason = (typeof GIT_UNAVAILABLE_REASONS)[number];
@@ -59,6 +62,8 @@ export interface GitCommitRequestMessage {
   readonly turnId: string;
   readonly paths: readonly string[];
   readonly message: string;
+  readonly snapshotId?: string;
+  readonly mode?: GitCommitMode;
 }
 
 export interface GitStatusMessage {
@@ -68,6 +73,10 @@ export interface GitStatusMessage {
   readonly turnId: string;
   readonly branch: string | null;
   readonly files: readonly GitStatusFile[];
+  /** Immutable host-side commit preview; pages share this identity. */
+  readonly snapshotId?: string;
+  readonly offset?: number;
+  readonly totalFiles?: number;
   /** Latest Changes turn was committed through Droid. */
   readonly committedHash?: string;
   readonly unavailableReason?: GitUnavailableReason;
@@ -151,7 +160,7 @@ export const MAX_GIT_STATUS_FILES = 100;
 export const MAX_GIT_BRANCH_DIFF_FILES = MAX_GIT_STATUS_FILES;
 
 /** Most paths one `git.commit` request may stage. */
-export const MAX_GIT_COMMIT_PATHS = MAX_GIT_STATUS_FILES;
+export const MAX_GIT_COMMIT_PATHS = 10_000;
 
 export const MAX_GIT_BRANCH_LENGTH = 250;
 

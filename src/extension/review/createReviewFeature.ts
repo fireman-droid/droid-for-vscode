@@ -20,12 +20,12 @@ import { createVscodeAttachmentSources } from '../attachments/vscodeAttachmentSo
 import { createVscodeFileDiffOpener } from '../changes/vscodeFileDiff';
 import { createVscodeGitWorkflow } from '../workspace/vscodeGitWorkflow';
 import type { ChangeStatsReader } from '../changes/changeStats';
-import { loadReviewGitScope } from './reviewGitComparison';
-import { loadReviewSdkScope } from './reviewSdkDiff';
+import { loadReviewGitScope, readReviewBranches } from './reviewGitComparison';
 import { isTurnActive } from '../chat/internals';
 import { SubagentReviewEvidence } from '../chat/subagents/SubagentReviewEvidence';
 import type { RecordedOperation } from './reviewOperationScope';
 import { priorFileOperations } from './recordedFileHistory';
+import { readOperationBody } from '../../runtime/tools/operationBody';
 
 type UnsequencedReviewMessage = ReviewHostMessage extends infer Message
   ? Message extends { readonly sequence: number }
@@ -65,6 +65,10 @@ export function createReviewFeature(options: {
     () => coordinator,
   );
   coordinator = new ReviewCoordinator({
+    readOperationBody(request) {
+      const runtime = options.getController().sessionState.runtime;
+      return runtime?.readOperationBody ? runtime.readOperationBody(request) : readOperationBody(request);
+    },
     readPriorFileOperations(sessionId, turnId, path) {
       const controller = options.getController();
       if (controller.sessionState.sessionId !== sessionId) return [];
@@ -123,15 +127,15 @@ export function createReviewFeature(options: {
       return mergeReviewOperations(persisted, live, child);
     },
     openSelectionInEditor: false,
-    async readGitScope(kind) {
+    async readBranches() {
       const root = getRoot();
       if (!root) throw new Error('No active workspace.');
-      const runtime = options.getController().sessionState.runtime;
-      if (kind === 'workspace' && runtime?.supportsGitDiff?.() === false)
-        return loadReviewGitScope(root, kind);
-      if (kind === 'branch' || kind === 'workspace')
-        return loadReviewSdkScope(root, kind, runtime);
-      return loadReviewGitScope(root, kind);
+      return readReviewBranches(root);
+    },
+    async readGitScope(kind, baseBranch) {
+      const root = getRoot();
+      if (!root) throw new Error('No active workspace.');
+      return loadReviewGitScope(root, kind, baseBranch);
     },
     getWorkspaceRoot: getRoot,
     snapshots: options.snapshots,

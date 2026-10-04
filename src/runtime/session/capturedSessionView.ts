@@ -75,6 +75,9 @@ function copyOptionalSessionMethods(
   if (typeof session.getGitDiff === 'function') {
     view.getGitDiff = (options) => session.getGitDiff!(options);
   }
+  if (typeof session.readOperationBody === 'function') {
+    view.readOperationBody = (request) => session.readOperationBody!(request);
+  }
   if (typeof session.compact === 'function') {
     view.compact = (params) => session.compact!(params);
   }

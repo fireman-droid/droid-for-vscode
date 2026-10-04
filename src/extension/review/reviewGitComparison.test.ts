@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
-import { loadReviewGitScope, readReviewVersion, reviewGit } from './reviewGitComparison';
+import { loadReviewGitScope, readReviewBranches, readReviewVersion, reviewGit } from './reviewGitComparison';
 
 const execute = promisify(execFile);
 let root: string | undefined;
@@ -34,4 +34,40 @@ it('compares index and worktree independently while keeping index contents uncha
   expect(branch.files).toEqual([]);
   expect(branch.commitCount).toBe(0);
   expect(branch.comparison.after).not.toBe('worktree');
+}, 30_000);
+
+it('compares an unborn repository against the empty tree without creating a commit or changing the index', async () => {
+  root = await mkdtemp(join(tmpdir(), 'dvx-review-unborn-'));
+  await reviewGit(root, ['init', '--quiet']);
+  expect(await readReviewBranches(root)).toEqual({ refs: [] });
+  await writeFile(join(root, 'a.txt'), 'staged\n');
+  await reviewGit(root, ['add', '--', 'a.txt']);
+  const index = await reviewGit(root, ['write-tree']);
+  await writeFile(join(root, 'a.txt'), 'working\n');
+  await writeFile(join(root, 'empty.txt'), '');
+  const staged = await loadReviewGitScope(root, 'staged');
+  const unstaged = await loadReviewGitScope(root, 'unstaged');
+  const workspace = await loadReviewGitScope(root, 'workspace');
+  expect(await readReviewVersion(root, staged.comparison.before, 'a.txt')).toBeNull();
+  expect((await readReviewVersion(root, staged.comparison.after, 'a.txt'))?.toString()).toBe('staged\n');
+  expect((await readReviewVersion(root, unstaged.comparison.before, 'a.txt'))?.toString()).toBe('staged\n');
+  expect(workspace.files.map(file => file.path)).toEqual(['a.txt', 'empty.txt']);
+  expect(await reviewGit(root, ['write-tree'])).toEqual(index);
+  await expect(reviewGit(root, ['rev-parse', '--verify', '--quiet', 'HEAD'])).rejects.toBeDefined();
+  await expect(loadReviewGitScope(root, 'branch')).rejects.toThrow('first commit');
+}, 30_000);
+
+it('offers local refs and uses only an explicit unique remote HEAD default', async () => {
+  root = await mkdtemp(join(tmpdir(), 'dvx-review-refs-'));
+  // Import a real existing commit without fetching or creating any commit.
+  await execute('git', ['clone', '--no-hardlinks', '--quiet', process.cwd(), root], { windowsHide: true });
+  const head = (await reviewGit(root, ['rev-parse', 'HEAD'])).toString().trim();
+  await reviewGit(root, ['update-ref', 'refs/heads/review-base', head]);
+  const branches = await readReviewBranches(root);
+  expect(branches.refs).toContain('refs/heads/review-base');
+  expect(branches.refs.some(ref => ref.endsWith('/HEAD'))).toBe(false);
+  expect(branches.defaultBranch).toMatch(/^refs\/remotes\/origin\//);
+  const scope = await loadReviewGitScope(root, 'branch', 'refs/heads/review-base');
+  expect(scope.files).toEqual([]);
+  expect(scope.comparison.after).toBe(head);
 }, 30_000);

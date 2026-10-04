@@ -161,6 +161,7 @@ const WEBVIEW_MESSAGE_PARSERS = {
   'file.readDiff': parseFileReadDiffMessage,
   'file.openTurnDiff': parseFileOpenTurnDiffMessage,
   'review.open': parseReviewMessage,
+  'review.listBranches': parseReviewMessage,
   'review.navigate': parseReviewMessage,
   'review.selectFile': parseReviewMessage,
   'review.markReviewed': parseReviewMessage,

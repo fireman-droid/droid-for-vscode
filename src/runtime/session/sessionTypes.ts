@@ -67,6 +67,7 @@ export interface FactoryDroidSession {
   ): Promise<{ session: FactoryDroidSession }>;
   getRewindInfo?(params: { messageId: string }): Promise<FactoryDroidSessionRewindInfo>;
   getGitDiff?(options?: RuntimeGitDiffOptions): Promise<FactoryDroidSessionGitDiff>;
+  readOperationBody?(request: import('../tools/operationBody').OperationBodyRequest): Promise<import('../tools/operationBody').OperationBody | undefined>;
   compact?(params?: {
     customInstructions?: string;
   }): Promise<{ session: FactoryDroidSession; removedCount: number }>;

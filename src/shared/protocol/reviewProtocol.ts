@@ -39,6 +39,7 @@ export interface ReviewFile {
 }
 
 export interface ReviewScopeState {
+  readonly baseBranch?: string;
   readonly sessionId: string;
   readonly reviewScopeId: string;
   readonly scopeKind: ReviewScopeKind;
@@ -57,7 +58,9 @@ export interface ReviewScopeState {
 }
 
 export type ReviewOpenMessage = {
+  readonly baseBranch?: string;
   readonly type: 'review.open';
+  readonly requestId?: string;
   readonly sessionId: string;
   readonly scopeKind: ReviewScopeKind;
   readonly turnId?: string;
@@ -122,6 +125,7 @@ export type ReviewRunAgentMessage = {
 };
 
 export type ReviewWebviewMessage =
+  | { readonly type: 'review.listBranches'; readonly sessionId: string; readonly requestId: string }
   | ReviewOpenMessage
   | ReviewNavigateMessage
   | ReviewSelectFileMessage
@@ -133,6 +137,7 @@ export type ReviewWebviewMessage =
 
 export interface ReviewStateMessage {
   readonly type: 'review.state';
+  readonly requestId?: string;
   readonly sequence: number;
   readonly state: ReviewScopeState;
 }
@@ -152,6 +157,7 @@ export interface ReviewRestorePreviewStateMessage {
 
 export interface ReviewOperationResultMessage {
   readonly type: 'review.operationResult';
+  readonly requestId?: string;
   readonly sequence: number;
   readonly sessionId: string;
   readonly reviewScopeId: string;
@@ -171,10 +177,20 @@ export interface ReviewAgentStateMessage {
 }
 
 export type ReviewHostMessage =
+  | ReviewBranchesMessage
   | ReviewStateMessage
   | ReviewRestorePreviewStateMessage
   | ReviewOperationResultMessage
   | ReviewAgentStateMessage;
+
+export interface ReviewBranchesMessage {
+  readonly type: 'review.branches';
+  readonly sequence: number;
+  readonly sessionId: string;
+  readonly requestId: string;
+  readonly refs: readonly string[];
+  readonly defaultBranch?: string;
+}
 
 export function parseReviewWebviewMessage(
   value: UnknownRecord,
@@ -182,6 +198,9 @@ export function parseReviewWebviewMessage(
   isPath: (value: unknown) => value is string,
 ): ReviewWebviewMessage | undefined {
   switch (value.type) {
+    case 'review.listBranches':
+      return hasExactKeys(value, ['type', 'sessionId', 'requestId']) && isId(value.sessionId) && isId(value.requestId)
+        ? value as unknown as Extract<ReviewWebviewMessage, { type: 'review.listBranches' }> : undefined;
     case 'review.open':
       return parseOpen(value, isId);
     case 'review.navigate':
@@ -273,10 +292,12 @@ function parseOpen(
   isId: (value: unknown) => value is string,
 ): ReviewOpenMessage | undefined {
   const required = ['type', 'sessionId', 'scopeKind'];
-  const optional = ['turnId', 'openCurrent'];
+  const optional = ['turnId', 'openCurrent', 'requestId', 'baseBranch'];
   if (
     !hasOnlyKeys(value, required, optional) ||
     !isId(value.sessionId) ||
+    (value.requestId !== undefined && !isId(value.requestId)) ||
+    (value.baseBranch !== undefined && (value.scopeKind !== 'branch' || !validBranch(value.baseBranch))) ||
     !isReviewScopeKind(value.scopeKind) ||
     (value.turnId !== undefined && !isId(value.turnId)) ||
     (value.openCurrent !== undefined && value.openCurrent !== true) ||
@@ -333,8 +354,14 @@ export function parseReviewHostMessage(value: unknown): ReviewHostMessage | unde
     return undefined;
   }
   switch (value.type) {
+    case 'review.branches':
+      return hasExactKeys(value, ['type', 'sequence', 'sessionId', 'requestId', 'refs'], ['defaultBranch']) &&
+        strings(value, ['sessionId']) && validRequestId(value.requestId) && Array.isArray(value.refs) &&
+        value.refs.every(validBranch) && (value.defaultBranch === undefined || validBranch(value.defaultBranch))
+        ? value as unknown as ReviewBranchesMessage : undefined;
     case 'review.state':
-      return hasExactKeys(value, ['type', 'sequence', 'state']) &&
+      return hasExactKeys(value, ['type', 'sequence', 'state'], ['requestId']) &&
+        (value.requestId === undefined || validRequestId(value.requestId)) &&
         isReviewState(value.state)
         ? (value as unknown as ReviewStateMessage)
         : undefined;
@@ -368,7 +395,8 @@ export function parseReviewHostMessage(value: unknown): ReviewHostMessage | unde
         'operation',
         'ok',
         'message',
-      ]) &&
+      ], ['requestId']) &&
+        (value.requestId === undefined || validRequestId(value.requestId)) &&
         strings(value, ['sessionId', 'reviewScopeId', 'message']) &&
         ['open', 'mark-reviewed', 'restore-file', 'restore-turn'].includes(
           String(value.operation),
@@ -399,7 +427,7 @@ function isReviewState(value: unknown): value is ReviewScopeState {
     'reviewedCount',
     'reviewableCount',
   ];
-  const optional = ['turnId', 'branchCommitCount', 'newerChangesAvailable', 'message', 'recordedOnly'];
+  const optional = ['turnId', 'branchCommitCount', 'newerChangesAvailable', 'message', 'recordedOnly', 'baseBranch'];
   if (
     !hasOnlyKeys(value, required, optional) ||
     !strings(value, ['sessionId', 'reviewScopeId', 'baseline', 'baselineLabel']) ||
@@ -419,6 +447,7 @@ function isReviewState(value: unknown): value is ReviewScopeState {
     return false;
   }
   return (
+    (value.baseBranch === undefined || validBranch(value.baseBranch)) &&
     (value.turnId === undefined || typeof value.turnId === 'string') &&
     (value.branchCommitCount === undefined || isCount(value.branchCommitCount)) &&
     (value.recordedOnly === undefined || value.recordedOnly === true) &&
@@ -480,6 +509,13 @@ function hasOnlyKeys(
 
 function strings(value: UnknownRecord, keys: readonly string[]): boolean {
   return keys.every((key) => typeof value[key] === 'string');
+}
+
+function validRequestId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256;
+}
+function validBranch(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 1024 && !/[\0\r\n]/.test(value);
 }
 
 function pathArray(value: unknown): boolean {

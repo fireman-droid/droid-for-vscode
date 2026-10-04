@@ -119,13 +119,15 @@ export function parseGitCommitRequest(
   value: UnknownRecord,
 ): GitCommitRequestMessage | undefined {
   if (
-    !hasExactKeys(value, ['type', 'sessionId', 'turnId', 'paths', 'message']) ||
+    !hasExactKeys(value, ['type', 'sessionId', 'turnId', 'paths', 'message'], ['snapshotId', 'mode']) ||
     !isId(value.sessionId) ||
     !isId(value.turnId) ||
     !isExactArray(value.paths, 1, MAX_GIT_COMMIT_PATHS) ||
     typeof value.message !== 'string' ||
     value.message.trim().length === 0 ||
-    value.message.length > MAX_GIT_COMMIT_MESSAGE_LENGTH
+    value.message.length > MAX_GIT_COMMIT_MESSAGE_LENGTH ||
+    (value.snapshotId !== undefined && !isId(value.snapshotId)) ||
+    (value.mode !== undefined && value.mode !== 'files' && value.mode !== 'staged')
   ) {
     return undefined;
   }
@@ -145,6 +147,8 @@ export function parseGitCommitRequest(
     turnId: value.turnId,
     paths,
     message: value.message,
+    ...(value.snapshotId === undefined ? {} : { snapshotId: value.snapshotId as string }),
+    ...(value.mode === undefined ? {} : { mode: value.mode as 'files' | 'staged' }),
   };
 }
 

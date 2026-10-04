@@ -2,6 +2,7 @@ import { useCallback, type Dispatch } from 'react';
 import { post, type ChatPort } from '../host/chatIntent';
 import type { PathLink } from '@droidvisx/chat-ui/markdown/pathLink';
 import { type AssistantWebviewAction } from '../state/types';
+import type { GitCommitMode } from '../../shared/protocol/gitCommitFlow';
 
 export function useWorkspaceActions({
   vscode,
@@ -42,7 +43,7 @@ export function useWorkspaceActions({
     [connectionStatus, sessionId, vscode],
   );
   const handleGitCommit = useCallback(
-    (commitTurnId: string, paths: readonly string[], message: string): void => {
+    (commitTurnId: string, paths: readonly string[], message: string, snapshotId?: string, mode?: GitCommitMode): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
         return;
       }
@@ -53,6 +54,8 @@ export function useWorkspaceActions({
         turnId: commitTurnId,
         paths,
         message,
+        ...(snapshotId === undefined ? {} : { snapshotId }),
+        ...(mode === undefined ? {} : { mode }),
       });
     },
     [connectionStatus, sessionId, vscode],

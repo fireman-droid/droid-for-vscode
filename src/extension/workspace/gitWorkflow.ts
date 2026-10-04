@@ -4,11 +4,13 @@ import {
   GIT_SHORT_HASH_LENGTH,
   MAX_GIT_BRANCH_LENGTH,
   MAX_GIT_COMMIT_ERROR_LENGTH,
-  MAX_GIT_STATUS_FILES,
+  MAX_GIT_COMMIT_PATHS,
+  type GitCommitMode,
   type GitFileStatus,
   type GitStatusFile,
   type GitUnavailableReason,
 } from '../../shared/protocol/gitCommitFlow';
+import { createGitCommitSnapshots, type GitCommitSnapshotReader } from './gitCommitSnapshot';
 
 /**
  * Git commit workflow (slice A of the git/PR workflow design): reads
@@ -57,6 +59,7 @@ export type GitWorkflowStatus =
       readonly available: true;
       readonly branch: string | null;
       readonly files: readonly GitStatusFile[];
+      readonly snapshotId?: string;
     }
   | {
       readonly available: false;
@@ -77,6 +80,7 @@ export interface GitWorkflow {
     paths: readonly string[],
     message: string,
     isCurrent?: () => boolean,
+    preview?: { readonly snapshotId?: string; readonly mode?: GitCommitMode },
   ): Promise<GitCommitOutcome>;
 }
 
@@ -244,12 +248,14 @@ function collectStatusFiles(
       }
       return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
     });
-  return files.slice(0, MAX_GIT_STATUS_FILES);
+  return files;
 }
 
 export function createGitWorkflow(
   getGitApi: () => Promise<GitApiLike | undefined>,
+  snapshotReader?: GitCommitSnapshotReader,
 ): GitWorkflow {
+  const snapshots = createGitCommitSnapshots(snapshotReader);
   const resolve = async (workspaceRoot: string) =>
     resolveRepository(await getGitApi(), workspaceRoot);
 
@@ -271,17 +277,24 @@ export function createGitWorkflow(
         return { available: false, reason: 'status-failed' };
       }
       const branch = repository.state.HEAD?.name;
+      const files = collectStatusFiles(repository, workspaceRoot, inTurnPaths);
+      if (files.length > MAX_GIT_COMMIT_PATHS) return { available: false, reason: 'too-many-files' };
+      let snapshotId: string;
+      try { snapshotId = await snapshots.capture(workspaceRoot, files); }
+      catch { return { available: false, reason: 'status-failed' }; }
       return {
         available: true,
         branch:
           branch === undefined || branch === ''
             ? null
             : branch.slice(0, MAX_GIT_BRANCH_LENGTH),
-        files: collectStatusFiles(repository, workspaceRoot, inTurnPaths),
+        files,
+        snapshotId,
       };
     },
 
-    async commit(workspaceRoot, paths, message, isCurrent = () => true) {
+    async commit(workspaceRoot, paths, message, isCurrent = () => true, preview) {
+      const mode = preview?.mode ?? 'files';
       let resolved: Awaited<ReturnType<typeof resolve>>;
       try {
         resolved = await resolve(workspaceRoot);
@@ -318,11 +331,18 @@ export function createGitWorkflow(
           return { ok: false, error: 'Other files are already staged. Include them explicitly or adjust the index before committing.' };
         if (repository.state.mergeChanges.length > 0)
           return { ok: false, error: 'Resolve merge conflicts before committing.' };
-        await repository.add(absolutePaths);
+        if (mode === 'staged' && (repository.state.indexChanges.length === 0 || paths.some(path =>
+          !repository.state.indexChanges.some(change => toRelativePath(workspaceRoot, change.uri.fsPath) === path))))
+          return { ok: false, error: 'Select the complete current staged file set before committing the index.' };
+        await snapshots.verify(preview?.snapshotId, workspaceRoot, paths, mode);
+        if (mode === 'files') await repository.add(absolutePaths);
         await repository.status();
         if (!isCurrent() || hasUnselectedIndex())
           return { ok: false, error: 'The target or staged files changed. Nothing was committed; check the index.' };
+        await snapshots.verify(preview?.snapshotId, workspaceRoot, paths, mode, mode === 'staged');
+        if (!isCurrent()) return { ok: false, error: 'The commit target changed. Nothing was committed; check the index.' };
         await repository.commit(message);
+        snapshots.forget(preview?.snapshotId);
       } catch (error) {
         return { ok: false, error: capError(readGitErrorText(error)) };
       }

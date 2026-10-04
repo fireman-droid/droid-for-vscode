@@ -146,15 +146,15 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
   expect(within(card).getByText('Edited 1 file')).toBeTruthy();
   expect(screen.queryByRole('button', { name: `Hide changes to ${path}` })).toBeNull();
-  expect(screen.queryByRole('button', { name: `Show changes to ${path}` })).toBeNull();
+  expect(screen.getByRole('button', { name: `Show changes to ${path}` })).toBeDefined();
   expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
   const prose = screen.getByText(answer.kind === 'assistant' ? answer.text : '');
   expect(prose.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(card.compareDocumentPosition(screen.getByRole('button', { name: 'Copy reply' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(within(card).getByRole('button', { name: `Review changes to ${path}` }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, path });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path });
   fireEvent.click(within(card).getByRole('button', { name: 'Review changes in 1 file' }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
   fireEvent.click(within(card).getByRole('button', { name: 'Undo changes in 1 file' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, action: 'undo' });
   await expectNoWorkspaceDiff(current.port);
@@ -191,7 +191,7 @@ it('reports a confirmed write without inventing text when no result patch was re
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
   expect(within(card).queryByLabelText(/^Recorded operation lines:/)).toBeNull();
   fireEvent.click(within(card).getByRole('button', { name: 'Review changes in 1 file' }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
   await expectNoWorkspaceDiff(current.port);
 });
 
@@ -230,9 +230,9 @@ it('keeps changes to the same file in separate turn cards and routes each review
   expect(cards).toHaveLength(2);
   cards.forEach((card) => expect(within(card).getAllByLabelText('Recorded operation lines: 1 added, 1 removed')).toHaveLength(2));
   fireEvent.click(within(cards[0]!).getByRole('button', { name: `Review changes to ${path}` }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, path });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path });
   fireEvent.click(within(cards[1]!).getByRole('button', { name: `Review changes to ${path}` }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId: secondTurn, path });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId: secondTurn, path });
 });
 
 it('reveals files beyond the first three without changing the turn review or undo scope', () => {
@@ -245,7 +245,7 @@ it('reveals files beyond the first three without changing the turn review or und
   fireEvent.click(within(card).getByRole('button', { name: 'Show 2 more files' }));
   expect(within(card).getAllByRole('button', { name: /^Review changes to/ })).toHaveLength(5);
   fireEvent.click(within(card).getByRole('button', { name: 'Review changes to src/file-5.ts' }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, path: 'src/file-5.ts' });
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path: 'src/file-5.ts' });
   fireEvent.click(within(card).getByRole('button', { name: 'Undo changes in 5 files' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, action: 'undo' });
   fireEvent.click(within(card).getByRole('button', { name: 'Show less' }));

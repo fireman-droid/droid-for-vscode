@@ -29,30 +29,23 @@ function setup() {
   send({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1', operation: null, operationPath: null });
   send({ type: 'review.state', sequence: 1, state: scope });
   const request = () => port.postMessage.mock.calls.filter(([entry]) => entry.type === 'reviewPanel.readFile').at(-1)![0];
-  const reply = (recordedOperations: ReviewRecordedEntry[], requestId = request().requestId) => send({
+  const reply = (recordedOperations: ReviewRecordedEntry[], requestId = request().requestId, truncated = false) => send({
     type: 'reviewPanel.file', requestId, reviewScopeId: 'scope1', path: 'app.ts', version: 'v1',
-    patch: '', truncated: false, error: null, recordedOperations,
+    patch: '', truncated, error: null, recordedOperations,
   });
   return { port, request, reply };
 }
 
-it('requests the selected edit on demand, preserves selection across context changes and opens that native diff', async () => {
+it('defaults to saved excerpts, requests the selected edit and opens that native diff', async () => {
   const user = userEvent.setup();
   const { port, request, reply } = setup();
   reply(entries);
   expect(screen.getByText('Edit 2 of 2')).toBeDefined();
-  expect(screen.getByText(/Full file comparison unavailable/)).toBeDefined();
+  expect(screen.queryByText(/Full file comparison unavailable/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Previous recorded edit' }));
-  expect(request()).toMatchObject({ toolUseId: 'first', context: 'all' });
-  expect(screen.getByText('Loading full file comparison…')).toBeDefined();
-  const recovered = { ...entries[0]!, fullPatch, message: 'The saved excerpt is incomplete.' };
-  reply([recovered, entries[1]!]);
-  expect(screen.getByText('Edit 1 of 2')).toBeDefined();
-  expect(screen.getByText('unchanged start')).toBeDefined();
-  expect(screen.queryByText(recovered.message)).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'More file actions' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Saved change excerpts' }));
   expect(request()).toMatchObject({ toolUseId: 'first', context: 3 });
+  expect(screen.queryByText('Loading full file comparison…')).toBeNull();
+  const recovered = { ...entries[0]!, fullPatch, message: 'The saved excerpt is incomplete.' };
   reply([recovered, entries[1]!]);
   expect(screen.getByText('Edit 1 of 2')).toBeDefined();
   expect(screen.queryByText('unchanged start')).toBeNull();
@@ -70,37 +63,40 @@ it('keeps a live comparison visible during successive reads and discards it when
   reply(entries, first.requestId);
   expect(screen.getByText('after')).toBeDefined();
   expect(screen.getByText(/Live run/)).toBeDefined();
+  reply(entries);
   send({ type: 'review.state', sequence: 3, state: { ...scope, lifecycle: 'settled', files: [{ ...scope.files[0]!, version: 'v3' }] } });
   expect(request().requestId).not.toBe(first.requestId);
   expect(screen.getByText(/Recorded operations · inspect each edit/)).toBeDefined();
-  reply([{ ...entries[1]!, fullPatch: '@@ -1 +1 @@\n-middle\n+settled' }]);
+  reply([{ ...entries[1]!, patch: '@@ -1 +1 @@\n-middle\n+settled' }]);
   expect(screen.getByText('settled')).toBeDefined();
   reply(entries, first.requestId);
   expect(screen.getByText('settled')).toBeDefined();
   expect(screen.queryByText('after')).toBeNull();
 });
 
-it('loads full context for a tool card target and switches to another tool in the same session', () => {
+it('loads the saved excerpt for a tool card target and switches to another tool in the same session', () => {
   const { request, reply } = setup();
   send({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1',
     operation: null, operationPath: 'app.ts', toolUseId: 'first' });
-  expect(request()).toMatchObject({ toolUseId: 'first', context: 'all' });
+  expect(request()).toMatchObject({ toolUseId: 'first', context: 3 });
   reply([{ ...entries[0]!, fullPatch }, entries[1]!]);
   expect(screen.getByText('Edit 1 of 2')).toBeDefined();
   send({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1',
     operation: null, operationPath: 'app.ts', toolUseId: 'second' });
-  expect(request()).toMatchObject({ toolUseId: 'second', context: 'all' });
+  expect(request()).toMatchObject({ toolUseId: 'second', context: 3 });
   reply(entries);
   expect(screen.getByText('Edit 2 of 2')).toBeDefined();
   expect(screen.queryByText('unchanged start')).toBeNull();
 });
 
-it('explains preview limits without claiming the full versions are missing', () => {
+it('keeps optional full-version limits out of saved excerpts and offers native diff', async () => {
+  const user = userEvent.setup();
   const { port, reply } = setup();
   reply([{ ...entries[1]!, fullPatchUnavailableReason: 'too-large' }]);
-  expect(screen.getByText('Full comparison exceeds the preview limit. Open Native Diff to read the complete file.')).toBeDefined();
+  expect(screen.queryByText(/Full comparison exceeds/)).toBeNull();
   expect(screen.queryByText(/Full file comparison unavailable/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Open Native Diff' }));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Open Native Diff' }));
   expect(port.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'reviewPanel.openNative', path: 'app.ts' }));
 });
 
@@ -108,7 +104,7 @@ it('does not offer an unusable native comparison when complete versions are unav
   const user = userEvent.setup();
   const { reply } = setup();
   reply([{ ...entries[1]!, fullPatchUnavailableReason: 'unavailable' }]);
-  expect(screen.getByText(/Full file comparison unavailable/)).toBeDefined();
+  expect(screen.queryByText(/Full file comparison unavailable/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Open Native Diff' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'More file actions' }));
   expect(screen.getByRole('menuitem', { name: 'Open Native Diff' }).getAttribute('aria-disabled')).toBe('true');
@@ -130,4 +126,39 @@ it('rejects a live response arriving in the same React batch as settlement', () 
   expect(request().requestId).not.toBe(liveRequest.requestId);
   reply([{ ...entries[1]!, patch: '@@ -1 +1 @@\n-before\n+completed result' }]);
   expect(screen.getByText('completed result')).toBeDefined();
+});
+
+it('keeps the selected historical edit when a later edit arrives and never substitutes a missing explicit target', () => {
+  const { request, reply } = setup();
+  reply(entries); reply(entries);
+  fireEvent.click(screen.getByRole('button', { name: 'Previous recorded edit' }));
+  reply(entries);
+  send({ type: 'review.state', sequence: 2, state: { ...scope, lifecycle: 'settled' } });
+  reply([...entries, { ...entries[1]!, toolUseId: 'third', patch: '@@ -2 +2 @@\n-after\n+newest' }]);
+  expect(screen.getByText('Edit 1 of 3')).toBeDefined();
+  expect(screen.queryByText('newest')).toBeNull();
+  send({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1',
+    operation: null, operationPath: 'app.ts', toolUseId: 'missing-edit' });
+  expect(request().toolUseId).toBe('missing-edit');
+  reply(entries);
+  expect(screen.getByText(/The selected edit is unavailable/)).toBeDefined();
+  expect(screen.queryByText('after')).toBeNull();
+});
+
+it('disables aggregate review for truncated evidence but permits referenced edits after the selected body loads', () => {
+  const { request, reply } = setup();
+  send({ type: 'review.state', sequence: 2, state: { ...scope, lifecycle: 'settled' } });
+  reply(entries); reply(entries); reply(entries, request().requestId, true);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark all file edits viewed' }).disabled).toBe(true);
+  send({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1',
+    operation: null, operationPath: 'app.ts', toolUseId: 'first' });
+  reply([{ ...entries[0]! }, { ...entries[1]!, patch: '', bodyRef: { digest: 'a'.repeat(64), patchUnits: 30_000, contentUnits: 0 } }]);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark all file edits viewed' }).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Next recorded edit' }));
+  expect(screen.getByText('Reading saved edit…')).toBeDefined();
+  send({ type: 'reviewPanel.file', requestId: request().requestId, reviewScopeId: 'scope1', path: 'app.ts',
+    version: '', patch: '', truncated: false, error: 'Saved body missing' });
+  expect(screen.queryByText('Reading saved edit…')).toBeNull();
+  expect(screen.getByText(/Saved content is not loaded/)).toBeDefined();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark all file edits viewed' }).disabled).toBe(true);
 });

@@ -1594,20 +1594,18 @@ settled 清单。界面应把它表达为“回合期间发生的变化”，除
 
 ## 统一 Diff 审查系统
 
-设计日期：2026-08-27
+设计日期：2026-08-27；当前阅读与范围规则更新于 2026-10-04（0.8.3）。
 
-本设计将上面的对标建议合并成一条完整链路，不再把连续导航、安全恢复、
-Diff 引用和 Agent Review 作为彼此独立的候选功能。界面继续采用
-**ReviewDock 导航 + Cursor / VS Code 原生 Diff**：聊天侧负责范围、顺序、
-进度和动作，代码阅读始终回到编辑器。
+生产入口为独立 Review Webview 与聊天工具／文件摘要，复用公共 Diff 组件。
+默认展示变更块和 3 行上下文；仅可靠版本可扩大上下文或打开编辑器原生 Diff。
+下文早期 Dock 流程保留为设计沿革，当前入口与能力以本节范围表及 REVIEW 指南为准。
 
 ### 产品语义
 
 - Workspace 中的文件在 Droid 工具执行时已经写入磁盘。Review 是写入后的审查，
   不是写入前的 Accept / Reject。
-- 默认范围是 `Latest Turn`，因为它有明确的 `sessionId`、`turnId` 和 before
-  基线。`Workspace` 与 `Branch` 是显式切换的更大范围，不能反过来污染 Turn
-  归因。
+- 工具 Review 进入对应 Recorded edits；本轮汇总 Review 进入 Turn workspace。
+  Git 范围需显式选择，范围变化不能改变聊天操作归因。
 - `reviewed` 只表示用户对某个确定版本的 Diff 做了明确确认，不代表 stage、
   commit、测试通过、质量通过或接受修改。
 - Diff Review 负责展示事实；Agent Review 是另一次 Droid 语义审查，两者有
@@ -1631,9 +1629,17 @@ Diff 引用和 Agent Review 作为彼此独立的候选功能。界面继续采�
 
 | 范围 | 比较事实 | 默认动作 |
 | --- | --- | --- |
-| Turn | `Before turn ↔ Current`；已提交历史回合可用 `commit^ ↔ commit` | 原生 Diff、reviewed、引用、安全恢复 |
-| Workspace | `HEAD ↔ Working` | 原生 Diff、reviewed、引用 |
-| Branch | `baseBranch ↔ branch / working tree`，标题必须显示基线 | 原生 Diff、reviewed、引用 |
+| Recorded edits | 本轮各次工具操作结果；不强求每次都有完整文件版本 | 默认真实片段，显式选择历史编辑 |
+| Turn workspace | `Before turn → After turn`；运行中为开始前到当前工作区 | 默认变更块，不宣称独占作者归因 |
+| Workspace | `HEAD → Working tree`，无 HEAD 用空树 | 本地 Git，包含适用未跟踪文件 |
+| Branch | 指定基分支 `merge-base → HEAD` | 只含已提交变化，显示基线，不自动 fetch |
+| Unstaged | `Index → Working tree` | 不依赖 HEAD，包含适用未跟踪文件 |
+| Staged | `HEAD → Index`，无 HEAD 用空树 | 只读已暂存内容，保留部分暂存 |
+
+范围请求按 requestId 匹配；失败后仍可阅读先前范围，并可重新切换。
+过滤、文件导航和标记后下一项使用同一可见列表。已查看绑定内容版本；操作历史的动作
+明确为该文件全部编辑，截断响应不能完成标记。聊天行展开与打开 Review 使用独立入口。
+提交提供 Working files / Index 两种模式，均验证对应预览身份；Index 模式不重新暂存。
 
 无法建立可靠比较基线时，文件只能标记为 `Open only`，不能伪装成 Diff；
 该文件也不能参与 reviewed 完成率或恢复。

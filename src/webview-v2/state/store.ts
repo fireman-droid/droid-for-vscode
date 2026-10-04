@@ -106,6 +106,8 @@ function reduceHostMessage(
     case 'workspace.files':
     case 'workspace.imageData':
       return reduceWorkspaceMessage(state, event);
+    case 'review.branches':
+      return advance(state, event.sequence);
     case 'git.branchDiff':
     case 'git.status':
     case 'git.commitResult':

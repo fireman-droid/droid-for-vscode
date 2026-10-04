@@ -115,6 +115,7 @@ const HOST_MESSAGE_PARSERS = {
   'git.branchDiff': parseGitBranchDiff,
   'git.commitResult': parseGitCommitResult,
   'review.state': parseReviewMessage,
+  'review.branches': parseReviewMessage,
   'review.restorePreview': parseReviewMessage,
   'review.operationResult': parseReviewMessage,
   'review.agentReviewState': parseReviewMessage,

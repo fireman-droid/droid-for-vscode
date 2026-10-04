@@ -8,12 +8,13 @@ export function handleReviewMessage(
 ): void {
   if (
     message.sessionId !== ctl.sessionState.sessionId ||
-    ctl.sessionState.connection.status !== 'connected'
+    (message.type === 'review.runAgentReview' && ctl.sessionState.connection.status !== 'connected')
   ) {
     return;
   }
   if (
     message.type === 'review.open' &&
+    message.requestId === undefined &&
     message.scopeKind === 'turn' &&
     ctl.turnState.turn?.turnId === message.turnId &&
     isTurnActive(ctl.turnState.turn)

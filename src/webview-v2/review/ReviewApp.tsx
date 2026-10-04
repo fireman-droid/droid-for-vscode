@@ -1,14 +1,14 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCheck, Columns2, Rows3, MoreHorizontal, ChevronLeft, ChevronRight, ExternalLink, FileCode2, GitCommitHorizontal, PanelLeft, RefreshCw, Undo2 } from 'lucide-react';
 import { MAX_REVIEW_UNDO_FILES, REVIEW_SCOPE_KINDS, type ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/selection';
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/overlays';
+import { Dialog, DialogContent, DialogDescription, DialogTitle, Tooltip, TooltipProvider } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { DiffView, findDiffChange } from './DiffView';
-import { ReviewFiles } from './ReviewFiles';
+import { ReviewFiles, filterReviewFiles, type ReviewFileFilters } from './ReviewFiles';
 import { ReviewCommit } from './ReviewCommit';
 import { useReviewWorkbench, type ReviewPort } from './useReviewWorkbench';
 import { OPERATION_UNAVAILABLE } from '../content/OperationDiff';
@@ -16,6 +16,9 @@ import { hasOperationTextChanges } from '../../shared/protocol/operationDiff';
 import { operationLabel } from '../content/operationPresentation';
 import { RecordedFileReview } from './RecordedFileReview';
 import type { ReviewRecordedEntry } from '../../shared/protocol/reviewPanelProtocol';
+import { ReviewIconButton } from './ReviewIconButton';
+import { useReviewReadingPosition, type ReviewReadingPositions } from './useReviewReadingPosition';
+import { useReviewFileNavigation } from './useReviewFileNavigation';
 const labels: Record<ReviewScopeKind, string> = {
   operations: 'Recorded edits', turn: 'Turn workspace', workspace: 'Workspace', branch: 'Branch', unstaged: 'Unstaged', staged: 'Staged',
 };
@@ -27,6 +30,8 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const [recordedToolbar, setRecordedToolbar] = useState<HTMLDivElement | null>(null);
   const [commit, setCommit] = useState(false);
   const [operationPath, setOperationPath] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ReviewFileFilters>({ query: '', unreviewed: false });
+  const positions = useRef<ReviewReadingPositions>(new Map());
   const scroll = useRef<HTMLDivElement>(null);
   const closeCommit = useCallback(() => setCommit(false), []);
   const operation = target?.operation?.status === 'ready' ? target.operation : null;
@@ -38,7 +43,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   }] : file?.recordedOperations, [operationFile, operation, file?.recordedOperations]);
   const selectedRecordedEntry = flow.selectedToolUseId ? recordedEntries?.find((entry) => entry.toolUseId === flow.selectedToolUseId)
     : recordedEntries?.reduce<ReviewRecordedEntry | undefined>((latest, entry) => entry.source === 'tool-result' && entry.outcome === 'applied' &&
-      (entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch)) ? entry : latest, undefined) ?? recordedEntries?.at(-1);
+      (entry.bodyRef || entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch)) ? entry : latest, undefined) ?? recordedEntries?.at(-1);
   const nativeUnavailable = selectedRecordedEntry?.fullPatchUnavailableReason === 'unavailable';
   const recordedContent = operation ? operationFile?.submittedContent !== undefined ? {
     content: operationFile.submittedContent, sourceToolUseId: operation?.callId ?? 'operation', appliedEdits: 0, remainingOperations: 0,
@@ -58,15 +63,12 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     if (operation) setOperationPath(value); else actions.onSelectFile(value);
     if (window.innerWidth <= 700) setFilesOpen(false);
   }, [operation, actions.onSelectFile]);
-  useLayoutEffect(() => {
-    scroll.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [path, review?.reviewScopeId, operation?.callId]);
-  const navigateFile = (direction: 'previous' | 'next') => {
-    if (operation) {
-      const next = operation.files[operationIndex + (direction === 'next' ? 1 : -1)];
-      if (next) setOperationPath(next.path);
-    } else actions.onNavigate(direction);
-  };
+  const readingKey = JSON.stringify([target?.sessionId, review?.reviewScopeId ?? operation?.callId, path]);
+  const readingRevision = useMemo(() => ({ patch, split }), [patch, split]);
+  useReviewReadingPosition(() => scroll.current, !recordedEntries && path && file ? readingKey : null,
+    readingRevision, positions.current);
+  const visiblePaths = useMemo(() => filterReviewFiles(files, filters).map(file => file.path), [files, filters]);
+  const navigation = useReviewFileNavigation(review, visiblePaths, path, selectFile, actions);
   const valid = target?.valid === true;
   const writing = review?.lifecycle === 'writing';
   const operationOnly = target?.operation != null;
@@ -77,7 +79,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const readOnlyMessage = missingSnapshot ? 'Saved operation excerpts · full turn snapshot unavailable'
     : operationOnly ? operationLabel(target!.operation!) : 'This file cannot be compared.';
   const canMark = valid && !readOnly && !flow.scopePending && review?.lifecycle !== 'stale' && !!current && !!file && !file.error &&
-    !flow.fileRefreshing && !flow.fileError &&
+    !flow.fileRefreshing && !flow.fileError && !file.truncated &&
     file.version === current.version && current.version !== 'unavailable' && current.status !== 'reviewed' &&
     !writing;
   const hasHunks = !!patch || !!file?.recordedOperations?.some((entry) => hasOperationTextChanges(entry.fullPatch ?? entry.patch));
@@ -91,9 +93,9 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     if (next !== null) container.scrollBy({ top: next - top,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
-  return <main className="review-workbench">
+  return <TooltipProvider><main className="review-workbench">
     <header className="review-topbar">
-      <Button variant="ghost" size="icon-sm" className="review-files-toggle" aria-label={showFiles ? 'Collapse files' : 'Show files'} aria-pressed={showFiles} onClick={() => setFilesOpen(!showFiles)}><PanelLeft /></Button>
+      <ReviewIconButton variant="ghost" size="icon-sm" className="review-files-toggle" aria-label={showFiles ? 'Collapse files' : 'Show files'} aria-pressed={showFiles} onClick={() => setFilesOpen(!showFiles)}><PanelLeft /></ReviewIconButton>
       <h1 className="review-title" title={review?.baselineLabel ?? 'Review changes'}>Review</h1>
       <div className="review-scope-control">
       <Select disabled={!valid || flow.scopePending} value={target?.operation ? 'operation' : review?.scopeKind ?? 'workspace'}
@@ -105,10 +107,16 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
         </SelectContent>
       </Select>
       </div>
+      {flow.choosingBranch || review?.scopeKind === 'branch' ? <Select disabled={flow.scopePending || !flow.branches?.refs.length}
+        value={review?.scopeKind === 'branch' ? review.baseBranch ?? flow.branches?.defaultBranch : undefined}
+        onValueChange={value => flow.openScope('branch', value)}>
+        <SelectTrigger aria-label="Base branch" className="review-scope-trigger h-7 text-xs"><SelectValue placeholder="Choose base branch" /></SelectTrigger>
+        <SelectContent className="review-menu" align="start">{flow.branches?.refs.map(ref => <SelectItem key={ref} value={ref}>{ref.replace(/^refs\/(heads|remotes)\//, '')}</SelectItem>)}</SelectContent>
+      </Select> : null}
       <span className="review-top-spacer" />
       {review && !operation && !missingSnapshot ? <span className="review-progress">{review.reviewedCount} / {review.reviewableCount} reviewed</span> : <span className="review-progress">{files.length} {files.length === 1 ? 'file' : 'files'}</span>}
       {!operation && !operationsScope && completeCounts ? <span className="review-range-counts"><i>+{additions}</i><b>−{deletions}</b></span> : null}
-      <Button variant="ghost" size="icon-sm" aria-label="Refresh review" disabled={!valid || flow.scopePending} aria-busy={flow.scopePending || flow.fileRefreshing} onClick={flow.refresh}><RefreshCw /></Button>
+      <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Refresh review" disabled={!valid || flow.scopePending} aria-busy={flow.scopePending || flow.fileRefreshing} onClick={flow.refresh}><RefreshCw /></ReviewIconButton>
       {review?.scopeKind === 'workspace' || review?.scopeKind === 'branch' || agentRunning ? <Button variant="ghost" size="sm" title="Runs the existing independent /review session; its own report defines the reviewed scope."
         disabled={!valid || !!target?.operation || writing || agentRunning || (review?.scopeKind !== 'workspace' && review?.scopeKind !== 'branch')}
         onClick={actions.onRunAgentReview}>{agentRunning ? 'Review running…' : 'Agent Review'}</Button> : null}
@@ -118,6 +126,8 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       : flow.error ? <div className="review-empty" role="alert">{flow.error}</div>
         : <DroidLoading label="Connecting to the workspace…" /> : <>
       {flow.error ? <p className="review-error review-notice" role="alert">{flow.error}</p> : null}
+      {flow.scopePending ? <p className="review-notice" role="status">Loading comparison…{review ? ' The previous comparison remains visible.' : ''}</p> : null}
+      {flow.choosingBranch && !flow.scopePending && flow.branches && review?.scopeKind !== 'branch' ? <p className="review-notice" role="status">{flow.branches.refs.length ? 'Choose a base branch to compare local changes.' : 'No local branch references are available.'}</p> : null}
       {flow.operation?.ok && flow.operation.reviewScopeId === review?.reviewScopeId
         ? <p className="review-notice" role="status">{flow.operation.message}</p> : null}
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
@@ -127,7 +137,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
             : review.scopeKind === 'turn' && !missingSnapshot ? 'Completed turn · before → after.' : review.baselineLabel}
       </p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
-        {showFiles ? <ReviewFiles files={files} selected={path} onSelect={selectFile} /> : null}
+        {showFiles ? <ReviewFiles files={files} selected={path} onSelect={value => { if (!flow.scopePending) selectFile(value); }} filters={filters} onFiltersChange={setFilters} /> : null}
         <section className="review-code">
           <div className="review-file-toolbar">
             <FileCode2 className="review-current-icon" aria-hidden />
@@ -139,26 +149,25 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                 <ToggleGroupItem className="h-7 w-7 p-1.5" value="unified" aria-label="Unified view" title="Unified view"><Rows3 /></ToggleGroupItem>
                 <ToggleGroupItem className="h-7 w-7 p-1.5" value="split" aria-label="Split view" title="Split view"><Columns2 /></ToggleGroupItem>
               </ToggleGroup>
-              <Button variant="ghost" size="icon-sm" aria-label="Previous change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(-1)}><ArrowUp /></Button>
-              <Button variant="ghost" size="icon-sm" aria-label="Next change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(1)}><ArrowDown /></Button>
+              <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Previous change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(-1)}><ArrowUp /></ReviewIconButton>
+              <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Next change" disabled={!hasHunks || flow.scopePending} onClick={() => hunk(1)}><ArrowDown /></ReviewIconButton>
             </> : null}
-            {!readOnly && current ? <Button variant="ghost" size="sm" className="review-viewed" data-reviewed={current.status === 'reviewed'} disabled={!canMark} onClick={() => actions.onMarkReviewed(false)}><CheckCheck aria-hidden /><span>{current.status === 'reviewed' ? 'Viewed' : 'Mark viewed'}</span></Button> : null}
-            <Button variant="ghost" size="icon-sm" aria-label="Open current file" disabled={!path} onClick={() => port.postMessage({ type: 'reviewPanel.openPath', path })}><ExternalLink /></Button>
+            {!readOnly && current ? <Tooltip content={operationsScope ? 'Marks all saved edits for this file at the current version.' : 'Marks this file comparison at the current version.'}><Button variant="ghost" size="sm" className="review-viewed" data-reviewed={current.status === 'reviewed'} disabled={!canMark} onClick={() => actions.onMarkReviewed(false)}><CheckCheck aria-hidden /><span>{current.status === 'reviewed' ? 'Viewed' : operationsScope ? 'Mark all file edits viewed' : 'Mark viewed'}</span></Button></Tooltip> : null}
+            <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Open current file" disabled={!path} onClick={() => port.postMessage({ type: 'reviewPanel.openPath', path })}><ExternalLink /></ReviewIconButton>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="More file actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild><ReviewIconButton variant="ghost" size="icon-sm" aria-label="More file actions"><MoreHorizontal /></ReviewIconButton></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="review-menu review-undo-menu" data-motion="anchored" sideOffset={6}>
                 <p className="review-undo-hint" role="status">{readOnly ? readOnlyMessage : writing ? 'Live changes · review actions wait for completion' : `File ${fileIndex + 1} of ${files.length}`}</p>
-                <DropdownMenuItem disabled={fileIndex <= 0} onSelect={() => navigateFile('previous')}><ChevronLeft />Previous file</DropdownMenuItem>
-                <DropdownMenuItem disabled={fileIndex < 0 || fileIndex >= files.length - 1} onSelect={() => navigateFile('next')}><ChevronRight />Next file</DropdownMenuItem>
-                {!readOnly && current && files.length > 1 ? <DropdownMenuItem disabled={!canMark} onSelect={() => actions.onMarkReviewed(true)}><CheckCheck />Mark viewed & next</DropdownMenuItem> : null}
+                <DropdownMenuItem disabled={flow.scopePending || !navigation.previous} onSelect={() => navigation.navigate('previous')}><ChevronLeft />Previous file</DropdownMenuItem>
+                <DropdownMenuItem disabled={flow.scopePending || !navigation.next} onSelect={() => navigation.navigate('next')}><ChevronRight />Next file</DropdownMenuItem>
+                {!readOnly && current && files.length > 1 ? <DropdownMenuItem disabled={!canMark || !navigation.next} onSelect={navigation.markAndNext}><CheckCheck />{operationsScope ? 'Mark all file edits viewed & next' : 'Mark viewed & next'}</DropdownMenuItem> : null}
                 {!operationOnly ? <>
                   <DropdownMenuItem disabled={!current || flow.scopePending || nativeUnavailable}
                     title={nativeUnavailable ? 'The complete versions for this edit are unavailable.' : undefined} onSelect={flow.openNative}>Open Native Diff</DropdownMenuItem>
                 </> : null}
-                {!operationOnly ? <>
-                  <DropdownMenuItem onSelect={() => flow.setContext('all')}>{recordedEntries ? 'Request full file context' : 'Full file'}{flow.context === 'all' ? ' ✓' : ''}</DropdownMenuItem>
-                  {recordedEntries ? <DropdownMenuItem onSelect={() => flow.setContext(3)}>Saved change excerpts{flow.context !== 'all' ? ' ✓' : ''}</DropdownMenuItem>
-                    : [3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
+                {!operationOnly && !recordedEntries ? <>
+                  <DropdownMenuItem onSelect={() => flow.setContext('all')}>Full file{flow.context === 'all' ? ' ✓' : ''}</DropdownMenuItem>
+                  {[3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
                 </> : null}
                 {!readOnly && current && operationsScope ? <>
                 {!current.restorable ? <p className="review-undo-hint">Undo needs a complete, reversible record. This file does not have one.</p> : null}
@@ -175,13 +184,14 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
           </div> : null}
           <div className="review-code-scroll" ref={scroll}>
             {target?.operation?.status === 'unavailable' ? <p className="review-empty">{OPERATION_UNAVAILABLE[target.operation.reason]}</p>
-              : flow.scopePending ? <DroidLoading label="Loading comparison…" />
+              : flow.scopePending && !file && !operation ? <DroidLoading label="Reading comparison…" />
               : !path ? <p className="review-empty">No changes in this comparison.</p>
               : !operation && !file ? flow.fileError ? <p className="review-empty">Diff unavailable.</p> : <DroidLoading label="Reading Diff…" />
               : !operation && file?.error ? <p className="review-empty" role="status">{file.error}</p>
               : recordedEntries ? <RecordedFileReview key={`${path}:${review?.reviewScopeId ?? operation?.callId ?? ''}`} entries={recordedEntries}
-                content={recordedContent} fullContext={flow.context === 'all'} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar}
-                loading={flow.fileRefreshing} selectedToolUseId={flow.selectedToolUseId} onSelectEdit={flow.selectRecordedEdit} onOpenNative={!operationOnly ? flow.openNative : undefined} />
+                content={recordedContent} path={path} split={split} onSplit={setSplit} onHunk={hunk} toolbarTarget={recordedToolbar}
+                readingKey={readingKey} positions={positions.current} loading={flow.fileRefreshing}
+                selectedToolUseId={flow.selectedToolUseId} onSelectEdit={flow.selectRecordedEdit} />
               : patch && patch !== '@@' ? <DiffView patch={patch} path={path} split={split} />
               : operationFile?.contentRestricted ? null
               : <p className="review-empty">{operationFile ? `File ${operationFile.kind}. Text changes were not recorded.` : operationsScope ? 'No text Diff evidence is available.' : 'No net text changes.'}</p>}
@@ -198,7 +208,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     </>}
     <Dialog open={commit && valid} onOpenChange={setCommit}>
       <DialogContent className="max-w-2xl border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Commit</DialogTitle><DialogDescription className="review-dialog-description">Choose the files to commit. Existing staged files require explicit selection.</DialogDescription>
-        {target?.sessionId ? <ReviewCommit port={port} sessionId={target.sessionId} onClose={closeCommit} /> : null}
+        {target?.sessionId ? <ReviewCommit port={port} sessionId={target.sessionId} initialMode={review?.scopeKind === 'staged' ? 'staged' : 'files'} onClose={closeCommit} /> : null}
       </DialogContent>
     </Dialog>
     <Dialog open={!!flow.preview && flow.preview.reviewScopeId === review?.reviewScopeId && valid} onOpenChange={(open) => { if (!open) flow.setPreview(null); }}>
@@ -209,5 +219,5 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
           </div></> : null}
       </DialogContent>
     </Dialog>
-  </main>;
+  </main></TooltipProvider>;
 }

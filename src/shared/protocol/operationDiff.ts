@@ -5,6 +5,8 @@ import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
 export const MAX_OPERATION_DIFF_UNITS = 24_000;
 /** Full Create/Write contents establish later edits' baseline, independently of preview hunks. */
 export const MAX_OPERATION_CONTENT_UNITS = 128_000;
+/** Body reads are on demand; this is not the transcript/Bridge inline budget. */
+export const MAX_OPERATION_BODY_UNITS = 512_000;
 export const MAX_OPERATION_DIFF_FILES = 20;
 export const TOOL_EXECUTION_PHASES = [
   'streaming_input', 'queued', 'executing', 'settled_after_execution',
@@ -40,6 +42,20 @@ export interface OperationDiffFile {
   readonly patch: string;
   /** Content submitted to a successful Create/Write call; not a before/after diff or a file snapshot. */
   readonly submittedContent?: string;
+  /** Source-bound reference for loading one tool-result body on demand. */
+  readonly bodyRef?: OperationBodyRef;
+}
+export interface OperationBodyRef {
+  readonly digest: string;
+  readonly patchUnits: number;
+  readonly contentUnits: number;
+}
+export function isOperationBodyRef(value: unknown): value is OperationBodyRef {
+  return isStrictRecord(value) && hasExactKeys(value, ['digest', 'patchUnits', 'contentUnits']) &&
+    typeof value.digest === 'string' && /^[a-f0-9]{64}$/u.test(value.digest) &&
+    typeof value.patchUnits === 'number' && Number.isSafeInteger(value.patchUnits) && value.patchUnits >= 0 &&
+    typeof value.contentUnits === 'number' && Number.isSafeInteger(value.contentUnits) && value.contentUnits >= 0 &&
+    value.patchUnits + value.contentUnits > 0 && value.patchUnits + value.contentUnits <= MAX_OPERATION_BODY_UNITS;
 }
 export function isOperationDiff(value: unknown): value is OperationDiff {
   if (!isStrictRecord(value)) return false;
@@ -54,7 +70,7 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       !/[\u0000-\u001f\u007f]/u.test(value.sourceSessionId)) && Array.isArray(value.files) &&
     value.files.length > 0 && value.files.length <= MAX_OPERATION_DIFF_FILES &&
     value.files.every((file) => isStrictRecord(file) &&
-      hasExactKeys(file, ['path', 'kind', 'patch'], ['scope', 'previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent']) &&
+      hasExactKeys(file, ['path', 'kind', 'patch'], ['scope', 'previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent', 'bodyRef']) &&
       isSafeWorkspaceRelativePath(file.path) &&
       (file.previousPath === undefined || isSafeWorkspaceRelativePath(file.previousPath)) &&
       (file.scope === undefined || file.scope === 'mission' && isMissionOperationPath(file.path) &&
@@ -65,7 +81,10 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
         !/[\u0000-\u0008\u000b-\u001f\u007f]/u.test(file.message)) &&
       (file.reversible === undefined || typeof file.reversible === 'boolean') &&
       (file.contentRestricted === undefined || file.contentRestricted === true && file.patch === '' &&
-        file.submittedContent === undefined && file.reversible === false) &&
+        file.submittedContent === undefined && file.bodyRef === undefined && file.reversible === false) &&
+      (file.bodyRef === undefined || value.source === 'tool-result' && value.callId !== undefined &&
+        value.sourceSessionId !== undefined && file.patch === '' && file.submittedContent === undefined &&
+        file.contentRestricted === undefined && isOperationBodyRef(file.bodyRef)) &&
       (file.submittedContent === undefined || value.source === 'tool-result' && file.outcome === 'applied' &&
         file.reversible === false && file.patch === '' && isSafeOperationText(file.submittedContent, MAX_OPERATION_CONTENT_UNITS)) &&
       (value.source !== 'tool-result' || file.outcome !== undefined) &&
@@ -113,8 +132,8 @@ export function hasOperationTextChanges(patch: string): boolean {
   return changed();
 }
 
-export function hasOperationChanges(file: Pick<OperationDiffFile, 'kind' | 'patch'>): boolean {
-  return file.kind !== 'modified' || hasOperationTextChanges(file.patch);
+export function hasOperationChanges(file: Pick<OperationDiffFile, 'kind' | 'patch' | 'bodyRef'>): boolean {
+  return file.bodyRef !== undefined || file.kind !== 'modified' || hasOperationTextChanges(file.patch);
 }
 
 /** Also applies to already persisted evidence from older extension versions. */
@@ -141,11 +160,11 @@ export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: 
       saved.callId !== incoming.callId || saved.sourceSessionId !== incoming.sourceSessionId) return saved;
     const files = saved.files.map((file) => {
       if (file.contentRestricted || file.outcome !== 'applied' || file.patch !== '' ||
-        file.submittedContent !== undefined) return file;
+        file.submittedContent !== undefined || file.bodyRef !== undefined) return file;
       const complete = incoming.files.find((candidate) => candidate.path === file.path &&
         candidate.scope === file.scope && candidate.previousPath === file.previousPath && candidate.kind === file.kind &&
         candidate.outcome === 'applied' && !candidate.contentRestricted &&
-        (candidate.patch !== '' || candidate.submittedContent !== undefined));
+        (candidate.patch !== '' || candidate.submittedContent !== undefined || candidate.bodyRef !== undefined));
       return complete ?? file;
     });
     if (files.every((file, index) => file === saved.files[index])) return saved;

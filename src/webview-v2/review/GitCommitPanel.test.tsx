@@ -28,6 +28,7 @@ function flow(state: Partial<GitCommitFlowState> = {}): GitCommitFlowContextValu
       statusPending: false,
       statusTurnId: 'turn-a',
       branch: 'main',
+      snapshotId: 'preview-a',
       files: [file],
       committedHash: null,
       commitPending: false,

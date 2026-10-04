@@ -353,19 +353,30 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - `runtime/tools/operationResult.ts` 从实际工具结果建立逐文件操作证据。
   拟议输入、失败和未知结果不能算已应用；Create 没有旧内容就不能编造旧正文。
   共享 `protocol/operationDiff.ts` 过滤纯上下文/相同替换，保留真正元数据变化。
+  大正文由 `operationBodyReference.ts` 生成绑定 session/tool/file 的摘要；聊天仍遵守
+  24k patch／128k submittedContent 预算。`operationBody.ts` 按选择读取原 SDK JSONL，
+  核对日志头、工具与结果配对、路径及摘要；尚未落盘时使用原 daemon client 的只读
+  getMessages 分页接口，不为阅读创建或恢复会话。单文件正文最多 512,000 UTF-16
+  字符单元，超限保留该文件元数据而不丢同操作其他文件；没有新增全文缓存数据库。
 - `reviewTurnScope.ts` 负责轮次工作区比较，`reviewOperationScope.ts` 负责记录操作。
   聊天 AI 汇总只用已确认操作；手动保存不能混进 AI 计数。子代理须有父调用/实际来源
   关联，描述相似或 Viewer 的导航映射不足以作为撤销证据。
-- daemon Branch/Workspace 使用 SDK committed/unstaged；后者包含暂存和未跟踪，
-  不等于本地 Unstaged。Staged/Unstaged 仍是 HEAD→Index、Index→工作树。
-  `reviewSdkDiff.ts` 用固定基线和 SDK 补丁恢复两侧，不能读后来磁盘内容替代 after。
+- `reviewGitComparison.ts` 统一读取本地 Git：Workspace 是 HEAD→工作树，Staged 是
+  HEAD→Index，Unstaged 是 Index→工作树；Workspace/Unstaged 包含未跟踪文件。
+  Branch 固定所选本地引用的 merge-base→HEAD；候选来自已有 heads/remotes，默认值
+  仅取唯一 remote HEAD，不猜 main/master、不 fetch。无 HEAD 使用空树比较 Workspace/
+  Staged，Unstaged 使用 Index tree；写入树对象不会修改项目 Index，也不创建提交。
 - `operationUndoFiles.ts` 只对完整、确认、可逆的文本更新做精确逆向匹配和写前复核，
   使用恢复日志并保留冲突；未知顺序、歧义、链接、未保存编辑等拒绝自动写入。
   整轮最多 200 文件，超量不做部分撤销；不宣称具有跨外部进程的原子事务。
 - `file.diff.invalidate` 只使正文缓存失效，不证明写入。预览按身份读取、失败可重试，
   刷新期间保留旧正文但不能把旧内容标成最新已审阅。缺证据的历史片段明确只读。
-- Commit 检查完整 Index，不能夹带未选暂存项；Agent Review 使用独立公开会话，
-  不代替 reviewed 标记、不自动 push。完整行为限制集中在 STATUS/CAPABILITIES。
+- Commit 的 Files 模式暂存所选当前文件，Staged 模式保持现有 Index；两者都核对全部
+  已有暂存项已经明确选择。`gitCommitSnapshot.ts` 将预览绑定 root、HEAD/符号分支、
+  完整 Index 和文件字节，提交前核验；Files 暂存后再检查所选字节及 Index/工作树一致性。
+  状态最多 10,000 文件，每页 100 条，收齐后才开放提交。此校验不构成跨进程锁，
+  暂存后失败不强行回滚 Index。Agent Review 使用独立公开会话，不代替 reviewed 标记，
+  两种入口都不自动 push。完整行为限制集中在 STATUS/CAPABILITIES。
 
 ### 旁问、Mission 和子代理不另建权威
 
@@ -421,15 +432,21 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - 主输入与历史编辑共用 `chat/useAttachmentIngress.ts`；开始读取即同步增加准备计数，
   提交入口查询 `isPreparing()`，界面渲染数值只负责展示。切会话/取消使旧读取失效，
   不能以一次渲染前的数字判断当前附件已经就绪；BTW 使用同样的同步查询原则。
-- Review Bridge 的 context 支持 all，toolUseId 选择目标编辑。普通比较从已有完整版本
-  生成全上下文补丁；recordedFileDiffs 只重建并保留选中操作的 before/after，全文独立于
-  片段预算，2 MiB 预览与 8 MiB Native 比较分别有界。无完整历史证据时明确显示片段。
+- Review Bridge 默认 context=3，普通比较可选 20/100/all；Recorded edits 保留实际工具
+  片段，按 toolUseId 选择编辑，不因新结果到达跳到末项。`reviewContent.ts` 先为选中
+  操作预留正文预算，按需解析 bodyRef，其余记录只补入可容纳的内容；显式目标缺失
+  不替换成其他编辑。完整版本只在请求时读取：`recordedFileDiffs` 重建所选操作的
+  before/after，2 MiB 页面预览与 8 MiB Native 比较分别有界。
   历史基线来自原执行会话快照或同源会话更早的完整写入和精确补丁，不读取当前磁盘
   冒充历史。自动撤销资格独立核验，全文可读不等于可安全撤销。
 - 公共 review/DiffView.tsx 以固定行高分块，离屏代码回收且保留占位高度；修改位置保存为
   每块元数据，避免大量零散修改为每个位置常驻一个 DOM 节点。原生选区涉及的块暂不回收；
   两侧代码独立横向滚动，行号保持原位。列宽估计覆盖 ASCII、宽字符和 tab，避免
   隐藏全文节点及折行导致的大量布局、测量与滚动位置变化。
+  `wordDiff.ts` 对相邻增删行做有界词级强调（每行最多 2,000 字符、128 token），仅在
+  可见代码挂载时计算；超限保留行级颜色，不引入跨行相似度匹配。阅读位置以范围、
+  文件、编辑和布局为键，优先保存源码行锚点。范围请求由 requestId 隔离，加载成功
+  才替换旧范围；文件导航基于当前筛选，Mark & next 等对应版本已读确认后再跳转。
 - 工具展示定义集中在 shared/transcript/toolCatalog.ts；Runtime 的 toolDetail 与
   toolResultPreview 分别从实际输入提取目标、从完整结果提取预览及诊断摘要，实时和
   history/toolResultHistory 共用。Bridge 沿 resultPreview 传递经验证的可选摘要，

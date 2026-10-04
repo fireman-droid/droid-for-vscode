@@ -83,6 +83,7 @@ export function watcherOpenMessage(scope: ActiveScope): ReviewOpenMessage {
     type: 'review.open',
     sessionId: scope.sessionId,
     scopeKind: scope.scopeKind,
+    ...(scope.baseBranch === undefined ? {} : { baseBranch: scope.baseBranch }),
     ...(scope.turnId === undefined ? {} : { turnId: scope.turnId }),
   };
 }

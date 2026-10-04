@@ -46,7 +46,7 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
   return <div aria-label="File operations" className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
       ? <FileChangeView key={`${file.scope ?? 'workspace'}:${file.path}`} file={operationFileStats(file)} onInteract={onInteract} label={file.submittedContent !== undefined ? 'Written' : file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
-        actions={isWorkspaceOperationFile(file) && context?.connected && context.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
+        actions={isWorkspaceOperationFile(file) && context?.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
         }); }}>Review</Button> : undefined}>
         <OperationFileDetails file={file} />

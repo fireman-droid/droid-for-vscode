@@ -3,12 +3,17 @@ import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './in
 import { highlightCode } from '../markdown/highlightCode';
 import { codeLanguageForPath } from '../markdown/codeLanguages';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
+import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
 export { findDiffChange } from './diffNavigation';
 
-const Code = memo(function Code({ text, language }: { text: string; language?: string }) {
+const Code = memo(function Code({ text, language, changes }: { text: string; language?: string; changes?: () => readonly WordRange[] | undefined }) {
   // Minified/generated lines remain complete without spending a frame on a
   // syntax grammar for thousands of characters in one line.
-  const html = useMemo(() => language && text.length <= 2_000 ? highlightCode(text, { language, detect: false }) : null, [text, language]);
+  const html = useMemo(() => {
+    const highlighted = language && text.length <= 2_000 ? highlightCode(text, { language, detect: false }) : null;
+    const ranges = changes?.();
+    return ranges?.length ? emphasizeWordRanges(highlighted ?? escapeDiffText(text), ranges) : highlighted;
+  }, [text, language, changes]);
   return html === null ? <code>{text || ' '}</code> : <code dangerouslySetInnerHTML={{ __html: html || ' ' }} />;
 });
 export interface DiffRow { left: InlineDiffLine | null; right: InlineDiffLine | null; header?: string }
@@ -48,22 +53,23 @@ function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefine
   }
   return blocks;
 }
-function SplitRow({ row, language }: { row: DiffRow; language?: string }) {
-  return <div className="review-split-row">{(['left', 'right'] as const).map((side) => {
+type WordDiffRanges = ReturnType<typeof wordDiffRanges>;
+function SplitRow({ row, language, words }: { row: DiffRow; language?: string; words: WordDiffRanges }) {
+  return <div className="review-split-row" data-diff-before={row.left?.before} data-diff-after={row.right?.after}>{(['left', 'right'] as const).map((side) => {
     const line = row[side];
     return <div key={side} data-side={side} className={`review-diff-cell ${line ? `diff-${line.kind}` : 'diff-empty'}`}>
       <span className="diff-number" aria-hidden>{line && (side === 'left' ? line.before : line.after)}</span>
       <span className="diff-sign" aria-hidden>{line?.kind === 'remove' ? '−' : line?.kind === 'add' ? '+' : ''}</span>
-      <div className="review-diff-code">{line ? <Code text={line.text} language={language} /> : null}</div>
+      <div className="review-diff-code">{line ? <Code text={line.text} language={language} changes={words.get(line)} /> : null}</div>
     </div>;
   })}</div>;
 }
-function UnifiedRow({ line, language }: { line: InlineDiffLine; language?: string }) {
-  return <div className={`review-unified-row diff-${line.kind}`}>
+function UnifiedRow({ line, language, words }: { line: InlineDiffLine; language?: string; words: WordDiffRanges }) {
+  return <div className={`review-unified-row diff-${line.kind}`} data-diff-before={line.before} data-diff-after={line.after}>
     <span className="diff-number" aria-hidden>{line.before}</span>
     <span className="diff-number" aria-hidden>{line.after}</span>
     <span className="diff-sign" aria-hidden>{line.kind === 'remove' ? '−' : line.kind === 'add' ? '+' : ''}</span>
-    <Code text={line.text} language={language} />
+    <Code text={line.text} language={language} changes={words.get(line)} />
   </div>;
 }
 
@@ -120,6 +126,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const root = useRef<HTMLDivElement>(null);
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
   const lines = useMemo(() => limit === undefined ? all : all.slice(0, limit), [all, limit]);
+  const words = useMemo(() => wordDiffRanges(lines), [lines]);
   const blocks = useMemo(() => split
     ? diffBlocks(splitDiffRows(lines), (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
     : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, split]);
@@ -145,8 +152,8 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
           {() => block.rows.map((row, index) => split
-            ? <SplitRow key={index} row={row as DiffRow} language={language} />
-            : <UnifiedRow key={index} line={row as InlineDiffLine} language={language} />)}
+            ? <SplitRow key={index} row={row as DiffRow} language={language} words={words} />
+            : <UnifiedRow key={index} line={row as InlineDiffLine} language={language} words={words} />)}
         </DeferredDiffChunk>)}
     </div>
   </div>;

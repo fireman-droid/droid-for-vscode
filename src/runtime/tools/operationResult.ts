@@ -1,7 +1,6 @@
 import {
   MAX_OPERATION_DIFF_FILES,
-  MAX_OPERATION_DIFF_UNITS,
-  MAX_OPERATION_CONTENT_UNITS,
+  MAX_OPERATION_BODY_UNITS,
   operationDiffWithChanges,
   type OperationDiff,
   type OperationDiffFile,
@@ -10,14 +9,15 @@ import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { toolDisplayPath } from './toolDisplayPath';
 import { isRestrictedToolContent, isRestrictedToolPath, readResultSource } from './toolResultPreview';
 import { applyPatchAbsolutePath, applyPatchDeclarationKey, readApplyPatchDeclarations, type ApplyPatchDeclaration } from './applyPatchDeclarations';
+import { omitOversizedOperationBody, summarizeOperationBodies } from './operationBodyReference';
 
 export type OperationTool = 'applypatch' | 'edit' | 'create' | 'write';
 type UnavailableReason = Extract<
   OperationDiff,
   { status: 'unavailable' }
 >['reason'];
-const MAX_RESULT_SOURCE_UNITS = MAX_OPERATION_DIFF_UNITS * 4;
-const MAX_DIFF_LINES = MAX_OPERATION_DIFF_UNITS;
+const MAX_RESULT_SOURCE_UNITS = MAX_OPERATION_BODY_UNITS * 8;
+const MAX_DIFF_LINES = 24_000;
 
 export function parseOperationResult(
   tool: OperationTool,
@@ -27,6 +27,14 @@ export function parseOperationResult(
   callId?: string,
   sourceSessionId?: string,
   eventIsError = false,
+): OperationDiff {
+  return summarizeOperationBodies(parseOperationResultBody(tool, input, content, workspace, callId, sourceSessionId, eventIsError));
+}
+
+/** Runtime-only detail: never attach this large result to transcript/Bridge events. */
+export function parseOperationResultBody(
+  tool: OperationTool, input: unknown, content: unknown, workspace: string | undefined,
+  callId?: string, sourceSessionId?: string, eventIsError = false,
 ): OperationDiff {
   if (!workspace) return unavailable('not-recorded');
   const text = readResultText(content);
@@ -51,7 +59,8 @@ export function parseOperationResult(
         : parseCreateResult(value, declared, workspace, input);
   if (typeof parsed === 'string') return unavailable(parsed);
   const files = parsed.map((file) => {
-    if (!eventIsError || file.outcome !== 'applied') return redactOperationFile(file, workspace);
+    if (!eventIsError || file.outcome !== 'applied') return redactOperationFile(
+      file.patch.length + (file.submittedContent?.length ?? 0) > MAX_OPERATION_BODY_UNITS ? omitOversizedOperationBody(file) : file, workspace);
     const { submittedContent: _submittedContent, ...metadata } = file;
     return redactOperationFile({
       ...metadata,
@@ -61,12 +70,7 @@ export function parseOperationResult(
     }, workspace);
   });
   if (!files.length) return unavailable(eventIsError ? 'failed' : 'not-recorded');
-  if (
-    files.length > MAX_OPERATION_DIFF_FILES ||
-    files.reduce((total, file) => total + file.patch.length, 0) > MAX_OPERATION_DIFF_UNITS ||
-    files.reduce((total, file) => total + (file.submittedContent?.length ?? 0), 0) > MAX_OPERATION_CONTENT_UNITS
-  )
-    return unavailable('too-large');
+  if (files.length > MAX_OPERATION_DIFF_FILES) return unavailable('too-large');
   return operationDiffWithChanges({
     status: 'ready',
     source: 'tool-result',
@@ -167,6 +171,8 @@ function parseEditResult(
   if (!location || declared.length !== 1 || location.path !== declared[0]!.path || location.scope !== declared[0]!.scope)
     return 'unattributed';
   if (value.diffLines.length === 0 && additions === 0 && removals === 0) return 'unchanged';
+  if (value.diffLines.reduce((size, line) => size + (isStrictRecord(line) && typeof line.content === 'string' ? line.content.length + 2 : 0), 0) > MAX_OPERATION_BODY_UNITS)
+    return [omitOversizedOperationBody({ ...location, kind: 'modified', patch: '', outcome: 'applied', reversible: false })];
   const patch = editDiffLinesPatch(value.diffLines);
   if (patch === undefined) return 'not-recorded';
   return [{ ...location, kind: 'modified', patch, outcome: 'applied', reversible: false }];
@@ -231,20 +237,25 @@ function parseApplyPatchResult(
     let patch = '';
     let reversible = false;
     let message: string | undefined;
+    let oversized = false;
     if (raw.display_operation === 'update') {
       if (typeof raw.diff !== 'string') return 'not-recorded';
-      const normalized = normalizeUnifiedPatch(raw.diff);
-      if (normalized === undefined) return 'not-recorded';
-      patch = normalized.patch;
-      reversible = normalized.complete && movedTo === undefined;
-      if (!normalized.complete) message =
-        'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
-        'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.';
+      if (raw.diff.length > MAX_OPERATION_BODY_UNITS) oversized = true;
+      else {
+        const normalized = normalizeUnifiedPatch(raw.diff);
+        if (normalized === undefined) return 'not-recorded';
+        patch = normalized.patch;
+        reversible = normalized.complete && movedTo === undefined;
+        if (!normalized.complete) message =
+          'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
+          'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.';
+      }
     } else if (raw.display_operation === 'create') {
       if (typeof raw.content !== 'string') return 'not-recorded';
-      patch = addedContentPatch(raw.content);
+      if (raw.content.length > MAX_OPERATION_BODY_UNITS) oversized = true;
+      else patch = addedContentPatch(raw.content);
     }
-    files.push({
+    const file: OperationDiffFile = {
       path: expected.path,
       ...(expected.scope === undefined ? {} : { scope: expected.scope }),
       ...(expected.previousPath ? { previousPath: expected.previousPath } : {}),
@@ -253,7 +264,8 @@ function parseApplyPatchResult(
       outcome: 'applied',
       reversible: expected.scope === 'mission' ? false : reversible,
       ...(message === undefined ? {} : { message }),
-    });
+    };
+    files.push(oversized ? omitOversizedOperationBody(file) : file);
   }
   for (const declaration of remaining.values()) {
     const missing = declaration.file;
@@ -288,7 +300,8 @@ function parseCreateResult(
   const content = input.content ?? input.file_text ?? input.text;
   if (typeof content !== 'string') return 'not-recorded';
   const submittedContent = content.replace(/\r\n?/gu, '\n');
-  if (submittedContent.length > MAX_OPERATION_CONTENT_UNITS) return 'too-large';
+  if (submittedContent.length > MAX_OPERATION_BODY_UNITS)
+    return [omitOversizedOperationBody({ ...location, kind: 'added', patch: '', outcome: 'applied', reversible: false })];
   return [{ ...location, kind: 'added', patch: '', submittedContent, outcome: 'applied', reversible: false }];
 }
 
@@ -386,7 +399,7 @@ function editDiffLinesPatch(lines: readonly unknown[]): string | undefined {
     );
   }
   const patch = hunks.join('\n');
-  return patch.length <= MAX_OPERATION_DIFF_UNITS ? patch : undefined;
+  return patch.length <= MAX_OPERATION_BODY_UNITS ? patch : undefined;
 }
 
 function isContinuous(
@@ -412,7 +425,7 @@ function isContinuous(
 }
 
 function normalizeUnifiedPatch(source: string): { patch: string; complete: boolean } | undefined {
-  if (source.length > MAX_OPERATION_DIFF_UNITS) return undefined;
+  if (source.length > MAX_OPERATION_BODY_UNITS) return undefined;
   const lines = source.replace(/\r\n?/gu, '\n').split('\n');
   const hunks: string[] = [];
   let complete = true;
@@ -457,7 +470,7 @@ function normalizeUnifiedPatch(source: string): { patch: string; complete: boole
     if (oldCount !== oldExpected || newCount !== newExpected) complete = false;
   }
   const patch = hunks.join('\n');
-  return hunks.length > 0 && patch.length <= MAX_OPERATION_DIFF_UNITS
+  return hunks.length > 0 && patch.length <= MAX_OPERATION_BODY_UNITS
     ? { patch, complete }
     : undefined;
 }

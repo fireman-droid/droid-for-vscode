@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { MAX_OPERATION_DIFF_FILES, MAX_OPERATION_DIFF_UNITS, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { MAX_OPERATION_BODY_UNITS, MAX_OPERATION_DIFF_FILES, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { toolDisplayPath } from './toolDisplayPath';
 
 /** Absolute identities stay inside Runtime; only file may cross the display boundary. */
@@ -21,7 +21,7 @@ export function applyPatchDeclarationKey(originalPath: string, path = originalPa
 }
 
 export function readApplyPatchDeclarations(source: string, workspace: string): ApplyPatchDeclaration[] | null {
-  if (source.length > MAX_OPERATION_DIFF_UNITS) return null;
+  if (source.length > MAX_OPERATION_BODY_UNITS * 4) return null;
   const lines = source.replace(/\r\n?/gu, '\n').split('\n');
   if (lines.shift() !== '*** Begin Patch') return null;
   const declarations: ApplyPatchDeclaration[] = [];

@@ -12,6 +12,8 @@
     --diff-remove-ink: light-dark(#a51d35, #ffadb5);
     --diff-add: color-mix(in srgb, light-dark(#16a34a, #3fb96a) 22%, var(--code-surface));
     --diff-remove: color-mix(in srgb, light-dark(#ef4561, #ef5269) 22%, var(--code-surface));
+    --diff-word-add: color-mix(in srgb, var(--diff-add-ink) 17%, var(--diff-add));
+    --diff-word-remove: color-mix(in srgb, var(--diff-remove-ink) 17%, var(--diff-remove));
     --syntax-keyword: light-dark(#7022a8, #d5b5ff);
     --syntax-number: light-dark(#125c2c, #c0dfa9);
     --link-ink: light-dark(#00528a, #91caff);
@@ -36,6 +38,9 @@
   .diff-sign { color: var(--muted-ink); text-align: center; user-select: none; }
   .diff-add { background: var(--diff-add); }
   .diff-remove { background: var(--diff-remove); }
+  .review-diff .diff-word-change { border-radius: 2px; box-decoration-break: clone; }
+  .review-diff .diff-add .diff-word-change { background: var(--diff-word-add); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--diff-add-ink) 45%, transparent); }
+  .review-diff .diff-remove .diff-word-change { background: var(--diff-word-remove); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--diff-remove-ink) 45%, transparent); }
   .review-split-labels { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); color: var(--secondary-ink); background: var(--code-surface); font: 11px var(--font-sans); }
   .review-split-labels > div { min-width: 0; border-right: 1px solid var(--panel-edge); }
   .review-split-labels span { display: block; padding: 6px 12px; }

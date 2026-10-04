@@ -611,7 +611,7 @@ describe('createTurnSnapshotStore', () => {
     });
   });
 
-  it('prunes the object directory when it exceeds the byte cap', async () => {
+  it('keeps referenced snapshots when the object directory exceeds the byte cap', async () => {
     const rm = vi.fn(async () => undefined);
     const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
       const command = verb(args);
@@ -628,6 +628,7 @@ describe('createTurnSnapshotStore', () => {
       if (command === 'write-tree') {
         return gitResult(`${BEFORE}\n`);
       }
+      if (command === 'rev-list') return gitResult(`${BEFORE}\n`);
       return gitResult('', 1);
     };
     const persistence = memoryPersistence();
@@ -646,12 +647,39 @@ describe('createTurnSnapshotStore', () => {
     await store.capture(SCOPE, 'before');
     expect(store.read(SCOPE.sessionId)?.before).toBe(BEFORE);
     await store.prune();
-    expect(rm).toHaveBeenCalled();
-    expect(store.readTurns(SCOPE.sessionId)).toEqual([]);
+    expect(rm).not.toHaveBeenCalled();
+    expect(store.read(SCOPE.sessionId)?.before).toBe(BEFORE);
     expect(persistence.stored).toEqual({
       version: 1,
-      sessions: [],
+      sessions: [{ sessionId: SCOPE.sessionId, turns: [{ turnId: SCOPE.turnId, before: BEFORE }] }],
     });
+  });
+
+  it('keeps a viewed turn readable during history rotation and releases it afterwards', async () => {
+    const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
+      const command = verb(args);
+      if (command === 'rev-parse') return gitResult(args.includes('--absolute-git-dir') ? '/workspace/.git' : '/workspace/.git/objects');
+      if (command === 'add') return gitResult('');
+      if (command === 'write-tree') return gitResult(`${BEFORE}\n`);
+      if (command === 'show') return gitResult('saved text\n');
+      return gitResult('', 1);
+    };
+    const { store } = createStore(runGit);
+    await store.capture(SCOPE, 'before');
+    await store.capture(SCOPE, 'after');
+    const release = store.retain!(SCOPE);
+    for (let index = 0; index < 25; index++) {
+      const scope = { sessionId: SCOPE.sessionId, turnId: `new-${index}` };
+      await store.capture(scope, 'before');
+      await store.capture(scope, 'after');
+    }
+    expect(store.readTurns(SCOPE.sessionId)).toHaveLength(24);
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toMatchObject({ before: BEFORE, after: BEFORE });
+    expect(await store.readTreeBytes(SCOPE, 'file.ts', 'before')).toEqual(Buffer.from('saved text\n'));
+    release();
+    release();
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toBeUndefined();
+    await store.dispose();
   });
 
   it('sets isolated object and index env on capture', async () => {

@@ -14,8 +14,10 @@ import { applySdkPatch } from './reviewSdkPatch';
 import { recordedOperationVersion } from './reviewOperationScope';
 import { MAX_REVIEW_PATCH_CHARS, type ReviewContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
 import { recordedFileContent } from './recordedFileContent';
+import { readOperationBody, type OperationBody, type OperationBodyRequest } from '../../runtime/tools/operationBody';
 
 export interface ReviewContentSource {
+  readonly readOperationBody?: (request: OperationBodyRequest) => Promise<OperationBody | undefined>;
   readonly snapshots: TurnSnapshotStore;
   readonly getWorkspaceRoot: () => string | undefined;
   readonly readPriorFileOperations?: (sessionId: string, turnId: string, path: string) => NonNullable<ActiveScope['recordedOperations']>;
@@ -81,30 +83,56 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
   if (scope.recordedOperations) {
     if (!scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
     const matching = scope.recordedOperations.filter((entry) => entry.path === path &&
-      (scope.scopeKind === 'operations' || hasOperationChanges({ kind: entry.kind ?? 'modified', patch: entry.patch })));
+      (scope.scopeKind === 'operations' || hasOperationChanges(entry)));
     if (!matching.length) throw new Error('No saved before/after snapshot or recorded changes are available for this file. Open the current file to inspect it.');
     if (toolUseId !== undefined && !matching.some(entry => entry.toolUseId === toolUseId))
       throw new Error('The selected edit is no longer available for this file. Refresh Review.');
-    const recordedOperations: NonNullable<ReviewPanelFile['recordedOperations']>[number][] = [];
-    let units = 0;
-    for (const { toolUseId, toolName, sequence, kind, patch, submittedContent, source, outcome, message } of matching) {
-      const size = patch.length + (submittedContent?.length ?? 0);
-      if (recordedOperations.length === 200 || units + size > 512_000) break;
-      recordedOperations.push({ toolUseId, toolName, sequence, kind, patch, source,
-        ...(submittedContent === undefined ? {} : { submittedContent }),
-        ...(outcome === undefined ? {} : { outcome }), ...(message === undefined ? {} : { message }) });
+    const selectedIndex = toolUseId === undefined
+      ? matching.reduce((last, entry, index) => entry.source === 'tool-result' && entry.outcome === 'applied' ? index : last, -1)
+      : matching.findIndex(entry => entry.toolUseId === toolUseId);
+    const targetIndex = selectedIndex < 0 ? matching.length - 1 : selectedIndex;
+    const savedTarget = matching[targetIndex]!;
+    let target = savedTarget;
+    if (savedTarget.bodyRef) {
+      const workspace = source.getWorkspaceRoot();
+      if (!workspace) throw new Error('The workspace for this saved edit is unavailable.');
+      const body = await (source.readOperationBody ?? readOperationBody)({ workspace,
+        sourceSessionId: savedTarget.sessionId, callId: savedTarget.callId ?? savedTarget.toolUseId, file: savedTarget });
+      if (!body) throw new Error('The saved body for this edit could not be read from its source session.');
+      target = { ...savedTarget, ...body };
+    }
+    const displayEntries = matching.map((entry, index) => index === targetIndex ? target : entry);
+    const visible = new Set<number>([targetIndex]);
+    let units = target.patch.length + (target.submittedContent?.length ?? 0);
+    if (units > 512_000) throw new Error('The selected edit exceeds the recorded preview limit.');
+    for (let index = 0; index < matching.length && visible.size < 200; index++) {
+      if (index === targetIndex) continue;
+      const entry = matching[index]!;
+      const size = entry.patch.length + (entry.submittedContent?.length ?? 0);
+      if (units + size > 512_000) continue;
+      visible.add(index);
       units += size;
     }
+    const indexes = [...visible].sort((left, right) => left - right);
+    const recordedOperations: NonNullable<ReviewPanelFile['recordedOperations']>[number][] = [];
+    for (const index of indexes) {
+      const { toolUseId, toolName, sequence, kind, patch, submittedContent, bodyRef, source, outcome, message } = displayEntries[index]!;
+      recordedOperations.push({ toolUseId, toolName, sequence, kind, patch, source,
+        ...(submittedContent === undefined ? {} : { submittedContent }),
+        ...(bodyRef === undefined ? {} : { bodyRef }),
+        ...(outcome === undefined ? {} : { outcome }), ...(message === undefined ? {} : { message }) });
+    }
     if (context === 'all') {
-      const full = await recordedFileDiffs(source, scope, path, matching, MAX_REVIEW_PATCH_CHARS, recordedOperations.length, toolUseId);
+      const full = await recordedFileDiffs(source, scope, path, displayEntries, MAX_REVIEW_PATCH_CHARS, matching.length, toolUseId);
       for (let index = 0; index < recordedOperations.length; index++) {
-        const fullPatch = full.patches.get(index);
+        const originalIndex = indexes[index]!;
+        const fullPatch = full.patches.get(originalIndex);
         if (fullPatch !== undefined) recordedOperations[index] = { ...recordedOperations[index]!, fullPatch };
-        else if (index === full.selectedIndex && full.unavailableReason)
+        else if (originalIndex === full.selectedIndex && full.unavailableReason)
           recordedOperations[index] = { ...recordedOperations[index]!, fullPatchUnavailableReason: full.unavailableReason };
       }
     }
-    const content = recordedFileContent(matching);
+    const content = recordedFileContent(displayEntries);
     return { version: recordedOperationVersion(matching),
       patch: '', truncated: recordedOperations.length !== matching.length, recordedOperations,
       ...(content === undefined ? {} : { recordedContent: content }) };

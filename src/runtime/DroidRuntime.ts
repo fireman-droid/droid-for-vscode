@@ -426,6 +426,7 @@ export interface DroidRuntime {
    * Rejects when the backend cannot read the repository.
    */
   readGitDiff?(options?: RuntimeGitDiffOptions): Promise<RuntimeGitDiff>;
+  readOperationBody?(request: import('./tools/operationBody').OperationBodyRequest): Promise<import('./tools/operationBody').OperationBody | undefined>;
   /** Explicit backend capability; process sessions have no Git RPC. */
   supportsGitDiff?(): boolean;
   /**

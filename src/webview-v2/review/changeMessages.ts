@@ -1,6 +1,7 @@
 import { advance } from '../state/turnIdentity';
 import type { AssistantWebviewState, StoreHostMessage } from '../state/types';
 import { reduceReviewUiMessage } from './reviewStore';
+import { mergeGitStatusPage } from '../../shared/protocol/gitStatusPaging';
 
 export function reduceChangesMessage(
   state: AssistantWebviewState,
@@ -37,13 +38,15 @@ export function reduceChangesMessage(
         review: reduceReviewUiMessage(state.review, event, state.sessionId),
       };
 
-    case 'git.status':
+    case 'git.status': {
       if (
         event.sessionId !== state.sessionId ||
         event.turnId !== state.git.statusTurnId
       ) {
         return advance(state, event.sequence);
       }
+      const page = mergeGitStatusPage(state.git, event);
+      if (!page) return advance(state, event.sequence);
       return {
         ...state,
         sequence: event.sequence,
@@ -52,12 +55,14 @@ export function reduceChangesMessage(
           availability:
             event.unavailableReason === undefined ? 'available' : 'unavailable',
           unavailableReason: event.unavailableReason ?? null,
-          statusPending: false,
+          statusPending: !page.complete,
           branch: event.branch,
-          files: event.files,
+          files: page.files,
+          snapshotId: page.snapshotId,
           committedHash: event.committedHash ?? null,
         },
       };
+    }
 
     case 'git.commitResult':
       if (

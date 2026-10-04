@@ -6,7 +6,9 @@ import { type PreviewInlineHtmlMessage } from '../../../shared/bridgeMessages';
 import {
   MAX_GIT_COMMIT_SUBJECT_LENGTH,
   type GitBranchDiffUnavailableReason,
+  type GitCommitMode,
 } from '../../../shared/protocol/gitCommitFlow';
+import { gitStatusPages } from '../../../shared/protocol/gitStatusPaging';
 import {
   type ImageMediaType,
   type WorkspaceImageStatus,
@@ -218,12 +220,12 @@ export function handleGitRequestStatus(
         !status.files.some((file) => file.inTurn)
           ? committed.hash
           : undefined;
-      ctl.emit({
+      for (const page of gitStatusPages(status)) ctl.emit({
         type: 'git.status',
         sessionId,
         turnId,
         branch: status.branch,
-        files: status.files,
+        ...page,
         ...(committedHash === undefined ? {} : { committedHash }),
       });
       return;
@@ -297,6 +299,8 @@ export function handleGitCommit(
   turnId: string,
   paths: readonly string[],
   message: string,
+  snapshotId?: string,
+  mode?: GitCommitMode,
 ): void {
   if (
     ctl.sessionState.connection.status !== 'connected' ||
@@ -347,7 +351,10 @@ export function handleGitCommit(
   const committedStats = commitChanges?.files.filter((file) =>
     selectedPaths.has(file.path.replaceAll('\\', '/')),
   );
-  void ctl.gitWorkflow.commit(root, paths, message).then(async (outcome) => {
+  const current = () => !ctl.sessionState.disposed && ctl.sessionState.sessionId === sessionId &&
+    ctl.sessionState.activeRuntimeCwd === root && ctl.effects.readLatestConversationChanges()?.turnId === turnId &&
+    !(ctl.turnState.turn && isTurnActive(ctl.turnState.turn));
+  void ctl.gitWorkflow.commit(root, paths, message, current, { snapshotId, mode }).then(async (outcome) => {
     ctl.recordHost({
       level: outcome.ok ? 'info' : 'warn',
       name: 'host.git.commit.finished',

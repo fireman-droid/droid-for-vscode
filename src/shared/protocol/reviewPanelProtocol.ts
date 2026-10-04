@@ -1,7 +1,8 @@
 import { isId, isSafeWorkspaceRelativePath } from '../validation/guards';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
-import { isOperationDiff, isSafeOperationText, MAX_OPERATION_CONTENT_UNITS, type OperationDiff, type OperationDiffFile } from './operationDiff';
+import { isOperationDiff, isOperationBodyRef, isSafeOperationText, MAX_OPERATION_CONTENT_UNITS, MAX_OPERATION_BODY_UNITS, type OperationDiff, type OperationDiffFile } from './operationDiff';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from './reviewProtocol';
+import { MAX_GIT_COMMIT_PATHS, type GitCommitMode } from './gitCommitFlow';
 
 export type ReviewContext = 3 | 20 | 100 | 'all';
 export const MAX_REVIEW_PATCH_CHARS = 2 * 1024 * 1024;
@@ -16,13 +17,14 @@ export type ReviewPanelRequest = ReviewPanelOpen | { readonly type: 'reviewPanel
     readonly reviewScopeId: string; readonly baseline: string; readonly path: string; readonly context: ReviewContext;
     readonly toolUseId?: string } |
   { readonly type: 'reviewPanel.gitStatus' | 'reviewPanel.openAgent' } |
-  { readonly type: 'reviewPanel.commit'; readonly paths: readonly string[]; readonly message: string } |
+  { readonly type: 'reviewPanel.commit'; readonly paths: readonly string[]; readonly message: string; readonly snapshotId?: string; readonly mode?: GitCommitMode } |
   { readonly type: 'reviewPanel.openPath'; readonly path: string };
 export type ReviewPanelContext = {
   readonly type: 'reviewPanel.context'; readonly sessionId: string | null;
   readonly latestTurnId: string | null; readonly valid: boolean;
   readonly operation: OperationDiff | null; readonly operationPath: string | null;
   readonly toolUseId?: string;
+  readonly resetReview?: true;
 };
 export interface ReviewRecordedEntry {
   readonly toolUseId: string;
@@ -38,6 +40,7 @@ export interface ReviewRecordedEntry {
   readonly kind?: OperationDiffFile['kind'];
   /** Submitted text associated with a successful write, not a before/after diff. */
   readonly submittedContent?: string;
+  readonly bodyRef?: OperationDiffFile['bodyRef'];
 }
 export interface ReviewRecordedContent {
   readonly content: string;
@@ -69,8 +72,10 @@ export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | un
   if (value.type === 'reviewPanel.openPath')
     return hasExactKeys(value, ['type', 'path']) && isSafeWorkspaceRelativePath(value.path) ? value as ReviewPanelRequest : undefined;
   if (value.type === 'reviewPanel.commit')
-    return hasExactKeys(value, ['type', 'paths', 'message']) && Array.isArray(value.paths) &&
-      value.paths.length > 0 && value.paths.length <= 100 && value.paths.every(isSafeWorkspaceRelativePath) &&
+    return hasExactKeys(value, ['type', 'paths', 'message'], ['snapshotId', 'mode']) && Array.isArray(value.paths) &&
+      value.paths.length > 0 && value.paths.length <= MAX_GIT_COMMIT_PATHS && value.paths.every(isSafeWorkspaceRelativePath) &&
+      (value.snapshotId === undefined || isId(value.snapshotId)) &&
+      (value.mode === undefined || value.mode === 'files' || value.mode === 'staged') &&
       typeof value.message === 'string' && value.message.trim().length > 0 && value.message.length <= 4_000
       ? value as ReviewPanelRequest : undefined;
   if (value.type === 'reviewPanel.readFile' || value.type === 'reviewPanel.openNative')
@@ -83,7 +88,8 @@ export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | un
 }
 export function isReviewPanelContext(value: unknown): value is ReviewPanelContext {
   return isStrictRecord(value) && value.type === 'reviewPanel.context' &&
-    hasExactKeys(value, ['type', 'sessionId', 'latestTurnId', 'valid', 'operation', 'operationPath'], ['toolUseId']) &&
+    hasExactKeys(value, ['type', 'sessionId', 'latestTurnId', 'valid', 'operation', 'operationPath'], ['toolUseId', 'resetReview']) &&
+    (value.resetReview === undefined || value.resetReview === true) &&
     (value.toolUseId === undefined || isId(value.toolUseId)) &&
     (value.sessionId === null || isId(value.sessionId)) && (value.latestTurnId === null || isId(value.latestTurnId)) &&
     typeof value.valid === 'boolean' && (value.operation === null || isOperationDiff(value.operation)) &&
@@ -99,7 +105,7 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
     (value.recordedOperations === undefined || Array.isArray(value.recordedOperations) &&
       value.recordedOperations.length <= 200 &&
       value.recordedOperations.every((entry) => isStrictRecord(entry) &&
-        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent', 'fullPatch', 'fullPatchUnavailableReason']) && isId(entry.toolUseId) &&
+        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent', 'bodyRef', 'fullPatch', 'fullPatchUnavailableReason']) && isId(entry.toolUseId) &&
         (entry.fullPatchUnavailableReason === undefined || entry.fullPatch === undefined &&
           ['too-large', 'unavailable'].includes(String(entry.fullPatchUnavailableReason))) &&
         (entry.source === undefined || ['tool-input', 'tool-result', 'successful-tool-input'].includes(String(entry.source))) &&
@@ -108,12 +114,22 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
         (entry.toolName === undefined || typeof entry.toolName === 'string' && entry.toolName.length <= 200) &&
         (entry.sequence === undefined || Number.isSafeInteger(entry.sequence) && Number(entry.sequence) >= 0) &&
         (entry.kind === undefined || ['added', 'modified', 'deleted', 'renamed'].includes(String(entry.kind))) &&
-        (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent, MAX_OPERATION_CONTENT_UNITS) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
+        (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent, entry.bodyRef ? MAX_OPERATION_BODY_UNITS : MAX_OPERATION_CONTENT_UNITS) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
         (entry.fullPatch === undefined || entry.source === 'tool-result' && entry.outcome === 'applied' &&
           typeof entry.fullPatch === 'string' && entry.fullPatch.length <= MAX_REVIEW_PATCH_CHARS) &&
-        typeof entry.patch === 'string' && entry.patch.length <= 24_000) &&
+        isRecordedBody(entry)) &&
+      value.recordedOperations.filter((entry: ReviewRecordedEntry) => entry.bodyRef && (entry.patch !== '' || entry.submittedContent !== undefined)).length <= 1 &&
       value.recordedOperations.filter((entry: ReviewRecordedEntry) => entry.fullPatch !== undefined).length <= 1 &&
       value.recordedOperations.reduce((sum: number, entry: ReviewRecordedEntry) => sum + entry.patch.length + (entry.submittedContent?.length ?? 0), 0) <= 512_000);
+}
+
+function isRecordedBody(entry: Record<string, unknown>): boolean {
+  if (entry.bodyRef === undefined) return isSafeOperationText(entry.patch);
+  if (entry.source !== 'tool-result' || !isOperationBodyRef(entry.bodyRef) ||
+    !isSafeOperationText(entry.patch, MAX_OPERATION_BODY_UNITS)) return false;
+  if (entry.patch === '' && entry.submittedContent === undefined) return true;
+  return entry.patch.length === entry.bodyRef.patchUnits &&
+    (typeof entry.submittedContent === 'string' ? entry.submittedContent.length : 0) === entry.bodyRef.contentUnits;
 }
 
 function isRecordedContent(value: unknown): value is ReviewRecordedContent {

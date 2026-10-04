@@ -1,8 +1,9 @@
+import type { ReviewCoordinatorOptions } from './reviewCoordinatorOptions';
+export type { ReviewCoordinatorOptions } from './reviewCoordinatorOptions';
 import type { ReviewContext } from '../../shared/protocol/reviewPanelProtocol';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 
-import type { RuntimeGitDiff } from '../../runtime/DroidRuntime';
 import { MAX_REVIEW_UNDO_FILES } from '../../shared/protocol/reviewProtocol';
 import type {
   ReviewHostMessage,
@@ -10,11 +11,7 @@ import type {
   ReviewScopeState,
   ReviewWebviewMessage,
 } from '../../shared/protocol/reviewProtocol';
-import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
-import type { ChangeStatsPersistence, CommittedFileStat } from '../changes/changeStats';
-import type { FileDiffOpener } from '../changes/fileDiffOpener';
-import type { TurnSnapshotStore } from '../changes/turnSnapshots';
-import type { ReviewGitScope } from './reviewGitComparison';
+import type { CommittedFileStat } from '../changes/changeStats';
 import { loadTurnReviewScope } from './reviewTurnScope';
 import { readReviewContents, readReviewPatch, reviewFileVersion } from './reviewContent';
 import { recordedFileVersion } from './recordedFileDiffs';
@@ -23,7 +20,7 @@ import {
   ReviewWatcherRefresh,
   watcherOpenMessage,
 } from './reviewWatcherRefresh';
-import { runAgentReview, type ReviewAgentRunner } from './reviewAgent';
+import { runAgentReview } from './reviewAgent';
 import {
   createActiveScope,
   isNotFound,
@@ -46,54 +43,14 @@ import {
   loadOperationReviewScope,
   preflightOperationRestore,
   recordedOperationVersion,
-  type RecordedOperation,
 } from './reviewOperationScope';
 import { applyOperationUndo, recoverOperationUndo } from './operationUndoFiles';
+import { ReviewScopeRetention } from './reviewScopeRetention';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
 const MAX_PERSISTED_SCOPES = 16;
 type Unsequenced<T> = T extends { readonly sequence: number } ? Omit<T, 'sequence'> : never;
-type CanonicalTurnFiles = (
-  sessionId: string,
-  turnId: string,
-) => readonly CommittedFileStat[] | undefined;
-export interface ReviewCoordinatorOptions {
-  readonly readPriorFileOperations?: import('./reviewContent').ReviewContentSource['readPriorFileOperations'];
-  readonly isTurnWriting?: (sessionId: string, turnId: string) => boolean;
-  readonly isOperationWriting?: (sessionId: string, turnId: string) => boolean;
-  readonly readTurnOperations?: (
-    sessionId: string,
-    turnId: string,
-  ) => readonly RecordedOperation[];
-  readonly readTurnOperationNotices?: (sessionId: string, turnId: string) => readonly string[];
-  readonly isSessionCurrent?: (sessionId: string) => boolean;
-  readonly openSelectionInEditor?: boolean;
-  readonly readGitScope?: (kind: 'workspace' | 'branch' | 'staged' | 'unstaged') => Promise<ReviewGitScope>;
-  readonly getWorkspaceRoot: () => string | undefined;
-  readonly snapshots: TurnSnapshotStore;
-  readonly fileDiff: FileDiffOpener;
-  readonly persistence: ChangeStatsPersistence;
-  readonly storageDir: string;
-  readonly publish: (message: Unsequenced<ReviewHostMessage>) => void;
-  readonly readCanonicalTurnFiles: CanonicalTurnFiles;
-  readonly resolveCanonicalTurnSessionId?: (
-    sessionId: string,
-    turnId: string,
-  ) => string | undefined;
-  readonly readWorkspaceFiles: () => Promise<
-    { readonly baseline: string; readonly files: readonly CommittedFileStat[] } | undefined
-  >;
-  readonly readBranchDiff: () => Promise<
-    | {
-        readonly baseline: string;
-        readonly diff: RuntimeGitDiff;
-      }
-    | undefined
-  >;
-  readonly runAgentReview?: ReviewAgentRunner;
-  readonly diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
-}
 interface RestoreEntry {
   readonly path: string;
   readonly before: Buffer | null;
@@ -110,7 +67,10 @@ interface RestorePreview {
   readonly versions: readonly { path: string; version: string }[];
 }
 export class ReviewCoordinator implements vscode.Disposable {
-  private active: ActiveScope | null = null;
+  private activeScope: ActiveScope | null = null;
+  private readonly retention: ReviewScopeRetention;
+  private get active(): ActiveScope | null { return this.activeScope; }
+  private set active(scope: ActiveScope | null) { this.retention.select(scope); this.activeScope = scope; }
   private readonly persisted: Map<string, PersistedScope>;
   private readonly previews = new Map<string, RestorePreview>();
   private readonly pendingOperationRefreshes = new Set<string>();
@@ -121,6 +81,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private readonly watcherRefresh: ReviewWatcherRefresh;
 
   constructor(private readonly options: ReviewCoordinatorOptions) {
+    this.retention = new ReviewScopeRetention(options.snapshots);
     this.persisted = readPersistedScopes(
       options.persistence,
       REVIEW_STORAGE_KEY,
@@ -175,6 +136,7 @@ export class ReviewCoordinator implements vscode.Disposable {
           'open',
           false,
           error instanceof Error ? error.message : 'Review operation failed.',
+          'requestId' in message ? message.requestId : undefined,
         );
     });
   }
@@ -279,6 +241,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         sessionId,
         scopeKind: saved.scopeKind,
         ...(saved.turnId === undefined ? {} : { turnId: saved.turnId }),
+        ...(saved.baseBranch === undefined ? {} : { baseBranch: saved.baseBranch }),
       });
       await this.refreshVersions(restored);
       if (this.disposed) return;
@@ -288,6 +251,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.publishState(this.active, publish);
   }
   dispose(): void {
+    this.retention.dispose();
     this.disposed = true;
     this.watcherRefresh.dispose();
     for (const disposable of this.disposables) {
@@ -313,6 +277,12 @@ export class ReviewCoordinator implements vscode.Disposable {
   private async handleNow(message: ReviewWebviewMessage): Promise<void> {
     if (this.options.isSessionCurrent?.(message.sessionId) === false) return;
     switch (message.type) {
+      case 'review.listBranches': {
+        if (!this.options.readBranches) throw new Error('Branch references are unavailable.');
+        const branches = await this.options.readBranches();
+        this.publish({ type: 'review.branches', sessionId: message.sessionId, requestId: message.requestId, ...branches });
+        return;
+      }
       case 'review.open':
         return this.open(message);
       case 'review.refresh':
@@ -351,12 +321,12 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.refreshVersions(loaded);
     if (this.disposed) return;
     this.active = loaded;
-    this.publishState(loaded);
+    this.publishState(loaded, this.options.publish, message.requestId);
     if (this.disposed) return;
     if (message.openCurrent === true) {
       (await this.openCurrent(loaded, false))
-        ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.')
-        : this.publishState(loaded);
+        ? this.result(loaded.sessionId, loaded.reviewScopeId, 'open', true, 'Review opened.', message.requestId)
+        : this.publishState(loaded, this.options.publish, message.requestId);
     }
     await this.persistScope(loaded);
   }
@@ -377,7 +347,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       return this.loadTurnScope(message.sessionId, message.turnId!);
     }
     if (this.options.readGitScope) {
-      const source = await this.options.readGitScope(message.scopeKind);
+      const source = await this.options.readGitScope(message.scopeKind, message.baseBranch);
       return Object.assign(createActiveScope(message, source.baseline, source.label, source.files, this.persisted), {
         comparison: source.comparison, branchCommitCount: source.commitCount, sdkPatches: source.sdkPatches,
       });
@@ -415,6 +385,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       sessionId: active.sessionId,
       scopeKind: active.scopeKind,
       ...(active.turnId === undefined ? {} : { turnId: active.turnId }),
+      ...(active.baseBranch === undefined ? {} : { baseBranch: active.baseBranch }),
     });
     if (reloaded.baseline !== active.baseline) {
       reloaded.lifecycle = 'stale';
@@ -587,6 +558,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private publishState(
     scope: ActiveScope,
     publish: (message: Unsequenced<ReviewHostMessage>) => void = this.options.publish,
+    requestId?: string,
   ): void {
     if (this.disposed) return;
     const reviewableCount = scope.files.filter(({ comparable }) => comparable).length;
@@ -595,10 +567,12 @@ export class ReviewCoordinator implements vscode.Disposable {
     ).length;
     publish({
       type: 'review.state',
+      ...(requestId ? { requestId } : {}),
       state: {
         sessionId: scope.sessionId,
         reviewScopeId: scope.reviewScopeId,
         scopeKind: scope.scopeKind,
+        ...(scope.baseBranch === undefined ? {} : { baseBranch: scope.baseBranch }),
         ...(scope.turnId === undefined ? {} : { turnId: scope.turnId }),
         baseline: scope.baseline,
         baselineLabel: scope.baselineLabel,
@@ -672,6 +646,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private async persistScope(scope: ActiveScope): Promise<void> {
     if (this.disposed) return;
     const record: PersistedScope = {
+      ...(scope.baseBranch === undefined ? {} : { baseBranch: scope.baseBranch }),
       reviewScopeId: scope.reviewScopeId,
       sessionId: scope.sessionId,
       scopeKind: scope.scopeKind,
@@ -878,9 +853,11 @@ export class ReviewCoordinator implements vscode.Disposable {
     >['operation'],
     ok: boolean,
     message: string,
+    requestId?: string,
   ): void {
     this.publish({
       type: 'review.operationResult',
+      ...(requestId ? { requestId } : {}),
       sessionId,
       reviewScopeId,
       operation,

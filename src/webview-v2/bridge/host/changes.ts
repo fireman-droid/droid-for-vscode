@@ -9,6 +9,7 @@ import {
 } from '../../../shared/bridgeMessages';
 import { type ChangesUpdateState } from '../../../shared/protocol/changesProtocol';
 import { MAX_CHANGED_FILES_PER_TURN } from '../../../shared/protocol/bounds';
+import { MAX_GIT_COMMIT_PATHS } from '../../../shared/protocol/gitCommitFlow';
 import { type ChangedFileSummary } from '../../../shared/protocol/transcript';
 import {
   hasExactKeys,
@@ -92,7 +93,7 @@ export function parseGitStatus(
     !hasExactKeys(
       value,
       ['type', 'sequence', 'sessionId', 'turnId', 'branch', 'files'],
-      ['committedHash', 'unavailableReason'],
+      ['committedHash', 'unavailableReason', 'snapshotId', 'offset', 'totalFiles'],
     ) ||
     !isSequence(value.sequence) ||
     !isId(value.sessionId) ||
@@ -116,11 +117,17 @@ export function parseGitStatus(
     return undefined;
   }
   const files = parseGitStatusFiles(value.files);
+  const paged = value.offset !== undefined || value.totalFiles !== undefined;
+  if ((value.snapshotId !== undefined && !isId(value.snapshotId)) || paged &&
+    (!Number.isSafeInteger(value.offset) || !Number.isSafeInteger(value.totalFiles) ||
+      (value.offset as number) < 0 || (value.totalFiles as number) < 0 ||
+      (value.totalFiles as number) > MAX_GIT_COMMIT_PATHS ||
+      (value.offset as number) + (files?.length ?? 0) > (value.totalFiles as number))) return undefined;
   // An unavailable report must not smuggle repository data.
   if (
     files === undefined ||
     (reason !== undefined &&
-      (files.length > 0 || branch !== null || committedHash !== undefined))
+      (files.length > 0 || branch !== null || committedHash !== undefined || value.snapshotId !== undefined || paged))
   ) {
     return undefined;
   }
@@ -134,6 +141,8 @@ export function parseGitStatus(
     files,
     ...(committedHash === undefined ? {} : { committedHash }),
     ...(reason === undefined ? {} : { unavailableReason: reason }),
+    ...(value.snapshotId === undefined ? {} : { snapshotId: value.snapshotId as string }),
+    ...(paged ? { offset: value.offset as number, totalFiles: value.totalFiles as number } : {}),
   };
 }
 

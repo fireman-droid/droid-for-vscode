@@ -1,13 +1,44 @@
 # 当前状态
 
-更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.2`。
+更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
-当前源码包含 Mission 刷新、Canvas 移除及 Reload 心跳衔接修复；本地安装状态见下文。
-`v0.8.2` 已正式发布，下载入口统一为 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest)。
+当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
+[最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
 `v0.8.1` 保留为历史草稿，不移动旧标签，也不以旧包替代当前版本。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## v0.8.3 Diff 改造
+
+- Review 默认 3 行上下文；Recorded edits 以真实操作片段为主，停止默认全文重建。
+  本轮和 Git 比较可增加上下文；原生历史对照仍要求可靠的 before/after。
+- Workspace、Branch、Staged、Unstaged 直接读取本地 Git。无 HEAD 时 Workspace／Staged
+  用空树，Unstaged 直接比较 Index；Branch 使用明确本地引用，不自动 fetch。
+  入口仍要求已建立的会话身份和工作区，不新增无会话的独立 Git 客户端。
+- 范围请求带身份，失败及超时解除等待，旧正文保留并标明当前范围；旧响应不覆盖新选择。
+  选中编辑优先进入 200 条／512,000 单元历史响应，阅读位置按范围、文件和视图恢复。
+- 超过聊天内联预算的操作正文携带源会话引用，选中时校验工具身份与摘要后读取，单份上限
+  512,000 单元；未落盘记录可通过现有 daemon 连接读取，不启动新会话。已归因的单文件
+  超限保留结果元数据及同次其他文件；源 JSON／声明的解析硬限仍存在。
+- 增加有界词级高亮、工具栏提示和聊天文件行 hover；文件导航遵循搜索／仅未查看的结果。
+  聚合“已查看”明确指全部编辑；历史传输截断或当前正文不可用时不允许完成标记。
+- 快照超过 256 MiB 时仅回收无记录引用的松散对象；运行中／查看中的轮次有保留引用。
+  此大小为回收触发线，不是强制清空或硬容量保证；记录仍为 8 会话、每会话 24 轮，
+  活跃保留不等于跨重载的无限历史。
+- Commit 按 100 条分页完整读取最多 10,000 个文件；预览绑定仓库、HEAD、Index 和文件内容。
+  Working files 暂存所选工作区内容，Index 保留既有部分暂存；提交前验证预览版本，
+  Working files 暂存后再核验。VS Code Git API 不提供与外部 Git 进程之间的原子提交锁。
+- 本轮只执行用户授权的 Diff 定向回归、类型检查、预算检查及构建；未运行模型或浏览器
+  自动化，未用用户业务仓库做行为测试。VS Code 实际视觉与操作由用户验收。
+- 定向回归通过：7 个 UI／范围／导航／撤销链文件共 43 条；正文源记录、collector 与
+  Recorded Review 3 文件共 21 条；快照存储与实际 Git 回收 2 文件共 22 条。
+  本地 Git 无 HEAD／基分支、提交预览与分页、两处 Commit UI、聊天 Host 及 Bridge 的
+  对应用例亦通过。现有 collector、DOM 与快照旧断言按当前生产契约同步后重跑；未跑全量测试。
+- `pnpm run package:vsix` 通过（含 typecheck、lint:budgets、公共 UI 与扩展构建）；
+  `verifyVsix.mjs` 校验 166 条目、外部依赖与扩展入口通过。正式附件由干净版本标签重新构建，
+  本地预提交构建不冒充 Release 附件。
+- `npm --prefix docs run build` 通过；保留现有大 chunk 提示，未新增前端依赖。
 
 ## 文档网站
 
@@ -1121,8 +1152,8 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
   单行、零行分别显示单行位置和“无对应行”；不改补丁数据、正文行号或撤销依据。
   本轮按“只构建安装”未运行或修改测试；既有 DiffView 渲染用例仍包含原始 hunk
   标记的文本断言，尚未随新展示文案调整。
-- Review 默认 Full file；工作区/分支/回合对比展示完整未修改上下文，菜单可切回
-  3/20/100 行。Recorded edits 在保存快照与同一会话的逐次结果补丁完全吻合时展示
+- Review 自 0.8.3 起默认 3 行上下文；工作区/分支/回合可按需扩大到 20/100 行或全文。
+  Recorded edits 默认真实片段；保存快照与同一会话的逐次结果补丁完全吻合时，可按需打开
   逐次完整文件 Diff；执行中以当前文件核对重放终态，撤销缺记录不阻止全文查看。
   恢复／分叉沿原执行会话读取快照；缺快照时可从已确认的完整创建／写入内容还原。
   缺完整基线、来源不确定、受限或超限时保留原片段并明确提示。
@@ -1202,10 +1233,9 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
   固定行高的代码块离屏回收，修改跳转锚点不依赖代码是否挂载。
 - writing scope 仅刷新受影响文件，合并刷新队列，拒绝迟到响应；失败可重试且不标记
   已审阅。settled 比较使用固定版本，不混入后续编辑；缺历史基线不能补造。
-- daemon Branch 使用 SDK committed，Workspace 使用 SDK unstaged（包含暂存、
-  未暂存、未跟踪）；默认补丁来自 SDK，扩展上下文/原生 Diff 用固定基线加 SDK 补丁。
-  Staged 为 HEAD→Index，Unstaged 为 Index→工作树；Process 保留本地 Git 路径。
-  不能从 SDK 名称推断它只包含普通未暂存文件。
+- 自 0.8.3 起四个 Git 范围统一读取本地 Git：Workspace 为 HEAD→工作树，Branch 为
+  所选基分支 merge-base→HEAD，Staged 为 HEAD→Index，Unstaged 为 Index→工作树。
+  不再因 Runtime 使用 daemon 或 process 而切换来源；工作区范围包含适用未跟踪文件。
 - 非 Git 根目录/嵌套项目使用存储区私有 Git 快照，不修改用户 index，仍要求本机 Git。
   未捕获的忽略文件不当作新建，缺失 before/after 明确不可用；仅 CRLF/LF 表示差异
   的采集问题已统一私有索引规范化，不通过忽略空白掩盖真实编辑，也不重写旧快照。

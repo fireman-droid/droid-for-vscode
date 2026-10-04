@@ -26,7 +26,7 @@ export function ComposerChanges({ store, port, blocked, onStop }: {
       }
       return { summary: turnId ? summarize(state.transcript).get(turnId) : undefined,
         conversationId: state.conversationId,
-        sessionId: state.connection.status === 'connected' ? state.sessionId : null,
+        sessionId: state.sessionId,
         status: state.turn?.status };
     };
   }, []);
@@ -37,6 +37,6 @@ export function ComposerChanges({ store, port, blocked, onStop }: {
     disabled={blocked || sessionId === null} onStop={running ? onStop : undefined} stopLabel={status === 'stopping' ? 'Retry Stop' : 'Stop'}
     onReview={(path) => {
       if (sessionId !== null) port.postMessage({ type: 'review.panel.open', sessionId,
-        scopeKind: 'operations', turnId: summary.turnId, ...(path ? { path } : {}) });
+        scopeKind: 'turn', turnId: summary.turnId, ...(path ? { path } : {}) });
     }} />;
 }

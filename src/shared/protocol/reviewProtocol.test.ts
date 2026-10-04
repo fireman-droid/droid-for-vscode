@@ -8,6 +8,17 @@ const isId = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
 describe('review protocol', () => {
+  it('correlates scope results and local branch selection without changing live broadcasts', () => {
+    const request = { type: 'review.open', sessionId: 's', requestId: 'request-1', scopeKind: 'branch', baseBranch: 'refs/heads/develop' };
+    expect(parseReviewWebviewMessage(request, isId, isSafeWorkspaceRelativePath)).toEqual(request);
+    expect(parseReviewWebviewMessage({ ...request, scopeKind: 'workspace' }, isId, isSafeWorkspaceRelativePath)).toBeUndefined();
+    const result = { type: 'review.operationResult', sequence: 1, sessionId: 's', reviewScopeId: 'r', operation: 'open', ok: false, message: 'Missing base', requestId: 'request-1' };
+    expect(parseReviewHostMessage(result)).toEqual(result);
+    expect(parseReviewHostMessage({ ...result, requestId: '' })).toBeUndefined();
+    const branches = { type: 'review.branches', sequence: 2, sessionId: 's', requestId: 'refs-1', refs: ['refs/heads/develop'] };
+    expect(parseReviewHostMessage(branches)).toEqual(branches);
+    expect(parseReviewWebviewMessage({ type: 'review.listBranches', sessionId: 's', requestId: 'refs-1' }, isId, isSafeWorkspaceRelativePath)).toBeDefined();
+  });
   it('routes a selected edit and budgets its full context independently from saved excerpts', () => {
     const request = { type: 'reviewPanel.readFile', requestId: 'request-1', reviewScopeId: 'scope-1',
       baseline: 'operations', path: 'src/main.ts', context: 'all', toolUseId: 'edit-20' };

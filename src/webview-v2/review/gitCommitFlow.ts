@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import type { GitStatusFile } from '../../shared/protocol/gitCommitFlow';
+import type { GitCommitMode, GitStatusFile } from '../../shared/protocol/gitCommitFlow';
 import type { GitCommitFlowState } from './gitCommitStore';
 import { buildCommitMessageDraft } from './gitCommitDraft';
 
@@ -8,7 +8,7 @@ export interface GitCommitFlowContextValue {
   readonly latestChangesTurnId: string | null;
   readonly promptText: string | null;
   readonly onRequestStatus: (turnId: string) => void;
-  readonly onCommit: (turnId: string, paths: readonly string[], message: string) => void;
+  readonly onCommit: (turnId: string, paths: readonly string[], message: string, snapshotId?: string, mode?: GitCommitMode) => void;
 }
 export const GitCommitFlowContext = createContext<GitCommitFlowContextValue | null>(null);
 export const GIT_FILE_STATUS_LABELS: Record<GitStatusFile['status'], string> = {
@@ -81,6 +81,8 @@ export function useGitCommitDraft(flow: GitCommitFlowContextValue, turnId: strin
     });
   }, [initialized, state.files, state.statusPending]);
   const selectedFilesAreCurrent = [...selected].every((path) => state.files.some((file) => file.path === path));
-  const canCommit = initialized && !state.statusPending && !state.commitPending && selected.size > 0 && selectedFilesAreCurrent && message.trim() !== '';
-  return { initialized, selected, message, setMessage, toggle, failure: failedResult?.error ?? null, canCommit };
+  const unselectedStaged = state.files.filter(file => file.staged && !selected.has(file.path)).length;
+  const canCommit = initialized && ready && !!state.snapshotId && !state.commitPending && selected.size > 0 && selectedFilesAreCurrent && !unselectedStaged && message.trim() !== '';
+  return { initialized, selected, message, setMessage, toggle, failure: failedResult?.error ?? null, canCommit, unselectedStaged,
+    selectAll: () => setSelected(new Set(state.files.map(file => file.path))), clear: () => setSelected(new Set()) };
 }

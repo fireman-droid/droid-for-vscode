@@ -51,6 +51,9 @@ export function upsertTurn(
     }
     turns = [];
     sessions.set(scope.sessionId, turns);
+  } else {
+    sessions.delete(scope.sessionId);
+    sessions.set(scope.sessionId, turns);
   }
   const index = turns.findIndex((turn) => turn.turnId === scope.turnId);
   if (index === -1) {

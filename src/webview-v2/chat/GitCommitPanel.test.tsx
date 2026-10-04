@@ -8,7 +8,7 @@ import { ReviewDock } from './ReviewDock';
 
 afterEach(cleanup);
 const flow: GitCommitFlowContextValue = {
-  state: { ...initialGitCommitFlowState, availability: 'available', statusTurnId: 'turn-1', branch: 'main', files: [
+  state: { ...initialGitCommitFlowState, availability: 'available', statusTurnId: 'turn-1', branch: 'main', snapshotId: 'preview-a', files: [
     { path: 'src/app.ts', status: 'modified', staged: false, inTurn: true },
     { path: 'unrelated.txt', status: 'untracked', staged: false, inTurn: false },
   ] },
@@ -34,7 +34,7 @@ it('keeps the inline commit form inside Review, preserves edited input on failur
   await user.clear(screen.getByRole('textbox', { name: 'Commit message' }));
   await user.type(screen.getByRole('textbox', { name: 'Commit message' }), 'fix: preserve my message');
   await user.click(screen.getByRole('button', { name: 'Commit', exact: true }));
-  expect(flow.onCommit).toHaveBeenCalledExactlyOnceWith('turn-1', ['src/app.ts'], 'fix: preserve my message');
+  expect(flow.onCommit).toHaveBeenCalledExactlyOnceWith('turn-1', ['src/app.ts'], 'fix: preserve my message', 'preview-a', 'files');
   const failed = { ...flow, state: { ...flow.state, commitTurnId: 'turn-1', lastResult: { ok: false as const, error: 'Commit was rejected' } } };
   view.rerender(<GitCommitFlowContext.Provider value={failed}><ReviewDock {...props} /></GitCommitFlowContext.Provider>);
   expect(screen.getByRole('alert').textContent).toBe('Commit was rejected');

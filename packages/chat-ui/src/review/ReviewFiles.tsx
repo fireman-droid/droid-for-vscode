@@ -16,12 +16,21 @@ const fileStatusLabels: Readonly<Record<string, string>> = {
   'changed-after-review': 'Changed since review', 'open-only': 'Open only', 'restore-conflict': 'Restore conflict',
 };
 const visibleStatuses = new Set(['changed-after-review', 'open-only', 'restore-conflict']);
-export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect }: {
+export interface ReviewFileFilters { readonly query: string; readonly unreviewed: boolean }
+export function filterReviewFiles<T extends ReviewFile>(files: readonly T[], filters: ReviewFileFilters): T[] {
+  const query = filters.query.toLowerCase();
+  return files.filter(file => file.path.toLowerCase().includes(query) && (!filters.unreviewed || file.status !== 'reviewed'));
+}
+export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect, filters, onFiltersChange }: {
   files: readonly ReviewFile[]; selected: string | null; onSelect(path: string): void;
+  filters?: ReviewFileFilters; onFiltersChange?(filters: ReviewFileFilters): void;
 }) {
-  const [filter, setFilter] = useState('');
+  const [localFilters, setLocalFilters] = useState<ReviewFileFilters>({ query: '', unreviewed: false });
+  const { query: filter, unreviewed } = filters ?? localFilters;
+  const updateFilters = onFiltersChange ?? setLocalFilters;
+  const setFilter = (query: string) => updateFilters({ query, unreviewed });
+  const setUnreviewed = (unreviewed: boolean) => updateFilters({ query: filter, unreviewed });
   const [tree, setTree] = useState(false);
-  const [unreviewed, setUnreviewed] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [width, setWidth] = useState(224);
   const [maxWidth, setMaxWidth] = useState(440);
@@ -41,8 +50,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
   const visibleWidth = Math.min(maxWidth, Math.max(minWidth, width));
   const query = useDeferredValue(filter.toLowerCase());
   const previousFilter = useRef({ query, unreviewed, tree });
-  const filtered = useMemo(() => files.filter((file) =>
-    file.path.toLowerCase().includes(query) && (!unreviewed || file.status !== 'reviewed')), [files, query, unreviewed]);
+  const filtered = useMemo(() => filterReviewFiles(files, { query, unreviewed }), [files, query, unreviewed]);
   const groups = useMemo(() => {
     const value = new Map<string, ReviewFile[]>();
     for (const file of filtered) {
@@ -141,7 +149,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
       </Collapsible>)}
       </div>
       {!filtered.length ? <p className="review-empty">{files.length === 0 ? 'No changed files in this scope.' : 'No matching files.'}
-        {files.length > 0 ? <Button variant="link" size="sm" onClick={() => { setFilter(''); setUnreviewed(false); }}>Clear filters</Button> : null}
+        {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>Clear filters</Button> : null}
       </p> : null}
     </div>
     <ResizeHandle value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label="Resize file sidebar" onValueChange={setWidth} />

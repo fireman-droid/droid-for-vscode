@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid",
   "description": "An unofficial local workspace UI for the Factory Droid CLI.",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",

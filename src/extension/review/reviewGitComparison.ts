@@ -1,11 +1,9 @@
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import type { ReviewFile, ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type { CommittedFileStat } from '../changes/changeStats';
 import { isText, MAX_INLINE_DIFF_FILE_BYTES, readCurrentFile } from '../changes/inlineDiff';
 import type { ReviewSdkPatch } from './reviewSdkPatch';
-const execute = promisify(execFile);
 export interface ReviewComparison {
   readonly before: string;
   readonly after: string | 'worktree';
@@ -18,30 +16,62 @@ export interface ReviewGitScope {
   readonly commitCount?: number;
   readonly sdkPatches?: ReadonlyMap<string, ReviewSdkPatch>;
 }
-export async function reviewGit(root: string, args: readonly string[], maxBuffer = 4 * 1024 * 1024): Promise<Buffer> {
-  const { stdout } = await execute('git', [
-    '-c', 'core.autocrlf=false', ...args,
-  ], { cwd: root, encoding: 'buffer', windowsHide: true, timeout: 10_000, maxBuffer });
-  return stdout;
+export async function reviewGit(root: string, args: readonly string[], maxBuffer = 4 * 1024 * 1024, input?: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = execFile('git', ['-c', 'core.autocrlf=false', ...args],
+      { cwd: root, encoding: 'buffer', windowsHide: true, timeout: 10_000, maxBuffer },
+      (error, stdout) => error ? reject(error) : resolve(stdout));
+    child.stdin?.on('error', () => { /* The process result reports a closed input pipe. */ });
+    child.stdin?.end(input);
+  });
 }
 async function ref(root: string, value: string): Promise<string> {
-  return (await reviewGit(root, ['rev-parse', '--verify', `${value}^{commit}`])).toString().trim();
+  return (await reviewGit(root, ['rev-parse', '--verify', '--end-of-options', `${value}^{commit}`])).toString().trim();
+}
+async function headOrEmptyTree(root: string): Promise<{ oid: string; unborn: boolean }> {
+  try {
+    return { oid: (await reviewGit(root, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])).toString().trim(), unborn: false };
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== 1) throw error;
+    // Store only the empty tree object: no commit, branch or index is changed.
+    return { oid: (await reviewGit(root, ['hash-object', '-w', '-t', 'tree', '--stdin'], 4096, Buffer.alloc(0))).toString().trim(), unborn: true };
+  }
+}
+export async function readReviewBranches(root: string): Promise<{ refs: readonly string[]; defaultBranch?: string }> {
+  const output = await reviewGit(root, ['for-each-ref', '--format=%(refname)%09%(symref)', 'refs/heads/', 'refs/remotes/']);
+  const lines = output.toString().split('\n').filter(Boolean);
+  const refs = lines.flatMap(line => {
+    const [name, target] = line.trim().split('\t');
+    return name && !target && !name.endsWith('/HEAD') ? [name] : [];
+  }).sort();
+  const targets = [...new Set(lines.flatMap((line) => {
+    const [name, target] = line.trim().split('\t');
+    return name?.startsWith('refs/remotes/') && name.endsWith('/HEAD') && target && refs.includes(target) ? [target] : [];
+  }))];
+  return { refs, ...(targets.length === 1 ? { defaultBranch: targets[0]! } : {}) };
+}
+export async function reviewDefaultBaseBranch(root: string): Promise<string> {
+  const branches = await readReviewBranches(root);
+  if (!branches.defaultBranch) throw new Error('Choose a base branch for Branch comparison. No unique local remote HEAD is available.');
+  return branches.defaultBranch;
 }
 export async function loadReviewGitScope(
-  root: string, kind: Exclude<ReviewScopeKind, 'turn'>, baseBranch?: string,
+  root: string, kind: Exclude<ReviewScopeKind, 'turn' | 'operations'>, baseBranch?: string,
 ): Promise<ReviewGitScope> {
-  const head = await ref(root, 'HEAD');
-  let before = head;
+  const baseline = kind === 'unstaged' ? undefined : await headOrEmptyTree(root);
+  let before = baseline?.oid ?? '';
   let after = 'worktree';
-  let label = 'HEAD → working tree';
+  let label = baseline?.unborn ? 'Empty tree → working tree' : 'HEAD → working tree';
   let commitCount: number | undefined;
   if (kind === 'staged' || kind === 'unstaged') {
     // write-tree creates an immutable tree object, without altering the user's index.
     const index = (await reviewGit(root, ['write-tree'])).toString().trim();
-    if (kind === 'staged') { after = index; label = 'HEAD → Index'; }
+    if (kind === 'staged') { after = index; label = baseline?.unborn ? 'Empty tree → Index' : 'HEAD → Index'; }
     else { before = index; label = 'Index → working tree'; }
   } else if (kind === 'branch') {
-    if (!baseBranch) throw new Error('The runtime did not provide a base branch.');
+    if (baseline!.unborn) throw new Error('Branch comparison needs a first commit. Workspace and Index comparisons are available.');
+    baseBranch ??= await reviewDefaultBaseBranch(root);
+    const head = baseline!.oid;
     const base = await ref(root, baseBranch);
     before = (await reviewGit(root, ['merge-base', base, head])).toString().trim();
     after = head;

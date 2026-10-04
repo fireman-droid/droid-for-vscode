@@ -12,6 +12,8 @@ import type { SessionViewerPanelController } from '../sessionViewer/SessionViewe
 import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../../shared/protocol/gitCommitFlow';
 import { operationDiffWithChanges, workspaceOperationDiff } from '../../../shared/protocol/operationDiff';
 import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
+import { gitStatusPages } from '../../../shared/protocol/gitStatusPaging';
+import { isId } from '../../../shared/validation/guards';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -80,7 +82,12 @@ export class ReviewPanelController implements vscode.Disposable {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
     });
     this.panel = panel;
-    const receive = panel.webview.onDidReceiveMessage((value) => { void this.handle(value).catch((error) => this.postError(error)); });
+    const receive = panel.webview.onDidReceiveMessage((value) => {
+      const request = parseReviewPanelRequest(value) ?? parseWebviewMessage(value);
+      const requestId = request && 'requestId' in request && isId(request.requestId) ? request.requestId : undefined;
+      const sessionId = request && 'sessionId' in request && isId(request.sessionId) ? request.sessionId : this.target?.sessionId;
+      void this.handle(value).catch((error) => this.postError(error, requestId, sessionId));
+    });
     const dispose = panel.onDidDispose(() => {
       receive.dispose(); dispose.dispose();
       if (this.panel === panel) { this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
@@ -98,11 +105,11 @@ export class ReviewPanelController implements vscode.Disposable {
   private current(): boolean {
     return !this.invalidated && !!this.target && this.target.sessionId === this.controller.sessionState.sessionId &&
       this.target.root === this.controller.sessionState.activeRuntimeCwd &&
-      this.controller.sessionState.connection.status === 'connected' && !this.controller.sessionState.disposed;
+      !this.controller.sessionState.disposed;
   }
   private initialize(): void {
     if (!this.ready || !this.pendingOpen || !this.current()) return;
-    this.postTheme(); this.postContext();
+    this.postTheme(); this.postContext(true);
     const pending = this.pendingOpen;
     const operation = this.targetOperation();
     const message: ReviewPanelOpen = pending.toolUseId && operation?.status === 'ready' && operation.files.length > 0
@@ -182,12 +189,13 @@ export class ReviewPanelController implements vscode.Disposable {
       : persistedOperation;
     return operation === undefined ? undefined : workspaceOperationDiff(operationDiffWithChanges(operation));
   }
-  private postContext(): void {
+  private postContext(resetReview = false): void {
     const target = this.target;
     const workspaceOperation = this.targetOperation();
     const recorded = workspaceOperation?.status === 'ready' && workspaceOperation.files.length > 0;
     this.post({
       type: 'reviewPanel.context', sessionId: target?.sessionId ?? null, valid: this.current(),
+      ...(resetReview ? { resetReview: true } : {}),
       latestTurnId:
         this.latestOperationTurn()?.turnId ??
         this.controller.effects.readLatestConversationChanges()?.turnId ??
@@ -242,7 +250,8 @@ export class ReviewPanelController implements vscode.Disposable {
       if (!current()) throw new Error('Wait for the active turn to finish before committing.');
       this.committing = true;
       try {
-        const result = await this.git.commit(target.root, message.paths, message.message, current);
+        const result = await this.git.commit(target.root, message.paths, message.message, current,
+          { snapshotId: message.snapshotId, mode: message.mode });
         if (this.target === target && this.current()) {
           this.post({ type: 'git.commitResult', sequence: 0, sessionId: target.sessionId, turnId: 'review',
             ...result, ...(result.ok ? { subject: message.message.split('\n')[0]!.slice(0, MAX_GIT_COMMIT_SUBJECT_LENGTH) } : {}) });
@@ -280,13 +289,15 @@ export class ReviewPanelController implements vscode.Disposable {
   private async postGitStatus(target: NonNullable<ReviewPanelController['target']>): Promise<void> {
     const status = await this.git.status(target.root, new Set());
     if (this.target !== target || !this.current()) return;
-    this.post({ type: 'git.status', sequence: 0, sessionId: target.sessionId, turnId: 'review',
-      branch: status.available ? status.branch : null, files: status.available ? status.files : [],
-      ...(!status.available ? { unavailableReason: status.reason } : {}) });
+    if (status.available) for (const page of gitStatusPages(status))
+      this.post({ type: 'git.status', sequence: 0, sessionId: target.sessionId, turnId: 'review', branch: status.branch, ...page });
+    else this.post({ type: 'git.status', sequence: 0, sessionId: target.sessionId, turnId: 'review',
+      branch: null, files: [], unavailableReason: status.reason });
   }
   private postTheme(): void { this.post({ type: 'ui.theme', ...readWebviewBootTheme() }); }
-  private postError(error: unknown): void {
-    this.post({ type: 'reviewPanel.error', message: error instanceof Error ? error.message : 'Review operation failed.' });
+  private postError(error: unknown, requestId?: string, sessionId?: string): void {
+    this.post({ type: 'reviewPanel.error', message: error instanceof Error ? error.message : 'Review operation failed.',
+      ...(requestId ? { requestId } : {}), ...(sessionId ? { sessionId } : {}) });
   }
   private post(message: unknown): void {
     if (this.ready) void this.panel?.webview.postMessage(message);

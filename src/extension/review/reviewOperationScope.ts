@@ -69,7 +69,7 @@ export function loadOperationReviewScope(
       deletions: null,
       version,
       comparable: matching.some((entry) => entry.source === 'tool-result' && entry.outcome === 'applied' &&
-        (entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch))),
+        (entry.bodyRef !== undefined || entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch))),
       restorable: operationUndoBlocked === undefined && operationPathEligibility(matching) === undefined,
       restoreConflict: false,
     };
@@ -190,6 +190,9 @@ export function recordedOperationVersion(
     entry.message ?? '',
     entry.patch,
     entry.submittedContent ?? '',
+    entry.bodyRef?.digest ?? '',
+    String(entry.bodyRef?.patchUnits ?? ''),
+    String(entry.bodyRef?.contentUnits ?? ''),
   ]));
 }
 

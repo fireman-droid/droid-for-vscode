@@ -83,6 +83,7 @@ import {
 } from './session/specHandoffWatch';
 import { createToolResultCollector } from './tools/toolResultPreview';
 import { createOperationDiffCollector } from './tools/operationDiff';
+import { readOperationBody, type OperationBodyRequest } from './tools/operationBody';
 
 export interface FactoryDroidRuntimeOptions {
   readonly interactionHandler: RuntimeInteractionHandler;
@@ -511,6 +512,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
     }
     return projectGitDiff(await session.getGitDiff(options), this.getSessionCwd() ?? this.sessionTarget?.cwd ?? null);
   }
+  readonly readOperationBody = (request: OperationBodyRequest) => !this.disposed && this.session?.readOperationBody
+    ? this.session.readOperationBody(request) : readOperationBody(request);
 
   compact(): Promise<RuntimeCompactResult> {
     return compact(this.replacementContext());

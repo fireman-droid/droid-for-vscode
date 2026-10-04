@@ -527,6 +527,7 @@ describe('ChatController', () => {
         available: true,
         branch: 'main',
         files,
+        snapshotId: 'commit-preview',
       }),
     );
     const commit = vi.fn(
@@ -654,6 +655,8 @@ describe('ChatController', () => {
       turnId: 'turn-a',
       paths: ['src/app.ts'],
       message: 'feat: add app\n\nBody detail.',
+      snapshotId: 'commit-preview',
+      mode: 'files',
     });
     await vi.waitFor(() => {
       expect(lastMessage(messages, 'git.commitResult')).toMatchObject({
@@ -667,6 +670,8 @@ describe('ChatController', () => {
       'C:\\workspace',
       ['src/app.ts'],
       'feat: add app\n\nBody detail.',
+      expect.any(Function),
+      { snapshotId: 'commit-preview', mode: 'files' },
     );
     expect(changeStats.rememberCommittedTurn).toHaveBeenCalledWith(
       { sessionId: 'session-1', turnId: 'turn-a' },

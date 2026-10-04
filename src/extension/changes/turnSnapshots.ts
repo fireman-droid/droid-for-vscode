@@ -27,6 +27,7 @@ import {
   upsertTurn,
 } from './turnSnapshotRecords';
 import { snapshotWorkspaceFiles } from './snapshotWorkspaceFiles';
+import { pruneSnapshotObjects } from './snapshotPruning';
 export {
   MAX_SNAPSHOT_SESSIONS,
   MAX_SNAPSHOT_TURNS_PER_SESSION,
@@ -100,6 +101,8 @@ export interface TurnSnapshotStore {
   ): Promise<Buffer | null | undefined>;
   read(sessionId: string, turnId?: string): TurnSnapshotRecord | undefined;
   readTurns(sessionId: string): readonly TurnSnapshotRecord[];
+  /** Keep a currently viewed/running turn readable while newer history rotates. */
+  retain?(scope: TurnSnapshotScope): () => void;
   prune(): Promise<void>;
   dispose(): Promise<void>;
 }
@@ -135,6 +138,22 @@ export function createTurnSnapshotStore(
   let pendingSessions: Map<string, TurnSnapshotRecord[]> | undefined;
   const failedTurns = new Set<string>();
   const turnKey = (scope: TurnSnapshotScope) => JSON.stringify([scope.sessionId, scope.turnId]);
+  const retained = new Map<string, { count: number; record: TurnSnapshotRecord | undefined }>();
+  const running = new Map<string, () => void>();
+  const recordFor = (scope: TurnSnapshotScope) =>
+    readTurn(sessions, scope.sessionId, scope.turnId) ?? retained.get(turnKey(scope))?.record;
+  const retain = (scope: TurnSnapshotScope): (() => void) => {
+    const key = turnKey(scope);
+    const entry = retained.get(key) ?? { count: 0, record: cloneRecord(recordFor(scope)) };
+    retained.set(key, entry);
+    entry.count++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (--entry.count === 0) retained.delete(key);
+    };
+  };
   let storeDisabled = false;
   let layout: GitLayout | undefined;
   let indexSeq = 0;
@@ -186,8 +205,11 @@ export function createTurnSnapshotStore(
   ): Promise<void> => {
     await flushPending();
     const nextSessions = cloneSessions(sessions);
-    upsertTurn(nextSessions, scope, patch);
+    const { turnId: _turnId, ...previous } = recordFor(scope) ?? { turnId: scope.turnId };
+    upsertTurn(nextSessions, scope, { ...previous, ...patch });
     await persist(nextSessions);
+    const held = retained.get(turnKey(scope));
+    if (held) held.record = cloneRecord(readTurn(nextSessions, scope.sessionId, scope.turnId));
   };
 
   const failCapture = (
@@ -359,8 +381,7 @@ export function createTurnSnapshotStore(
       }
       const snapshotPaths =
         phase === 'after'
-          ? readTurn(pendingSessions ?? sessions, scope.sessionId, scope.turnId)
-              ?.snapshotPaths
+          ? (readTurn(pendingSessions ?? sessions, scope.sessionId, scope.turnId) ?? recordFor(scope))?.snapshotPaths
           : undefined;
       if (snapshotPaths !== undefined && snapshotPaths.length > 0) {
         const added = await addSnapshotPaths(root, snapshotPaths, env, deadline);
@@ -383,7 +404,7 @@ export function createTurnSnapshotStore(
       if (!TREE_OID.test(oid)) {
         return failCapture(scope, phase, 'invalid-tree-oid');
       }
-      const previousTree = readTurn(sessions, scope.sessionId, scope.turnId)?.[phase];
+      const previousTree = recordFor(scope)?.[phase];
       await persistPatch(scope, { [phase]: oid });
       dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot.capture',
         attributes: { ...scope, phase, tree: oid, previousTree: previousTree ?? null,
@@ -409,7 +430,7 @@ export function createTurnSnapshotStore(
     paths: readonly string[],
   ): Promise<void> => {
     if (disposed || storeDisabled || failedTurns.has(turnKey(scope))) return;
-    const record = readTurn(sessions, scope.sessionId, scope.turnId);
+    const record = recordFor(scope);
     if (record?.before === undefined) return;
     const root = getWorkspaceRoot();
     if (root === undefined) return;
@@ -422,7 +443,7 @@ export function createTurnSnapshotStore(
     let indexFile: string | undefined;
     try {
       await flushPending();
-      const persistedRecord = readTurn(sessions, scope.sessionId, scope.turnId);
+      const persistedRecord = recordFor(scope);
       if (persistedRecord?.before === undefined) {
         return;
       }
@@ -504,7 +525,7 @@ export function createTurnSnapshotStore(
     if (!isSafeWorkspaceRelativePath(path) || disposed || storeDisabled) {
       return undefined;
     }
-    const record = readTurn(sessions, scope.sessionId, scope.turnId);
+    const record = recordFor(scope);
     const oid = record?.[phase];
     if (oid === undefined) {
       return undefined;
@@ -559,7 +580,18 @@ export function createTurnSnapshotStore(
       if (closing) {
         return Promise.resolve(undefined);
       }
-      return enqueue(() => captureNow(scope, phase));
+      const key = turnKey(scope);
+      if (phase === 'before' && !running.has(key)) running.set(key, retain(scope));
+      return enqueue(async () => {
+        let captured: string | undefined;
+        try { captured = await captureNow(scope, phase); return captured; }
+        finally {
+          if (phase === 'after' || captured === undefined) {
+            running.get(key)?.();
+            running.delete(key);
+          }
+        }
+      });
     },
     capturePaths(scope, paths) {
       if (closing) {
@@ -568,7 +600,7 @@ export function createTurnSnapshotStore(
       return enqueue(() => capturePathsNow(scope, paths));
     },
     async diff(scope) {
-      const record = readTurn(sessions, scope.sessionId, scope.turnId);
+      const record = recordFor(scope);
       // Both trees are required: comparing a tree against the working
       // copy would need a populated index, and an empty one makes git
       // report every tracked file as deleted.
@@ -640,25 +672,46 @@ export function createTurnSnapshotStore(
     },
     readTreeBytes,
     read(sessionId, turnId) {
-      return cloneRecord(readTurn(sessions, sessionId, turnId));
+      return cloneRecord(turnId === undefined ? readTurn(sessions, sessionId) : recordFor({ sessionId, turnId }));
     },
     readTurns(sessionId) {
       return (sessions.get(sessionId) ?? []).map((record) => cloneRecord(record)!);
     },
+    retain,
     prune() {
       return enqueue(async () => {
         if (disposed || closing) {
           return;
         }
-        const snapshotSessions = pendingSessions ?? sessions;
-        const empty = snapshotSessions.size === 0;
+        await flushPending();
         const bytes = await directoryBytes(objectsDir, dependencies);
-        if (empty || bytes <= MAX_SNAPSHOT_OBJECT_BYTES) {
+        if (bytes <= MAX_SNAPSHOT_OBJECT_BYTES) return;
+        const roots = [...new Set([
+          ...[...sessions.values()].flat(), ...[...retained.values()].flatMap(entry => entry.record ? [entry.record] : []),
+        ].flatMap(record => [record.before, record.after].filter((oid): oid is string => oid !== undefined)))];
+        // A store with no records may belong to another live controller. Do not
+        // infer that its objects are disposable from an empty local index.
+        if (!roots.length) return;
+        const root = getWorkspaceRoot();
+        if (!root) return;
+        const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+        const resolved = await resolveLayout(root, deadline);
+        if (!resolved) return;
+        const result = await git(root, ['rev-list', '--objects', '--no-object-names', '--stdin'],
+          readEnv(resolved.repoObjectsDir), deadline, 32 * 1024 * 1024, Buffer.from(roots.join('\n') + '\n'));
+        if (result.code !== 0 || result.timedOut) {
+          dependencies.recordDiagnostic({ level: 'warn', name: 'host.changes.snapshot-prune-failed',
+            attributes: { reason: 'reachability-unavailable', retainedTrees: roots.length } });
           return;
         }
-        await dependencies.rm(objectsDir).catch(() => undefined);
-        await flushPending();
-        await persist(new Map());
+        const reachable = new Set(result.stdout.toString('utf8').trim().split(/\r?\n/));
+        if (roots.some(oid => !reachable.has(oid)) || [...reachable].some(oid => !TREE_OID.test(oid))) return;
+        const removed = await pruneSnapshotObjects(objectsDir, reachable, dependencies);
+        dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot-pruned',
+          attributes: { removed, retainedTrees: roots.length, bytesBefore: bytes } });
+      }).catch(error => {
+        dependencies.recordDiagnostic({ level: 'warn', name: 'host.changes.snapshot-prune-failed',
+          attributes: { reason: error instanceof Error ? error.message : 'object-cleanup-failed' } });
       });
     },
     dispose() {
@@ -669,6 +722,8 @@ export function createTurnSnapshotStore(
       disposeOutcome = queue.then(async () => {
         disposed = true;
         failedTurns.clear();
+        retained.clear();
+        running.clear();
         layout = undefined;
         if (persistenceFailed) {
           throw persistenceFailure;

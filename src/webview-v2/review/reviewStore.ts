@@ -32,6 +32,8 @@ export function reduceReviewUiMessage(
     return state;
   }
   switch (message.type) {
+    case 'review.branches':
+      return state;
     case 'review.state':
       return {
         ...state,

@@ -44,15 +44,15 @@ it('keeps navigation inside Review, rejects stale file responses and supports ra
     path: 'a.ts', version: 'a.ts', patch: '@@ -1 +1 @@\n-old\n+obsolete', truncated: false, error: null });
   expect(screen.getByText('selected')).toBeDefined();
   expect(screen.queryByText('obsolete')).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'More file actions' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Mark viewed & next' }));
-  expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.markReviewed', path: 'b.ts', version: 'b.ts', advance: true }));
+  await user.click(screen.getByRole('button', { name: 'Mark viewed' }));
+  expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.markReviewed', path: 'b.ts', version: 'b.ts', advance: false }));
   await user.click(screen.getByRole('combobox', { name: 'Comparison scope' }));
   await user.click(screen.getByRole('option', { name: 'Staged', exact: true }));
-  expect(port.postMessage).toHaveBeenCalledWith({ type: 'review.open', sessionId: 's1', scopeKind: 'staged' });
+  expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.open', sessionId: 's1', scopeKind: 'staged', requestId: expect.any(String) }));
+  const scopeRequest = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'review.open').at(-1)![0];
   send({ type: 'review.state', sequence: 3, state: scope });
-  expect(screen.getByText('Loading comparison…')).toBeDefined();
-  send({ type: 'review.state', sequence: 4, state: { ...scope, scopeKind: 'staged', reviewScopeId: 'staged1', baseline: 'head:index' } });
+  expect(screen.getByText(/Loading comparison…/)).toBeDefined();
+  send({ type: 'review.state', sequence: 4, requestId: scopeRequest.requestId, state: { ...scope, scopeKind: 'staged', reviewScopeId: 'staged1', baseline: 'head:index' } });
   expect(screen.getByRole('combobox', { name: 'Comparison scope' }).textContent).toBe('Staged');
   const context = screen.getByRole('button', { name: 'More file actions' });
   await user.click(context);
@@ -67,19 +67,20 @@ it('keeps navigation inside Review, rejects stale file responses and supports ra
 it('requires explicit staged selection and preserves the commit draft after a failure', () => {
   const port = { postMessage: vi.fn() };
   render(<ReviewCommit port={port} sessionId="s1" onClose={vi.fn()} />);
-  send({ type: 'git.status', sequence: 0, sessionId: 's1', turnId: 'review', branch: 'main',
+  send({ type: 'git.status', sequence: 0, sessionId: 's1', turnId: 'review', branch: 'main', snapshotId: 'commit-preview',
     files: [{ path: 'a.ts', status: 'modified', staged: true, inTurn: false }] });
   fireEvent.change(screen.getByRole('textbox', { name: 'Commit message' }), { target: { value: 'fix: reviewed files' } });
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Commit selected files' }).disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Commit selected files' }));
-  expect(port.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.commit', paths: ['a.ts'], message: 'fix: reviewed files' });
+  expect(port.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.commit', paths: ['a.ts'], message: 'fix: reviewed files', snapshotId: 'commit-preview', mode: 'files' });
   send({ type: 'git.commitResult', sequence: 0, sessionId: 's1', turnId: 'review', ok: false, error: 'Hook failed' });
   expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Commit message' }).value).toBe('fix: reviewed files');
   expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('true');
   expect(screen.getByRole('alert').textContent).toBe('Hook failed');
 });
-it('offers undo only for AI operations and requires a conflict-free preview for the recorded version', () => {
+it('offers undo only for AI operations and requires a conflict-free preview for the recorded version', async () => {
+  const user = userEvent.setup();
   const port = { postMessage: vi.fn() };
   render(<ReviewApp port={port} />);
   send(target);
@@ -89,12 +90,18 @@ it('offers undo only for AI operations and requires a conflict-free preview for 
   const turn = { ...scope, scopeKind: 'operations', baseline: 'operations-t1', turnId: 't1', files: [
     { ...scope.files[0]!, restorable: true },
   ], reviewableCount: 1 };
+  send({ ...target, resetReview: true });
   send({ type: 'review.state', sequence: 2, state: turn });
   const request = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'reviewPanel.readFile').at(-1)![0];
   send({ type: 'reviewPanel.file', requestId: request.requestId, reviewScopeId: turn.reviewScopeId,
     path: 'a.ts', version: 'a.ts', patch: '', truncated: false, error: null,
     recordedOperations: [{ toolUseId: 'applied', source: 'tool-result', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' }] });
-  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
+  const selectedRequest = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'reviewPanel.readFile').at(-1)![0];
+  send({ type: 'reviewPanel.file', requestId: selectedRequest.requestId, reviewScopeId: turn.reviewScopeId,
+    path: 'a.ts', version: 'a.ts', patch: '', truncated: false, error: null,
+    recordedOperations: [{ toolUseId: 'applied', source: 'tool-result', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' }] });
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Undo this file…' }));
   expect(port.postMessage).toHaveBeenCalledWith({
     type: 'review.restorePreview', sessionId: 's1', reviewScopeId: 'scope1',
     baseline: 'operations-t1', target: 'file', path: 'a.ts', version: 'a.ts',
@@ -126,11 +133,11 @@ it('shows historical excerpts with working change navigation instead of inapplic
       { toolUseId: 'legacy', patch: '@@ -1 +1 @@\n-older\n+after' },
     ] });
   expect(screen.getByText('Edit 1 of 3')).toBeDefined();
-  expect(screen.getByText(/Full file comparison unavailable/)).toBeDefined();
+  expect(screen.queryByText(/Full file comparison unavailable/)).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Edit history' }));
   expect(screen.getAllByText('Input only · Saved patch')).toHaveLength(2);
   await user.click(screen.getByRole('menuitem', { name: 'Show all saved excerpts' }));
-  expect(screen.getByText(/Saved change excerpts in order/)).toBeDefined();
+  expect(screen.getByText(/Saved change excerpts in execution order/)).toBeDefined();
   expect(screen.getByText('before')).toBeDefined();
   expect(screen.getByText('after')).toBeDefined();
   for (const name of ['Native Diff', 'Undo file operations…', 'Undo turn operations…', 'Mark & next'])

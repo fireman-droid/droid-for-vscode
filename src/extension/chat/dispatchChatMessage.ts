@@ -239,6 +239,7 @@ export function dispatchChatMessage(
       handleFileOpenTurnDiff(controller, message);
       return;
     case 'review.open':
+    case 'review.listBranches':
     case 'review.navigate':
     case 'review.selectFile':
     case 'review.markReviewed':
@@ -420,6 +421,8 @@ export function dispatchChatMessage(
         message.turnId,
         message.paths,
         message.message,
+        message.snapshotId,
+        message.mode,
       );
       return;
     case 'terminal.openMirror':

@@ -17,6 +17,7 @@ import type { ToolExecutionPhase } from '../../shared/protocol/operationDiff';
 import type { ReviewSdkPatch } from './reviewSdkPatch';
 
 export interface PersistedScope {
+  readonly baseBranch?: string;
   readonly reviewScopeId: string;
   readonly sessionId: string;
   readonly scopeKind: ReviewScopeKind;
@@ -36,6 +37,7 @@ export interface ScopeFile extends CommittedFileStat {
 }
 
 export interface ActiveScope {
+  baseBranch?: string;
   operationUndoBlocked?: string;
   sdkPatches?: ReadonlyMap<string, ReviewSdkPatch>;
   recordedOperations?: readonly {
@@ -50,6 +52,7 @@ export interface ActiveScope {
     previousPath?: string;
     patch: string;
     submittedContent?: string;
+    bodyRef?: OperationDiffFile['bodyRef'];
     contentRestricted?: true;
     kind: OperationDiffFile['kind'];
     outcome?: OperationDiffFile['outcome'];
@@ -119,6 +122,7 @@ export function createActiveScope(
     reviewScopeId,
     sessionId: message.sessionId,
     scopeKind: message.scopeKind,
+    ...(message.baseBranch === undefined ? {} : { baseBranch: message.baseBranch }),
     ...(message.turnId === undefined ? {} : { turnId: message.turnId }),
     baseline,
     baselineLabel,

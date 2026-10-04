@@ -70,7 +70,7 @@ Ollama 等服务，Next Edit 已接入 Mercury。从状态栏可以暂停、恢�
 
 1. 打开 [最新版本](https://github.com/fireman-droid/droid-for-vscode/releases/latest)，
    在 **Assets** 下载 `droid-版本号.vsix`。当前版本为
-   [droid-0.8.2.vsix](https://github.com/fireman-droid/droid-for-vscode/releases/download/v0.8.2/droid-0.8.2.vsix)。
+   [droid-0.8.3.vsix](https://github.com/fireman-droid/droid-for-vscode/releases/download/v0.8.3/droid-0.8.3.vsix)。
 2. 在编辑器扩展面板的 `…` 菜单中选择 **Install from VSIX…**，安装下载的文件。
 3. 执行 **Developer: Reload Window**，再运行 **Droid: Open Chat** 打开侧栏。
 

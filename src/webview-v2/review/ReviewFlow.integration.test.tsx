@@ -27,6 +27,7 @@ beforeEach(() => {
   HTMLElement.prototype.hasPointerCapture = () => false;
   HTMLElement.prototype.setPointerCapture = () => {};
   HTMLElement.prototype.releasePointerCapture = () => {};
+  window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
 });
 
 vi.mock('vscode', () => {
@@ -114,26 +115,29 @@ it('round-trips snapshot review and guarded confirmed-operation undo through Hos
   render(<ReviewApp port={port} />);
   deliver({ type: 'reviewPanel.context', sessionId: 's1', valid: true, latestTurnId: 't1', operation: null, operationPath: null });
   coordinator.handle({ type: 'review.open', ...turn, scopeKind: 'turn' });
-  await screen.findByText('changed a');
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for a.ts' }).textContent).toContain('changed a'));
   expect(state?.files[0]?.version).not.toBe('unavailable');
-  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark & next' }).disabled).toBe(false));
-  fireEvent.click(screen.getByRole('button', { name: 'Mark & next' }));
-  await screen.findByText('changed b');
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark viewed' }).disabled).toBe(false));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Mark viewed & next' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for b.ts' }).textContent).toContain('changed b'));
   expect(state?.reviewedCount).toBe(1);
   expect(state?.currentIndex).toBe(1);
   expect(screen.queryByRole('button', { name: 'Undo file operations…' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Undo turn operations…' })).toBeNull();
   await user.click(screen.getByRole('combobox', { name: 'Comparison scope' }));
-  await user.click(screen.getByRole('option', { name: 'AI operations', exact: true }));
-  await screen.findByText('changed a');
+  await user.click(screen.getByRole('option', { name: 'Recorded edits', exact: true }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for a.ts' }).textContent).toContain('changed a'));
   expect(state?.scopeKind).toBe('operations');
-  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark & next' }).disabled).toBe(false));
-  fireEvent.click(screen.getByRole('button', { name: 'Mark & next' }));
-  await screen.findByText('changed b');
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Mark all file edits viewed' }).disabled).toBe(false));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Mark all file edits viewed & next' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for b.ts' }).textContent).toContain('changed b'));
   expect(state?.reviewedCount).toBe(1);
   expect(state?.currentIndex).toBe(1);
   await writeFile(b, 'changed b\nmanual note\n');
-  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Undo this file…' }));
   await screen.findByRole('button', { name: 'Confirm restore' });
   await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm restore' }).disabled).toBe(false));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
@@ -141,10 +145,12 @@ it('round-trips snapshot review and guarded confirmed-operation undo through Hos
   expect(await readFile(b, 'utf8')).toBe('original b\nmanual note\n');
   expect(await readFile(a, 'utf8')).toBe('changed a\n');
   // Recorded evidence stays readable after undo; unrelated manual text is preserved.
-  await screen.findByText('changed b');
-  fireEvent.click(screen.getByRole('button', { name: 'Previous file' }));
-  await screen.findByText('changed a');
-  fireEvent.click(screen.getByRole('button', { name: 'Undo file operations…' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for b.ts' }).textContent).toContain('changed b'));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Previous file' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Diff for a.ts' }).textContent).toContain('changed a'));
+  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Undo this file…' }));
   await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm restore' }).disabled).toBe(false));
   await writeFile(a, 'newer user edit\n');
   fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));

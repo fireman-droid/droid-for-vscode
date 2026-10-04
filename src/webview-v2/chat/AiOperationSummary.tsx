@@ -8,17 +8,18 @@ export { summarizeOperations, type OperationSummary } from './operationSummary';
 export function AiOperationSummary({ summary, onInteract }: { readonly summary: OperationSummary; readonly onInteract?: () => void }) {
   const context = useContext(InlineDiffContext);
   if (summary.files.size === 0) return null;
-  const connected = context?.connected && context.sessionId;
+  const connected = !!context?.sessionId;
   const contentRestricted = [...summary.files.values()].some((file) =>
     file.records.some((record) => record.contentRestricted));
-  const open = (path?: string, action?: 'undo') => {
-    if (context?.connected && context.sessionId) context.port.postMessage({
-      type: 'review.panel.open', sessionId: context.sessionId, scopeKind: 'operations', turnId: summary.turnId,
+  const open = (path?: string, action?: 'undo', scopeKind: 'turn' | 'operations' = 'turn') => {
+    if (context?.sessionId) context.port.postMessage({
+      type: 'review.panel.open', sessionId: context.sessionId, scopeKind: action ? 'operations' : scopeKind, turnId: summary.turnId,
       ...(path ? { path } : {}), ...(action ? { action } : {}),
     });
   };
   return <ChangeSummaryView files={[...summary.files.values()]} onInteract={onInteract}
     onReview={connected ? () => open() : undefined} onUndo={connected ? () => open(undefined, 'undo') : undefined}
+    onReviewEdits={connected ? () => open(undefined, undefined, 'operations') : undefined}
     undoDisabled={contentRestricted}
     undoReason={contentRestricted ? 'Some file content is restricted. Review individual files to undo available operations.' : undefined}
     onSelectFile={connected ? (path) => open(path) : undefined}

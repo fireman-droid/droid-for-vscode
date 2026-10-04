@@ -335,8 +335,11 @@
     background: transparent; box-shadow: none; transform: none;
     transition: color var(--motion-fast) var(--motion-ease);
   }
-  .dvx-change-file-header > .dvx-change-row:is(:hover, :active, :focus-visible, [data-state='open']),
-  .dvx-change-file-action:is(:hover, :active, :focus-visible) { background: transparent; color: var(--ink); }
+  .dvx-change-file-header > .dvx-change-row:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--ink) 4%, transparent); color: var(--ink);
+  }
+  .dvx-change-file-header > .dvx-change-row:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .dvx-change-file-action:is(:hover, :active, :focus-visible) { color: var(--ink); }
   .dvx-change-file-action:hover { text-decoration: underline; text-underline-offset: 2px; }
   .dvx-change-action:focus-visible, .dvx-change-row:focus-visible, .dvx-change-more:focus-visible, .dvx-change-file-action:focus-visible {
     outline: 1px solid var(--focus); outline-offset: -2px;
