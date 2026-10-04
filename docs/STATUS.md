@@ -9,6 +9,15 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 引用预览主题配色
+
+- 共享 QuoteChips 的引用正文显式使用透明背景和弹层文字色，修复浅色主题下混入
+  VS Code 默认深色引用背景、文字几乎不可读的问题；覆盖主聊天、BTW、队列及只读 Viewer。
+- `pnpm run package:vsix` 通过（含 typecheck、lint:budgets、公共 UI 与扩展构建），
+  VSIX 166 条目校验通过，已全局安装 Microsoft VS Code；需 Reload Window 加载。
+  未新增或运行测试、浏览器自动化，实际视觉待用户验收。
+- 此修复为 0.8.3 发布后的源码与本地安装更新；GitHub v0.8.3 正式附件未替换。
+
 ## v0.8.3 Diff 改造
 
 - [v0.8.3 Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.3)

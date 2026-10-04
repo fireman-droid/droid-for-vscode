@@ -34,7 +34,7 @@ export function QuoteChips({ quotes, onRemove, className }: QuoteChipsProps) {
         <PopoverContent side="top" align="start" sideOffset={6} collisionPadding={0} aria-label={label}
           className="w-[var(--radix-popover-trigger-width)] max-w-[var(--radix-popover-content-available-width)] p-3">
           <p className="mb-2 select-none text-[11px] font-medium text-muted-foreground">{label}</p>
-          <blockquote tabIndex={0} aria-label="Full quoted text" className="max-h-[min(320px,50vh)] select-text overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">{text}</blockquote>
+          <blockquote tabIndex={0} aria-label="Full quoted text" className="max-h-[min(320px,50vh)] select-text overflow-auto whitespace-pre-wrap bg-transparent text-popover-foreground [overflow-wrap:anywhere] text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">{text}</blockquote>
         </PopoverContent>
       </Popover>;
     })}
