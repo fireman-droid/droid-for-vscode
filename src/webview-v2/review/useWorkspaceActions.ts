@@ -1,6 +1,5 @@
 import { useCallback, type Dispatch } from 'react';
 import { post, type ChatPort } from '../host/chatIntent';
-import { MAX_INLINE_PREVIEW_HTML_LENGTH } from '../../shared/bridgeMessages';
 import type { PathLink } from '@droidvisx/chat-ui/markdown/pathLink';
 import { type AssistantWebviewAction } from '../state/types';
 
@@ -82,47 +81,12 @@ export function useWorkspaceActions({
     },
     [sessionId, connectionStatus, vscode],
   );
-  const handlePreviewFile = useCallback(
-    (path: string): void => {
-      if (sessionId === null || connectionStatus !== 'connected') {
-        return;
-      }
-      post(vscode, { type: 'file.preview', sessionId, path });
-    },
-    [sessionId, connectionStatus, vscode],
-  );
   const handleOpenTerminalMirror = useCallback((): void => {
     if (sessionId === null || connectionStatus !== 'connected') {
       return;
     }
     post(vscode, { type: 'terminal.openMirror', sessionId });
   }, [sessionId, connectionStatus, vscode]);
-  // Webview side of the dual-side limit: the code-block entry is
-  // already disabled above MAX_INLINE_PREVIEW_HTML_LENGTH, so this
-  // guard only drops payloads a stale DOM could still submit.
-  const handlePreviewInlineHtml = useCallback(
-    (
-      html: string,
-      artifact: { readonly artifactId: string; readonly title: string },
-    ): void => {
-      if (
-        sessionId === null ||
-        connectionStatus !== 'connected' ||
-        html.length === 0 ||
-        html.length > MAX_INLINE_PREVIEW_HTML_LENGTH
-      ) {
-        return;
-      }
-      post(vscode, {
-        type: 'preview.inlineHtml',
-        sessionId,
-        html,
-        artifactId: artifact.artifactId,
-        title: artifact.title,
-      });
-    },
-    [sessionId, connectionStatus, vscode],
-  );
   const handleOpenPath = useCallback(
     (link: PathLink): void => {
       if (sessionId === null || connectionStatus !== 'connected') {
@@ -144,9 +108,7 @@ export function useWorkspaceActions({
     handleGitCommit,
     handleOpenFileDiff,
     handleOpenReviewTurn,
-    handlePreviewFile,
     handleOpenTerminalMirror,
-    handlePreviewInlineHtml,
     handleOpenPath,
   };
 }

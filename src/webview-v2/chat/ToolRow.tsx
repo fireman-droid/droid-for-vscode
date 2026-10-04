@@ -4,7 +4,6 @@ import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
 import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
 import { resolveToolAction } from '../../shared/transcript/toolActivity';
-import { isPreviewableFilePath } from '../../shared/validation/guards';
 import { classifyExploreTool } from './transcript/activityGrouping';
 import { useProcessDisclosure } from './transcript/processPresentation';
 import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
@@ -12,7 +11,6 @@ import { formatDuration, formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
 import { OperationDiff } from '../content/OperationDiff';
-import { useContent } from '../content/context';
 import { useToolActions } from '../content/toolActions';
 import { Button } from '../ui/button';
 import { CommandCard } from './CommandCard';
@@ -36,7 +34,6 @@ function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
 
 export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperations = false, onInteract }: { readonly item: ToolTranscriptItem; readonly messageId: string; readonly grouped?: boolean; readonly hideConfirmedOperations?: boolean; readonly onInteract?: () => void }) {
   const actions = useToolActions();
-  const content = useContent();
   const inlineDiff = useContext(InlineDiffContext);
   const command = item.detailKind === 'command' ? item.detail : undefined;
   const running = item.status === 'running';
@@ -66,12 +63,9 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const activityActions = <>
     {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={`Open ${currentFile}`} aria-label="Open current file"
       onClick={() => actions.openPath!({ path: currentFile })}><ExternalLink className="size-3" /></Button> : null}
-    {item.filePath && item.status === 'completed' && isPreviewableFilePath(item.filePath) && content.actions?.previewFile
-      ? <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10.5px]" onClick={() => content.actions!.previewFile?.(item.filePath!)}>Canvas</Button> : null}
   </>;
   const fileActions = <>
     {currentFile && actions.openPath ? <Button variant="link" size="sm" className="h-auto select-none px-1 text-[11px]" title={`Open ${currentFile}`} aria-label="Open current file" onClick={() => actions.openPath!({ path: currentFile })}>{currentFile.split(/[\\/]/).at(-1)}</Button> : null}
-    {item.filePath && item.status === 'completed' && isPreviewableFilePath(item.filePath) && content.actions?.previewFile ? <Button variant="ghost" size="sm" onClick={() => content.actions!.previewFile?.(item.filePath!)}>Canvas</Button> : null}
   </>;
   const activityDetail = available !== null || unavailable !== null || !!output || !!errorMessage ? <>
     {available ? <ActivityResult preview={available} /> : null}

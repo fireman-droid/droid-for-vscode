@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { AssistantWebviewState } from '../state/types';
 import { createTurnId } from '../host/chatIntent';
 import { findMentionToken, findSlashToken, getSlashMatches, splitMentionPath, type MentionToken, type SlashEntry, type SlashToken } from './composer/composerCommands';
-import { CANVAS_REQUEST_TEMPLATE, type SlashNavTarget } from './composer/slashBuiltins';
+import type { SlashNavTarget } from './composer/slashBuiltins';
 import { PopoverContent } from '../ui/overlays';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
@@ -69,8 +69,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     const name = entry.kind === 'command' ? entry.command.name : entry.name;
     const navigate = entry.kind === 'nav';
     const btw = entry.kind === 'builtin' && entry.name === 'btw';
-    const prefix = navigate || btw ? '' : entry.kind === 'skill' ? `Use the "${entry.name}" skill: `
-      : entry.kind === 'builtin' && entry.name === 'canvas' ? CANVAS_REQUEST_TEMPLATE : `/${name} `;
+    const prefix = navigate || btw ? '' : entry.kind === 'skill' ? `Use the "${entry.name}" skill: ` : `/${name} `;
     onChange(prefix + draft.slice(slash.end));
     dismiss();
     if (navigate) onNavigate(entry.name);

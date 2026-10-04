@@ -1,10 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChevronRight, RefreshCw, Unplug } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import { announceReady } from '../bridge/vscode';
 import type { ChatPort } from '../host/chatIntent';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+
+function RecoveryHelp() {
+  return <Collapsible>
+    <CollapsibleTrigger asChild>
+      <Button variant="ghost" size="sm" className="group -ml-1.5 h-auto whitespace-normal px-1.5 py-1 text-left">
+        <ChevronRight aria-hidden="true" className="transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
+        Still unresponsive?
+      </Button>
+    </CollapsibleTrigger>
+    <CollapsibleContent className="pt-1">
+      <p>Use the editor’s Reload Window command. Copy any unsent edits and reattach files after reloading.</p>
+    </CollapsibleContent>
+  </Collapsible>;
+}
 
 function useLongWait(waiting: boolean, delay = 5_000) {
   const [elapsed, setElapsed] = useState(false);
@@ -44,8 +60,8 @@ function RefreshSessionState({ port, sequence, conversationId, sessionId }: {
       request.current = null;
     };
   }, [port, conversationId, sessionId]);
-  return <div className="space-y-1 text-xs text-muted-foreground">
-    <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs" disabled={pending} onClick={() => {
+  return <div className="space-y-2 text-xs text-muted-foreground">
+    <Button variant="outline" size="sm" className="h-auto min-h-7 max-w-full whitespace-normal py-1 text-left" disabled={pending} onClick={() => {
       if (request.current !== null) return;
       setPending(true);
       setOutcome(null);
@@ -55,11 +71,11 @@ function RefreshSessionState({ port, sequence, conversationId, sessionId }: {
         setOutcome('timeout');
       }, 10_000) };
       announceReady(port);
-    }}>{pending ? 'Waiting for session state…' : 'Refresh session state'}</Button>
+    }}><RefreshCw aria-hidden="true" className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} />{pending ? 'Waiting for session state…' : 'Refresh session state'}</Button>
     {outcome === 'received' ? <p role="status">Latest host state received.</p> : null}
     {outcome === 'timeout' ? <p role="status">No session state received after 10 seconds. You can refresh again.</p> : null}
-    <p>Requests the current state without reloading this view, restarting a session, or resending a message.</p>
-    <p>If it remains unresponsive, use the editor’s Reload Window command. Copy any unsent edits and reattach files after reloading.</p>
+    <p>Fetches the latest state without restarting your session or resending a message.</p>
+    <RecoveryHelp />
   </div>;
 }
 
@@ -82,15 +98,15 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
     : connection.status === 'connecting' ? 'Connecting to Droid…'
     : !hasSnapshot ? 'Waiting for the session state…' : 'Opening conversation…';
   return <div className="absolute inset-x-0 bottom-0 top-10 z-20 grid place-content-center bg-background/95 p-4 text-center">
-    <div className="mx-auto max-w-sm space-y-3 text-xs">
-      <div role={connection.status === 'unavailable' ? 'alert' : 'status'} className="flex items-center justify-center gap-2">
+    <section aria-label="Session recovery" className="mx-auto w-full max-w-sm space-y-3 rounded-xl border border-[var(--panel-edge)] bg-background p-3 text-left text-xs leading-relaxed [overflow-wrap:anywhere]">
+      <div role={connection.status === 'unavailable' ? 'alert' : 'status'} className="flex items-center gap-2 font-medium">
         {waiting && connection.status !== 'unavailable' ? <DroidActivity phase="loading" /> : null}<span>{label}</span>
       </div>
       {connection.message ? <p className="text-muted-foreground">{connection.message}</p> : null}
       {longWait && phase === 'restoring' && connection.status !== 'unavailable'
         ? <p className="text-muted-foreground">Restoring your session. State refreshes automatically.</p> : null}
       {recoveryNeeded || connection.status === 'unavailable' ? <RefreshSessionState port={port} sequence={sequence} conversationId={conversationId} sessionId={sessionId} /> : null}
-    </div>
+    </section>
   </div>;
 }
 
@@ -117,17 +133,19 @@ export function SessionRecovery({ state, blocked, onReconnect, port }: {
   const failed = state.connection.status === 'unavailable';
   const working = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   if (blocked || (!failed && !pending && !connecting && !reconnectingIde)) return null;
-  return <div className="space-y-1 text-xs text-muted-foreground">
-    {pending || connecting || reconnectingIde ? <p role="status" className="flex items-center gap-2"><DroidActivity phase="loading" />{reconnectingIde ? state.ide.message : 'Waiting for the Droid session…'}</p> : null}
+  return <section aria-label="Session recovery" className="mb-2 min-w-0 space-y-2 rounded-xl border border-[var(--panel-edge)] bg-background px-3 py-2.5 text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+    {pending || connecting || reconnectingIde
+      ? <p role="status" className="flex items-start gap-2 font-medium text-foreground"><span className="mt-0.5 shrink-0"><DroidActivity phase="loading" /></span><span>{reconnectingIde ? state.ide.message ?? 'Reconnecting to the IDE…' : 'Waiting for the Droid session…'}</span></p>
+      : <p className="flex items-center gap-2 font-medium text-foreground"><Unplug aria-hidden="true" className="size-3.5 shrink-0" />Session disconnected</p>}
     {failed && !reconnectingIde ? <>
-      <Button variant="link" size="sm" className="h-auto px-0 py-1 text-xs" disabled={pending || connecting || working || loadingCatalog} onClick={() => {
+      <Button variant="outline" size="sm" className="h-auto min-h-7 max-w-full whitespace-normal py-1 text-left" disabled={pending || connecting || working || loadingCatalog} onClick={() => {
         if (pendingAfter.current !== null || connecting || working || loadingCatalog) return;
         pendingAfter.current = state.sequence;
         setPending(true);
         onReconnect();
-      }}>Reconnect Droid session</Button>
+      }}><RefreshCw aria-hidden="true" />Reconnect Droid session</Button>
       <p>Opens or resumes your Droid session. Your previous message is not resent.</p>
     </> : null}
     {longWait ? <RefreshSessionState port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} /> : null}
-  </div>;
+  </section>;
 }

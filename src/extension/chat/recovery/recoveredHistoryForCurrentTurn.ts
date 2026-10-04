@@ -27,6 +27,19 @@ export function recoveredHistoryForCurrentTurn(
   }) };
 }
 
+/** Only the latest persisted message can supply newly pending calls. Older
+ * unmatched calls may really have been interrupted; never revive them. */
+export function restorePendingTools(
+  history: HostTranscriptState,
+  ancestry: readonly HistoryMessageAncestry[] | undefined,
+): HostTranscriptState {
+  const latest = ancestry?.at(-1);
+  if (latest === undefined || latest.startsTurn) return history;
+  return { ...history, transcript: history.transcript.map(item =>
+    item.kind === 'tool' && item.turnId === latest.projectedTurnId && item.status === 'stopped'
+      ? { ...item, status: 'running' } : item) };
+}
+
 /** New user/system request boundaries cannot inherit ownership from an earlier turn. */
 function descendantTurns(ancestry: readonly HistoryMessageAncestry[], root: string): Set<string> {
   const messages = new Map(ancestry.map(message => [message.messageId, message]));

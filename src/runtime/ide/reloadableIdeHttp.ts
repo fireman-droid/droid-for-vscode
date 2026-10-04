@@ -75,15 +75,20 @@ export function envelope(body: Buffer | null): Record<string, unknown> | null {
 }
 
 export function initializeResult(body: Buffer | null, id: string | number): boolean {
-  if (!body) return false;
+  return typeof controlResult(body, id)?.protocolVersion === 'string';
+}
+
+export function controlResult(body: Buffer | null, id: string | number): Record<string, unknown> | null {
+  if (!body) return null;
   const candidates = [envelope(body), ...body.toString('utf8').split(/\r?\n\r?\n/u).map((frame) => {
     const data = frame.split(/\r?\n/u).filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trimStart()).join('\n');
     return envelope(Buffer.from(data));
   })];
-  return candidates.some((value) => value?.jsonrpc === '2.0' && value.id === id &&
+  const response = candidates.find((value) => value?.jsonrpc === '2.0' && value.id === id &&
     value.error === undefined && value.result !== null && typeof value.result === 'object' &&
-    typeof (value.result as Record<string, unknown>).protocolVersion === 'string');
+    !Array.isArray(value.result));
+  return response?.result as Record<string, unknown> | undefined ?? null;
 }
 
 export async function sendControl(port: number, handshake: IdeHandshake, signal: AbortSignal, sessionId?: string): Promise<{

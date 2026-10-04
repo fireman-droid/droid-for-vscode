@@ -4,7 +4,7 @@ import type { RootContent } from 'hast';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { normalizeMathDelimiters } from '../markdown/mathNormalization';
-import { decodeImagePath, isSafeMarkdownUrl, previewablePathOf } from '../markdown/markdownPolicy';
+import { decodeImagePath, isSafeMarkdownUrl } from '../markdown/markdownPolicy';
 import { detectPathLink } from '../markdown/pathLink';
 import { useLocalImageVisit } from './useLocalImageVisit';
 import { CodeBlock } from './CodeBlock';
@@ -40,21 +40,17 @@ function MarkdownPre({ children }: ComponentProps<'pre'>) {
 }
 
 function InlineCode({ children }: ComponentProps<'code'>) {
-  const { actions, workspaceRoot } = useContent();
+  const { actions } = useContent();
   const { thinking } = useContext(MarkdownState);
   const path = actions?.openPath && !thinking ? detectPathLink(nodeText(children)) : null;
-  const preview = actions?.previewFile && path ? previewablePathOf({ workspaceRoot, previewFile: actions.previewFile }, path) : null;
-  return <>
-    <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]">
-      {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="text-link hover:underline">
-        <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={`Open ${path.path}`}
-          onClick={(event) => { event.preventDefault(); if (!isTextSelectionClick(event)) actions.openPath?.(path); }}>
-          {nodeText(children).split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
-        </a>
-      </Button> : children}
-    </code>
-    {preview && actions ? <Button variant="plain" size="none" className="ml-1 rounded border border-[var(--panel-edge)] px-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground active:bg-[var(--control-surface-active)]" title={`Open ${preview} in Canvas`} onClick={() => actions.previewFile?.(preview)}>Canvas</Button> : null}
-  </>;
+  return <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]">
+    {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="text-link hover:underline">
+      <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={`Open ${path.path}`}
+        onClick={(event) => { event.preventDefault(); if (!isTextSelectionClick(event)) actions.openPath?.(path); }}>
+        {nodeText(children).split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
+      </a>
+    </Button> : children}
+  </code>;
 }
 
 function MarkdownImage({ src, alt }: ComponentProps<'img'>) {

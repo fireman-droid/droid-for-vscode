@@ -1,15 +1,63 @@
 import { createServer, request } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createReloadableIdeEndpoint } from './reloadableIdeEndpoint';
 import { createNativeIdeRelay } from './nativeIdeRelay';
 
 const disposals: Array<() => Promise<void>> = [];
-afterEach(async () => { await Promise.all(disposals.splice(0).map((dispose) => dispose())); });
+afterEach(async () => { await Promise.all(disposals.splice(0).map((dispose) => dispose())); vi.useRealTimers(); });
 const initialize = (name: string) => ({ jsonrpc: '2.0', id: 1, method: 'initialize',
   params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name, version: '1.0.0' } } });
 
 describe('reloadable native IDE endpoint', () => {
+  it('renews root and child liveness from real IDE discovery after the server heartbeat phase resets', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    const first = await fixture('first');
+    const next = await fixture('next', false, false);
+    next.refreshContextOnDiscovery();
+    const endpoint = await createReloadableIdeEndpoint({ upstreamPort: first.port, recoveryTimeoutMs: 2_000 });
+    const relay = await createNativeIdeRelay({ sessionId: 'chat', upstreamPort: endpoint.port, timeoutMs: 2_000 });
+    disposals.push(endpoint.dispose, () => relay.dispose());
+    const root = await handshake(relay.port, 'factory-cli-mcp-client');
+    const child = await handshake(relay.port, 'child');
+    const rootEvents = await events(relay.port, root);
+    const childEvents = await events(relay.port, child);
+    await rpc(relay.port, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, root);
+    await relay.waitUntilReady();
+    await childEvents.waitFor('first-child');
+    vi.advanceTimersByTime(40_000);
+    await first.close();
+    await endpoint.updateUpstream(next.port);
+    await rootEvents.waitFor('notifications/heartbeat');
+    await childEvents.waitFor('notifications/heartbeat');
+    expect(rootEvents.text()).toContain('next-factory-cli-mcp-client');
+    expect(childEvents.text()).toContain('next-child');
+    expect(next.calls.filter(call => call.method === 'tools/list').map(call => call.client).sort())
+      .toEqual(['child', 'factory-cli-mcp-client']);
+    vi.advanceTimersByTime(40_000);
+    expect(relay.read().status).toBe('connected');
+    expect(endpoint.read()).toBe('connected');
+    expect(rootEvents.closed()).toBe(false);
+    expect(childEvents.closed()).toBe(false);
+    expect(next.calls.some(call => call.method === 'tools/call')).toBe(false);
+  });
+
+  it('does not renew heartbeats when editor events arrive but discovery fails', async () => {
+    const first = await fixture('first');
+    const next = await fixture('next', false, false);
+    next.refreshContextOnDiscovery();
+    next.rejectDiscovery();
+    const endpoint = await createReloadableIdeEndpoint({ upstreamPort: first.port, recoveryTimeoutMs: 100 });
+    disposals.push(endpoint.dispose);
+    const id = await handshake(endpoint.port, 'root');
+    const stream = await events(endpoint.port, id);
+    await stream.waitFor('first-root');
+    await expect(endpoint.updateUpstream(next.port)).rejects.toThrow('could not be restored');
+    expect(stream.text()).toContain('next-root');
+    expect(stream.text()).not.toContain('notifications/heartbeat');
+    expect(endpoint.read()).toBe('error');
+  });
+
   it('preserves the native relay handshake and stream when the editor service reloads', async () => {
     const first = await fixture('first');
     const next = await fixture('next');
@@ -226,6 +274,8 @@ async function fixture(prefix: string, holdTools = false, sendInitialEvent = tru
   let closed = false;
   let sseInitialization = false;
   let rejectedClient: string | undefined;
+  let refreshContext = false;
+  let discoveryFails = false;
   const server = createServer((request, response) => {
     const id = typeof request.headers['mcp-session-id'] === 'string' ? request.headers['mcp-session-id'] : undefined;
     if (request.method === 'GET') {
@@ -253,7 +303,14 @@ async function fixture(prefix: string, holdTools = false, sendInitialEvent = tru
       } else if (message.method === 'notifications/initialized') response.writeHead(202).end();
       else {
         const reply = () => {
+          if (message.method === 'tools/list' && refreshContext) {
+            streams.get(id!)?.write(`data: ${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/openFiles', params: { files: [id] } })}\n\n`);
+          }
           response.writeHead(200, { 'content-type': 'application/json' });
+          if (message.method === 'tools/list' && discoveryFails) {
+            response.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: 'IDE failed' } }));
+            return;
+          }
           response.end(JSON.stringify({ jsonrpc: '2.0', id: message.id,
             result: message.method === 'tools/list' ? { tools: [] } : { session: id } }));
         };
@@ -273,6 +330,8 @@ async function fixture(prefix: string, holdTools = false, sendInitialEvent = tru
   return { port, calls, close, streamCount: () => streams.size,
     releaseTools: () => { for (const reply of heldTools.splice(0)) reply(); },
     useSseInitialization: () => { sseInitialization = true; },
+    refreshContextOnDiscovery: () => { refreshContext = true; },
+    rejectDiscovery: () => { discoveryFails = true; },
     rejectClient: (client: string) => { rejectedClient = client; },
     emit: (client: string, event: unknown) => streams.get(`${prefix}-${client}`)?.write(`data: ${JSON.stringify(event)}\n\n`) };
 }

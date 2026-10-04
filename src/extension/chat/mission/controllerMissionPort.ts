@@ -17,6 +17,7 @@ export interface ControllerPort
     | 'emitSnapshot'
     | 'emit'
     | 'emitSessionDiagnostic'
+    | 'recordHost'
   > {
   readonly sessionState: Readonly<
     Pick<SessionLifecycleState, 'connection' | 'managedRuntimes' | 'disposed' | 'conversationId' | 'sessionId'>
@@ -32,7 +33,7 @@ export interface ControllerPort
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<
     MissionSessionState,
-    'mission' | 'missionRuntime' | 'missionStartInProgress' | 'stopMissionSubscription'
+    'mission' | 'missionRuntime' | 'missionStartInProgress' | 'stopMissionSubscription' | 'refreshMission'
   >;
   readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata' | 'commitSessionBinding'>;
 }

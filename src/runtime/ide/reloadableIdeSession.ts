@@ -1,6 +1,6 @@
 import type { ClientRequest, IncomingMessage, IncomingHttpHeaders, ServerResponse } from 'node:http';
 import { StringDecoder } from 'node:string_decoder';
-import { initializeResult, openEvents, responseHeaders, sendControl, singleHeader, type IdeHandshake } from './reloadableIdeHttp';
+import { controlResult, initializeResult, openEvents, responseHeaders, sendControl, singleHeader, type IdeHandshake } from './reloadableIdeHttp';
 
 interface EventPipe {
   readonly response: ServerResponse;
@@ -152,9 +152,15 @@ export class ReloadableIdeSession {
       }
       if (this.closed || epoch !== this.epoch) return;
       this.upstreamId = sessionId;
-      await Promise.all([...this.events].map((pipe) => this.attach(pipe)));
+      await Promise.all([...this.events].map((pipe) => this.attach(pipe, attempt.signal)));
       if (this.closed || epoch !== this.epoch) return;
       if ([...this.events].some((pipe) => !pipe.live)) throw new Error('IDE event stream closed during recovery.');
+      // Factory sends heartbeats every 60s from its server start time. A Reload
+      // resets that phase, but the native client still has its old 75s deadline.
+      // Renew liveness only after this new IDE answered tools/list AND delivered
+      // real events. A disconnected or unresponsive upstream never reaches here.
+      const heartbeat = `data: ${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/heartbeat', params: { timestamp: Date.now() } })}\n\n`;
+      for (const pipe of this.events) if (!pipe.response.write(heartbeat)) pipe.upstream?.pause();
       const recovery = this.recovery!;
       clearTimeout(recovery.deadline);
       this.recovery = undefined;
@@ -167,9 +173,11 @@ export class ReloadableIdeSession {
     });
   }
 
-  private attach(pipe: EventPipe): Promise<void> {
+  private attach(pipe: EventPipe, recoverySignal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       const epoch = this.epoch;
+      let contextConfirmed = recoverySignal === undefined;
+      const ready = () => { if (pipe.live && contextConfirmed) resolve(); };
       const request = openEvents(this.upstreamPort, pipe.headers, this.upstreamId);
       pipe.request = request;
       const interrupted = () => {
@@ -208,9 +216,9 @@ export class ReloadableIdeSession {
           const frames = /\r?\n\r?\n/gu;
           let start = 0;
           for (let match = frames.exec(pending); match; match = frames.exec(pending)) {
-            // Forward only complete, real frames. Never invent a heartbeat during Reload.
+            // Forward complete upstream frames; partial frames cannot confirm recovery.
             if (!pipe.response.write(pending.slice(start, frames.lastIndex))) upstream.pause();
-            if (/^data:/mu.test(pending.slice(start, frames.lastIndex))) { pipe.live = true; resolve(); }
+            if (/^data:/mu.test(pending.slice(start, frames.lastIndex))) { pipe.live = true; ready(); }
             start = frames.lastIndex;
           }
           pending = pending.slice(start);
@@ -232,6 +240,21 @@ export class ReloadableIdeSession {
           request.on('error', () => {});
           pipe.response.off('drain', drain);
         };
+        if (recoverySignal) {
+          // Initial notifications sent during initialize have no GET listener yet.
+          // The official tools/list handler refreshes editor context on this stream.
+          const id = `droid-ide-reload-${epoch}`;
+          const body = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' }));
+          void sendControl(this.upstreamPort, { body, id, headers: this.initialize.headers }, recoverySignal, this.upstreamId)
+            .then((result) => {
+              if (this.closed || epoch !== this.epoch || !this.events.has(pipe)) return;
+              if (result.status < 200 || result.status >= 300 || !Array.isArray(controlResult(result.body, id)?.tools)) {
+                interrupted(); return;
+              }
+              contextConfirmed = true;
+              ready();
+            }, interrupted);
+        }
       });
       request.end();
     });

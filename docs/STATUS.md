@@ -2,14 +2,44 @@
 
 更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.1`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
-`v0.8.1` 历史 Release 草稿尚未发布。本地 Mission 刷新、Canvas 移除及后续心跳修复
-仍待完成测试同步与提交，未包含在当前公开源码或草稿安装包中；本地安装状态见下文。
+当前源码包含 Mission 刷新、Canvas 移除及 Reload 心跳衔接修复；本地安装状态见下文。
+`v0.8.1` 历史 Release 草稿尚未发布，草稿安装包不包含这些后续修复。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Mission 状态刷新
+
+- Reload 后的真实日志已确认后台重新加载成功到达快照校验，但 `mission_run_started.message`
+  的正常换行被当作非法单行文本，导致整份进度及 Worker 投影被拒绝。现在按多行任务说明
+  校验该字段，保留长度及其他控制字符限制；可重新读取既有多行记录，无需改写任务文件。
+- Mission 的“刷新状态”通过现有 daemon 会话重新加载后台状态，再更新面板及后续订阅；
+  不再仅重读 SDK 内存快照。沿用当前会话配置，不重新发送消息、启动或停止任务。
+- 已有 Mission 恢复时主动补取一次：历史元数据只保存角色、没有生命周期，空缓存不能
+  被当作新任务一直停在 setup，造成 Worker 卡片与 Agents 数量同时消失。
+- 订阅更新缺少有效快照时自动补取一次，失败后仍可手动重试；合并同一会话的
+  在途刷新，切换会话或释放旧订阅后不发布过期结果。日志区分请求失败、缺少快照和校验失败。
+- 后台确认仍在运行的恢复轮次中，最新历史消息尚未收到结果的工具调用恢复为运行中，
+  避免进行中的 Start Mission Run 一直误标 Stopped；旧消息中的未配对调用不会被重新激活。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、完整构建、`pnpm run package:vsix` 和
+  `pnpm run verify:vsix` 通过。166 条目统一 VSIX 已全局安装 Microsoft VS Code，163 个
+  安装载荷的 SHA-256 及清单与包一致；需 Reload Window 加载本轮修复，真实界面由用户验收。
+- Mission 刷新与解析的回归许可尚未收到，未新增、修改或运行相关测试；现有同步刷新用例仍需获授权后同步为
+  后台异步刷新，并补充恢复空缓存及活动工具状态的回归。按用户明确要求提交并推送已通过
+  构建验证的当前修复，这部分定向测试未运行，不宣称通过。
+  未调用模型、重启或中断用户的真实任务；安装 CLI 的弃用提示未阻断安装。
+
 ## Reload 后的 IDE 连接
 
+- 再次 Reload 后仍断线的原因已确认：官方 IDE 服务按启动时间每 60 秒发送心跳，
+  Reload 重置其发送时机，而 CLI 仍沿用此前的 75 秒到期时间。因此重新握手成功不代表
+  下一次官方心跳能及时到达；本次日志在恢复连接后约 37 秒再次过期。
+- 恢复主／子会话的事件流后，通过只读 `tools/list` 重新取得真实编辑器通知；只有请求
+  成功且真实事件流已到达，适配层才发送一次经该往返确认的心跳，衔接新的心跳周期。
+  请求失败或断线不续期，不重复执行 `tools/call`。已超时的旧客户端由既有空闲重连路径
+  替换，仍运行的任务不强制迁移；正在运行的旧 helper 不会因安装新包自动热更新。
+- 本次沿用已授权的 IDE 定向回归：3 个文件共 37 项通过，覆盖心跳时序、主／子隔离、
+  上游失败不续期，以及失效旧连接在空闲时替换、忙碌时保留、重握手失败不发送消息。
 - 原因已确认：旧实现的 IDE 转发端口属于 Extension Host，Reload 会关闭它；
   后台 Droid daemon 与 Worker 继续运行，但 CLI 不会自动重新建立已断开的原生 IDE 客户端。
 - 新分配的会话使用独立 IDE 转发进程，Host 退出不关闭原生接入端口。重新打开同一工作区
@@ -23,12 +53,26 @@
   未调用模型，也未中断或重启用户的真实任务。
 - CLI 关闭子客户端不发送 DELETE，转发层在没有 GET 和在途请求后有界回收其记录；
   短暂重新连接、空闲 Worker 再次加载和执行中的工具请求均保留正确的会话身份。
-- 本轮授权范围内 9 个文件共 98 项定向回归通过。首次直接执行 pnpm 被环境的依赖
+- 此前授权范围内 9 个文件共 98 项定向回归通过。首次直接执行 pnpm 被环境的依赖
   预检查中止；设置 `pnpm_config_verify_deps_before_run=false` 后使用已有依赖完成验证，
   未重装依赖或修改 Lockfile。真实 VS Code 的交互仍由用户 Reload Window 后验收。
 - `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 和
   `pnpm run verify:vsix` 通过。统一安装包包含 166 个条目，已全局安装 Microsoft VS Code；
   163 个安装载荷与清单均匹配包内内容。安装 CLI 的 `url.parse()` 弃用提示未阻断安装。
+
+## 恢复卡片、Canvas 移除与 Mission 空面板
+
+- 主／子聊天的会话恢复提示改为输入框上方的紧凑卡片，刷新、重连与反馈集中展示；
+  Reload Window 说明按需展开。切换等待层复用相同样式，原有请求、禁用和超时逻辑保留。
+- 移除 HTML 文件、代码块、工具结果的 Canvas 按钮和 `/canvas` 模板，主／子 Host
+  不再装配预览面板。正常打开 HTML 文件、代码复制、图片标注与 Review 引用保留。
+- Mission 子代理面板仅在 Host 提供真实可打开的 Worker 会话时显示；规划和没有
+  Worker 的状态不再显示空 `0/0` 面板。已有 Worker 的完成、规划与暂时断开状态保留
+  查看入口，普通 Task scout／worker 卡片继续独立展示。
+- `pnpm run package:vsix` 完成其中的 `typecheck`、`lint:budgets` 与全部生产构建，
+  `pnpm run verify:vsix` 校验 165 个条目通过，已全局安装 Microsoft VS Code。
+  需 Reload Window 生效；未运行本轮测试或浏览器视觉验证。测试授权尚未收到，
+  现有 Canvas 用例的旧入口断言仍待同步；按用户明确要求随当前修复提交推送。
 
 ## Agents 当前消息范围
 
@@ -793,7 +837,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - Runtime replacement、工作区切换、请求和回合使用身份/代次检查；旧异步结算仅将
   自己的 Changes 合并到最新状态，不持有旧全文覆盖新消息。持久写入成功才确认 revision。
 - 发布给页面的边界诊断只记录类型、序号、身份、状态、长度及耗时，不记录正文、
-  Thinking、命令或凭据。安全 Markdown 禁止原始 HTML；Canvas 使用零网络隔离沙箱。
+  Thinking、命令或凭据。安全 Markdown 禁止原始 HTML；Canvas 预览入口已移除。
 
 ## 连接、启动与历史恢复
 

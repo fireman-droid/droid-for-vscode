@@ -112,7 +112,7 @@ export function ChatPane(props: {
   它们提供吸顶测量和选区保护需要的 `data-question-card`，无需项目自行拼 DOM。
 - `UiEnvironmentProvider` 注入产品名称和剪贴板服务。普通浏览器默认使用
   Clipboard API；VS Code 等受限宿主应提供自己的关联请求实现。
-- `ContentProvider` 注入文件／Canvas 动作、本地图片加载、主题及可选 Mermaid
+- `ContentProvider` 注入文件打开动作、本地图片加载、主题及可选 Mermaid
   渲染器。HTML 预览是否有沙箱、大小限制和授权，由宿主实现并如实描述。
   Image annotation 的 `maxBytes` 也由项目按实际附件契约提供。
 - 普通浏览器可从 `@droidvisx/chat-ui/markdown/mermaidRenderer` 导入

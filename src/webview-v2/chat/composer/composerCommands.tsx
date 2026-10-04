@@ -75,7 +75,6 @@ export const BUILT_IN_COMMANDS = [
     description: 'Summarize earlier messages to free context',
   },
   { name: 'new', description: 'Start a new session' },
-  { name: 'canvas', description: 'Create an interactive result artifact' },
 ] as const;
 
 /**
@@ -156,7 +155,7 @@ export function getSlashMatches(
   const query = slash?.query.toLocaleLowerCase() ?? '';
   const builtInMatches = slash === null ? [] : [...BUILT_IN_COMMANDS, ...(btwAvailable ? [BTW_COMMAND] : [])].filter((command) => command.name.startsWith(query));
   const navMatches = slash === null || !navigationAvailable ? [] : SLASH_NAV_COMMANDS.filter((command) => command.name.startsWith(query));
-  const commandMatches = slash === null ? [] : filterSlashCommands(commands, slash.query).filter((command) => command.name !== 'mission');
+  const commandMatches = slash === null ? [] : filterSlashCommands(commands, slash.query).filter((command) => command.name !== 'mission' && command.name !== 'canvas');
   const skillMatches = slash === null ? [] : skills.filter((skill) => skill.enabled && skill.name.toLocaleLowerCase().startsWith(query)).slice(0, MAX_SLASH_SKILL_MATCHES);
   const entries: readonly SlashEntry[] = [
     ...builtInMatches.map((command): SlashEntry => ({ kind: 'builtin', ...command })),

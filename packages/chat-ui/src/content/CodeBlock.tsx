@@ -1,25 +1,18 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { CodeSyntax } from './CodeSyntax';
-import { isInlineHtmlPreviewCandidate, readCanvasTitle, stableSourceId } from '../markdown/markdownPolicy';
 import { Button } from '../ui/button';
-import { MarkdownState, useContent } from './context';
+import { MarkdownState } from './context';
 import { useUiEnvironment } from '../environment';
 
 export function CodeBlock({ text, language }: { readonly text: string; readonly language: string | null }) {
   const { copyText } = useUiEnvironment();
-  const { actions, maxPreviewHtmlLength, previewHtmlDescription } = useContent();
-  const { streaming, thinking } = useContext(MarkdownState);
+  const { streaming } = useContext(MarkdownState);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
-  const preview = actions?.previewHtml !== undefined && !streaming && !thinking && isInlineHtmlPreviewCandidate(language, text);
   return <div className="v2-code-block my-3 min-w-0 overflow-hidden rounded border border-border">
-    {preview ? <div data-transcript-selection-exclude="" className="v2-code-preview-head flex select-none items-center justify-between gap-2 border-b border-border bg-muted px-2 py-1.5">
-      <span className="min-w-0 text-xs"><span className="block truncate">{readCanvasTitle(text)}</span><span className="block text-[11px] text-muted-foreground">{previewHtmlDescription ?? 'HTML preview'}</span></span>
-      <Button variant="outline" size="sm" disabled={maxPreviewHtmlLength !== undefined && text.length > maxPreviewHtmlLength} onClick={() => actions.previewHtml?.(text, { artifactId: `inline:${stableSourceId(text)}`, title: readCanvasTitle(text) })}>Open Canvas</Button>
-    </div> : null}
     <div className="v2-code-body">
     <header data-transcript-selection-exclude="" className="v2-code-toolbar flex select-none items-center justify-between border-b border-border bg-muted px-2 py-1">
       <span className="v2-code-language text-[11px] text-muted-foreground">{language ?? 'text'}</span>

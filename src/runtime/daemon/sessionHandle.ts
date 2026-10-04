@@ -7,6 +7,7 @@ import {
   type DroidStreamMessage,
   type SessionSettings,
   type MultiMissionStateManager,
+  type ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
 import type {
   DaemonHandlers,
@@ -28,6 +29,7 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   private admission: AbortController | undefined;
   private readonly recovered = new Set<RecoveredDaemonTurn>();
   private readonly subscriptions = new Set<() => void>();
+  private missionRefresh: Promise<unknown> | undefined;
 
   constructor(
     private readonly controller: DaemonSessionController,
@@ -36,6 +38,7 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     private readonly unregister: () => void,
     private readonly waitUntilReady: (signal?: AbortSignal) => Promise<void> = async () => {},
     private readonly missions?: MultiMissionStateManager,
+    private readonly getReloadOptions?: () => ResumeDaemonSessionOptions | undefined,
   ) {}
 
   get settings(): Readonly<SessionSettings> {
@@ -139,6 +142,39 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   readMissionSnapshot(): unknown {
     this.assertAttached();
     return this.missions?.getMissionStoreIfKnown(this.id)?.getSnapshot() ?? null;
+  }
+
+  refreshMissionSnapshot(): Promise<unknown> {
+    this.assertAttached();
+    if (this.missionRefresh !== undefined) return this.missionRefresh;
+    const refresh = this.reloadMissionSnapshot().finally(() => {
+      if (this.missionRefresh === refresh) this.missionRefresh = undefined;
+    });
+    this.missionRefresh = refresh;
+    return refresh;
+  }
+
+  private async reloadMissionSnapshot(): Promise<unknown> {
+    await this.waitUntilReady();
+    this.assertAttached();
+    if (this.controller.isSessionLoadInFlight(this.id)) {
+      await this.controller.ensureSessionLoaded(this.id);
+      this.assertAttached();
+    }
+    // The public SDK has no Mission-only query. Reload the same session with
+    // its current spawn options and preserve parent-owned session attribution.
+    const result = await this.controller.loadSession({
+      ...this.getReloadOptions?.(),
+      ...this.controller.getSessionStateManager().getSessionLoadOptions(this.id),
+      sessionId: this.id,
+      sessionOriginHint: undefined,
+      sessionSource: undefined,
+    });
+    this.assertAttached();
+    // The SDK retains its previous store when the load response has no Mission.
+    // That cached store cannot establish that this refresh obtained fresh state.
+    if (result.mission === undefined) return null;
+    return this.readMissionSnapshot();
   }
 
   subscribeMissionSnapshot(listener: (snapshot: unknown) => void): () => void {

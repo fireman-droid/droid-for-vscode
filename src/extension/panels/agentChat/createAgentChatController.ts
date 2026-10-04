@@ -12,7 +12,6 @@ import { RecentCommandsStore } from '../../chat/capabilities/RecentCommandsStore
 import { PlanDocumentController } from '../../interactions/planDocumentController';
 import { SessionRecoveryStore, type SessionRecoveryPersistence } from '../../recovery/SessionRecoveryStore';
 import { createReviewFeature, createReviewFoundation } from '../../review/createReviewFeature';
-import { PreviewPanelController } from '../preview/PreviewPanelController';
 import { ReviewPanelController } from '../review/ReviewPanelController';
 import type { SessionViewerPanelController } from '../sessionViewer/SessionViewerPanelController';
 
@@ -47,7 +46,6 @@ export function createAgentChatController(options: {
   const changeStats = createGitChangeStatsReader(root, {}, childPersistence, snapshots, watchWorkspaceChanges);
   const { attachmentSources, fileDiff, gitWorkflow } = createReviewFoundation(
     changeStats, diagnostics, `droidvisx-child-baseline-${scope}`);
-  const preview = new PreviewPanelController(diagnostics);
   let controller: ChatController;
   const planDocuments = new PlanDocumentController((state) => controller.emit(state));
   const review = createReviewFeature({
@@ -71,7 +69,6 @@ export function createAgentChatController(options: {
     diagnostics,
     daemonSessions: parent.daemonSessions,
     pathOpener: parent.pathOpener,
-    prototypePreview: preview,
     gitWorkflow,
     daemonPlugins: parent.daemonPlugins,
     turnSnapshots: snapshots,
@@ -84,7 +81,6 @@ export function createAgentChatController(options: {
     controller.nativeIde = { read: options.nativeIde.read };
     subscriptions.push({ dispose: options.nativeIde.subscribe(() => emitIdeState(controller)) });
   }
-  preview.setFeedbackHandler((text) => controller.emit({ type: 'canvas.feedbackDraft', text }));
   const reviewPanel = new ReviewPanelController(
     context.extensionUri, controller, review.coordinator, gitWorkflow, options.sessionViewer);
   review.start();
@@ -95,7 +91,6 @@ export function createAgentChatController(options: {
     dispose() {
       if (disposal) return disposal;
       reviewPanel.dispose();
-      preview.dispose();
       attachmentSources.dispose();
       for (const subscription of subscriptions) subscription.dispose();
       subscriptions.length = 0;

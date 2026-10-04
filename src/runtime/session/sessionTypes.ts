@@ -52,6 +52,7 @@ export interface FactoryDroidSession {
   readWorkingState?(): Promise<string | null>;
   readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
   readMissionSnapshot?(): unknown;
+  refreshMissionSnapshot?(): Promise<unknown>;
   subscribeMissionSnapshot?(listener: (snapshot: unknown) => void): () => void;
   updateSettings(params: DroidSessionUpdateSettingsOptions): Promise<unknown>;
   getContextStats(): Promise<GetContextStatsResult>;

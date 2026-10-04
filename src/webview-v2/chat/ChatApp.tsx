@@ -1,4 +1,3 @@
-import { MAX_INLINE_PREVIEW_HTML_LENGTH } from '../../shared/protocol/canvasProtocol';
 import { renderMermaid } from '../content/mermaidRenderer';
 import { ChatLayout } from '@droidvisx/chat-ui/chat/ChatLayout';
 import type { TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
@@ -75,10 +74,10 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const content = useMemo(() => ({
     workspaceRoot: state.workspaceRoot,
     theme: theme.resolved,
-    renderDiagram: renderMermaid, maxPreviewHtmlLength: MAX_INLINE_PREVIEW_HTML_LENGTH, previewHtmlDescription: 'HTML · sandboxed · no network',
+    renderDiagram: renderMermaid,
     images,
-    actions: { openPath: workspace.handleOpenPath, previewFile: workspace.handlePreviewFile, previewHtml: workspace.handlePreviewInlineHtml },
-  }), [state.workspaceRoot, theme.resolved, images, workspace.handleOpenPath, workspace.handlePreviewFile, workspace.handlePreviewInlineHtml]);
+    actions: { openPath: workspace.handleOpenPath },
+  }), [state.workspaceRoot, theme.resolved, images, workspace.handleOpenPath]);
   const inlineDiff = useMemo(() => ({
     port, sessionId: state.sessionId, connected: state.connection.status === 'connected',
   }), [port, state.sessionId, state.connection.status]);

@@ -44,7 +44,6 @@ import { watchWorkspaceChanges } from './changes/watchWorkspaceChanges';
 import { createTurnSnapshotStore } from './changes/turnSnapshots';
 import { createVscodeExternalUrlOpener } from './workspace/vscodeExternalUrlOpener';
 import { createVscodePathOpener } from './workspace/vscodePathOpener';
-import { PreviewPanelController } from './panels/preview/PreviewPanelController';
 import { PlanDocumentController } from './interactions/planDocumentController';
 import {
   createWorktreeSessionsFeature,
@@ -223,7 +222,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const catalogReader = new SessionCatalogReader(context.asAbsolutePath('dist/extension/sessionCatalogWorker.cjs'));
   context.subscriptions.push(catalogReader);
   const sessionCatalog = new FactorySessionCatalog({ listSdkSessions: catalogReader.list });
-  const previewController = new PreviewPanelController(diagnostics);
   // Read-only terminal mirror of execute-command output; takeover is
   // fail-closed by design (native-terminal design slice A).
   const terminalMirror = createTerminalMirror({
@@ -424,7 +422,6 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
     daemonSessions: daemonSidecar.provider,
     pathOpener: createVscodePathOpener(),
-    prototypePreview: previewController,
     gitWorkflow,
     // Worktree sessions ride the daemon's native create channel; in
     // process mode (including a fallback from the daemon default) the
@@ -510,9 +507,6 @@ export function activate(context: vscode.ExtensionContext): void {
     {},
     diagnostics,
   );
-  previewController.setFeedbackHandler((text) => {
-    controller.emit({ type: 'canvas.feedbackDraft', text });
-  });
   const modelsPanel = new ModelsPanelController(
     context.extensionUri,
     new ModelManager({
@@ -583,7 +577,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('droidvisx.openReview', () => reviewPanel.open()),
     controller,
     provider,
-    previewController,
     terminalMirror,
     sessionViewer,
     subagentTranscripts,

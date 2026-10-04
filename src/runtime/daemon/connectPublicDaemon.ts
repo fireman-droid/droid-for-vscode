@@ -145,6 +145,7 @@ export function retainDaemonController(
       },
       (signal) => recovery.waitUntilReady(signal),
       missions,
+      () => reloadOptions.get(id),
     );
     handles.set(id, handle);
     return handle;

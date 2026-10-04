@@ -19,7 +19,7 @@ import { SESSION_RECOVERY_DEBOUNCE_MS } from '../../recovery/SessionRecoveryStor
 import { delay, isTurnActive } from '../internals';
 import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
-import { recoveredHistoryForCurrentTurn } from './recoveredHistoryForCurrentTurn';
+import { recoveredHistoryForCurrentTurn, restorePendingTools } from './recoveredHistoryForCurrentTurn';
 import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
 
 export /**
@@ -350,7 +350,9 @@ async function refreshRecoveredTurnTranscript(
   ) {
     return;
   }
-  const next = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(loaded.state,
+  const history = ctl.turnState.turn?.status === 'streaming'
+    ? restorePendingTools(loaded.state, loaded.messageAncestry) : loaded.state;
+  const next = recoveredHistoryForCurrentTurn(ctl, historyWithLocalChanges(history,
     ctl.sessionState.conversationId === null ? undefined :
       ctl.recoveryStore.readConversation(ctl.sessionState.conversationId),
     ctl.recoveryState.transcript.transcript), loaded.messageAncestry);

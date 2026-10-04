@@ -109,6 +109,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
   private session: FactoryDroidSession | null = null;
   private readonly missionSnapshots = new RuntimeMissionSnapshots();
   readonly readMissionSnapshot = this.missionSnapshots.read;
+  readonly refreshMissionSnapshot = this.missionSnapshots.refresh;
   readonly subscribeMissionSnapshot = this.missionSnapshots.subscribe;
   private sessionTarget: RuntimeSessionTarget | null = null;
   private initialization:

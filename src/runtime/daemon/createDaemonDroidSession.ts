@@ -448,6 +448,9 @@ function adaptDaemonSession(
   return {
     onNotification: (listener) => session.onNotification(listener),
     readMissionSnapshot: () => session.readMissionSnapshot(),
+    ...(session.refreshMissionSnapshot === undefined ? {} : {
+      refreshMissionSnapshot: () => session.refreshMissionSnapshot!(),
+    }),
     subscribeMissionSnapshot: (listener) => session.subscribeMissionSnapshot(listener),
     ...(session.readTurnOutcome === undefined ? {} : {
       readTurnOutcome: (backendTurnId: string) => session.readTurnOutcome!(backendTurnId),

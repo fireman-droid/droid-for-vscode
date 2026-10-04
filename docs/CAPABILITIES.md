@@ -56,7 +56,7 @@ SDK 中出现接口就自动成为产品功能。
 | Review 的 SDK Git Diff | 已安装，待 Cursor 验收 | daemon Branch 使用 committed 数据，Workspace 使用官方 unstaged 数据（含暂存、未暂存及未跟踪文件）；默认补丁来自 SDK，扩大上下文／原生 Diff 使用固定基线与 SDK 补丁。Staged／Unstaged 保留本地 Git，Process Workspace 保留原路径；不改变逐轮归属和恢复 |
 | Review Agent | 已接通，受限 | 复用独立 `/review` 会话与 Viewer 报告；不宣称精确审阅单次操作或 Index，不替用户执行 push |
 | Markdown、KaTeX、Mermaid | 已接通 | 禁止原始 HTML |
-| Canvas HTML | 已接通 | opaque-origin、零网络沙箱 |
+| Canvas HTML | 已移除 | 不再提供文件、代码块、工具结果或 `/canvas` 预览入口；HTML 文件仍可正常打开 |
 | Skills | 已接通，扩展待真实验收 | 浏览与启停；daemon 原生管理可查看定义、资源、版本和禁用来源，明确 user／project 范围并重读有效状态；不自动生成、保存或覆盖 Skill |
 | MCP | 已接通，新增管理待真实验收 | 保留服务器 CRUD；新增官方注册表添加、工具级启停、daemon 浏览器授权／取消／清理凭据。自动完成之外可在原生密码输入框提交含 state 的回调 URL，必须等 SDK 完成通知才报成功；Process 认证保持原路径 |
 | 官方原生 IDE | 空闲恢复及断线重连已修复，待 Reload 验收 | 主聊天独立 daemon／本地 IDE relay，按完整握手及初始上下文确认连接。worker 空闲回收后，发送先恢复原会话并重新握手，无需手动迁移；元数据提前加载同样支持。重连使用 SDK `preserveEmptyDraft` 保留空会话，不再要求已有消息；确认新握手后解除对应失败提示且不重发。旧活跃任务保留，断线、错误和心跳超时按事实反馈；不承诺运行中 Reload 无缝重连 |

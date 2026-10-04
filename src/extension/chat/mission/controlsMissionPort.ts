@@ -10,6 +10,6 @@ export interface ControlsPort
   > {
   readonly sessionState: Readonly<Pick<SessionLifecycleState, 'runtime' | 'sessionId'>>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
-  readonly missionState: Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
+  readonly missionState: Readonly<Pick<MissionSessionState, 'missionRuntime' | 'refreshMission'>>;
   readonly effects: Pick<ChatEffects, 'handleSend'>;
 }

@@ -370,6 +370,8 @@ export interface DroidRuntime {
   readMissionSettings?(): RuntimeMissionSettings | null;
   /** Host-only SDK Mission state; the Host validates and projects this snapshot. */
   readMissionSnapshot?(): unknown;
+  /** Refreshes the retained session's Mission state from the daemon without starting a turn. */
+  refreshMissionSnapshot?(): Promise<unknown>;
   /** Changes continue while no local turn is streaming. Does not replay the initial snapshot. */
   subscribeMissionSnapshot?(listener: (snapshot: unknown) => void): () => void;
   readContextWindow(): Promise<RuntimeContextWindow>;

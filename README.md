@@ -106,7 +106,7 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 ## 当前状态
 
 - 当前源码版本：`0.8.1`；公开下载以 Releases 为准，能力与验证状态见 `docs/STATUS.md`
-- 主聊天、会话恢复、权限、AskUser、计划、附件、Review、Canvas、
+- 主聊天、会话恢复、权限、AskUser、计划、附件、Review、
   Skills、MCP、自定义模型和子代理展示已接入
 - Mission Control 已接通聊天、独立 Session、readiness、进度和 Worker
 - Chat、Models、Mission、Viewer、Review 共用 React 19 / Tailwind 4 前端；

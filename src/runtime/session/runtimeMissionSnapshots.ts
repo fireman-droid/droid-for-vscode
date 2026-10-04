@@ -8,6 +8,16 @@ export class RuntimeMissionSnapshots {
 
   readonly read = (): unknown => this.session?.readMissionSnapshot?.() ?? null;
 
+  readonly refresh = async (): Promise<unknown> => {
+    const session = this.session;
+    if (session?.refreshMissionSnapshot === undefined)
+      throw new Error('The active session cannot refresh Mission state.');
+    const snapshot = await session.refreshMissionSnapshot();
+    if (this.session !== session)
+      throw new Error('The active session changed while refreshing Mission state.');
+    return snapshot;
+  };
+
   readonly subscribe = (listener: (snapshot: unknown) => void): (() => void) => {
     this.listeners.add(listener);
     this.bind();

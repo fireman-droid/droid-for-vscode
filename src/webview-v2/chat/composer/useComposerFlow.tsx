@@ -6,7 +6,6 @@ import { createTurnId, post, type ChatPort } from '../../host/chatIntent';
 import { subscribeHostMessages } from '../../host/hostMessageSource';
 import { canSendMessage, shouldQueueMessage } from './sendEligibility';
 import {
-  CANVAS_REQUEST_TEMPLATE,
   resolveBuiltinSlash,
   type SlashNavTarget,
 } from './slashBuiltins';
@@ -147,14 +146,6 @@ export function useComposerFlow(
         else if (builtin.kind === 'btw') {
           openBtw();
           if (builtin.question.length > 0) askBtw(builtin.question);
-        } else if (builtin.kind === 'canvas') {
-          writeDraft(
-            builtin.request.length === 0
-              ? CANVAS_REQUEST_TEMPLATE
-              : `Create an interactive Canvas artifact for:\n\n${builtin.request}`,
-            true,
-          );
-          return;
         }
         writeDraft('');
         return;

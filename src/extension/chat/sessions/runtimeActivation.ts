@@ -248,7 +248,7 @@ export async function activateRuntime(
     initializeMs: phases.initializeMs ?? 0, historyMs: phases.historyMs ?? 0,
   } });
   ctl.emitSnapshot();
-  ctl.effects.recoverMissionProjection(runtime, generation, sessionId, target.cwd);
+  ctl.effects.recoverMissionProjection(runtime, generation, sessionId, target.cwd, target.kind === 'resume');
   if (target.kind === 'new' && target.worktree === true) {
     bindWorktreeSessionMetadata(ctl, runtime, generation, sessionId, target.cwd);
   }

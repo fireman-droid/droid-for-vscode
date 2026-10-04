@@ -36,12 +36,7 @@ export type BuiltinSlashAction =
   | { readonly kind: 'new' }
   | { readonly kind: 'navigate'; readonly target: SlashNavTarget }
   | { readonly kind: 'btw'; readonly question: string }
-  | { readonly kind: 'canvas'; readonly request: string }
   | { readonly kind: 'removed' };
-
-export const CANVAS_REQUEST_TEMPLATE =
-  'Create an interactive Canvas artifact for:\n\n' +
-  '[Describe the result, audience, and key interactions]';
 
 /** CLI-parity aliases onto the existing compaction pipeline. */
 const COMPACT_ALIASES = new Set(['compact', 'compress', 'handoff']);
@@ -80,11 +75,8 @@ export function resolveBuiltinSlash(
   if (slug === 'btw') {
     return options.btwEnabled ? { kind: 'btw', question: rest.trim() } : null;
   }
-  if (slug === 'mission') {
+  if (slug === 'mission' || slug === 'canvas') {
     return { kind: 'removed' };
-  }
-  if (slug === 'canvas') {
-    return { kind: 'canvas', request: rest.trim() };
   }
   if (rest.length > 0) {
     return null;

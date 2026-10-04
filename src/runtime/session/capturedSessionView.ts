@@ -57,6 +57,9 @@ function copyOptionalSessionMethods(
   if (typeof session.readMissionSnapshot === 'function') {
     view.readMissionSnapshot = () => session.readMissionSnapshot!();
   }
+  if (typeof session.refreshMissionSnapshot === 'function') {
+    view.refreshMissionSnapshot = () => session.refreshMissionSnapshot!();
+  }
   if (typeof session.subscribeMissionSnapshot === 'function') {
     view.subscribeMissionSnapshot = (listener) => session.subscribeMissionSnapshot!(listener);
   }

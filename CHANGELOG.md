@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+### Changed
+
+- 会话恢复提示集中为输入框上方的卡片；移除 Canvas 预览入口，保留文件打开和代码复制。
+
+### Fixed
+
+- Mission 恢复及刷新重新读取后台状态，允许启动说明包含正常换行，恢复真实 Worker 卡片。
+- 修复活动工具在历史恢复后误标为 Stopped，以及尚无 Worker 时出现空 Mission 面板。
+- Reload 后通过真实 IDE 响应与事件流衔接心跳期限，避免重新连接后沿旧期限再次超时。
+
 ## 0.8.1
 
 ### Changed

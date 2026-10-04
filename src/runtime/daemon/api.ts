@@ -36,6 +36,7 @@ export interface DaemonSessionHandle extends ConnectedDroidSession {
   ensureLoaded(signal?: AbortSignal): Promise<void>;
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;
   readMissionSnapshot(): unknown;
+  refreshMissionSnapshot?(): Promise<unknown>;
   subscribeMissionSnapshot(listener: (snapshot: unknown) => void): () => void;
   readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
 }

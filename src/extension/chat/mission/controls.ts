@@ -61,13 +61,16 @@ export function handleMissionCommand(ctl: ControlsPort, message: MissionCommand)
     return;
   }
   if (message.type === 'mission.refresh') {
-    if (!mission.hydrate(ctl.sessionState.runtime?.readMissionSnapshot?.())) {
+    const refresh = ctl.missionState.refreshMission;
+    if (refresh === null || refresh === undefined) {
       emitResult(ctl, message.requestId, 'refresh', 'rejected', 'unavailable');
       return;
     }
-    mission.setAvailability('attached');
-    ctl.emit(mission.snapshot());
-    emitResult(ctl, message.requestId, 'refresh', 'accepted');
+    void refresh().then((accepted) => {
+      if (ctl.missionState.missionRuntime !== mission || ctl.missionState.refreshMission !== refresh) return;
+      emitResult(ctl, message.requestId, 'refresh', accepted ? 'accepted' : 'rejected',
+        accepted ? undefined : 'unavailable');
+    });
     return;
   }
   const snapshot = mission.snapshot();

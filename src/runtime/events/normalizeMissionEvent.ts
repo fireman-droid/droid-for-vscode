@@ -184,7 +184,7 @@ function readProgressEntry(value: unknown): MissionProgressSummary | undefined {
         : undefined;
     case 'mission_run_started':
       return hasExactKeys(value, ['type', 'timestamp'], ['message']) &&
-        (value.message === undefined || isText(value.message, MAX_MISSION_TASK_LENGTH))
+        (value.message === undefined || isText(value.message, MAX_MISSION_TASK_LENGTH, true))
         ? { ...base, type: value.type }
         : undefined;
     case 'worker_started':
