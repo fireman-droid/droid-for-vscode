@@ -4,11 +4,13 @@
 不在仓库里维护第二份。
 
 第一次读代码从 [架构与代码导航](./ARCHITECTURE.md) 开始，按其中的源码阅读顺序和修改定位表查找。
-前端源码统一在 `src/webview-v2/`；预览、构建和类型检查命令见根目录
-[`README.md`](../README.md#前端开发与预览)。
+前端源码统一在 `src/webview-v2/`；预览、构建和类型检查命令见
+[开发指南](DEVELOPMENT.md#前端开发与预览)。
 
 | 文件 | 内容 |
 | --- | --- |
+| [`AUTOCOMPLETE.md`](./AUTOCOMPLETE.md) | 代码补全、模型服务、Next Edit 与读取边界 |
+| [`DEVELOPMENT.md`](./DEVELOPMENT.md) | 开发环境、构建安装、前端预览、换机与发布流程 |
 | [`PLAN.md`](./PLAN.md) | 当前目标、执行顺序和明确不做的内容 |
 | [`STATUS.md`](./STATUS.md) | 已完成、进行中、受限和未实现能力 |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | 源码阅读顺序、目录职责、发送/恢复流程与修改定位 |
@@ -20,8 +22,8 @@
 | [`OPEN_SOURCE_POST.md`](./OPEN_SOURCE_POST.md) | LINUX DO 开源推广文案草稿与配图位置 |
 | [`RUNTIME_CORRECTNESS_REVIEW.md`](./RUNTIME_CORRECTNESS_REVIEW.md) | 旧基线审查与未复核候选；当前结论以 `STATUS.md` 为准 |
 
-换电脑的依赖安装、构建、静态预览与本机配置边界见根目录 [`README.md`](../README.md)。
-安装、非官方声明、MIT 与数据处理说明也在该入口；本地发布准备和人工发布阻塞
+换电脑的依赖安装、构建、静态预览与本机配置边界见 [开发指南](DEVELOPMENT.md)。
+安装、非官方声明、MIT 与数据处理说明见 [项目首页](../README.md)；本地发布准备和人工发布阻塞
 见 `STATUS.md`，日志分享风险与手动导出行为见 `TROUBLESHOOTING.md`。
 报告中的绝对路径是原审查机器的证据定位，换电脑后以仓库相对路径定位，不要求相同盘符。
 

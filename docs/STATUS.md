@@ -8,6 +8,20 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 项目首页与下载包命名
+
+- README 按产品介绍、日常功能、安装与文档入口重新组织，保留非官方身份、费用、
+  数据处理和能力限制。补全细节与开发发布流程分别移入 `AUTOCOMPLETE.md` 和
+  `DEVELOPMENT.md`；封面沿用风车形象，使用生成的项目横幅，不充当真实界面截图。
+- 对外 VSIX 名称统一为 `droid-版本号.vsix`，Actions artifact 使用 `droid-v版本号`；
+  扩展 ID、配置前缀及本地 `dist/droidvisx.vsix` 构建路径保持不变。
+- `v0.8.1` 旧草稿附件已改名为 `droid-0.8.1.vsix`，同步校验清单、构建信息和说明。
+  VSIX 内容与 SHA-256 未变，仍对应 `c4d5649`，不包含后续 main 修复；草稿未发布，
+  没有移动标签。发布说明移除重复标题，完整记录与校验信息默认折叠。
+- 使用项目指定 pnpm 10.2.0 完成 typecheck、lint:budgets、构建、166 条目 VSIX 校验
+  和 release:assets。首次系统 pnpm 被依赖自动安装检查拦住，未改依赖与锁文件。
+  本轮仅修改文档与分发脚本，未重新安装扩展、运行测试或浏览器自动化。
+
 ## Mission 状态刷新
 
 - Reload 后的真实日志已确认后台重新加载成功到达快照校验，但 `mission_run_started.message`
@@ -1355,13 +1369,13 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - 新流程的[仅构建运行](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37127873608)
   与 [v0.8.1 标签构建及草稿创建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37128056864)
   均通过。标签固定在 `c4d564998051722ec918e67709a1a679b69df219`，附件记录
-  `sourceDirty=false`。[Release 草稿](https://github.com/fireman-droid/droid-for-vscode/releases/tag/untagged-ed533ccd618b938ce297)
+  `sourceDirty=false`。[Release 列表](https://github.com/fireman-droid/droid-for-vscode/releases)
   包含 VSIX、SHA256SUMS.txt、build-info.json 及安装／更新说明；仍为 `isDraft=true`。
   仓库现已公开；该草稿仍未发布，扩展未在插件市场上架，公共 UI 包未 npm 发布。
-- 已重新下载草稿附件，核对校验和、构建信息和 165 条目包校验后全局安装 Microsoft VS Code。
-  `droidvisx-0.8.1.vsix` 为 10,583,613 bytes，SHA256：
+- 旧草稿附件曾经下载并通过校验和、构建信息及 165 条目包校验后安装 Microsoft VS Code。
+  现名 `droid-0.8.1.vsix`，大小仍为 10,583,613 bytes，SHA256：
   `3df57a77522ed06060ddae4ad92864bed7b3869d7c606ef3df78970feed91f13`。
-  本地 `dist/droidvisx.vsix` 与 `dist/release/v0.8.1` 同步保留这份 GitHub 构建产物。
+  本地构建目录会随新构建更新；旧草稿的身份以 GitHub 附件及其构建信息为准。
 - 本轮 `release:check`、`package:vsix`（含 typecheck、lint:budgets）、`verify:vsix`
   和 `release:assets` 已通过；引用样式修改后的 165 条目 VSIX 已全局安装 Microsoft VS Code。
   YAML 与内嵌 PowerShell 语法检查通过；仅经许可同步两份现有模型测试数据，未新增或
