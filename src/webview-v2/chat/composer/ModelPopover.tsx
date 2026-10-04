@@ -17,19 +17,8 @@ import { matchesModelSource } from '../../../shared/protocol/modelSourceProtocol
 import type { SessionSettingSelection } from './useOptimisticSetting';
 import { ChevronDownIcon, SettingsStatus, Stat, formatReasoningLabel } from './shared';
 
-export function ModelPopover({
-  id,
-  settings,
-  modelCatalog,
-  disabled,
-  refreshDisabled = disabled,
-  onRefresh,
-  onUpdate,
-  onManageModels,
-  onOpenModels,
-}: {
+type ModelPopoverProps = {
   readonly id: string;
-  readonly settings: SessionSettingsState;
   readonly modelCatalog: ModelCatalogState;
   readonly disabled: boolean;
   readonly refreshDisabled?: boolean;
@@ -49,27 +38,38 @@ export function ModelPopover({
   /** Closes the popover; the entry row itself opens the manager page. */
   readonly onManageModels: () => void;
   readonly onOpenModels?: () => void;
-}): React.JSX.Element {
+} & (
+  | { readonly settings: SessionSettingsState; readonly selection?: never }
+  | { readonly settings?: never; readonly selection: {
+    readonly modelId: string | undefined;
+    readonly reasoningEffort: SessionReasoningEffort | undefined;
+  } }
+);
+
+export function ModelPopover({
+  id, settings, selection, modelCatalog, disabled, refreshDisabled = disabled,
+  onRefresh, onUpdate, onManageModels, onOpenModels,
+}: ModelPopoverProps): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
   const [view, setView] = useState<'root' | 'spec'>('root');
   const { mode: sourceMode } = useModelSource();
-  const confirmed = settings.value;
-  const isSpecView = view === 'spec';
+  const confirmed = settings?.value;
+  const isSpecView = settings !== undefined && view === 'spec';
   const specModelOverrideId = confirmed?.specModeModelId ?? null;
   // An unset drafting model inherits the session model; "Same as
   // session" carries that state on its own row, so a model row only
   // checks when specModeModelId names it explicitly (no double tick).
   const effectiveModelId = isSpecView
     ? (specModelOverrideId ?? confirmed?.modelId)
-    : confirmed?.modelId;
+    : selection?.modelId ?? confirmed?.modelId;
   const rowMatchId = isSpecView ? (specModelOverrideId ?? undefined) : effectiveModelId;
   const scopedReasoning = isSpecView
     ? (confirmed?.specModeReasoningEffort ?? undefined)
-    : confirmed?.reasoningEffort;
+    : selection?.reasoningEffort ?? confirmed?.reasoningEffort;
   const usesSessionModel = isSpecView && specModelOverrideId === null;
   const selected =
-    confirmed === null || modelCatalog.status !== 'ready'
+    modelCatalog.status !== 'ready'
       ? undefined
       : modelCatalog.items.find((item) => item.id === effectiveModelId);
   const goToView = (next: 'root' | 'spec'): void => {
@@ -124,7 +124,7 @@ export function ModelPopover({
               onSelect={selectEffort}
             />
           </div>
-          <SettingsStatus settings={settings} />
+          {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
         </div>
       </div>
     );
@@ -296,7 +296,7 @@ export function ModelPopover({
               {filtered.length === 0 ? <ModelSourceEmpty /> : null}
             </div>
           </div>
-          {!isSpecView ? (
+          {settings !== undefined && !isSpecView ? (
             <Button variant="plain" size="none"
               type="button"
               className="dvx-model-spec-row"
@@ -317,12 +317,12 @@ export function ModelPopover({
           ) : null}
         </>
       ) : (
-        <ModelCatalogStatus modelCatalog={modelCatalog} current={confirmed}
+        <ModelCatalogStatus modelCatalog={modelCatalog} current={confirmed ?? null}
           disabled={refreshDisabled} onRefresh={onRefresh} />
       )}
       <AddModelEntry onOpen={onManageModels} onOpenModels={onOpenModels} />
-      <SettingsStatus settings={settings} />
-      {disabled && settings.status === 'ready' ? (
+      {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
+      {disabled && settings?.status === 'ready' ? (
         <p className="dvx-popover-message" role="status">
           Model settings can be changed after the current turn.
         </p>

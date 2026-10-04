@@ -247,6 +247,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
       modelCatalog={state.modelCatalog} images={btw.images} selectedModel={btw.selectedModel}
       reasoning={{ value: btw.selectedReasoningEffort, onChange: btw.setReasoningEffort }}
+      onOpenModels={() => { void port.postMessage({ type: 'models.open' }); }}
       onModelChange={btw.setChosenModel} sending={btw.sending}
       onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onAsk={btw.sendDraft} onStop={btw.stop} onDismiss={btw.dismiss} /> : null}
     </div>

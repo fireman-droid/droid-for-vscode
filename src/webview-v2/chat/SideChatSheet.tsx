@@ -9,13 +9,14 @@ import { BtwModelSelect, type BtwReasoningControl } from './btw/BtwModelSelect';
 import { BtwImages } from './BtwImages';
 import type { useBtwImages } from './useBtwImages';
 
-export function SideChatSheet({ state, images, modelCatalog, selectedModel, onModelChange, reasoning, sending = false, ...props }: Omit<ComponentProps<typeof SideChatView>, 'state' | 'maxTextLength'> & {
+export function SideChatSheet({ state, images, modelCatalog, selectedModel, onModelChange, reasoning, onOpenModels, sending = false, ...props }: Omit<ComponentProps<typeof SideChatView>, 'state' | 'maxTextLength'> & {
   readonly state: SessionBtwState;
   readonly images: ReturnType<typeof useBtwImages>;
   readonly modelCatalog?: ModelCatalogState;
   readonly selectedModel?: string;
   readonly onModelChange: (modelId: string) => void;
   readonly reasoning?: BtwReasoningControl;
+  readonly onOpenModels?: () => void;
   readonly sending?: boolean;
 }) {
   const unavailable = state.status === 'error' || state.status === 'unsupported';
@@ -40,6 +41,6 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
       }} />
       <Button variant="ghost" size="icon-sm" disabled={unavailable || selected?.disabled || selected?.supportsImages === false} title={selected?.supportsImages === false ? 'This model does not support images' : 'Attach images'} aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
       <BtwModelSelect catalog={modelCatalog} value={selectedModel} onChange={onModelChange}
-        disabled={unavailable} reasoning={reasoning} />
+        disabled={unavailable} reasoning={reasoning} onOpenModels={onOpenModels} />
     </>} />;
 }

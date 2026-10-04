@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
 import { Button } from '../ui/button';
@@ -15,7 +15,7 @@ interface ModelOption {
 }
 
 export function ModelSourceSelect({ label, value, models, disabled, onChange,
-  placeholder = 'Choose an available model', className = '', side = 'bottom', align = 'start', valueSuffix, footer }: {
+  placeholder = 'Choose an available model', className = '', side = 'bottom', align = 'start' }: {
   readonly label: string;
   readonly value: string | undefined;
   readonly models: readonly ModelOption[];
@@ -25,8 +25,6 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
   readonly className?: string;
   readonly side?: 'top' | 'bottom';
   readonly align?: 'start' | 'end';
-  readonly valueSuffix?: string;
-  readonly footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const { mode } = useModelSource();
@@ -39,7 +37,6 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
         title={selected?.displayName ?? value}
         className={`h-8 w-full min-w-0 justify-between gap-2 bg-input-background px-2 font-normal ${className}`}>
         <span className="truncate">{selected?.displayName ?? value ?? placeholder}</span>
-        {valueSuffix ? <span className="shrink-0 text-muted-foreground">{valueSuffix}</span> : null}
         <ChevronDown aria-hidden="true" className="size-3 shrink-0" />
       </Button>
     </PopoverTrigger>
@@ -62,7 +59,6 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
           </RadioGroupItem>)}
         </RadioGroup>
       )}
-      {footer}
     </PopoverContent>
   </Popover>;
 }
