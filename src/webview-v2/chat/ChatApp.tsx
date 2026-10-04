@@ -110,7 +110,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     beginConversationSwitch: transition.beginSwitch,
   });
   const compact = sessions.handleCompact;
-  const btw = useBtwPanel(port, state.sessionId, { state: state.btw, available: state.btwAvailable,
+  const btw = useBtwPanel(port, state.sessionId, { state: state.btw, available: state.btwAvailable, modelCatalog: state.modelCatalog,
+    defaultReasoningEffort: state.settings.value?.interactionMode === 'spec'
+      ? state.settings.value.specModeReasoningEffort ?? state.settings.value.reasoningEffort : state.settings.value?.reasoningEffort,
     defaultModelId: state.settings.value?.interactionMode === 'spec'
       ? state.settings.value.specModeModelId ?? state.settings.value.modelId : state.settings.value?.modelId });
   const openBtw = btw.openPanel;
@@ -244,6 +246,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
       inputNeeded={state.mission?.role === 'orchestrator' && state.interactions.length > 0} onShowChat={() => host.setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
     {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
       modelCatalog={state.modelCatalog} images={btw.images} selectedModel={btw.selectedModel}
+      reasoning={{ value: btw.selectedReasoningEffort, onChange: btw.setReasoningEffort }}
       onModelChange={btw.setChosenModel} sending={btw.sending}
       onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote} onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onAsk={btw.sendDraft} onStop={btw.stop} onDismiss={btw.dismiss} /> : null}
     </div>

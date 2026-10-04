@@ -123,6 +123,7 @@ export class BtwSideChat {
           if (!this.stopping) {
             for await (const event of sidecar.ask(question, {
               ...(modelId === undefined ? {} : { modelId }),
+              ...(questionOptions.reasoningEffort === undefined ? {} : { reasoningEffort: questionOptions.reasoningEffort }),
               ...(questionOptions.images?.length ? { images: questionOptions.images.map((image) => ({
                 type: 'base64' as const, mediaType: image.mediaType, data: image.dataBase64,
               })) } : {}),

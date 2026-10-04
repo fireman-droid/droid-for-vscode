@@ -32,9 +32,10 @@ export function setBtwPendingQuestion(
   pendingQuestion: string | null,
   options: BtwAskOptions = {},
 ): SessionBtwState {
-  const { pendingImages: _images, pendingModelId: _model, ...rest } = state;
+  const { pendingImages: _images, pendingModelId: _model, pendingReasoningEffort: _effort, ...rest } = state;
   return { ...rest, pendingQuestion, ...(options.images?.length ? { pendingImages: btwImageSummaries(options.images) } : {}),
-    ...(options.modelId === undefined ? {} : { pendingModelId: options.modelId }) };
+    ...(options.modelId === undefined ? {} : { pendingModelId: options.modelId }),
+    ...(options.reasoningEffort === undefined ? {} : { pendingReasoningEffort: options.reasoningEffort }) };
 }
 
 /** Appends one streaming question, evicting the oldest beyond cap. */
@@ -51,6 +52,7 @@ export function appendBtwQuestion(
       question,
       ...(options.images?.length ? { images: btwImageSummaries(options.images) } : {}),
       ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
+      ...(options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort }),
       answer: '',
       state: 'streaming' as const,
       progress: 'waiting' as const,

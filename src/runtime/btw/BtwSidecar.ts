@@ -1,6 +1,8 @@
 import { DroidClient, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
 import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
+import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 import { BtwThinkingProjection, type BtwThinkingEvent } from './btwThinking';
+import { projectSettingsUpdate } from '../session/projections';
 
 /**
  * Hidden-fork sidecar behind the `/btw` Side Chat card
@@ -37,6 +39,7 @@ export type BtwAnswerEvent =
 export interface BtwPromptOptions {
   readonly images?: Base64ImageSource[];
   readonly modelId?: string;
+  readonly reasoningEffort?: SessionReasoningEffort;
 }
 
 /**
@@ -121,8 +124,12 @@ async function createLocalBtwClient(
     return {
       loadSession: (params) => client.loadSession(params),
       forkSession: (params) => client.forkSession(params),
-      addUserMessage: async ({ modelId, signal, ...params }) => {
-        if (modelId !== undefined) await client.updateSessionSettings({ modelId, specModeModelId: null });
+      addUserMessage: async ({ modelId, reasoningEffort, signal, ...params }) => {
+        if (modelId !== undefined || reasoningEffort !== undefined) await client.updateSessionSettings({
+          ...(modelId === undefined ? {} : { modelId }),
+          ...(reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: reasoningEffort })),
+          specModeModelId: null, specModeReasoningEffort: null,
+        });
         signal?.throwIfAborted();
         return client.addUserMessage(params);
       },

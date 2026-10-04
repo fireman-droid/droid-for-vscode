@@ -306,7 +306,9 @@ export class ChatController {
         this.handleBtwPrepare(message.sessionId);
         return;
       case 'btw.ask':
-        this.handleBtwAsk(message.sessionId, message.text, { images: message.images, modelId: message.modelId });
+        this.handleBtwAsk(message.sessionId, message.text, {
+          images: message.images, modelId: message.modelId, reasoningEffort: message.reasoningEffort,
+        });
         return;
       default:
         dispatchChatMessage(this, message);
@@ -505,10 +507,13 @@ export class ChatController {
           : 'Load the model catalog and choose an available model before sending a side question.');
       return;
     }
-    this.withBtwSession(
-      sessionId,
-      (sideChat, cwd) => void sideChat.handleAsk(cwd, sessionId, text, options),
-    );
+    if (options.reasoningEffort !== undefined && !model.supportedReasoningEfforts.includes(options.reasoningEffort)) {
+      this.emitSessionDiagnostic('settings-update-unsupported', 'Choose a reasoning effort supported by the side conversation model.');
+      return;
+    }
+    this.withBtwSession(sessionId, (sideChat, cwd) => void sideChat.handleAsk(cwd, sessionId, text, {
+      ...options, modelId: model.id, reasoningEffort: options.reasoningEffort ?? model.defaultReasoningEffort,
+    }));
   }
   private handleBtwPrepare(sessionId: string): void {
     this.withBtwSession(

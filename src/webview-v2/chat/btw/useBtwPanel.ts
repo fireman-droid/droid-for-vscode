@@ -6,6 +6,7 @@ import {
   type BtwAskOptions, type SessionBtwState,
 } from '../../../shared/protocol/btwProtocol';
 import { useBtwImages } from '../useBtwImages';
+import type { ModelCatalogState, SessionReasoningEffort } from '../../../shared/protocol/settings';
 
 interface MessagePort {
   postMessage(message: BtwPrepareMessage | BtwAskMessage | BtwStopMessage): void | Promise<void>;
@@ -22,19 +23,28 @@ const UNCONFIRMED_NOTICE = 'The side question has not been confirmed. Your draft
 const emptyDraft = (sessionId: string | null) => ({
   sessionId, open: false, draft: '', quotes: [] as readonly string[],
   notice: null as string | null, chosenModel: null as string | null,
+  chosenReasoning: null as { modelId: string; effort: SessionReasoningEffort } | null,
   pending: null as PendingDraft | null,
 });
 
 /** The bound session owns all unsent BTW input; hiding its view does not dispose it. */
 export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
-  state = EMPTY_SESSION_BTW_STATE, defaultModelId, available = true,
-}: { readonly state?: SessionBtwState; readonly defaultModelId?: string; readonly available?: boolean } = {}) {
+  state = EMPTY_SESSION_BTW_STATE, defaultModelId, defaultReasoningEffort, modelCatalog, available = true,
+}: { readonly state?: SessionBtwState; readonly defaultModelId?: string; readonly available?: boolean;
+  readonly defaultReasoningEffort?: SessionReasoningEffort; readonly modelCatalog?: ModelCatalogState } = {}) {
   const [local, setLocal] = useState(() => emptyDraft(sessionId));
   const [width, setWidth] = useState(320);
   if (local.sessionId !== sessionId) setLocal(emptyDraft(sessionId));
   const unavailable = !available || state.status === 'error' || state.status === 'unsupported';
   const images = useBtwImages(sessionId, unavailable);
   const selectedModel = local.chosenModel ?? defaultModelId;
+  const model = modelCatalog?.items.find((item) => item.id === selectedModel);
+  const preferredEffort = local.chosenReasoning !== null && local.chosenReasoning.modelId === selectedModel ? local.chosenReasoning.effort
+    : local.chosenModel === null ? defaultReasoningEffort : undefined;
+  const selectedReasoningEffort = model?.supportedReasoningEfforts.length
+    ? preferredEffort !== undefined && model.supportedReasoningEfforts.includes(preferredEffort)
+      ? preferredEffort : model.defaultReasoningEffort
+    : undefined;
   const pendingRef = useRef<PendingDraft | null>(null);
   pendingRef.current = local.sessionId === sessionId ? local.pending : null;
 
@@ -42,7 +52,12 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
     setLocal((current) => current.sessionId === sessionId ? change(current) : current);
   }, [sessionId]);
   const setDraft = useCallback((draft: string) => update((current) => ({ ...current, draft })), [update]);
-  const setChosenModel = useCallback((chosenModel: string) => update((current) => ({ ...current, chosenModel })), [update]);
+  const setChosenModel = useCallback((chosenModel: string) => update((current) => ({
+    ...current, chosenModel, chosenReasoning: current.chosenModel === chosenModel ? current.chosenReasoning : null,
+  })), [update]);
+  const setReasoningEffort = useCallback((effort: SessionReasoningEffort) => {
+    if (selectedModel !== undefined) update((current) => ({ ...current, chosenReasoning: { modelId: selectedModel, effort } }));
+  }, [selectedModel, update]);
   const clearQuote = useCallback(() => update((current) => ({ ...current, quotes: [], notice: null })), [update]);
   const removeQuote = useCallback((index: number) => update((current) => ({
     ...current, quotes: current.quotes.filter((_, position) => position !== index), notice: null,
@@ -69,8 +84,13 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
 
   // /btw from the main composer sends its own text and never consumes the side draft.
   const ask = useCallback((text: string, options?: BtwAskOptions) => {
-    if (sessionId !== null) void vscode.postMessage({ type: 'btw.ask', sessionId, text, ...options });
-  }, [sessionId, vscode]);
+    const modelId = options?.modelId ?? selectedModel;
+    const reasoningEffort = options?.reasoningEffort ?? (modelId === selectedModel ? selectedReasoningEffort : undefined);
+    if (sessionId !== null) void vscode.postMessage({ type: 'btw.ask', sessionId, text, ...options,
+      ...(modelId === undefined ? {} : { modelId }),
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+    });
+  }, [sessionId, selectedModel, selectedReasoningEffort, vscode]);
   const stop = useCallback(() => {
     if (sessionId !== null) void vscode.postMessage({ type: 'btw.stop', sessionId });
   }, [sessionId, vscode]);
@@ -80,6 +100,7 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
       state.pendingQuestion !== null || (!text.trim() && !images.images.length) || text.length > MAX_BTW_TEXT_LENGTH) return;
     const options: BtwAskOptions = {
       ...(selectedModel === undefined ? {} : { modelId: selectedModel }),
+      ...(selectedReasoningEffort === undefined ? {} : { reasoningEffort: selectedReasoningEffort }),
       ...(images.images.length ? { images: images.images } : {}),
     };
     const pending: PendingDraft = { text, draft: local.draft, quotes: local.quotes, options,
@@ -98,7 +119,7 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
     } catch {
       failed();
     }
-  }, [sessionId, unavailable, images, state, selectedModel, local.draft, local.quotes, update, vscode]);
+  }, [sessionId, unavailable, images, state, selectedModel, selectedReasoningEffort, local.draft, local.quotes, update, vscode]);
 
   useEffect(() => {
     const pending = local.pending;
@@ -115,12 +136,13 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
   useEffect(() => {
     const pending = local.pending;
     if (pending === null || local.sessionId !== sessionId) return;
-    const matches = (question: string | null, modelId: string | undefined, attached: readonly { id: string }[] | undefined) =>
-      question === pending.text && modelId === pending.options.modelId &&
+    const matches = (question: string | null, modelId: string | undefined, attached: readonly { id: string }[] | undefined, effort: SessionReasoningEffort | undefined) =>
+      question === pending.text && (pending.options.modelId === undefined || modelId === pending.options.modelId) &&
+      (pending.options.reasoningEffort === undefined || effort === pending.options.reasoningEffort) &&
       (attached ?? []).map((image) => image.id).join('\0') === (pending.options.images ?? []).map((image) => image.id).join('\0');
-    const entry = state.entries.find((item) => !pending.entryIds.has(item.id) && matches(item.question, item.modelId, item.images));
+    const entry = state.entries.find((item) => !pending.entryIds.has(item.id) && matches(item.question, item.modelId, item.images, item.reasoningEffort));
     const accepted = entry !== undefined && entry.state !== 'error' ||
-      matches(state.pendingQuestion, state.pendingModelId, state.pendingImages);
+      matches(state.pendingQuestion, state.pendingModelId, state.pendingImages, state.pendingReasoningEffort);
     if (!accepted && !unavailable && entry?.state !== 'error') return;
     if (pendingRef.current === pending) pendingRef.current = null;
     if (accepted) images.sent((pending.options.images ?? []).map((image) => image.id));
@@ -136,6 +158,6 @@ export function useBtwPanel(vscode: MessagePort, sessionId: string | null, {
     open: local.open, draft: local.draft, quote: local.quotes.length ? local.quotes.join('\n\n') : null,
     quotes: local.quotes, notice: local.pending ? 'Sending side question…' : local.notice,
     width, setDraft, setWidth, clearQuote, removeQuote, openPanel, openWithQuote, dismiss, ask, stop,
-    selectedModel, setChosenModel, images, sendDraft, sending: local.pending !== null,
+    selectedModel, setChosenModel, selectedReasoningEffort, setReasoningEffort, images, sendDraft, sending: local.pending !== null,
   };
 }

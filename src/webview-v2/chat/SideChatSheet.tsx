@@ -5,16 +5,17 @@ import { MAX_BTW_TEXT_LENGTH, type SessionBtwState } from '../../shared/protocol
 import type { ModelCatalogState } from '../../shared/protocol/settings';
 import { IMAGE_MEDIA_TYPES } from '../../shared/protocol/bounds';
 import { Button } from '../ui/button';
-import { ModelSourceSelect } from '../models/ModelSourceSelect';
+import { BtwModelSelect, type BtwReasoningControl } from './btw/BtwModelSelect';
 import { BtwImages } from './BtwImages';
 import type { useBtwImages } from './useBtwImages';
 
-export function SideChatSheet({ state, images, modelCatalog, selectedModel, onModelChange, sending = false, ...props }: Omit<ComponentProps<typeof SideChatView>, 'state' | 'maxTextLength'> & {
+export function SideChatSheet({ state, images, modelCatalog, selectedModel, onModelChange, reasoning, sending = false, ...props }: Omit<ComponentProps<typeof SideChatView>, 'state' | 'maxTextLength'> & {
   readonly state: SessionBtwState;
   readonly images: ReturnType<typeof useBtwImages>;
   readonly modelCatalog?: ModelCatalogState;
   readonly selectedModel?: string;
   readonly onModelChange: (modelId: string) => void;
+  readonly reasoning?: BtwReasoningControl;
   readonly sending?: boolean;
 }) {
   const unavailable = state.status === 'error' || state.status === 'unsupported';
@@ -38,10 +39,7 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
         images.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '';
       }} />
       <Button variant="ghost" size="icon-sm" disabled={unavailable || selected?.disabled || selected?.supportsImages === false} title={selected?.supportsImages === false ? 'This model does not support images' : 'Attach images'} aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
-      <ModelSourceSelect label="Side conversation model" value={selectedModel} onChange={onModelChange}
-        disabled={unavailable || modelCatalog?.status !== 'ready'} placeholder="Model" side="top" align="end"
-        className="ml-auto h-7 w-auto max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs"
-        models={models.map((model) => ({ ...model,
-          description: model.disabledReason ?? (model.supportsImages ? 'Images supported' : 'Text only') }))} />
+      <BtwModelSelect catalog={modelCatalog} value={selectedModel} onChange={onModelChange}
+        disabled={unavailable} reasoning={reasoning} />
     </>} />;
 }

@@ -1,6 +1,7 @@
 import type { DaemonApi } from '../daemon/api';
 import { ToolConfirmationOutcome } from '@factory/droid-sdk';
 import { BtwThinkingProjection } from './btwThinking';
+import { projectSettingsUpdate } from '../session/projections';
 
 import {
   BTW_FORK_TAG,
@@ -126,7 +127,11 @@ async function createConnectedDroidBtwClient(
       });
       return {
         async *stream(text, options = {}) {
-          if (options.modelId !== undefined) await droid.sessions.updateSettings(forkSessionId, { modelId: options.modelId, specModeModelId: null });
+          if (options.modelId !== undefined || options.reasoningEffort !== undefined) await droid.sessions.updateSettings(forkSessionId, {
+            ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
+            ...(options.reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: options.reasoningEffort })),
+            specModeModelId: null, specModeReasoningEffort: null,
+          });
           options.signal?.throwIfAborted();
           yield* session.stream(text, { includePartialMessages: true, images: options.images, abortSignal: options.signal });
         },
