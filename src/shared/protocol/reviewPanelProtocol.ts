@@ -1,6 +1,6 @@
 import { isId, isSafeWorkspaceRelativePath } from '../validation/guards';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
-import { isOperationDiff, isSafeOperationText, type OperationDiff, type OperationDiffFile } from './operationDiff';
+import { isOperationDiff, isSafeOperationText, MAX_OPERATION_CONTENT_UNITS, type OperationDiff, type OperationDiffFile } from './operationDiff';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from './reviewProtocol';
 
 export type ReviewContext = 3 | 20 | 100 | 'all';
@@ -108,7 +108,7 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
         (entry.toolName === undefined || typeof entry.toolName === 'string' && entry.toolName.length <= 200) &&
         (entry.sequence === undefined || Number.isSafeInteger(entry.sequence) && Number(entry.sequence) >= 0) &&
         (entry.kind === undefined || ['added', 'modified', 'deleted', 'renamed'].includes(String(entry.kind))) &&
-        (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
+        (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent, MAX_OPERATION_CONTENT_UNITS) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
         (entry.fullPatch === undefined || entry.source === 'tool-result' && entry.outcome === 'applied' &&
           typeof entry.fullPatch === 'string' && entry.fullPatch.length <= MAX_REVIEW_PATCH_CHARS) &&
         typeof entry.patch === 'string' && entry.patch.length <= 24_000) &&

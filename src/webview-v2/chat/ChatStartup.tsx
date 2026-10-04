@@ -15,10 +15,10 @@ export function ChatStartup({ state, blocked, onDraftSuggestion }: {
 }) {
   if (state.connection.status === 'unavailable') return <section className="px-3 py-12 text-center" aria-label="Droid unavailable">
     <h2 className="text-sm font-medium">Droid is not ready</h2>
-    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{state.connection.message ?? 'The local runtime is unavailable. Check the connection message below before reconnecting.'}</p>
+    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{state.connection.message ?? 'Droid is unavailable. Check the connection message below before reconnecting.'}</p>
   </section>;
   if (state.connection.status !== 'connected' || state.sessionId === null) return <div role="status" className="flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground">
-    <DroidActivity phase="loading" /><span>{state.connection.status === 'connected' ? 'Waiting for the session state…' : 'Connecting to the local runtime…'}</span>
+    <DroidActivity phase="loading" /><span>{state.connection.status === 'connected' ? 'Waiting for the session state…' : 'Connecting to Droid…'}</span>
   </div>;
   const settings = state.settings;
   const modelId = settings.value?.interactionMode === 'spec'

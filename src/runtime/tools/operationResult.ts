@@ -1,6 +1,7 @@
 import {
   MAX_OPERATION_DIFF_FILES,
   MAX_OPERATION_DIFF_UNITS,
+  MAX_OPERATION_CONTENT_UNITS,
   operationDiffWithChanges,
   type OperationDiff,
   type OperationDiffFile,
@@ -62,8 +63,8 @@ export function parseOperationResult(
   if (!files.length) return unavailable(eventIsError ? 'failed' : 'not-recorded');
   if (
     files.length > MAX_OPERATION_DIFF_FILES ||
-    files.reduce((total, file) => total + file.patch.length + (file.submittedContent?.length ?? 0), 0) >
-      MAX_OPERATION_DIFF_UNITS
+    files.reduce((total, file) => total + file.patch.length, 0) > MAX_OPERATION_DIFF_UNITS ||
+    files.reduce((total, file) => total + (file.submittedContent?.length ?? 0), 0) > MAX_OPERATION_CONTENT_UNITS
   )
     return unavailable('too-large');
   return operationDiffWithChanges({
@@ -287,7 +288,7 @@ function parseCreateResult(
   const content = input.content ?? input.file_text ?? input.text;
   if (typeof content !== 'string') return 'not-recorded';
   const submittedContent = content.replace(/\r\n?/gu, '\n');
-  if (submittedContent.length > MAX_OPERATION_DIFF_UNITS) return 'too-large';
+  if (submittedContent.length > MAX_OPERATION_CONTENT_UNITS) return 'too-large';
   return [{ ...location, kind: 'added', patch: '', submittedContent, outcome: 'applied', reversible: false }];
 }
 

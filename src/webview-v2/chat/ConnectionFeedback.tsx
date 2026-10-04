@@ -79,7 +79,7 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
   const label = handshakeTimedOut ? 'Still waiting for the extension…'
     : phase === 'switching' ? 'Switching conversation…'
     : connection.status === 'unavailable' ? 'Droid is unavailable'
-    : connection.status === 'connecting' ? 'Connecting to the local runtime…'
+    : connection.status === 'connecting' ? 'Connecting to Droid…'
     : !hasSnapshot ? 'Waiting for the session state…' : 'Opening conversation…';
   return <div className="absolute inset-x-0 bottom-0 top-10 z-20 grid place-content-center bg-background/95 p-4 text-center">
     <div className="mx-auto max-w-sm space-y-3 text-xs">
@@ -126,7 +126,7 @@ export function SessionRecovery({ state, blocked, onReconnect, port }: {
         setPending(true);
         onReconnect();
       }}>Reconnect Droid session</Button>
-      <p>Opens or resumes a local session. Your previous message is not resent.</p>
+      <p>Opens or resumes your Droid session. Your previous message is not resent.</p>
     </> : null}
     {longWait ? <RefreshSessionState port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} /> : null}
   </div>;

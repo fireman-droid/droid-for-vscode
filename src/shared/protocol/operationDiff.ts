@@ -3,6 +3,8 @@ import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
 
 export const MAX_OPERATION_DIFF_UNITS = 24_000;
+/** Full Create/Write contents establish later edits' baseline, independently of preview hunks. */
+export const MAX_OPERATION_CONTENT_UNITS = 128_000;
 export const MAX_OPERATION_DIFF_FILES = 20;
 export const TOOL_EXECUTION_PHASES = [
   'streaming_input', 'queued', 'executing', 'settled_after_execution',
@@ -65,16 +67,16 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       (file.contentRestricted === undefined || file.contentRestricted === true && file.patch === '' &&
         file.submittedContent === undefined && file.reversible === false) &&
       (file.submittedContent === undefined || value.source === 'tool-result' && file.outcome === 'applied' &&
-        file.reversible === false && file.patch === '' && isSafeOperationText(file.submittedContent)) &&
+        file.reversible === false && file.patch === '' && isSafeOperationText(file.submittedContent, MAX_OPERATION_CONTENT_UNITS)) &&
       (value.source !== 'tool-result' || file.outcome !== undefined) &&
       (file.reversible !== true || value.source === 'tool-result' && file.outcome === 'applied') &&
       isSafeOperationText(file.patch)) &&
-    value.files.reduce((size, file: OperationDiffFile) =>
-      size + file.patch.length + (file.submittedContent?.length ?? 0), 0) <= MAX_OPERATION_DIFF_UNITS;
+    value.files.reduce((size, file: OperationDiffFile) => size + file.patch.length, 0) <= MAX_OPERATION_DIFF_UNITS &&
+    value.files.reduce((size, file: OperationDiffFile) => size + (file.submittedContent?.length ?? 0), 0) <= MAX_OPERATION_CONTENT_UNITS;
 }
 
-export function isSafeOperationText(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= MAX_OPERATION_DIFF_UNITS &&
+export function isSafeOperationText(value: unknown, maxUnits = MAX_OPERATION_DIFF_UNITS): value is string {
+  return typeof value === 'string' && value.length <= maxUnits &&
     !/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(value);
 }
 export function isMissionOperationPath(value: unknown): value is string {

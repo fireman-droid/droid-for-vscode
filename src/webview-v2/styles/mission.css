@@ -76,32 +76,18 @@
 }
 .v2-mission-banner[data-tone='attention'] { --mission-tone: var(--mission-tone-attention); }
 
-/* Feature timeline in Mission details */
-.v2-mission-timeline { position: relative; }
-.v2-mission-timeline > li { position: relative; }
-.v2-mission-timeline > li:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  left: 23.5px;
-  top: 38px;
-  bottom: -10px;
-  width: 1px;
-  background: var(--panel-edge);
-}
+/* Feature status icons share the row surface instead of a second ring. */
 .v2-mission-node {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 16px;
   flex-shrink: 0;
-  border-radius: 999px;
-  border: 1px solid var(--panel-edge);
-  background: var(--surface);
   color: var(--muted-ink);
 }
-.v2-mission-node[data-tone='active'] { border-color: color-mix(in srgb, var(--mission-tone-active) 25%, transparent); color: var(--mission-tone-active); }
-.v2-mission-node[data-tone='done'] { border-color: color-mix(in srgb, var(--mission-tone-done) 25%, transparent); color: var(--mission-tone-done); }
+.v2-mission-node[data-tone='active'] { color: var(--mission-tone-active); }
+.v2-mission-node[data-tone='done'] { color: var(--mission-tone-done); }
 .v2-mission-node[data-tone='muted'] { color: var(--muted-ink); }
 
 /* Keep dense work surfaces quiet; state is conveyed by labels and a soft fill. */
@@ -123,12 +109,10 @@
   background: color-mix(in srgb, var(--error-ink) 4%, var(--surface));
 }
 .v2-mission-feature { border-color: var(--panel-edge); background: var(--surface); }
-.v2-mission-feature[data-current='true'] { background: var(--control-surface-hover); }
-.v2-mission-feature-trigger { border-radius: var(--control-radius); }
-.v2-mission-feature-trigger:hover:not(:disabled),
-.v2-mission-feature-trigger[data-state='open'] { background: var(--control-surface-hover); }
-.v2-mission-feature-trigger:active:not(:disabled) { background: var(--control-surface-active); }
-.v2-mission-feature-content { border-color: var(--panel-edge); }
+.v2-mission-feature[data-current='true'] { border-color: color-mix(in srgb, var(--mission-tone-active) 35%, var(--panel-edge)); }
+.v2-mission-feature:has(.v2-mission-feature-trigger:hover),
+.v2-mission-feature:focus-within { background: color-mix(in srgb, var(--control-surface-hover) 45%, var(--surface)); }
+.v2-mission-feature-trigger { border-radius: inherit; cursor: pointer; }
 .v2-mission-settings-trigger:hover:not(:disabled),
 .v2-mission-settings-trigger[data-state='open'] { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
 .v2-mission-settings-trigger:active:not(:disabled) { background: var(--control-surface-active); }
