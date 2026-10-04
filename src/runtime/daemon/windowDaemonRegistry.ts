@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { isSafeSessionIdentifier } from '../catalog/SessionCatalog';
 import { defaultDiscoveryFile, readDaemonDiscovery } from './daemonDiscovery';
 import { removeIdeDaemonSnapshot } from './ideDaemonFeatures';
+import { isRelayDescriptor, type PersistentIdeRelayDescriptor } from '../ide/persistentIdeRelayProtocol';
 
 export interface WindowDaemonRecord {
   readonly id: string;
@@ -15,6 +16,7 @@ export interface WindowDaemonRecord {
   readonly idePort: number | null;
   /** Absent on legacy shared daemons and the window's metadata-only daemon. */
   readonly rootSessionId?: string;
+  readonly ideRelay?: PersistentIdeRelayDescriptor;
 }
 
 const root = join(homedir(), '.droidvisx', 'window-daemons');
@@ -99,6 +101,7 @@ async function readRecord(file: string): Promise<WindowDaemonRecord | null> {
       typeof value.cwd !== 'string' || value.cwd.length > 32_768 ||
       (value.rootSessionId !== undefined &&
         (typeof value.rootSessionId !== 'string' || !isSafeSessionIdentifier(value.rootSessionId))) ||
+      (value.ideRelay !== undefined && (!isRelayDescriptor(value.ideRelay) || value.rootSessionId === undefined)) ||
       (value.idePort !== null && !validPort(value.idePort))) {
     throw new Error('Invalid window daemon discovery record.');
   }
@@ -140,7 +143,7 @@ async function replaceRecord(file: string, value: unknown): Promise<void> {
   await mkdir(join(root, 'sessions'), { recursive: true });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, JSON.stringify(value), { flag: 'wx' });
+    await writeFile(temporary, JSON.stringify(value), { flag: 'wx', mode: 0o600 });
     await replaceWithRetry(temporary, file);
   } finally {
     await unlink(temporary).catch((error: NodeJS.ErrnoException) => {

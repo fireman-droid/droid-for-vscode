@@ -26,7 +26,9 @@ vi.mock('./daemonLifecycle', () => ({
   startDetachedDaemon: fake.spawn, stopDaemon: fake.stop,
 }));
 vi.mock('./daemonConnection', () => ({ openDaemonConnection: fake.open }));
-vi.mock('../ide/nativeIdeRelay', () => ({ createNativeIdeRelay: vi.fn() }));
+vi.mock('../ide/persistentIdeRelay', () => ({
+  createPersistentIdeRelay: vi.fn(), restorePersistentIdeRelay: vi.fn(),
+}));
 
 const delay = (ms: number) => ms === 0 ? Promise.resolve() : new Promise<void>(resolve => setTimeout(resolve, ms));
 const pools: WindowDaemonPool[] = [];

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { reconnectControllerIde, type NativeIdeBackend } from './ideIntegration';
+import { readControllerIde, reconnectControllerIde, type NativeIdeBackend } from './ideIntegration';
+import type { SessionMissionSummary } from '../../shared/protocol/sessions';
 import { reconcileDaemonTurn } from './recovery/recovery';
 import { startReplacement } from './sessions/runtimeLifecycle';
 import { createTurnActivityState } from './turns/turnActivityState';
@@ -12,7 +13,7 @@ import {
 const controllers: ChatController[] = [];
 afterEach(async () => { await Promise.all(controllers.splice(0).map(controller => controller.dispose())); });
 
-async function fixture() {
+async function fixture(mission?: SessionMissionSummary) {
   const workspace = { cwd: 'C:\\workspace-a', trusted: true };
   const original = createMockRuntime();
   const replacement = createMockRuntime();
@@ -20,11 +21,13 @@ async function fixture() {
   const catalog = createCatalog([catalogEntry('session-1')]);
   const history: SessionHistoryLoader = { loadHistory: vi.fn<SessionHistoryLoader['loadHistory']>(async () => ({
     status: 'available', state: { transcript: [], historyStatus: 'complete', truncated: false },
+    ...(mission === undefined ? {} : { mission }),
   })) };
   const result = createController(factory, workspace, catalog, undefined, history);
   controllers.push(result.controller);
   ready(result.controller);
   await waitForConnected(result.messages);
+  result.controller.missionState.mission = mission ?? null;
   const backend = { read: vi.fn<NativeIdeBackend['read']>(() => ({ status: 'connected', message: 'Connected to IDE.' })),
     reconnect: vi.fn<NativeIdeBackend['reconnect']>(async (_sessionId, _current, onClosingSource) => { onClosingSource(); return true; }) };
   result.controller.nativeIde = backend;
@@ -126,8 +129,9 @@ it.each(['completed', 'failed', 'interrupted'] as const)('automatically reconnec
   await vi.waitFor(() => expect(replacement.sendTurn).toHaveBeenCalledOnce());
 });
 
-it('waits for the recovered turn and automatic reconnection before dispatching its queued prompt', async () => {
-  const { controller, messages, original, replacement, backend } = await fixture();
+it.each([undefined, { state: 'paused', role: 'orchestrator' }] as const)(
+  'waits for the recovered turn and automatic reconnection before dispatching its queued prompt with mission %j', async mission => {
+  const { controller, messages, original, replacement, backend } = await fixture(mission);
   let working = true;
   original.readSessionWorkingState = vi.fn(async () => working ? 'running' : 'idle');
   backend.read.mockReturnValue({ status: 'reconnect-required', message: 'Earlier backend.' });
@@ -152,8 +156,58 @@ it('waits for the recovered turn and automatic reconnection before dispatching i
   expect(original.sendTurn).not.toHaveBeenCalled();
   gate.resolve();
   await vi.waitFor(() => expect(replacement.sendTurn).toHaveBeenCalledWith('Queued continuation', undefined));
+  expect(replacement.sendTurn).toHaveBeenCalledOnce();
   expect(controller.queueState.queuedPrompts.items).toHaveLength(0);
   expect(snapshots(messages).at(-1)?.connection.status).toBe('connected');
+});
+
+it.each(['paused', 'completed'] as const)('reconnects an idle %s Mission without discarding its identity or replaying prompts', async state => {
+  const mission = { state, role: 'orchestrator' } as const;
+  const { controller, original, replacement, backend } = await fixture(mission);
+  original.readSessionWorkingState = vi.fn(async () => 'idle' as const);
+  backend.read.mockReturnValue({ status: 'reconnect-required', message: 'Earlier backend.' });
+  backend.reconnect.mockImplementation(async (_id, _current, closing) => {
+    closing();
+    backend.read.mockReturnValue({ status: 'connected', message: 'Connected.' });
+    return true;
+  });
+  expect(readControllerIde(controller).canReconnect).toBe(true);
+  reconcileDaemonTurn(controller, original, controller.sessionState.runtimeGeneration, 'session-1', 'C:\\workspace-a');
+  await vi.waitFor(() => expect(replacement.initialize).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(controller.ideReconnectInProgress).toBe(false));
+  expect(backend.reconnect).toHaveBeenCalledOnce();
+  expect(replacement.initialize).toHaveBeenCalledWith({ kind: 'resume', sessionId: 'session-1', cwd: 'C:\\workspace-a' });
+  expect(controller.missionState.mission).toEqual(mission);
+  expect(original.interrupt).not.toHaveBeenCalled();
+  expect(original.sendTurn).not.toHaveBeenCalled();
+  expect(replacement.sendTurn).not.toHaveBeenCalled();
+});
+
+it.each(['running', 'waiting-for-user'] as const)('retains a Mission whose recovered daemon is %s', async state => {
+  const { controller, original, replacement, backend } = await fixture({ state: 'running', role: 'orchestrator' });
+  original.readSessionWorkingState = vi.fn(async () => state);
+  backend.read.mockReturnValue({ status: 'reconnect-required', message: 'Earlier backend.' });
+  reconcileDaemonTurn(controller, original, controller.sessionState.runtimeGeneration, 'session-1', 'C:\\workspace-a');
+  await vi.waitFor(() => expect(controller.turnState.turn?.status).toBe('streaming'));
+  expect(readControllerIde(controller).canReconnect).toBe(false);
+  await reconnectControllerIde(controller, 'session-1');
+  expect(backend.reconnect).not.toHaveBeenCalled();
+  expect(original.interrupt).not.toHaveBeenCalled();
+  expect(original.dispose).not.toHaveBeenCalled();
+  expect(replacement.initialize).not.toHaveBeenCalled();
+});
+
+it('keeps a Mission worker attached to its parent connection instead of reconnecting it independently', async () => {
+  const { controller, original, replacement, backend } = await fixture({ state: 'paused', role: 'worker' });
+  original.readSessionWorkingState = vi.fn(async () => 'idle' as const);
+  backend.read.mockReturnValue({ status: 'reconnect-required', message: 'Restore the parent IDE connection.' });
+  controller.nativeIde = { read: backend.read };
+  expect(readControllerIde(controller).canReconnect).toBe(false);
+  reconcileDaemonTurn(controller, original, controller.sessionState.runtimeGeneration, 'session-1', 'C:\\workspace-a');
+  await reconnectControllerIde(controller, 'session-1');
+  expect(backend.reconnect).not.toHaveBeenCalled();
+  expect(original.dispose).not.toHaveBeenCalled();
+  expect(replacement.initialize).not.toHaveBeenCalled();
 });
 
 it('consumes an idle recovery intent only after session activation releases its lock', async () => {

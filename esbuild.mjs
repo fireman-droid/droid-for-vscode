@@ -71,6 +71,14 @@ const historyWorkerResult = await build({
   legalComments: 'eof', metafile: true, logLevel: 'info',
 });
 await notices.add(historyWorkerResult.metafile);
+const ideRelayWorkerResult = await build({
+  entryPoints: ['src/runtime/ide/persistentIdeRelayWorker.ts'],
+  outfile: 'dist/extension/persistentIdeRelayWorker.cjs',
+  bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  minify: true, keepNames: true, sourcemap: false, legalComments: 'eof',
+  metafile: true, logLevel: 'info',
+});
+await notices.add(ideRelayWorkerResult.metafile);
 await notices.write('dist/extension/THIRD_PARTY_LICENSES.txt');
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nKilo Code (vendored autocomplete, 7d977bce994af36f0edf752cb53e3aefc7aeb214)\n' + readFileSync('third-party/KILO-LICENSE.txt', 'utf8'));
 
@@ -88,6 +96,9 @@ assertExpectedExternals(extensionResult.metafile, {
 });
 assertExpectedExternals(historyWorkerResult.metafile, {
   required: new Set(), allowed: (path) => isBuiltin(path) || optionalWsAddons.includes(path),
+});
+assertExpectedExternals(ideRelayWorkerResult.metafile, {
+  required: new Set(), allowed: (path) => isBuiltin(path),
 });
 assertExpectedExternals(catalogWorkerResult.metafile, {
   required: new Set(),

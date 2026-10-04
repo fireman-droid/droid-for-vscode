@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import type { IdeState } from '../../shared/protocol/ideProtocol';
-import { createNativeIdeRelay, type NativeIdeRelay } from '../ide/nativeIdeRelay';
+import type { NativeIdeRelay } from '../ide/nativeIdeRelay';
+import { createPersistentIdeRelay, restorePersistentIdeRelay, type PersistentIdeRelay } from '../ide/persistentIdeRelay';
 import type { DaemonApi, DaemonNotification, DaemonSessionHandle } from './api';
 import { openDaemonConnection, type DaemonConnection } from './daemonConnection';
 import { prepareIdeDaemonEnvironment, removeIdeDaemonSnapshot } from './ideDaemonFeatures';
@@ -19,9 +21,9 @@ export interface WindowDaemonBinding {
   readonly detail: string | null;
 }
 export interface WindowDaemonEntry {
-  readonly record: WindowDaemonRecord;
+  record: WindowDaemonRecord;
   readonly connection: DaemonConnection;
-  readonly ide?: NativeIdeRelay;
+  ide?: PersistentIdeRelay;
 }
 export interface WindowDaemonPoolOptions {
   prepare(): Promise<WindowDaemonBinding>;
@@ -42,6 +44,7 @@ export class WindowDaemonPool {
   private readonly owned = new Set<string>();
   private readonly used = new Set<string>();
   private readonly allocations = new Map<string, Promise<WindowDaemonEntry>>();
+  private readonly ideAttachments = new Map<string, Promise<WindowDaemonEntry>>();
   private discovery: Promise<WindowDaemonEntry[]> | undefined;
   private openedDiscovery: Promise<{
     entry: WindowDaemonEntry;
@@ -181,7 +184,7 @@ export class WindowDaemonPool {
   async forSession(sessionId: string, attach = false): Promise<WindowDaemonEntry> {
     const cached = this.owners.get(sessionId);
     if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
-    if (cached && cached.connection.status() === 'connected') return cached;
+    if (cached && cached.connection.status() === 'connected') return attach ? this.attachIde(cached) : cached;
     const ownerId = await readSessionDaemon(sessionId);
     const [owner, discovered] = await Promise.all([
       ownerId ? readWindowDaemon(ownerId) : null, this.discoverOpened(),
@@ -199,7 +202,52 @@ export class WindowDaemonPool {
     const entry = found ?? (attach
       ? await this.allocate(sessionId, owner?.cwd)
       : (owner ? await this.existing(owner) : null) ?? await this.current());
+    if (attach) await this.attachIde(entry);
     if (found || attach) await this.remember(sessionId, entry);
+    return entry;
+  }
+
+  /** Only a real chat attachment may take over an exited window's relay. */
+  attachIde(entry: WindowDaemonEntry): Promise<WindowDaemonEntry> {
+    const existing = this.ideAttachments.get(entry.record.id);
+    if (existing) return existing;
+    const pending = this.restoreAttachedIde(entry);
+    this.ideAttachments.set(entry.record.id, pending);
+    const clear = () => {
+      if (this.ideAttachments.get(entry.record.id) === pending) this.ideAttachments.delete(entry.record.id);
+    };
+    void pending.then(clear, clear);
+    return pending;
+  }
+
+  private async restoreAttachedIde(entry: WindowDaemonEntry): Promise<WindowDaemonEntry> {
+    if (this.owned.has(entry.record.id) || !entry.record.ideRelay || !entry.record.rootSessionId) return entry;
+    const binding = await this.options.prepare();
+    this.binding = binding;
+    if (this.disposed || binding.port === null || !sameWorkspace(binding.cwd, entry.record.cwd)) return entry;
+    const record = await readWindowDaemon(entry.record.id);
+    if (!record?.ideRelay || !record.rootSessionId || record.pid !== entry.record.pid ||
+        record.port !== entry.record.port || !sameWorkspace(binding.cwd, record.cwd) ||
+        (record.ownerPid !== process.pid && isProcessAlive(record.ownerPid))) return entry;
+    let ide: PersistentIdeRelay | undefined;
+    try {
+      ide = await restorePersistentIdeRelay({ descriptor: record.ideRelay,
+        sessionId: record.rootSessionId, upstreamPort: binding.port });
+      if (this.disposed) { await ide.dispose(); return entry; }
+      const adopted = { ...record, ownerPid: process.pid, idePort: binding.port };
+      await writeWindowDaemon(adopted);
+      entry.record = adopted;
+      entry.ide = ide;
+      this.owned.add(record.id);
+      this.ideSubscriptions.set(record.id, this.observeIde(ide));
+      this.options.record({ level: 'info', name: 'ide.native.relay-restored',
+        detail: 'The existing daemon and its workers retained their IDE relay after window reload.' });
+      this.emitIdeChange();
+    } catch {
+      await ide?.dispose();
+      this.options.record({ level: 'warn', name: 'ide.native.relay-restore-failed',
+        detail: 'The existing IDE relay could not be restored. The conversation remains on its original daemon.' });
+    }
     return entry;
   }
 
@@ -328,6 +376,7 @@ export class WindowDaemonPool {
     this.disposed = true;
     if (this.currentEntry) await this.currentEntry.catch(() => undefined);
     await Promise.allSettled(this.allocations.values());
+    await Promise.allSettled(this.ideAttachments.values());
     const entries = await Promise.allSettled(this.connections.values());
     for (const result of entries) {
       if (result.status !== 'fulfilled') continue;
@@ -341,7 +390,10 @@ export class WindowDaemonPool {
           const pid = await resolveDaemonListenerPid(entry.record.port, '127.0.0.1');
           if (pid === entry.record.pid) {
             await stopDaemon({ url: windowDaemonUrl(entry.record), pid });
-            if (!isProcessAlive(pid)) await removeWindowDaemon(entry.record);
+            if (!isProcessAlive(pid)) {
+              await entry.ide?.shutdown();
+              await removeWindowDaemon(entry.record);
+            }
           }
         }
       } catch {
@@ -358,6 +410,7 @@ export class WindowDaemonPool {
     this.ideSubscriptions.clear();
     this.ideListeners.clear();
     this.allocations.clear();
+    this.ideAttachments.clear();
   }
 
   async shutdownCurrent(sessionId?: string | null): Promise<boolean> {
@@ -370,7 +423,7 @@ export class WindowDaemonPool {
     await stopDaemon({ url: windowDaemonUrl(entry.record), pid });
     if (isProcessAlive(pid)) throw new Error('The daemon has not confirmed shutdown. Its recovery record was retained.');
     entry.connection.dispose();
-    await entry.ide?.dispose();
+    await entry.ide?.shutdown();
     await removeWindowDaemon(entry.record);
     if (!selected) this.currentEntry = undefined;
     if (entry.record.rootSessionId) this.allocations.delete(entry.record.rootSessionId);
@@ -394,7 +447,7 @@ export class WindowDaemonPool {
     delete env.FACTORY_VSCODE_MCP_PORT;
     delete env.FACTORY_JETBRAINS_MCP_PORT;
     const ide = sessionId && binding.port !== null
-      ? await createNativeIdeRelay({ sessionId, upstreamPort: binding.port, timeoutMs: 60_000 })
+      ? await createPersistentIdeRelay({ sessionId, upstreamPort: binding.port, timeoutMs: 60_000 })
       : undefined;
     const unsubscribeIde = ide ? this.observeIde(ide) : undefined;
     if (ide) env.FACTORY_VSCODE_MCP_PORT = String(ide.port);
@@ -404,7 +457,9 @@ export class WindowDaemonPool {
       endpoint = await startDetachedDaemon({ cwd: cwd ?? binding.cwd, env: daemonEnv });
     } catch (error) {
       unsubscribeIde?.();
-      await ide?.dispose();
+      await ide?.shutdown().catch(() => {
+        this.options.record({ level: 'warn', name: 'ide.native.relay-cleanup-failed' });
+      });
       try { await removeIdeDaemonSnapshot(instanceId); }
       catch { this.options.record({ level: 'warn', name: 'daemon.feature-snapshot.cleanup-failed' }); }
       throw error;
@@ -413,8 +468,10 @@ export class WindowDaemonPool {
       id: instanceId, port: endpoint.port, pid: endpoint.pid, ownerPid: process.pid,
       cwd: cwd ?? binding.cwd, idePort: sessionId ? binding.port : null,
       ...(sessionId ? { rootSessionId: sessionId } : {}),
+      ...(ide ? { ideRelay: ide.descriptor } : {}),
     };
     const pending = (async () => {
+      await ide?.bindDaemon(endpoint.pid);
       await writeWindowDaemon(record);
       const connection = await openDaemonConnection(endpoint);
       if (this.disposed) {
@@ -435,11 +492,17 @@ export class WindowDaemonPool {
       this.connections.delete(record.id);
       unsubscribeIde?.();
       this.ideSubscriptions.delete(record.id);
-      await ide?.dispose();
-      await stopDaemon(endpoint);
-      await removeWindowDaemon(record);
-      // Registration may have failed before its file existed.
-      if (!isProcessAlive(endpoint.pid)) await removeIdeDaemonSnapshot(instanceId);
+      const cleanup = await Promise.allSettled([ide?.shutdown(), stopDaemon(endpoint)]);
+      if (cleanup.some(result => result.status === 'rejected')) {
+        this.options.record({ level: 'warn', name: 'daemon.session.cleanup-deferred' });
+      }
+      try {
+        if (!isProcessAlive(endpoint.pid)) {
+          await removeWindowDaemon(record);
+          // Registration may have failed before its file existed.
+          await removeIdeDaemonSnapshot(instanceId);
+        }
+      } catch { this.options.record({ level: 'warn', name: 'daemon.session.cleanup-deferred' }); }
       throw error;
     }
   }
@@ -452,7 +515,7 @@ export class WindowDaemonPool {
     if (pid !== entry.record.pid) return;
     await stopDaemon({ url: windowDaemonUrl(entry.record), pid });
     if (isProcessAlive(pid)) return;
-    await entry.ide?.dispose();
+    await entry.ide?.shutdown();
     entry.connection.dispose();
     await removeWindowDaemon(entry.record);
     this.connections.delete(entry.record.id);
@@ -474,7 +537,7 @@ export class WindowDaemonPool {
     record: WindowDaemonRecord, verified?: DaemonListenerVerification,
   ): Promise<WindowDaemonEntry | null> {
     const cached = this.connections.get(record.id);
-    let ide: NativeIdeRelay | undefined;
+    let ide: PersistentIdeRelay | undefined;
     if (cached) {
       const entry = await cached;
       if (entry.connection.status() === 'recovering') await entry.connection.waitUntilReady?.();
@@ -542,6 +605,11 @@ function isProcessAlive(pid: number): boolean {
     if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
     throw error;
   }
+}
+
+function sameWorkspace(left: string, right: string): boolean {
+  const normalize = (path: string) => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path);
+  return normalize(left) === normalize(right);
 }
 
 function busySessionTree(

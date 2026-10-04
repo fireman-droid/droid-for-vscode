@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonNotification, DaemonSessionHandle } from './api';
 import { WindowDaemonPool } from './windowDaemonPool';
 import { createRoutedDaemon } from './routedDaemon';
@@ -17,25 +17,35 @@ const fake = vi.hoisted(() => ({
   wait: vi.fn(async () => {}),
   resetRoot: vi.fn(),
   stop: vi.fn(async () => {}),
+  restoreRelay: vi.fn(),
+  bindDaemon: vi.fn(async () => {}),
+  shutdownRelay: vi.fn(async () => {}),
+  detachRelay: vi.fn(async () => {}),
+  writeRecord: vi.fn(async () => {}),
+  events: vi.fn(),
   count: 0,
   relays: 0,
   failedRelay: 0,
 }));
 
-vi.mock('../ide/nativeIdeRelay', () => ({
-  createNativeIdeRelay: vi.fn(async ({ sessionId }: { sessionId: string }) => {
+vi.mock('../ide/persistentIdeRelay', () => ({
+  createPersistentIdeRelay: vi.fn(async ({ sessionId }: { sessionId: string }) => {
     const index = ++fake.relays;
     return {
       port: 45000 + index,
+      descriptor: { port: 55000 + index, pid: 55001 + index, token: 'a'.repeat(64) },
+      bindDaemon: fake.bindDaemon,
+      shutdown: fake.shutdownRelay,
       sessionId,
       read: () => ({ status: 'connected', message: 'Native handshake complete' }),
       subscribe: () => () => {},
       waitUntilReady: fake.wait,
       requiresSessionRestart: () => index === fake.failedRelay,
       resetForSessionRestart: fake.resetRoot,
-      dispose: async () => {},
+      dispose: fake.detachRelay,
     };
   }),
+  restorePersistentIdeRelay: fake.restoreRelay,
 }));
 vi.mock('./daemonLifecycle', () => ({
   startDetachedDaemon: fake.spawn,
@@ -49,7 +59,7 @@ vi.mock('./windowDaemonRegistry', () => ({
   readSessionDaemon: async () => 'legacy-owner',
   readWindowDaemon: async (id: string) => fake.records.find(record => record.id === id) ?? null,
   writeSessionDaemon: async () => {},
-  writeWindowDaemon: async () => {},
+  writeWindowDaemon: fake.writeRecord,
   removeWindowDaemon: async () => {},
   windowDaemonUrl: (record: { port: number }) => `ws://127.0.0.1:${record.port}`,
 }));
@@ -62,6 +72,7 @@ vi.mock('./daemonConnection', () => ({
         listOpened: async () => url.endsWith(':43000') ? fake.opened : fake.openedByUrl.get(url) ?? [],
         getMessages: async () => fake.messages,
         resume: fake.resume,
+        attachChild: fake.resume,
       },
       terminals: { list: async () => url.endsWith(':43000') ? fake.terminals : [] },
       notifications: { subscribe: () => () => {}, subscribeTerminal: () => () => {} },
@@ -69,10 +80,10 @@ vi.mock('./daemonConnection', () => ({
   }),
 }));
 
-function pool() {
+function pool(cwd = 'C:/workspace') {
   return new WindowDaemonPool({
-    prepare: async () => ({ cwd: 'C:/workspace', port: 44000, detail: null }),
-    record: () => {},
+    prepare: async () => ({ cwd, port: 44000, detail: null }),
+    record: fake.events,
   });
 }
 
@@ -99,6 +110,13 @@ beforeEach(() => {
   fake.count = 0;
   fake.relays = 0;
   fake.failedRelay = 0;
+  fake.restoreRelay.mockImplementation(async ({ descriptor, sessionId }) => ({
+    descriptor, sessionId, port: 45000,
+    read: () => ({ status: 'connected', message: 'Native handshake complete' }),
+    subscribe: () => () => {}, waitUntilReady: fake.wait,
+    requiresSessionRestart: () => false, resetForSessionRestart: fake.resetRoot,
+    bindDaemon: fake.bindDaemon, shutdown: fake.shutdownRelay, dispose: fake.detachRelay,
+  }));
   fake.wait.mockImplementation(async () => {});
   fake.close.mockImplementation(async () => {});
   fake.stream.mockImplementation(async function* () { yield { type: 'assistant', text: 'continued' }; });
@@ -109,6 +127,96 @@ beforeEach(() => {
   fake.spawn.mockImplementation(async () => {
     const port = 46000 + 2 * ++fake.count;
     return { port, pid: port + 1, url: `ws://127.0.0.1:${port}`, listenerVerified: true };
+  });
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+function savedRelay(ownerPid = 999999, cwd = 'C:/workspace') {
+  const record = {
+    id: 'persistent-owner', pid: 43001, port: 43000, ownerPid, cwd, idePort: 44001,
+    rootSessionId: 'root-chat', ideRelay: { port: 55000, pid: 55001, token: 'b'.repeat(64) },
+  };
+  fake.records = [record];
+  fake.opened = [{ id: 'root-chat', workingState: 'running' },
+    { id: 'child-chat', parentSessionId: 'root-chat', workingState: 'running' }];
+  vi.spyOn(process, 'kill').mockImplementation(pid => {
+    if (pid === 999999) throw Object.assign(new Error('Exited'), { code: 'ESRCH' });
+    return true;
+  });
+  return record;
+}
+
+describe('persistent IDE relay restoration', () => {
+  it('reattaches a running root and child after reload without closing, moving or resending their work', async () => {
+    const record = savedRelay();
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const [root, child] = await Promise.all([
+      routed.sessions.resume('root-chat'), routed.sessions.attachChild!('child-chat', {}),
+    ]);
+    expect(root.id).toBe('root-chat'); expect(child.id).toBe('child-chat');
+    expect(fake.restoreRelay).toHaveBeenCalledExactlyOnceWith({ descriptor: record.ideRelay,
+      sessionId: 'root-chat', upstreamPort: 44000 });
+    expect(fake.writeRecord).toHaveBeenCalledExactlyOnceWith({ ...record, ownerPid: process.pid, idePort: 44000 });
+    expect(value.readIde('root-chat').status).toBe('connected');
+    expect(value.readIde('child-chat', 'shared').status).toBe('connected');
+    expect(fake.close).not.toHaveBeenCalled();
+    expect(fake.spawn).not.toHaveBeenCalled();
+    expect(fake.stream).not.toHaveBeenCalled();
+    fake.opened = [{ id: 'root-chat', workingState: 'idle' },
+      { id: 'child-chat', parentSessionId: 'root-chat', workingState: 'idle' }];
+    const messages = root.stream('continue once');
+    await messages.next(); await messages.next();
+    expect(fake.stream).toHaveBeenCalledExactlyOnceWith('continue once', { includePartialMessages: false });
+    routed.disconnect();
+    await value.dispose();
+    expect(fake.shutdownRelay).not.toHaveBeenCalled();
+    expect(fake.detachRelay).toHaveBeenCalledOnce();
+  });
+
+  it('does not take over a relay during discovery or read-only routing', async () => {
+    savedRelay();
+    const value = pool();
+    await value.forSession('root-chat');
+    expect(fake.restoreRelay).not.toHaveBeenCalled();
+    expect(fake.writeRecord).not.toHaveBeenCalled();
+    await value.dispose();
+  });
+
+  it.each(['workspace', 'live-owner'] as const)('does not steal a relay with a different %s', async boundary => {
+    savedRelay(boundary === 'live-owner' ? process.pid + 1 : 999999);
+    const value = pool(boundary === 'workspace' ? 'C:/different-workspace' : 'C:/workspace');
+    const entry = await value.forSession('root-chat', true);
+    expect(entry.record.id).toBe('persistent-owner');
+    expect(fake.restoreRelay).not.toHaveBeenCalled();
+    expect(fake.writeRecord).not.toHaveBeenCalled();
+    expect(value.readIde('root-chat').status).toBe('reconnect-required');
+    await value.dispose();
+  });
+
+  it('retains busy sessions and history when their old helper cannot be restored', async () => {
+    savedRelay();
+    fake.restoreRelay.mockRejectedValue(new Error('Private transport failure'));
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    await routed.sessions.resume('root-chat');
+    expect(value.readIde('root-chat').status).toBe('reconnect-required');
+    expect(fake.close).not.toHaveBeenCalled(); expect(fake.spawn).not.toHaveBeenCalled();
+    expect(fake.stream).not.toHaveBeenCalled(); expect(fake.writeRecord).not.toHaveBeenCalled();
+    expect(fake.events).toHaveBeenCalledWith(expect.objectContaining({ name: 'ide.native.relay-restore-failed' }));
+    expect(JSON.stringify(fake.events.mock.calls)).not.toContain('Private transport failure');
+    routed.disconnect(); await value.dispose();
+  });
+
+  it('still stops a failed startup daemon when relay cleanup also fails and reports the original failure', async () => {
+    fake.bindDaemon.mockRejectedValueOnce(new Error('Could not bind daemon'));
+    fake.shutdownRelay.mockRejectedValueOnce(new Error('Relay cleanup failed'));
+    const value = pool();
+    await expect(value.allocate('root-chat')).rejects.toThrow('Could not bind daemon');
+    expect(fake.stop).toHaveBeenCalledOnce();
+    expect(fake.events).toHaveBeenCalledWith(expect.objectContaining({ name: 'daemon.session.cleanup-deferred' }));
+    await value.dispose();
   });
 });
 
@@ -224,6 +332,8 @@ describe('dedicated chat daemon ownership', () => {
     expect(first.ide?.port).not.toBe(second.ide?.port);
     expect(fake.spawn.mock.calls[0]![0].env.FACTORY_VSCODE_MCP_PORT).toBe(String(first.ide?.port));
     expect(fake.spawn.mock.calls[1]![0].env.FACTORY_VSCODE_MCP_PORT).toBe(String(second.ide?.port));
+    expect(fake.bindDaemon.mock.calls).toEqual([[first.record.pid], [second.record.pid]]);
+    expect(first.record.ideRelay).toEqual(first.ide?.descriptor);
     await value.dispose();
   });
 
@@ -240,8 +350,9 @@ describe('dedicated chat daemon ownership', () => {
   it('does not delete an empty draft to establish a new IDE connection', async () => {
     const value = pool();
     const entry = await original(value, 'idle');
-    expect(await value.rebindIdleAttachment('old-chat', entry)).toBe(entry);
-    expect(fake.close).not.toHaveBeenCalled();
+    fake.close.mockImplementation(async () => { fake.opened = []; });
+    expect(await value.rebindIdleAttachment('old-chat', entry)).not.toBe(entry);
+    expect(fake.close).toHaveBeenCalledExactlyOnceWith({ preserveEmptyDraft: true });
     await value.dispose();
   });
 
@@ -258,10 +369,10 @@ describe('dedicated chat daemon ownership', () => {
     await value.dispose();
   });
 
-  it.each(['child', 'terminal', 'empty-draft'] as const)('defers automatic migration without closing the source when blocked by %s', async reason => {
+  it.each(['child', 'terminal'] as const)('defers automatic migration without closing the source when blocked by %s', async reason => {
     const value = pool();
     await original(value, 'idle');
-    fake.messages = reason === 'empty-draft' ? [] : [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
+    fake.messages = [{ role: 'user', content: [{ type: 'text', text: 'retained prompt' }] }];
     if (reason === 'child') fake.opened.push({ id: 'child', parentSessionId: 'old-chat', workingState: 'working' });
     if (reason === 'terminal') fake.terminals.push({ id: 'managed-terminal' });
     const closing = vi.fn();

@@ -7,6 +7,28 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Reload 后的 IDE 连接
+
+- 原因已确认：旧实现的 IDE 转发端口属于 Extension Host，Reload 会关闭它；
+  后台 Droid daemon 与 Worker 继续运行，但 CLI 不会自动重新建立已断开的原生 IDE 客户端。
+- 新分配的会话使用独立 IDE 转发进程，Host 退出不关闭原生接入端口。重新打开同一工作区
+  的聊天时，接管原转发进程并为主／子客户端分别重建真实上游 MCP 会话，保留后台任务。
+  不跨工作区接管，不抢占仍运行的 Host，不重发用户消息或已经转发的工具调用。
+- 恢复期间显示连接中，不伪造心跳。恢复窗口为 60 秒，CLI 的 75 秒心跳限制仍存在；
+  超过窗口或已经在旧版断开的 Worker 仍需等任务及子任务空闲后重建，不能运行中热修。
+  暂停／完成的 Mission 不再因为保留 Mission 元数据而永远禁止重连；受管终端等约束保留。
+- 已完成模拟 IDE 服务与真实独立进程验证：宿主进程退出后转发进程存活、主／子 SSE
+  恢复、工具不重复执行、活动 Host 不被接管、daemon 退出后转发进程退出。
+  未调用模型，也未中断或重启用户的真实任务。
+- CLI 关闭子客户端不发送 DELETE，转发层在没有 GET 和在途请求后有界回收其记录；
+  短暂重新连接、空闲 Worker 再次加载和执行中的工具请求均保留正确的会话身份。
+- 本轮授权范围内 9 个文件共 98 项定向回归通过。首次直接执行 pnpm 被环境的依赖
+  预检查中止；设置 `pnpm_config_verify_deps_before_run=false` 后使用已有依赖完成验证，
+  未重装依赖或修改 Lockfile。真实 VS Code 的交互仍由用户 Reload Window 后验收。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 和
+  `pnpm run verify:vsix` 通过。统一安装包包含 166 个条目，已全局安装 Microsoft VS Code；
+  163 个安装载荷与清单均匹配包内内容。安装 CLI 的 `url.parse()` 弃用提示未阻断安装。
+
 ## Agents 当前消息范围
 
 - 再次用残留列表对应的真实会话和任务记录只读回放，新版会将已完成且属于旧消息的
@@ -801,7 +823,8 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
 - 失效原生 IDE 客户端可安全重建，但须满足空闲、无活动子代理/BTW/受管终端等条件。
   关闭旧后台时传递 SDK 的 `preserveEmptyDraft: true`，保留空会话及设置后恢复同一 ID，
   不再要求先有历史消息才能重连；首条消息仍等待新 IDE 握手后才提交。
-  已核对安装 SDK 和本机 CLI 支持该参数。旧活动任务继续保留，运行中 Reload 不保证无缝 IDE 重连。
+  已核对安装 SDK 和本机 CLI 支持该参数。新分配会话的 Reload 恢复由独立转发进程承担，
+  旧版已断开或超过恢复窗口的活动任务继续保留，空闲后再重建 IDE 客户端。
   旧任务结束后可自动尝试一次恢复，失败保留草稿与暂停队列，允许手动重连。
 - 新完整握手成功后清除对应旧失败提示。会话租约和 daemon 登记的原子替换有界
   重试并串行写入；永久错误仍报告，不能把存储损坏当作空表。

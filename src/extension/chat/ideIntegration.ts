@@ -45,7 +45,7 @@ function eligible(ctl: ChatController): boolean {
     ctl.sessionState.sessionId !== null && ctl.sessionState.runtime !== null &&
     ctl.sessionState.connection.status === 'connected' &&
     ctl.btwSideChat?.isBusy() !== true &&
-    ctl.sessionState.workspaceTransition === null && ctl.missionState.mission === null &&
+    ctl.sessionState.workspaceTransition === null &&
     evaluateActiveSessionTransform({
       turn: ctl.turnState.turn,
       hasPendingInteractions: ctl.interactions.hasPending(),

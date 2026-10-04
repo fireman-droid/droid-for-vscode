@@ -455,9 +455,19 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
 - `nativeIdeRelay.ts` 只在 loopback 透传官方 MCP，根连接身份固定。完整初始化、
   工具发现和初始编辑器通知后才 connected；端口可达或 child 握手不能代替根握手。
   `recoverableIdeEventStream.ts` 有界续接完整 SSE 帧，不重放 POST，也不伪造心跳。
+- `persistentIdeRelayWorker.ts` 将 IDE 接入端口放在独立进程，其寿命跟随所属 daemon，
+  Host 退出只释放观察者。`reloadableIdeEndpoint.ts` 按原生 MCP 客户端隔离会话；
+  官方 IDE 服务随 Reload 更换后，用保存的初始化握手建立新上游会话，保留下游身份
+  和 SSE，再透传真实编辑器事件。恢复窗口为 60 秒，CLI 的 75 秒心跳限制仍有效。
+  恢复时不重放已经转发的工具请求，也不生成心跳；断线中的工具调用可能失败。
+  Host 只在实际打开聊天、工作区匹配且旧 Host 已退出时接管；loopback 控制接口
+  校验每个 relay 的私有凭据及活动 Host 归属。凭据只写本地登记，不写日志或 Bridge。
+  CLI 关闭客户端不会发送 DELETE；最后一个 GET 结束且无在途请求后按恢复窗口回收
+  该 MCP 会话，期间重新打开 GET 或发起请求会保留它，避免完成的子任务积累连接记录。
 - `ideSessionHandle.ts` 发送前先加载同一原会话再等 IDE；空闲回收后的代次重置隔离
   迟到旧请求。失效 attachment 只有满足无活动任务/受管终端等安全条件才重建。
-  已提交请求不重发，运行中 Reload 不保证无缝连接，旧活动后台仍保留。
+  已提交请求不重发。旧版已断开的原生客户端没有公开热重连接口，保留其活动后台，
+  空闲后再重建；Mission 元数据不再永久禁止这一恢复，仍受实际回合和后端安全检查约束。
 - `transportRecovery.ts` 区分 SDK 恢复中/最终失败，认证时重读凭据并恢复原订阅/配置。
   连接恢复后补历史确认终态，不能从 idle 猜成功。监听换代解绑，历史 child 不为展示另 attach。
 - `ideDaemonFeatures.ts` 为 CLI 0.228 生成独立 feature snapshot，覆盖
