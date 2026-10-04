@@ -11,6 +11,14 @@
 
 ## v0.8.3 Diff 改造
 
+- [v0.8.3 Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.3)
+  已正式公开并标为 Latest；标签对应 `dfd18f2d08b5f840b3a8edb8c1bc07068875a126`。
+  [发布构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37208200668) 全部通过，
+  附件 `droid-0.8.3.vsix` 为 10,589,188 bytes，`sourceDirty=false`，SHA-256 为
+  `15ceb4909f5f860326f71c965c220eb1bd8e77e274fffe4919e82dd70d05efbb`。
+- 同一 CI 附件经 166 条目校验后全局安装到 Microsoft VS Code；CLI 确认版本 0.8.3，
+  9 个生产文件与附件逐一哈希一致。初次整体比较 package.json 因安装器追加 `__metadata`
+  不一致，改为验证扩展身份／版本及生产文件内容。需 Reload Window 加载，未替用户重载运行中的任务。
 - Review 默认 3 行上下文；Recorded edits 以真实操作片段为主，停止默认全文重建。
   本轮和 Git 比较可增加上下文；原生历史对照仍要求可靠的 before/after。
 - Workspace、Branch、Staged、Unstaged 直接读取本地 Git。无 HEAD 时 Workspace／Staged
