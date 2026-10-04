@@ -109,6 +109,8 @@ GitHub 下载版需要手动安装新版 VSIX。更新会沿用扩展 ID `droidv
 
 贡献前请阅读 [项目规则](AGENTS.md)。全部文档入口在 [docs/README.md](docs/README.md)。
 
+社区友链：[LINUX DO](https://linux.do/)。感谢社区为开源项目提供交流与分享的平台。
+
 ## 许可与致谢
 
 原创代码采用 [MIT](LICENSE) 许可证，第三方代码与依赖保留各自许可。
