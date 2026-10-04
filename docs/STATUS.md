@@ -3,11 +3,23 @@
 更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.2`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Mission 刷新、Canvas 移除及 Reload 心跳衔接修复；本地安装状态见下文。
-本次以 `v0.8.2` 交付最新修复，下载入口统一为 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest)。
+`v0.8.2` 已正式发布，下载入口统一为 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest)。
 `v0.8.1` 保留为历史草稿，不移动旧标签，也不以旧包替代当前版本。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## v0.8.2 正式分发
+
+- [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.2)
+  已公开并标为最新版本；README 直接链接 `droid-0.8.2.vsix`，普通安装不再要求源码构建。
+- 标签对应 `6c45470e35eacb7e6165a223abd61a38b8791d40`；
+  [发布构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/37199443624)
+  通过类型、预算、构建、VSIX 及附件校验，构建信息为 `sourceDirty=false`。
+- 已下载并核对正式附件：10,576,163 bytes，SHA-256 为
+  `a0082d3b669cb509b078ec7486d11fa7cc58757f587ecd217ef5c04fc54f887d`。
+  166 条目包校验通过，同一份包已全局安装 Microsoft VS Code，需 Reload Window 加载。
+- 本次未新增或运行测试、浏览器自动化或模型请求；既有功能验证与待验收范围仍见对应条目。
 
 ## 项目首页与下载包命名
 

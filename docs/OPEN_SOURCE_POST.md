@@ -3,7 +3,7 @@
 <!--
 发帖准备说明，不属于正文：
 1. 本稿介绍本仓库的 Droid 插件，LearnGraph 帖子仅作为写法参考。
-2. 仓库已公开，Release 仍为草稿；准备好与公开源码对应的下载附件后，再发布推广帖。
+2. 仓库已公开，v0.8.2 已正式发布；推广帖使用 Releases 的最新版本下载入口。
 3. 文末社区声明尚未填写“是”；请按发布时的社区规则和实际完成情况确认。
 4. 按用户提供的声明要求，将 AI 生成或润色的正文以截图方式发布。下面的配图注释是产品演示图位置，两类截图用途不同。
 -->
@@ -87,7 +87,7 @@ GitHub：[fireman-droid/droid-for-vscode](https://github.com/fireman-droid/droid
 ## 怎么使用
 
 1. 先安装官方 **Droid CLI**，完成本机认证，确认所选模型可以正常使用。
-2. 从 [GitHub Releases](https://github.com/fireman-droid/droid-for-vscode/releases) 下载 `.vsix`，在编辑器扩展面板选择 **Install from VSIX**。如果还没有可下载版本，可以按 README 从源码构建。
+2. 从 [GitHub Releases](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 下载 `droid-版本号.vsix`，在编辑器扩展面板选择 **Install from VSIX**。
 3. 执行 **Developer: Reload Window**，打开 Droid 侧栏开始使用。需要代码补全时，再单独配置并启用。
 
 插件原创代码采用 **MIT** 许可证，第三方代码保留各自的许可。它是个人维护的非官方项目，不包含 Factory 订阅或模型额度；聊天、BYOK 和补全的费用取决于实际使用的服务。
