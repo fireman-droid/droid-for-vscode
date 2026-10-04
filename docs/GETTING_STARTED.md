@@ -42,6 +42,13 @@ droid --version
 任务需要权限或补充信息时，在对话内对应的卡片回答。
 模型开始修改文件后，可以从修改记录进入 [Review](REVIEW.md) 查看结果。
 
+<figure class="droid-screenshot">
+
+[![Droid 正在制作 HTML 天气卡片，任务计划和展开的 Activity 显示执行进展](images/chat-task.png)](images/chat-task.png)
+
+<figcaption>一次制作天气卡片的任务：顶部查看计划，Activity 中查看工具细节。点击图片查看原图。</figcaption>
+</figure>
+
 想使用自己的模型渠道，继续阅读 [模型与服务渠道](MODELS.md)。
 想让编辑器自动显示代码建议，单独完成 [补全配置](AUTOCOMPLETE.md)。
 聊天模型和补全服务分别配置。

@@ -33,6 +33,13 @@
 所选强度显示在模型名旁；切换模型后使用该模型的默认档位，不会把不支持的档位带过去。
 设置只用于 BTW，已排队的问题保留发送时的模型和强度，不改变主聊天配置。
 
+<figure class="droid-screenshot">
+
+[![左侧主聊天正在讲解 SQL，右侧 By the way 面板有独立的对话与输入区](images/chat-btw.png)](images/chat-btw.png)
+
+<figcaption>主聊天与 BTW 并排显示，各自保留对话和输入区。点击图片查看原图。</figcaption>
+</figure>
+
 例如，主任务正在修改登录流程，你可以选中一段说明，问：
 
 > 这里的 refresh token 和 access token 各自负责什么？
@@ -59,6 +66,13 @@ BTW 使用独立的侧问答会话，这段追问不会作为新消息追加到�
 
 从聊天顶部的历史入口切换已有会话，查看该会话的消息与工具记录。
 需要保存可阅读的副本时，执行 **Droid: Export Session as Markdown**。
+
+<figure class="droid-screenshot">
+
+[![聊天右上角展开历史菜单，包含搜索框和按时间分组的会话列表](images/chat-history.png)](images/chat-history.png)
+
+<figcaption>从右上角打开历史菜单，搜索或切换会话。点击图片查看原图。</figcaption>
+</figure>
 
 导出前检查正文、路径、附件和工具输出是否含有个人或项目敏感信息。
 本地历史与恢复数据不随代码仓库自动迁移到另一台电脑。

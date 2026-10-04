@@ -16,6 +16,15 @@
 
 ## 使用 Mission
 
+聊天输入区的模式菜单提供 **Auto**、**Spec** 和 **Mission** 入口。
+
+<figure class="droid-screenshot">
+
+[![聊天输入区展开模式菜单，可选择 Auto、Spec 和 Mission](images/chat-modes.png)](images/chat-modes.png)
+
+<figcaption>输入区的模式选择菜单。点击图片查看原图。</figcaption>
+</figure>
+
 运行 **Droid: Open Mission Control** 打开任务列表。查看已有 Mission，或点击 **New Mission** 创建任务：
 
 1. 在 **Mission goal** 中填写要交付的目标和约束。

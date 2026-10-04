@@ -17,6 +17,13 @@
    服务配置、相关文件开关、设置和删除已存密钥；停用后仍可点击状态栏恢复。错误显示在状态栏，自动请求
    对 429/网络/服务错误指数退避，连续失败后暂停 5 分钟；认证/余额错误等待手动重试或重新配置。
 
+<figure class="droid-screenshot">
+
+[![SQL 编辑器中的灰字代码建议，悬浮工具栏提示使用 Tab 接受](images/inline-completion.png)](images/inline-completion.png)
+
+<figcaption>普通代码补全：建议直接显示在光标处，按 Tab 接受。点击图片查看原图。</figcaption>
+</figure>
+
 ## 上下文与数据读取
 
 普通续写接入 Kilo/Continue 的导入定义、语法路径、近期编辑/浏览/打开文件、排序与

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { cp } from 'node:fs/promises';
 import { defineConfig } from 'vitepress';
 import { repositoryLinks } from './repositoryLinks.mjs';
 
@@ -13,6 +14,10 @@ export default defineConfig({
   rewrites: { 'README.md': 'index.md' },
   srcExclude: ['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md', 'OPEN_SOURCE_POST.md', 'RUNTIME_CORRECTNESS_REVIEW.md'],
   lastUpdated: true,
+  // Keep original-image links valid in both GitHub Markdown and the built site.
+  async buildEnd({ outDir }) {
+    await cp(path.resolve(import.meta.dirname, '../images'), path.join(outDir, 'images'), { recursive: true });
+  },
   head: [
     ['meta', { name: 'theme-color', content: '#202229' }],
   ],

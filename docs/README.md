@@ -8,6 +8,13 @@ Droid 是 Factory Droid CLI 的非官方 VS Code / Cursor 扩展。聊天、BTW 
 
 第一次使用，从 [安装与第一次对话](GETTING_STARTED.md) 开始。
 
+<figure class="droid-screenshot">
+
+[![浅色主题下的 Droid 聊天：顶部显示任务计划，正文展示工具执行，底部是输入区](images/chat-light.png)](images/chat-light.png)
+
+<figcaption>浅色主题下的任务执行界面。点击图片查看原图。</figcaption>
+</figure>
+
 ## 使用指南
 
 | 你想做什么 | 从这里开始 |

@@ -11,6 +11,13 @@ Review 把文件改动和上下文放在同一个页面：未修改的内容继�
 先检查顶部当前查看的范围，例如 **Recorded edits** 表示会话记录的编辑操作。
 记录的某次编辑和文件当前的工作区状态可能不同。
 
+<figure class="droid-screenshot">
+
+[![左侧 Review 对照新增天气卡片文件，Before 为空，After 显示新增代码；右侧保留聊天](images/review-split.png)](images/review-split.png)
+
+<figcaption>新增文件的分栏比较：Before 为空，After 为新增的 183 行内容，右侧保留任务对话。点击图片查看原图。</figcaption>
+</figure>
+
 ## 阅读与切换视图
 
 - 在文件列表中选择目标文件，或使用筛选框缩小范围。
