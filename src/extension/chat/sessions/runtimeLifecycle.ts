@@ -231,12 +231,14 @@ export async function replaceRuntime(
     }
   }
 
-  // Read persisted history alongside the native session handshake. Activation
-  // owns their common ready/checkpoint boundary; history may appear read-only
-  // while the native handshake continues.
+  // New child IDs can precede their persisted history. Attach to the original
+  // worker first; existing root history remains independent of its handshake.
+  const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
-    prepareHistory(ctl, target, generation, phases),
-    createInitializedRuntime(ctl, target, generation, phases),
+    target.kind === 'resume' && target.child
+      ? initializing.then(result => result === null ? null : prepareHistory(ctl, target, generation, phases))
+      : prepareHistory(ctl, target, generation, phases),
+    initializing,
   ]);
   if (
     transcript === null ||
@@ -300,10 +302,14 @@ export async function activateInitialRuntime(
 ): Promise<void> {
   const phases = createSessionSwitchTimings(target.kind);
   const generation = ++ctl.sessionState.runtimeGeneration;
-  // History reading and the session's native handshake run independently.
+  // A child must exist before its history can be read; root history can load
+  // while its native handshake is still in progress.
+  const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
-    prepareHistory(ctl, target, generation, phases),
-    createInitializedRuntime(ctl, target, generation, phases),
+    target.kind === 'resume' && target.child
+      ? initializing.then(result => result === null ? null : prepareHistory(ctl, target, generation, phases))
+      : prepareHistory(ctl, target, generation, phases),
+    initializing,
   ]);
   if (
     transcript === null ||

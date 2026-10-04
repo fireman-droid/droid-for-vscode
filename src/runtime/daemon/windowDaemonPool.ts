@@ -39,6 +39,11 @@ export class WindowDaemonPool {
   private readonly connections = new Map<string, Promise<WindowDaemonEntry>>();
   private readonly connecting = new Map<string, Promise<WindowDaemonEntry | null>>();
   private readonly owners = new Map<string, WindowDaemonEntry>();
+  private readonly childOwnerWaiters = new Set<{
+    sessionId: string;
+    resolve(entry: WindowDaemonEntry): void;
+    reject(error: unknown): void;
+  }>();
   private readonly handles = new Map<string, DaemonSessionHandle>();
   private readonly listeners = new Set<(entry: WindowDaemonEntry) => void>();
   private readonly owned = new Set<string>();
@@ -186,25 +191,63 @@ export class WindowDaemonPool {
     if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
     if (cached && cached.connection.status() === 'connected') return attach ? this.attachIde(cached) : cached;
     const ownerId = await readSessionDaemon(sessionId);
-    const [owner, discovered] = await Promise.all([
-      ownerId ? readWindowDaemon(ownerId) : null, this.discoverOpened(),
+    const [owner, found] = await Promise.all([
+      ownerId ? readWindowDaemon(ownerId) : null, this.findOpenedOwner(sessionId),
     ]);
-    // Initial attachment still checks every live daemon for duplicate ownership.
-    // Historical reads use the metadata daemon and never enter this discovery.
-    let found: WindowDaemonEntry | undefined;
-    for (const { entry, opened } of discovered) {
-      if (!opened.some((session) => session.id === sessionId)) continue;
-      if (found && found.record.id !== entry.record.id) {
-        throw new Error('This session is open on multiple daemons. Resolve its ownership before continuing.');
-      }
-      found = entry;
-    }
     const entry = found ?? (attach
       ? await this.allocate(sessionId, owner?.cwd)
       : (owner ? await this.existing(owner) : null) ?? await this.current());
     if (attach) await this.attachIde(entry);
     if (found || attach) await this.remember(sessionId, entry);
     return entry;
+  }
+
+  /** An assigned child ID can precede its worker. Never route it to a new daemon. */
+  forChildSession(sessionId: string): Promise<WindowDaemonEntry> {
+    if (this.disposed) return Promise.reject(new Error('Window daemon is disposed.'));
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        sessionId,
+        resolve: (entry: WindowDaemonEntry) => { cleanup(); resolve(entry); },
+        reject: (error: unknown) => { cleanup(); reject(error); },
+      };
+      const timeout = setTimeout(() => waiter.reject(new Error(
+        'The child session has not become available on its owning daemon. Retry opening this session.',
+      )), 30_000);
+      const cleanup = () => { clearTimeout(timeout); this.childOwnerWaiters.delete(waiter); };
+      // Subscribe before discovery so an availability notification cannot fall
+      // between the initial lookup and the wait. This is not a polling loop.
+      this.childOwnerWaiters.add(waiter);
+      void this.findChildOwner(sessionId).then(entry => {
+        if (entry) waiter.resolve(entry);
+      }, waiter.reject);
+    });
+  }
+
+  private async findChildOwner(sessionId: string): Promise<WindowDaemonEntry | null> {
+    const cached = this.owners.get(sessionId);
+    if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
+    if (cached?.connection.status() === 'connected') return cached;
+    const [ownerId, found] = await Promise.all([readSessionDaemon(sessionId), this.findOpenedOwner(sessionId)]);
+    if (found) return found;
+    // A previously attached child may be idle/unloaded. Its saved, verified
+    // owner remains valid; a newly announced child has no such binding yet.
+    const owner = ownerId ? await readWindowDaemon(ownerId) : null;
+    return owner ? this.existing(owner) : null;
+  }
+
+  private async findOpenedOwner(sessionId: string): Promise<WindowDaemonEntry | undefined> {
+    // Initial attachment still checks every live daemon for duplicate ownership.
+    // Historical reads use the metadata daemon and never enter this discovery.
+    let found: WindowDaemonEntry | undefined;
+    for (const { entry, opened } of await this.discoverOpened()) {
+      if (!opened.some((session) => session.id === sessionId)) continue;
+      if (found && found.record.id !== entry.record.id) {
+        throw new Error('This session is open on multiple daemons. Resolve its ownership before continuing.');
+      }
+      found = entry;
+    }
+    return found;
   }
 
   /** Only a real chat attachment may take over an exited window's relay. */
@@ -308,6 +351,13 @@ export class WindowDaemonPool {
     const owner = this.owners.get(sessionId);
     if (owner && owner.record.id !== entry.record.id) return false;
     this.owners.set(sessionId, entry);
+    for (const waiter of this.childOwnerWaiters) if (waiter.sessionId === sessionId) waiter.resolve(entry);
+    if (notification?.type === 'child_session_available' &&
+        typeof notification.childSessionId === 'string' && notification.childSessionId.length > 0) {
+      // The notification comes from the parent's connected daemon. Record the
+      // child's owner before consumers try to hydrate or open its conversation.
+      this.observeSession(notification.childSessionId, entry);
+    }
     if (this.owned.has(entry.record.id)) this.used.add(entry.record.id);
     if (notification?.type === 'session_inactivity' && entry.record.rootSessionId === sessionId) {
       entry.ide?.resetForSessionRestart();
@@ -374,6 +424,7 @@ export class WindowDaemonPool {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    for (const waiter of this.childOwnerWaiters) waiter.reject(new Error('Window daemon is disposed.'));
     if (this.currentEntry) await this.currentEntry.catch(() => undefined);
     await Promise.allSettled(this.allocations.values());
     await Promise.allSettled(this.ideAttachments.values());

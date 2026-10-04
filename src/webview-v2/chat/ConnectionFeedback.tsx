@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, RefreshCw, Unplug } from 'lucide-react';
+import { Check, ChevronRight, Clock3, RefreshCw, Unplug } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import { announceReady } from '../bridge/vscode';
@@ -9,14 +9,15 @@ import { DroidActivity } from '../ui/droid-motion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 function RecoveryHelp() {
-  return <Collapsible>
+  return <Collapsible className="border-t border-[var(--panel-edge)] pt-2">
     <CollapsibleTrigger asChild>
       <Button variant="ghost" size="sm" className="group -ml-1.5 h-auto whitespace-normal px-1.5 py-1 text-left">
         <ChevronRight aria-hidden="true" className="transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
         Still unresponsive?
       </Button>
     </CollapsibleTrigger>
-    <CollapsibleContent className="pt-1">
+    <CollapsibleContent className="space-y-2 pt-2 text-xs leading-relaxed text-muted-foreground">
+      <p>Fetches the latest state without restarting your session or resending a message.</p>
       <p>Use the editor’s Reload Window command. Copy any unsent edits and reattach files after reloading.</p>
     </CollapsibleContent>
   </Collapsible>;
@@ -33,11 +34,12 @@ function useLongWait(waiting: boolean, delay = 5_000) {
   return waiting && elapsed;
 }
 
-function RefreshSessionState({ port, sequence, conversationId, sessionId }: {
+function RefreshSessionState({ port, sequence, conversationId, sessionId, primary = false }: {
   readonly port: ChatPort;
   readonly sequence: number;
   readonly conversationId?: string | null;
   readonly sessionId?: string | null;
+  readonly primary?: boolean;
 }) {
   const request = useRef<{ readonly sequence: number; readonly timer: ReturnType<typeof setTimeout> } | null>(null);
   const [pending, setPending] = useState(false);
@@ -60,8 +62,8 @@ function RefreshSessionState({ port, sequence, conversationId, sessionId }: {
       request.current = null;
     };
   }, [port, conversationId, sessionId]);
-  return <div className="space-y-2 text-xs text-muted-foreground">
-    <Button variant="outline" size="sm" className="h-auto min-h-7 max-w-full whitespace-normal py-1 text-left" disabled={pending} onClick={() => {
+  return <div className="space-y-3 text-xs text-muted-foreground">
+    <Button variant={primary ? 'default' : 'outline'} size="sm" className="h-auto min-h-8 max-w-full whitespace-normal px-3 py-1.5 text-left" disabled={pending} onClick={() => {
       if (request.current !== null) return;
       setPending(true);
       setOutcome(null);
@@ -72,9 +74,8 @@ function RefreshSessionState({ port, sequence, conversationId, sessionId }: {
       }, 10_000) };
       announceReady(port);
     }}><RefreshCw aria-hidden="true" className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} />{pending ? 'Waiting for session state…' : 'Refresh session state'}</Button>
-    {outcome === 'received' ? <p role="status">Latest host state received.</p> : null}
-    {outcome === 'timeout' ? <p role="status">No session state received after 10 seconds. You can refresh again.</p> : null}
-    <p>Fetches the latest state without restarting your session or resending a message.</p>
+    {outcome === 'received' ? <p role="status" className="flex items-start gap-2"><Check aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" /><span>Latest host state received.</span></p> : null}
+    {outcome === 'timeout' ? <p role="status" className="flex items-start gap-2"><Clock3 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" /><span>No session state received after 10 seconds. You can refresh again.</span></p> : null}
     <RecoveryHelp />
   </div>;
 }
@@ -97,15 +98,22 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
     : connection.status === 'unavailable' ? 'Droid is unavailable'
     : connection.status === 'connecting' ? 'Connecting to Droid…'
     : !hasSnapshot ? 'Waiting for the session state…' : 'Opening conversation…';
+  const detail = connection.message ?? (handshakeTimedOut
+    ? 'The extension has not sent this session’s state yet.'
+    : longWait && phase === 'restoring' && connection.status !== 'unavailable'
+      ? 'Restoring your session. State refreshes automatically.' : null);
   return <div className="absolute inset-x-0 bottom-0 top-10 z-20 grid place-content-center bg-background/95 p-4 text-center">
-    <section aria-label="Session recovery" className="mx-auto w-full max-w-sm space-y-3 rounded-xl border border-[var(--panel-edge)] bg-background p-3 text-left text-xs leading-relaxed [overflow-wrap:anywhere]">
-      <div role={connection.status === 'unavailable' ? 'alert' : 'status'} className="flex items-center gap-2 font-medium">
-        {waiting && connection.status !== 'unavailable' ? <DroidActivity phase="loading" /> : null}<span>{label}</span>
+    <section aria-label="Session recovery" className="mx-auto w-full max-w-sm space-y-4 rounded-xl border border-[var(--panel-edge)] bg-background p-4 text-left text-xs leading-relaxed [overflow-wrap:anywhere]">
+      <div className="flex items-start gap-3">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+          {waiting && connection.status !== 'unavailable' ? <DroidActivity phase="loading" /> : <Unplug aria-hidden="true" className="size-4" />}
+        </span>
+        <div className="min-w-0 space-y-1">
+          <h2 role={connection.status === 'unavailable' ? 'alert' : 'status'} className="text-sm font-semibold leading-snug text-foreground">{label}</h2>
+          {detail ? <p className="text-muted-foreground">{detail}</p> : null}
+        </div>
       </div>
-      {connection.message ? <p className="text-muted-foreground">{connection.message}</p> : null}
-      {longWait && phase === 'restoring' && connection.status !== 'unavailable'
-        ? <p className="text-muted-foreground">Restoring your session. State refreshes automatically.</p> : null}
-      {recoveryNeeded || connection.status === 'unavailable' ? <RefreshSessionState port={port} sequence={sequence} conversationId={conversationId} sessionId={sessionId} /> : null}
+      {recoveryNeeded || connection.status === 'unavailable' ? <RefreshSessionState primary port={port} sequence={sequence} conversationId={conversationId} sessionId={sessionId} /> : null}
     </section>
   </div>;
 }

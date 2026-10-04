@@ -43,7 +43,7 @@ export async function prepareHistory(
       if (ctl.sessionState.sessionId === null && target.kind === 'resume') {
         ctl.effects.bindSessionIdentity({
           sessionId: target.sessionId,
-          conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? null,
+          conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId,
         });
       }
       ctl.sessionState.connection = {

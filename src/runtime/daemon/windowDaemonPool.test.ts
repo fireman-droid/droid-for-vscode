@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SessionNotificationType } from '@factory/droid-sdk';
 import type { DaemonNotification, DaemonSessionHandle } from './api';
 import { WindowDaemonPool } from './windowDaemonPool';
 import { createRoutedDaemon } from './routedDaemon';
@@ -23,6 +24,8 @@ const fake = vi.hoisted(() => ({
   detachRelay: vi.fn(async () => {}),
   writeRecord: vi.fn(async () => {}),
   events: vi.fn(),
+  notifications: new Map<string, (event: DaemonNotification) => void>(),
+  attachNotifications: vi.fn(async () => {}),
   count: 0,
   relays: 0,
   failedRelay: 0,
@@ -75,7 +78,14 @@ vi.mock('./daemonConnection', () => ({
         attachChild: fake.resume,
       },
       terminals: { list: async () => url.endsWith(':43000') ? fake.terminals : [] },
-      notifications: { subscribe: () => () => {}, subscribeTerminal: () => () => {} },
+      notifications: {
+        subscribe: (listener: (event: DaemonNotification) => void) => {
+          fake.notifications.set(url, listener);
+          return () => { fake.notifications.delete(url); };
+        },
+        subscribeTerminal: () => () => {},
+        attachChild: fake.attachNotifications,
+      },
     },
   }),
 }));
@@ -105,6 +115,7 @@ beforeEach(() => {
   fake.records = [];
   fake.opened = [];
   fake.openedByUrl.clear();
+  fake.notifications.clear();
   fake.messages = [];
   fake.terminals = [];
   fake.count = 0;
@@ -130,7 +141,7 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 function savedRelay(ownerPid = 999999, cwd = 'C:/workspace') {
   const record = {
@@ -148,6 +159,63 @@ function savedRelay(ownerPid = 999999, cwd = 'C:/workspace') {
 }
 
 describe('persistent IDE relay restoration', () => {
+  it('attaches an early-opened child to the daemon that announces it without allocating or polling', async () => {
+    vi.useFakeTimers();
+    savedRelay();
+    fake.opened = [{ id: 'root-chat', workingState: 'running' }];
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    const pending = routed.sessions.attachChild!('child-chat', {});
+    const watching = routed.notifications.attachChild('child-chat');
+    try {
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(fake.resume).not.toHaveBeenCalled();
+      expect(fake.attachNotifications).not.toHaveBeenCalled();
+      expect(fake.spawn).not.toHaveBeenCalled();
+      const discoveries = fake.events.mock.calls.filter(([event]) => event.name === 'daemon.discovery.finished');
+      expect(discoveries).toHaveLength(1);
+      const notify = fake.notifications.get('ws://127.0.0.1:43000')!;
+      notify({ sessionId: 'root-chat', notification: {
+        type: SessionNotificationType.CHILD_SESSION_AVAILABLE, timestamp: Date.now(),
+        childSessionId: 'other-child', toolUseId: 'other-task',
+      } });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fake.resume).not.toHaveBeenCalled();
+      notify({ sessionId: 'root-chat', notification: {
+        type: SessionNotificationType.CHILD_SESSION_AVAILABLE, timestamp: Date.now(),
+        childSessionId: 'child-chat', toolUseId: 'task-1',
+      } });
+      const [child] = await Promise.all([pending, watching]);
+      expect(child.id).toBe('child-chat');
+      expect(fake.resume).toHaveBeenCalledExactlyOnceWith('child-chat', {});
+      expect(fake.attachNotifications).toHaveBeenCalledExactlyOnceWith('child-chat');
+      expect((await value.forSession('child-chat')).record.id).toBe('persistent-owner');
+      expect(fake.spawn).not.toHaveBeenCalled();
+      expect(fake.stream).not.toHaveBeenCalled();
+      expect(fake.close).not.toHaveBeenCalled();
+    } finally { routed.disconnect(); await value.dispose(); }
+  });
+
+  it('ends an unannounced child wait without starting a replacement session', async () => {
+    vi.useFakeTimers();
+    savedRelay();
+    fake.opened = [{ id: 'root-chat', workingState: 'running' }];
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    try {
+      const failed = expect(routed.sessions.attachChild!('missing-child', {})).rejects.toThrow('child session');
+      await vi.advanceTimersByTimeAsync(30_000);
+      await failed;
+      fake.notifications.get('ws://127.0.0.1:43000')!({ sessionId: 'root-chat', notification: {
+        type: SessionNotificationType.CHILD_SESSION_AVAILABLE, timestamp: Date.now(), childSessionId: 'missing-child',
+      } });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fake.resume).not.toHaveBeenCalled();
+      expect(fake.spawn).not.toHaveBeenCalled();
+      expect(fake.stream).not.toHaveBeenCalled();
+    } finally { routed.disconnect(); await value.dispose(); }
+  });
+
   it('reattaches a running root and child after reload without closing, moving or resending their work', async () => {
     const record = savedRelay();
     const value = pool();
