@@ -9,6 +9,13 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 文档网站
+
+- 直接复用 docs Markdown，增加安装、聊天／BTW、模型、Review 和 Mission 使用指南；
+  提供中文本地搜索、深浅主题、移动端导航和架构图。网站依赖隔离在 docs，不进入扩展包。
+- `npm --prefix docs run build` 与内部链接检查通过，未运行浏览器或截图测试。
+  GitHub Pages 工作流仅手动运行，默认只构建；公开部署待确认，真实产品截图待提供。
+
 ## BTW 模型选择器宽度
 
 - BTW 输入框的模型按钮按名称宽度收缩，避免继承表单选择器的全宽样式；长名称保留

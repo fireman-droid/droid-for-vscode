@@ -130,6 +130,44 @@ pnpm run build:webview
 不使用固定预览宽度或模拟数据。独立 `4176` 预览不能替代这个启动流程。
 升级扩展后先 **Developer: Reload Window**，再重新执行 Start；不要复用旧标签页链接。
 
+## 维护文档网站
+
+文档站使用 VitePress，直接读取 `docs/` 中的 Markdown，不维护第二份正文。
+导航、主题和构建配置在 `docs/.vitepress/`。依赖和 lockfile 放在 `docs/`，与根项目独立，不进入扩展的运行时或 VSIX。
+
+在仓库根目录执行：
+
+```sh
+npm --prefix docs ci
+npm --prefix docs run dev
+```
+
+打开终端给出的地址，并进入 `/droid-for-vscode/` 路径。
+导航包含使用指南和开发文档；全文搜索在浏览器本地完成，无需外部搜索账号。
+站点支持深浅主题、移动端导航、页内目录与架构图。
+
+构建和预览：
+
+```sh
+npm --prefix docs run build
+npm --prefix docs run preview
+```
+
+生成目录为 `docs/.vitepress/dist/`，依赖、缓存和产物都忽略提交。
+构建会检查站内死链；源码链接与内部状态／计划文档在网页中指向 GitHub 原文件。
+网站首页复用 `docs/README.md`，仓库内仍可正常阅读 Markdown。
+
+`.github/workflows/docs.yml` 只提供手动触发：Actions → **Build Droid docs**。
+默认只构建并上传 Pages artifact，不公开网站。首次发布需由维护者确认，
+在仓库 **Settings → Pages** 将 Source 设为 **GitHub Actions**，
+再从 `main` 手动运行该工作流并勾选 `deploy`。后续更新也使用同一入口。
+
+按当前仓库名，启用后的地址为 `https://fireman-droid.github.io/droid-for-vscode/`。
+在首次成功部署前，不把这个地址写成已经上线的下载或文档入口。
+
+产品截图只使用实际界面的脱敏截图；需要时由维护者提供。
+不要用模拟界面、错误提示截图或生成图片代替正常使用效果。
+
 ## Git 不会迁移的内容
 
 - Droid 登录凭据、BYOK API key、个人模型/heavy 路由和全局设置，需要在新电脑

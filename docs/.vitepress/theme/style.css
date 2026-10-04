@@ -1,0 +1,38 @@
+:root {
+  --vp-c-brand-1: #426553;
+  --vp-c-brand-2: #537b65;
+  --vp-c-brand-3: #426553;
+  --vp-c-brand-soft: rgba(66, 101, 83, 0.1);
+  --vp-c-bg: #faf9f6;
+  --vp-c-bg-alt: #f2f1ed;
+  --vp-c-bg-soft: #f2f1ed;
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --vp-layout-max-width: 1480px;
+}
+
+.dark {
+  --vp-c-brand-1: #b4d1bb;
+  --vp-c-brand-2: #d0e4d4;
+  --vp-c-brand-3: #577b63;
+  --vp-c-brand-soft: rgba(180, 209, 187, 0.12);
+  --vp-c-bg: #202229;
+  --vp-c-bg-alt: #1b1d23;
+  --vp-c-bg-soft: #292c34;
+}
+
+.VPNavBarTitle .logo { width: 26px; height: 26px; }
+.dark .VPNavBarTitle .logo { filter: invert(1); }
+.VPDoc .content-container { max-width: 800px !important; }
+.vp-doc h1 { font-size: clamp(28px, 4vw, 36px); line-height: 1.3; letter-spacing: -0.025em; }
+.vp-doc h2 { margin-top: 40px; }
+.vp-doc p, .vp-doc li { line-height: 1.85; }
+.vp-doc a { text-underline-offset: 4px; }
+.vp-doc table { width: 100%; }
+.vp-doc th { font-weight: 600; }
+.droid-diagram { margin: 24px 0; overflow: auto; padding: 20px; border: 1px solid var(--vp-c-divider); border-radius: 8px; }
+.droid-diagram svg { display: block; height: auto; margin: auto; }
+.droid-diagram pre { white-space: pre; font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
