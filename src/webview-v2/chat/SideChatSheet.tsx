@@ -40,7 +40,7 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
       <Button variant="ghost" size="icon-sm" disabled={unavailable || selected?.disabled || selected?.supportsImages === false} title={selected?.supportsImages === false ? 'This model does not support images' : 'Attach images'} aria-label="Attach images to side question" onClick={() => picker.current?.click()}><ImagePlus /></Button>
       <ModelSourceSelect label="Side conversation model" value={selectedModel} onChange={onModelChange}
         disabled={unavailable || modelCatalog?.status !== 'ready'} placeholder="Model" side="top" align="end"
-        className="ml-auto h-7 max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs"
+        className="ml-auto h-7 w-auto max-w-[180px] flex-initial gap-1 border-0 bg-transparent px-1 text-xs"
         models={models.map((model) => ({ ...model,
           description: model.disabledReason ?? (model.supportsImages ? 'Images supported' : 'Text only') }))} />
     </>} />;

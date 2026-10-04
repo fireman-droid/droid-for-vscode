@@ -9,6 +9,15 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## BTW 模型选择器宽度
+
+- BTW 输入框的模型按钮按名称宽度收缩，避免继承表单选择器的全宽样式；长名称保留
+  180px 上限及省略显示，模型列表仍使用现有共享选择组件。
+- typecheck、lint:budgets、构建及 166 条目 VSIX 校验通过，已全局安装 Microsoft
+  VS Code，需 Reload Window 加载。此修复尚未更新 GitHub 的 v0.8.2 正式附件。
+- 首次构建在 Node 22 复制 WASM 时失败；切换本机 Node 26 后重新构建、打包成功。
+  未新增或运行测试、浏览器自动化；实际视觉由用户在 VS Code 中验收。
+
 ## v0.8.2 正式分发
 
 - [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.2)
