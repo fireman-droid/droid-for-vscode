@@ -68,24 +68,14 @@ Ollama 等服务，Next Edit 已接入 Mercury。从状态栏可以暂停、恢�
 
 ### 2. 安装扩展
 
-**目前请从源码构建。** GitHub 上的 `v0.8.1` 仍是未发布草稿，旧草稿包不包含最新修复。
-正式安装包发布后，可从 [Releases](https://github.com/fireman-droid/droid-for-vscode/releases)
-下载 `droid-版本号.vsix`。
+1. 打开 [最新版本](https://github.com/fireman-droid/droid-for-vscode/releases/latest)，
+   在 **Assets** 下载 `droid-版本号.vsix`。当前版本为
+   [droid-0.8.2.vsix](https://github.com/fireman-droid/droid-for-vscode/releases/download/v0.8.2/droid-0.8.2.vsix)。
+2. 在编辑器扩展面板的 `…` 菜单中选择 **Install from VSIX…**，安装下载的文件。
+3. 执行 **Developer: Reload Window**，再运行 **Droid: Open Chat** 打开侧栏。
 
-准备 Git、Node.js 24 和 pnpm 10.2.0，然后执行：
+安装不需要克隆源码或配置 Node.js。需要自行开发时，见 [源码构建指南](docs/DEVELOPMENT.md)。
 
-```powershell
-git clone https://github.com/fireman-droid/droid-for-vscode.git
-cd droid-for-vscode
-pnpm install --frozen-lockfile
-pnpm run package:vsix
-pnpm run verify:vsix
-```
-
-在编辑器扩展面板的 `…` 菜单中选择 **Install from VSIX…**，安装生成的
-`dist/droidvisx.vsix`。这是本地构建路径；对外下载包使用 `droid-版本号.vsix`。
-
-执行 **Developer: Reload Window**，再运行 **Droid: Open Chat** 打开侧栏。
 需要代码补全时，运行 **Droid: Configure Autocomplete**，配置服务后选择 **Enable autocomplete**。
 
 GitHub 下载版需要手动安装新版 VSIX。更新会沿用扩展 ID `droidvisx.droidvisx`，

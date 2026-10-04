@@ -1,9 +1,10 @@
 # 当前状态
 
-更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.1`。
+更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.2`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Mission 刷新、Canvas 移除及 Reload 心跳衔接修复；本地安装状态见下文。
-`v0.8.1` 历史 Release 草稿尚未发布，草稿安装包不包含这些后续修复。
+本次以 `v0.8.2` 交付最新修复，下载入口统一为 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest)。
+`v0.8.1` 保留为历史草稿，不移动旧标签，也不以旧包替代当前版本。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
