@@ -1,8 +1,9 @@
 # 当前状态
 
-更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；`0.8.1`
-已生成 GitHub Release 草稿，仓库仍私有。当前源码已完成聊天分层整理及定向回归，
-本轮安装状态见下文；GitHub 草稿仍保留之前已校验的安装包，没有公开发布。
+更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前版本为 `0.8.1`。
+[GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
+`v0.8.1` 历史 Release 草稿尚未发布。本地 Mission 刷新、Canvas 移除及后续心跳修复
+仍待完成测试同步与提交，未包含在当前公开源码或草稿安装包中；本地安装状态见下文。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
@@ -1312,7 +1313,7 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
   均通过。标签固定在 `c4d564998051722ec918e67709a1a679b69df219`，附件记录
   `sourceDirty=false`。[Release 草稿](https://github.com/fireman-droid/droid-for-vscode/releases/tag/untagged-ed533ccd618b938ce297)
   包含 VSIX、SHA256SUMS.txt、build-info.json 及安装／更新说明；仍为 `isDraft=true`。
-  仓库保持私有，扩展未公开上架，公共 UI 包未 npm 发布。
+  仓库现已公开；该草稿仍未发布，扩展未在插件市场上架，公共 UI 包未 npm 发布。
 - 已重新下载草稿附件，核对校验和、构建信息和 165 条目包校验后全局安装 Microsoft VS Code。
   `droidvisx-0.8.1.vsix` 为 10,583,613 bytes，SHA256：
   `3df57a77522ed06060ddae4ad92864bed7b3869d7c606ef3df78970feed91f13`。
@@ -1323,8 +1324,8 @@ Windows runner 从 VSIX 解包，在不切换的独立桌面启动全新编辑�
   运行测试、浏览器验收、模型请求。首次沙箱构建因父目录访问受限失败，
   正常权限重跑成功；npm/VS Code CLI 的弃用提示未阻断构建或安装。
 - 用户明确要求保留风车；SVG、PNG 和 PinwheelIcon 均未修改，README 补充来源、
-  非官方声明及标识不按本项目 MIT 重新授权的说明，未取得新的商标许可。公开发布、改变
-  仓库可见性及涉及历史清理的操作仍须明确授权；普通 push 许可不等于公开发布许可。
+  非官方声明及标识不按本项目 MIT 重新授权的说明，未取得新的商标许可。
+  2026-10-04 已按用户明确要求公开现有仓库；后续安装包须与已提交源码对应，不改写旧标签。
 - 不可用或未完成：稳定 Session Delete、统一 Undo All、任意工具后台进程控制、
   Worktree 清理/合并/删除、完整账号计费/组织后台、MCP resources/prompts 稳定发现。
 - 云同步开关不等于跨设备恢复；SDK 远端会话分页需独立 API Key，尚未接入目录，

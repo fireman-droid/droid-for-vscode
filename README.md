@@ -146,9 +146,8 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 [设计说明](docs/DESIGN.md#分发标识)。该标识及相关商标不按本项目 MIT 许可证重新授权，
 保留标识不表示本项目获得 Factory 官方背书。
 
-仓库公开后可通过 [GitHub Issues](https://github.com/fireman-droid/droid-for-vscode/issues)
+可通过 [GitHub Issues](https://github.com/fireman-droid/droid-for-vscode/issues)
 提交去敏后的问题，格式见 [`docs/FEEDBACK.md`](docs/FEEDBACK.md)。
-公开前这些链接只对有仓库权限的人可用。
 
 ## 换电脑继续开发
 
