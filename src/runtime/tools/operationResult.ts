@@ -10,6 +10,7 @@ import { toolDisplayPath } from './toolDisplayPath';
 import { isRestrictedToolContent, isRestrictedToolPath, readResultSource } from './toolResultPreview';
 import { applyPatchAbsolutePath, applyPatchDeclarationKey, readApplyPatchDeclarations, type ApplyPatchDeclaration } from './applyPatchDeclarations';
 import { omitOversizedOperationBody, summarizeOperationBodies } from './operationBodyReference';
+import { normalizeOperationResultPatch } from '../../shared/transcript/operationPatch';
 
 export type OperationTool = 'applypatch' | 'edit' | 'create' | 'write';
 type UnavailableReason = Extract<
@@ -18,6 +19,9 @@ type UnavailableReason = Extract<
 >['reason'];
 const MAX_RESULT_SOURCE_UNITS = MAX_OPERATION_BODY_UNITS * 8;
 const MAX_DIFF_LINES = 24_000;
+export const INCONSISTENT_OPERATION_PATCH_MESSAGE =
+  'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
+  'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.';
 
 export function parseOperationResult(
   tool: OperationTool,
@@ -35,6 +39,7 @@ export function parseOperationResult(
 export function parseOperationResultBody(
   tool: OperationTool, input: unknown, content: unknown, workspace: string | undefined,
   callId?: string, sourceSessionId?: string, eventIsError = false,
+  preservePatchCounts = false,
 ): OperationDiff {
   if (!workspace) return unavailable('not-recorded');
   const text = readResultText(content);
@@ -55,7 +60,7 @@ export function parseOperationResultBody(
     tool === 'edit'
       ? parseEditResult(value, declared, workspace)
       : tool === 'applypatch'
-        ? parseApplyPatchResult(value, patchDeclarations!, workspace)
+        ? parseApplyPatchResult(value, patchDeclarations!, workspace, preservePatchCounts)
         : parseCreateResult(value, declared, workspace, input);
   if (typeof parsed === 'string') return unavailable(parsed);
   const files = parsed.map((file) => {
@@ -182,6 +187,7 @@ function parseApplyPatchResult(
   value: unknown,
   declared: readonly ApplyPatchDeclaration[],
   workspace: string,
+  preservePatchCounts: boolean,
 ): OperationDiffFile[] | UnavailableReason {
   if (!isStrictRecord(value) || value.success !== true || !Array.isArray(value.files)) return 'not-recorded';
   if (value.files.length > MAX_OPERATION_DIFF_FILES) return 'too-large';
@@ -242,13 +248,11 @@ function parseApplyPatchResult(
       if (typeof raw.diff !== 'string') return 'not-recorded';
       if (raw.diff.length > MAX_OPERATION_BODY_UNITS) oversized = true;
       else {
-        const normalized = normalizeUnifiedPatch(raw.diff);
+        const normalized = normalizeOperationResultPatch(raw.diff, !preservePatchCounts && kind === 'modified' ? expected.patch : undefined);
         if (normalized === undefined) return 'not-recorded';
         patch = normalized.patch;
         reversible = normalized.complete && movedTo === undefined;
-        if (!normalized.complete) message =
-          'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
-          'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.';
+        if (!normalized.complete) message = INCONSISTENT_OPERATION_PATCH_MESSAGE;
       }
     } else if (raw.display_operation === 'create') {
       if (typeof raw.content !== 'string') return 'not-recorded';
@@ -422,57 +426,6 @@ function isContinuous(
       expectedNew === undefined ||
       current.next === expectedNew)
   );
-}
-
-function normalizeUnifiedPatch(source: string): { patch: string; complete: boolean } | undefined {
-  if (source.length > MAX_OPERATION_BODY_UNITS) return undefined;
-  const lines = source.replace(/\r\n?/gu, '\n').split('\n');
-  const hunks: string[] = [];
-  let complete = true;
-  let index = 0;
-  while (index < lines.length && !lines[index]!.startsWith('@@')) index += 1;
-  while (index < lines.length) {
-    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$/u.exec(
-      lines[index]!,
-    );
-    if (!header) return undefined;
-    const oldExpected = Number(header[2] ?? 1);
-    const newExpected = Number(header[4] ?? 1);
-    let oldCount = 0;
-    let newCount = 0;
-    hunks.push(lines[index]!);
-    index += 1;
-    while (index < lines.length && !lines[index]!.startsWith('@@')) {
-      const line = lines[index]!;
-      if (line === '' && index === lines.length - 1) {
-        index += 1;
-        break;
-      }
-      if (line.startsWith('\\ No newline at end of file')) {
-        hunks.push(line);
-      } else if (line.startsWith(' ')) {
-        oldCount += 1;
-        newCount += 1;
-        hunks.push(line);
-      } else if (line.startsWith('-')) {
-        oldCount += 1;
-        hunks.push(line);
-      } else if (line.startsWith('+')) {
-        newCount += 1;
-        hunks.push(line);
-      } else {
-        return undefined;
-      }
-      index += 1;
-    }
-    // A result can contain useful recorded changes without being safe to undo.
-    // Keep every reported hunk verbatim; do not invent missing lines or counts.
-    if (oldCount !== oldExpected || newCount !== newExpected) complete = false;
-  }
-  const patch = hunks.join('\n');
-  return hunks.length > 0 && patch.length <= MAX_OPERATION_BODY_UNITS
-    ? { patch, complete }
-    : undefined;
 }
 
 function replacementPatch(before: string, after: string): string {

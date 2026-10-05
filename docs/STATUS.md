@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-04。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
+更新：2026-10-05。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,23 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## ApplyPatch 末尾上下文行数修正
+
+- 修复工具返回的最后一个 Diff hunk 声明 9 行但实际只有 8 行时，聊天显示不完整告警、
+  自动撤销不可用的问题。只有前后缺口相等，且同文件原始调用的全部增删行与结果逐行
+  同序一致，才按实际记录修正 hunk 行数；保持起始位置和全部正文，不猜测缺失内容。
+- 真正缺失修改、前后缺口不等、非末尾异常及换行边界不明仍不能通过修正取得撤销资格。
+  撤销继续核对当前文件，保留无关手动文本，遇到内容已变或匹配歧义时拒绝写入。
+- 历史重载可用同一次调用重新解析的结果更新旧内联告警；只接受正文相同的范围计数修正，
+  不覆盖其他会话、其他调用或内容已变的记录。已保存的大正文引用保留原补丁与告警以
+  验证原摘要，不因本次规范化变得不可读；原始 SDK 日志保持不变。
+- 78 条定向回归通过，覆盖工具结果、历史合并、大正文读取、Review 与安全撤销；新增
+  用例先复现行数异常，修正一条旧历史用例中已失效的纯 `Success` 模拟返回后通过。
+  `pnpm run package:vsix` 通过（含 typecheck、lint:budgets 和生产构建），VSIX 166 条目
+  校验通过，已全局安装 Microsoft VS Code；扩展入口、历史 Worker、Chat／Review JS
+  与公共 CSS 均与包内哈希一致。需 Reload Window 并重新打开会话，真实 UI 尚待验收。
+  定向回归只在临时目录操作文件，不调用模型；未替换 GitHub 正式发布附件。
 
 ## 子会话启动与恢复卡片
 

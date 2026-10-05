@@ -3,7 +3,7 @@ import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { defaultSessionsDirectory } from '../catalog/sessionFavorites';
 import { readPersistedSessionMessages } from '../history/persistedSessionMessages';
 import { operationToolName } from './operationDiff';
-import { parseOperationResultBody } from './operationResult';
+import { INCONSISTENT_OPERATION_PATCH_MESSAGE, parseOperationResultBody } from './operationResult';
 import { matchingOperationBody, type OperationBody, type OperationBodyRequest } from './operationBodyReference';
 
 export type { OperationBody, OperationBodyRequest } from './operationBodyReference';
@@ -76,8 +76,11 @@ function bodyFromMessages(request: OperationBodyRequest, messages: readonly unkn
   const result = results[0]!;
   const tool = typeof call.name === 'string' ? operationToolName(call.name) : undefined;
   if (tool === undefined || result.isError !== undefined && typeof result.isError !== 'boolean') return undefined;
+  // Already persisted large-body references hash the original count warning and
+  // patch. Preserve that representation without weakening the digest check.
+  const preservePatchCounts = request.file.reversible === false && request.file.message === INCONSISTENT_OPERATION_PATCH_MESSAGE;
   return matchingOperationBody(request, parseOperationResultBody(tool, call.input, result.content,
-    request.workspace, request.callId, request.sourceSessionId, result.isError === true));
+    request.workspace, request.callId, request.sourceSessionId, result.isError === true, preservePatchCounts));
 }
 
 function isSelectedBlock(value: unknown, callId: string): value is Record<string, unknown> {

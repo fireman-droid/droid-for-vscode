@@ -6,6 +6,7 @@ import { isOperationDiff, MAX_OPERATION_BODY_UNITS, type OperationDiff } from '.
 import { createOperationDiffCollector } from './operationDiff';
 import { parseOperationResult, type OperationTool } from './operationResult';
 import { readOperationBody, type OperationBodyRequest } from './operationBody';
+import { summarizeOperationBodies } from './operationBodyReference';
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -53,6 +54,24 @@ function applyPatch(size = 25_000) {
 }
 
 describe('recorded operation bodies', () => {
+  it('reads both corrected and already persisted count-mismatch references without changing their digests', async () => {
+    const { input, content, patch } = applyPatch();
+    const recordedPatch = patch.replace('@@ -1 +1 @@', '@@ -1,2 +1,2 @@');
+    const result = JSON.parse(content);
+    result.files[0].diff = recordedPatch;
+    const raw = JSON.stringify(result);
+    const corrected = parseOperationResult('applypatch', input, raw, workspace, callId, sessionId);
+    const legacy = summarizeOperationBodies({ status: 'ready', source: 'tool-result', callId, sourceSessionId: sessionId,
+      files: [{ path: 'large.ts', kind: 'modified', outcome: 'applied', reversible: false, patch: recordedPatch,
+        message: 'The tool reported this file as changed, but its diff line counts are inconsistent. ' +
+          'Showing the recorded lines; the diff may be incomplete and automatic undo is unavailable.' }] });
+    const { directory } = await logFixture('ApplyPatch', input, raw);
+    expect(ready(corrected).files[0]?.reversible).toBe(true);
+    expect(await readOperationBody(request(corrected), { sessionsDirectory: directory }))
+      .toEqual({ patch: patch.replace('@@ -1 +1 @@', '@@ -1,1 +1,1 @@') });
+    expect(await readOperationBody(request(legacy), { sessionsDirectory: directory })).toEqual({ patch: recordedPatch });
+  });
+
   it('keeps a large real ApplyPatch result and neighboring files, then reads only the selected source body', async () => {
     const { input, content, patch } = applyPatch();
     const collect = createOperationDiffCollector(workspace, sessionId);

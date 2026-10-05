@@ -353,11 +353,16 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - `runtime/tools/operationResult.ts` 从实际工具结果建立逐文件操作证据。
   拟议输入、失败和未知结果不能算已应用；Create 没有旧内容就不能编造旧正文。
   共享 `protocol/operationDiff.ts` 过滤纯上下文/相同替换，保留真正元数据变化。
+  `transcript/operationPatch.ts` 统一解析结果补丁：仅最后一个 hunk 的前后行数出现等量缺口，
+  且返回的所有增删行与同文件原始调用逐行同序一致时，按实际记录修正范围计数；不补造正文。
+  缺失修改、非末尾异常或换行边界不明确时仍保留告警并阻止撤销。历史合并只允许同调用／
+  同会话、正文未变的计数修正更新旧记录；撤销仍要求当前文件唯一精确匹配及写前复核。
   大正文由 `operationBodyReference.ts` 生成绑定 session/tool/file 的摘要；聊天仍遵守
   24k patch／128k submittedContent 预算。`operationBody.ts` 按选择读取原 SDK JSONL，
   核对日志头、工具与结果配对、路径及摘要；尚未落盘时使用原 daemon client 的只读
   getMessages 分页接口，不为阅读创建或恢复会话。单文件正文最多 512,000 UTF-16
   字符单元，超限保留该文件元数据而不丢同操作其他文件；没有新增全文缓存数据库。
+  旧大正文引用若绑定了行数异常告警，按原计数重放解析并校验原摘要，不隐式重签或放宽匹配。
 - `reviewTurnScope.ts` 负责轮次工作区比较，`reviewOperationScope.ts` 负责记录操作。
   聊天 AI 汇总只用已确认操作；手动保存不能混进 AI 计数。子代理须有父调用/实际来源
   关联，描述相似或 Viewer 的导航映射不足以作为撤销证据。

@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { OperationDiff } from '../../shared/protocol/operationDiff';
 import { applyOperationUndo } from './operationUndoFiles';
 import { loadOperationReviewScope, preflightOperationRestore, type RecordedOperation } from './reviewOperationScope';
+import { parseOperationResult } from '../../runtime/tools/operationResult';
 
 vi.mock('vscode', () => ({ workspace: { textDocuments: [] } }));
 
@@ -53,6 +54,27 @@ it('undoes an applied patch after a confirmed no-op while preserving unrelated m
     .toEqual({ complete: true, written: 1 });
   expect(await readFile(join(root, 'example.txt'), 'utf8')).toBe('header\nold\nfooter\nmanual note\n');
 });
+
+it.each(['exact', 'changed', 'ambiguous', 'missing-edit'] as const)(
+  'checks the actual file before undoing a count-corrected ApplyPatch result: %s', async mode => {
+    const root = await workspace();
+    const input = `*** Begin Patch\n*** Update File: ${join(root, 'example.txt')}\n@@\n-old\n+new\n${mode === 'missing-edit' ? '-omitted old\n+omitted new\n' : ''}*** End Patch`;
+    const operationDiff = parseOperationResult('applypatch', { input }, JSON.stringify({ success: true,
+      files: [{ file_path: join(root, 'example.txt'), display_operation: 'update',
+        diff: '@@ -1,4 +1,4 @@\n header\n-old\n+new\n footer' }] }), root, 'applied', 'session-undo');
+    const scope = loadOperationReviewScope(
+      { type: 'review.open', sessionId: 'session-undo', scopeKind: 'operations', turnId: 'turn-undo' },
+      [{ ...applied, operationDiff }], new Map());
+    const current = mode === 'changed' ? currentText.replace('new', 'manual edit')
+      : mode === 'ambiguous' ? currentText + currentText : currentText;
+    await writeFile(join(root, 'example.txt'), current);
+    const plan = await preflightOperationRestore(root, scope, ['example.txt']);
+    expect(plan[0]?.status).toBe(mode === 'exact' ? 'restorable' : mode === 'missing-edit' ? 'unsupported' : 'conflicted');
+    const result = await applyOperationUndo(join(root, 'recovery'), root, plan, () => true);
+    expect(result).toMatchObject({ complete: mode === 'exact', written: mode === 'exact' ? 1 : 0 });
+    expect(await readFile(join(root, 'example.txt'), 'utf8')).toBe(mode === 'exact' ? currentText.replace('new', 'old') : current);
+  },
+);
 
 it.each(['not-recorded', 'unattributed', 'failed', 'too-large', 'restricted', 'evicted'] as const)(
   'still blocks undo when another operation has %s evidence', async (reason) => {

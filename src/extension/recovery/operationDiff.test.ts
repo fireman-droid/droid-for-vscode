@@ -11,7 +11,38 @@ import { projectSessionMessages } from '../../runtime/history/projectSessionHist
 import { ingestConversationHistory } from './ingestConversationHistory';
 
 describe('operation Diff identity and recovery', () => {
+  it('refreshes a saved malformed hunk from the same raw result without replacing its recorded content or identity', () => {
+    const input = '*** Begin Patch\n*** Update File: /workspace/a.ts\n@@\n-old\n+new\n*** End Patch';
+    const patch = '@@ -1,4 +1,4 @@\n header\n-old\n+new\n footer';
+    const history = projectSessionMessages([
+      { role: 'user', id: 'prompt', content: [{ type: 'text', text: 'Update file' }] },
+      { role: 'assistant', id: 'answer', content: [{ type: 'tool_use', id: 'patch', name: 'ApplyPatch', input: { input } }] },
+      { role: 'tool', id: 'result', content: [{ type: 'tool_result', toolUseId: 'patch', isError: false,
+        content: JSON.stringify({ success: true, files: [{ file_path: '/workspace/a.ts', display_operation: 'update', diff: patch }] }) }] },
+    ], { workspaceRoot: '/workspace' });
+    if (history.status !== 'available') throw new Error('History projection failed');
+    const tool = history.state.transcript.find(item => item.kind === 'tool')!;
+    if (tool.kind !== 'tool' || tool.operationDiff?.status !== 'ready') throw new Error('Missing tool result');
+    const saved = { ...tool, id: 'live-row', turnId: 'live-turn', operationDiff: { ...tool.operationDiff,
+      files: [{ ...tool.operationDiff.files[0]!, patch, reversible: false, message: 'Diff line counts are inconsistent.' }] } };
+    const canonical = { historyStatus: 'complete' as const, truncated: false,
+      transcript: [history.state.transcript[0]!, saved] };
+    const expected = { ...tool.operationDiff, files: [{ path: 'a.ts', kind: 'modified', outcome: 'applied',
+      patch: patch.replace('-1,4 +1,4', '-1,3 +1,3'), reversible: true }] };
+    expect(ingestConversationHistory(canonical, history.state).transcript[1])
+      .toMatchObject({ id: 'live-row', turnId: 'live-turn', operationDiff: expected });
+    expect(preserveToolResultPreviews([tool], [saved])[0]).toMatchObject({ operationDiff: expected });
+    const differentContent = { ...saved, operationDiff: { ...saved.operationDiff,
+      files: [{ ...saved.operationDiff.files[0]!, patch: patch.replace('+new', '+another') }] } };
+    expect(preserveToolResultPreviews([tool], [differentContent])[0]).toMatchObject({ operationDiff: differentContent.operationDiff });
+  });
+
   it('reconstructs successful historical edits and replaces old missing-data markers only for the same raw call', () => {
+    const result = (before: string, after: string) => JSON.stringify({ success: true, file_path: '/workspace/a.ts',
+      linesAdded: 1, linesRemoved: 1, diffLines: [
+        { type: 'removed', content: before, lineNumber: { old: 1 } },
+        { type: 'added', content: after, lineNumber: { new: 1 } },
+      ] });
     const history = projectSessionMessages([
       { role: 'user', id: 'prompt', content: [{ type: 'text', text: 'Update file' }] },
       { role: 'assistant', id: 'answer', content: [
@@ -20,8 +51,8 @@ describe('operation Diff identity and recovery', () => {
         { type: 'tool_use', id: 'edit-failed', name: 'Edit', input: { file_path: '/workspace/a.ts', old_str: 'three', new_str: 'four' } },
       ] },
       { role: 'tool', id: 'results', content: [
-        { type: 'tool_result', toolUseId: 'edit-1', content: 'Success', isError: false },
-        { type: 'tool_result', toolUseId: 'edit-2', content: 'Success', isError: false },
+        { type: 'tool_result', toolUseId: 'edit-1', content: result('one', 'two'), isError: false },
+        { type: 'tool_result', toolUseId: 'edit-2', content: result('two', 'three'), isError: false },
         { type: 'tool_result', toolUseId: 'edit-failed', content: 'No match', isError: true },
       ] },
     ], { workspaceRoot: '/workspace' });
@@ -29,8 +60,8 @@ describe('operation Diff identity and recovery', () => {
     if (history.status !== 'available') throw new Error('History projection failed');
     const tools = history.state.transcript.filter((item) => item.kind === 'tool');
     expect(tools.map((item) => item.operationDiff)).toMatchObject([
-      { status: 'ready', callId: 'edit-1', files: [{ patch: '@@\n-one\n+two' }] },
-      { status: 'ready', callId: 'edit-2', files: [{ patch: '@@\n-two\n+three' }] },
+      { status: 'ready', callId: 'edit-1', files: [{ patch: '@@ -1,1 +1,1 @@\n-one\n+two' }] },
+      { status: 'ready', callId: 'edit-2', files: [{ patch: '@@ -1,1 +1,1 @@\n-two\n+three' }] },
       { status: 'unavailable', reason: 'failed' },
     ]);
     const canonicalTool = { ...tools[0]!, id: 'live-row', turnId: 'live-turn', toolUseId: 'edit-1',

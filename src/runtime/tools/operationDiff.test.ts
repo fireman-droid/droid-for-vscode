@@ -80,3 +80,46 @@ describe('operation change evidence', () => {
       .toMatchObject({ status: 'ready', source: 'tool-input', files: [{ path: '.env', contentRestricted: true, patch: '', reversible: false }] });
   });
 });
+
+describe('ApplyPatch result count reconciliation', () => {
+  const input = ['*** Begin Patch', '*** Update File: /workspace/a.ts', '@@',
+    '-old a', '-old b', '-old c', '+new a', '+new b', '+new c', '*** End Patch'].join('\n');
+  const truncatedContext = ['@@ -46,9 +46,9 @@', ' ', ' intro', ' ',
+    '-old a', '-old b', '-old c', '+new a', '+new b', '+new c', ' ', ' ## Projects'].join('\n');
+  const corrected = truncatedContext.replace('-46,9 +46,9', '-46,8 +46,8');
+  function collect(patch: string, submitted = input, isError = false) {
+    const collector = createOperationDiffCollector('/workspace', 'session-patch');
+    collector({ type: 'tool_call', name: 'ApplyPatch', toolUseId: 'patch', input: { input: submitted } });
+    return collector({ type: 'tool_result', toolName: 'ApplyPatch', toolUseId: 'patch', isError,
+      content: JSON.stringify({ success: true, files: [{ file_path: '/workspace/a.ts', display_operation: 'update', diff: patch }] }) });
+  }
+
+  it('reconciles the reported 9-line hunk with its 8 recorded lines when every submitted change is confirmed', () => {
+    expect(collect(truncatedContext)).toEqual({ status: 'ready', source: 'tool-result', callId: 'patch',
+      sourceSessionId: 'session-patch', files: [{ path: 'a.ts', kind: 'modified', outcome: 'applied',
+        patch: corrected, reversible: true }] });
+  });
+
+  it('preserves valid earlier hunks and repairs only the final context count', () => {
+    const submitted = input.replace('@@\n-old a', '@@\n-first\n+second\n@@\n-old a');
+    const prefix = '@@ -1 +1 @@\n-first\n+second\n';
+    expect(collect(prefix + truncatedContext, submitted)).toMatchObject({ files: [{ patch: prefix + corrected, reversible: true }] });
+  });
+
+  it.each([
+    { name: 'missing replacement', patch: truncatedContext.replace('-old c\n', '').replace('+new c\n', '') },
+    { name: 'missing addition', patch: truncatedContext.replace('+new c\n', '') },
+    { name: 'altered replacement', patch: truncatedContext.replace('+new c\n', '+unexpected\n') },
+    { name: 'reordered edits', patch: truncatedContext.replace('+new a\n+new b', '+new b\n+new a') },
+    { name: 'unequal deficits', patch: truncatedContext.replace('-46,9 +46,9', '-46,9 +46,10') },
+    { name: 'excess recorded lines', patch: truncatedContext.replace('-46,9 +46,9', '-46,7 +46,7') },
+    { name: 'truncated nonfinal hunk', patch: truncatedContext + '\n@@ -60 +60 @@\n-end\n+last' },
+  ])('retains the original warning and prevents undo for $name', ({ patch }) => {
+    expect(collect(patch)).toMatchObject({ files: [{ patch, reversible: false,
+      message: expect.stringContaining('line counts are inconsistent') }] });
+  });
+
+  it('does not grant undo when the SDK marks the otherwise recoverable result as failed', () => {
+    expect(collect(truncatedContext, input, true)).toMatchObject({ files: [{ outcome: 'uncertain', reversible: false }] });
+  });
+});

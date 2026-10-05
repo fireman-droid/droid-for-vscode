@@ -1,6 +1,7 @@
 import { isSafeWorkspaceRelativePath } from '../validation/guards';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
+import { isOperationPatchCountCorrection } from '../transcript/operationPatch';
 
 export const MAX_OPERATION_DIFF_UNITS = 24_000;
 /** Full Create/Write contents establish later edits' baseline, independently of preview hunks. */
@@ -159,13 +160,17 @@ export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: 
     if (incoming.status !== 'ready' || incoming.source !== 'tool-result' || saved.callId === undefined ||
       saved.callId !== incoming.callId || saved.sourceSessionId !== incoming.sourceSessionId) return saved;
     const files = saved.files.map((file) => {
-      if (file.contentRestricted || file.outcome !== 'applied' || file.patch !== '' ||
+      if (file.contentRestricted || file.outcome !== 'applied' ||
         file.submittedContent !== undefined || file.bodyRef !== undefined) return file;
       const complete = incoming.files.find((candidate) => candidate.path === file.path &&
         candidate.scope === file.scope && candidate.previousPath === file.previousPath && candidate.kind === file.kind &&
         candidate.outcome === 'applied' && !candidate.contentRestricted &&
         (candidate.patch !== '' || candidate.submittedContent !== undefined || candidate.bodyRef !== undefined));
-      return complete ?? file;
+      if (complete === undefined) return file;
+      if (file.patch === '') return complete;
+      return file.kind === 'modified' && file.previousPath === undefined && file.scope === undefined &&
+        file.reversible === false && complete.reversible === true &&
+        isOperationPatchCountCorrection(file.patch, complete.patch) ? complete : file;
     });
     if (files.every((file, index) => file === saved.files[index])) return saved;
     const enriched = { ...saved, files };
