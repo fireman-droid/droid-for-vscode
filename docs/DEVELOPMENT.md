@@ -157,6 +157,9 @@ npm --prefix docs run preview
 构建会检查站内死链；源码链接与内部状态／计划文档在网页中指向 GitHub 原文件。
 产品首页使用 `docs/index.md` 与 `docs/.vitepress/theme/DroidHome.vue`，
 样式独立在 `home.css`，不改变文档页的深浅主题。
+首页动效在 `homeMotion.js`，逐字排版在 `HomeMotionText.vue`；参考参数及有意差异见
+`DESIGN.md` 的「项目网站与参考动效」。修改后须在获准的浏览器验收中检查手机换行、
+滚动入场、模型列表暂停和首页与文档之间的往返，不只核对静态截图。
 文档首页仍读取 `docs/README.md`，在网站中对应 `GUIDE.html`，仓库内可正常阅读 Markdown。
 
 `.github/workflows/docs.yml` 只提供手动触发：Actions → **Build Droid docs**。
