@@ -155,7 +155,9 @@ npm --prefix docs run preview
 
 生成目录为 `docs/.vitepress/dist/`，依赖、缓存和产物都忽略提交。
 构建会检查站内死链；源码链接与内部状态／计划文档在网页中指向 GitHub 原文件。
-网站首页复用 `docs/README.md`，仓库内仍可正常阅读 Markdown。
+产品首页使用 `docs/index.md` 与 `docs/.vitepress/theme/DroidHome.vue`，
+样式独立在 `home.css`，不改变文档页的深浅主题。
+文档首页仍读取 `docs/README.md`，在网站中对应 `GUIDE.html`，仓库内可正常阅读 Markdown。
 
 `.github/workflows/docs.yml` 只提供手动触发：Actions → **Build Droid docs**。
 默认只构建并上传 Pages artifact，不公开网站。首次发布需由维护者确认，

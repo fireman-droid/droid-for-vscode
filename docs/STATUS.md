@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 开源项目网站
+
+- 新增独立产品首页，复用现有 VitePress 和手动 GitHub Pages 工作流；采用 Factory 官网
+  的黑白排版、等宽标签与宽幅实拍，明确社区维护及非官方归属。
+- 首页包含聊天、BTW、Review、BYOK、补全、安装、源码与反馈入口；文档正文仍读取
+  `docs/README.md`，网站对应 `GUIDE.html`。未引入新依赖，未改变扩展功能或 Release。
+- 文档构建、根 typecheck 和 lint:budgets 通过；用户授权的桌面与 390px 手机浏览器验收
+  已检查图片、横向溢出、页内锚点、文档路由与下载入口。下载跳转到 v0.8.3 Latest。
+  当前可本地预览，尚未公开部署；发布仍需维护者明确授权。
+
 ## ApplyPatch 末尾上下文行数修正
 
 - 修复工具返回的最后一个 Diff hunk 声明 9 行但实际只有 8 行时，聊天显示不完整告警、

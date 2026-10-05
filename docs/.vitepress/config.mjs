@@ -8,10 +8,10 @@ const repository = 'https://github.com/fireman-droid/droid-for-vscode';
 export default defineConfig({
   title: 'Droid',
   titleTemplate: ':title · Droid 文档',
-  description: 'Droid 使用指南与开发文档：在 VS Code / Cursor 中聊天、审阅改动和补全代码。',
+  description: 'Factory Droid CLI 的非官方开源编辑器界面：BYOK、BTW 旁问、改动审阅与代码补全。',
   lang: 'zh-CN',
   base: '/droid-for-vscode/',
-  rewrites: { 'README.md': 'index.md' },
+  rewrites: { 'README.md': 'GUIDE.md' },
   srcExclude: ['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md', 'OPEN_SOURCE_POST.md', 'RUNTIME_CORRECTNESS_REVIEW.md'],
   lastUpdated: true,
   // Keep original-image links valid in both GitHub Markdown and the built site.
@@ -20,18 +20,20 @@ export default defineConfig({
   },
   head: [
     ['meta', { name: 'theme-color', content: '#202229' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/droid-for-vscode/droid.svg' }],
   ],
   themeConfig: {
     logo: { src: '/droid.svg', alt: 'Droid 风车标识' },
     siteTitle: 'Droid 文档',
     nav: [
+      { text: '项目首页', link: '/' },
       { text: '使用指南', link: '/GETTING_STARTED' },
       { text: '开发文档', link: '/DEVELOPMENT' },
       { text: '下载', link: `${repository}/releases/latest` },
     ],
     sidebar: [
       { text: '开始', items: [
-        { text: '文档首页', link: '/' },
+        { text: '文档首页', link: '/GUIDE' },
         { text: '安装与第一次对话', link: '/GETTING_STARTED' },
       ] },
       { text: '使用 Droid', items: [

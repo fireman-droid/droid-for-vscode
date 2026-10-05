@@ -15,7 +15,7 @@ export function repositoryLinks(md, repository) {
         const current = state.env.relativePath ?? 'README.md';
         const target = path.posix.normalize(path.posix.join(path.posix.dirname(current), file));
         const fragment = hash.length ? `#${hash.join('#')}` : '';
-        if (target === 'README.md') child.attrSet('href', `./index.md${fragment}`);
+        if (target === 'README.md') child.attrSet('href', `./GUIDE.md${fragment}`);
         else if (target.startsWith('../') || excluded.has(target)) {
           const repositoryPath = path.posix.normalize(path.posix.join('docs', target));
           child.attrSet('href', `${repository}/blob/main/${repositoryPath}${fragment}`);
