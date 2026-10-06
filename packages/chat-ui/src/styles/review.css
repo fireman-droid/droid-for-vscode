@@ -16,9 +16,6 @@
     --diff-remove: color-mix(in srgb, light-dark(#ef4561, #ef5269) 22%, var(--code-surface));
     --diff-word-add: color-mix(in srgb, var(--diff-add-ink) 17%, var(--diff-add));
     --diff-word-remove: color-mix(in srgb, var(--diff-remove-ink) 17%, var(--diff-remove));
-    --syntax-keyword: light-dark(#7022a8, #d5b5ff);
-    --syntax-number: light-dark(#125c2c, #c0dfa9);
-    --link-ink: light-dark(#00528a, #91caff);
   }
   .review-diff-content { min-width: 100%; }
   .review-diff[data-layout='unified'] .review-diff-content { min-width: max(100%, calc((var(--diff-code-columns) + 13) * 1ch + 16px)); }

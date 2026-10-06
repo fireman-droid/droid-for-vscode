@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Review 主题一致性（2026-10-06）
+
+- 修复 Review 固定黑色画布与根节点主题菜单混用的问题；移除工作台局部覆盖的背景、
+  文字、边框、代码底色和独立语法配色，复用现有主题变量及共享按钮状态。
+- Auto 使用编辑器主题；手动 Light／Dark 使用既有配色。增删底色在主题代码表面上混合，
+  保留变化语义与现有布局、尺寸、操作流程，弹层继续使用同一根节点主题。
+- `pnpm run package:vsix` 通过，包含 typecheck、lint:budgets、公共包及 Webview 构建；
+  `pnpm run verify:vsix` 校验 166 条目通过。已全局安装 Microsoft VS Code，7 项入口／
+  样式哈希一致。未新增或运行测试及浏览器验收，真实配色由用户 Reload Window 后验收。
+
 ## 连续多文件 Review（2026-10-06）
 
 - 将用户确认的浏览器预览接入正式 Review：紧凑范围栏、默认 Split、连续文件区、
