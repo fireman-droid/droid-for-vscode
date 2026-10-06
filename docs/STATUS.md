@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-05。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
+更新：2026-10-06。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,17 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 空输入框展开（2026-10-06）
+
+- 空输入框首次 Shift+Enter 只展开为多行，草稿仍为空，光标保持第一行。
+  已展开或已有内容时继续原生换行；输入后清空、发送清空或切换会话恢复自动高度。
+- 展开状态留在共享 Composer 展示层，测高函数接受显式展开参数，不用空白换行撑高；
+  普通 Enter 发送／排队、输入法选词、自动增高上限及现有样式保持不变。
+- `pnpm run package:vsix` 通过，包含类型检查、文件预算、公共包和五个 Webview 构建；
+  VSIX 166 条目校验通过，已全局安装 Microsoft VS Code，扩展入口、五个 Webview JS
+  与 CSS 共 7 个文件哈希匹配。Reload Window 后生效；本轮未新增或运行测试，真实
+  按键行为由用户在 VS Code 验收。
 
 ## 开源项目网站
 

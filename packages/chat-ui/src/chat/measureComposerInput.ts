@@ -1,5 +1,5 @@
 /** Measure wrapping without collapsing the focused input or its live flex row. */
-export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElement) {
+export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElement, expanded = false) {
   const shadow = row.cloneNode(true) as HTMLElement;
   shadow.inert = true;
   shadow.setAttribute('aria-hidden', 'true');
@@ -33,7 +33,7 @@ export function measureComposerInput(row: HTMLElement, input: HTMLTextAreaElemen
       }
       return contentHeight;
     };
-    const multiline = text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight);
+    const multiline = expanded || text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight);
     shadow.dataset.multiline = String(multiline);
     const contentHeight = measureUntil(maxHeight);
     const height = Math.min(maxHeight, Math.max(multiline ? lineHeight * 2 : lineHeight, contentHeight));

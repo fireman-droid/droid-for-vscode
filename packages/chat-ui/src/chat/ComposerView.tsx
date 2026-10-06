@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ClipboardEventHandler, type DragEventHandler, type KeyboardEventHandler, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEventHandler, type DragEventHandler, type KeyboardEventHandler, type ReactNode } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
@@ -57,6 +57,10 @@ export function ComposerView({
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => {
+    if (value.length === 0) setExpanded(false);
+  }, [value, focusSignal]);
   useEffect(() => {
     if (focusSignal > 0) input.current?.focus({ preventScroll: true });
   }, [focusSignal]);
@@ -67,7 +71,7 @@ export function ComposerView({
     let rowWidth = 0;
     let inputWidth = 0;
     const resize = () => {
-      const { multiline, height, scrollable } = measureComposerInput(row, element);
+      const { multiline, height, scrollable } = measureComposerInput(row, element, expanded);
       const previousHeight = element.getBoundingClientRect().height;
       const previousMultiline = row.dataset.multiline === 'true';
       if (row.dataset.multiline !== String(multiline)) row.dataset.multiline = String(multiline);
@@ -86,7 +90,7 @@ export function ComposerView({
     observer.observe(row);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [value, inputReplacement, placeholder, assistantName, onLayout]);
+  }, [value, expanded, inputReplacement, placeholder, assistantName, onLayout]);
   const submit = () => { if (!sendDisabled) onSend(); };
   const editor = inputReplacement != null ? <div className="v2-composer-replacement">{inputReplacement}</div>
     : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={`Message ${assistantName}`}
@@ -98,6 +102,11 @@ export function ComposerView({
       if (event.nativeEvent.isComposing || event.keyCode === 229) return;
       onKeyDown?.(event);
       if (event.defaultPrevented) return;
+      if (event.key === 'Enter' && event.shiftKey && !expanded && event.currentTarget.value.length === 0) {
+        event.preventDefault();
+        setExpanded(true);
+        return;
+      }
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     }}
     onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[14px] leading-[20px] focus-visible:ring-0" />;
