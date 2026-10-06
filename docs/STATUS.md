@@ -9,6 +9,23 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 聊天文件改动卡片（2026-10-06）
+
+- 按用户提供的 Cursor 卡片参考调整为 12px 圆角、细边框、中性背景和紧凑文件列表；
+  标题为 `N Files Changed`，不再重复总计与装饰图标；每行显示文件名、类型图标和
+  靠右增删统计，完整路径保留在悬停提示和导航标签。底部汇总统一字体、图标和文字 Review。
+- 汇总卡移除 Edits，Review 使用轻量文字入口，Undo 保留为带说明的小图标；Review 继续打开整轮 Turn workspace，
+  Recorded edits 保留在工作台范围菜单，撤销仍进入已有预览与确认。
+- 汇总文件行直接打开该轮并定位文件；生成中的单文件行直接定位对应工具操作与文件，
+  移除每行右侧的 Review。共享文件行保留键盘按钮语义、悬停和焦点反馈。
+- 只读记录与无工作台入口的 Mission 文件仍展开已保存的 Diff；统计依据、增删行数、
+  多文件折叠及历史回合归属不变。
+- `pnpm run package:vsix` 通过，包含类型检查、文件预算、公共包和五个 Webview 构建；
+  VSIX 166 条目校验通过，已全局安装 Microsoft VS Code，扩展入口、五个 Webview JS
+  与 CSS 共 7 个文件哈希匹配。Reload Window 后生效。
+- 现有 `changeAttribution.test.tsx` 的旧“点击展开”与标题断言需要随交互更新；本次未
+  获新增测试或浏览器验收许可，未修改或运行测试。真实视觉与点击行为由用户在 VS Code 验收。
+
 ## SDK 原生回退结果（2026-10-06）
 
 - 原生消息回退继续使用 `@factory/droid-sdk@0.9.1` 的 `getRewindInfo` / `rewind`，

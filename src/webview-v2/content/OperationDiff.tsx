@@ -4,7 +4,6 @@ import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { DiffView } from '../review/DiffView';
 import { RecordedSource } from '../review/RecordedSource';
-import { Button } from '../ui/button';
 import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { operationFileStats } from '../chat/operationSummary';
 import { operationLabel } from './operationPresentation';
@@ -46,9 +45,9 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
   return <div aria-label="File operations" className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
       ? <FileChangeView key={`${file.scope ?? 'workspace'}:${file.path}`} file={operationFileStats(file)} onInteract={onInteract} label={file.submittedContent !== undefined ? 'Written' : file.kind === 'added' ? 'Created' : file.kind === 'deleted' ? 'Deleted' : file.kind === 'renamed' ? 'Renamed' : 'Edited'}
-        actions={isWorkspaceOperationFile(file) && context?.sessionId ? <Button variant="plain" size="none" className="dvx-change-file-action" aria-label={`Review changes to ${file.path}`} onClick={() => { onInteract?.(); context.port.postMessage({
+        onSelect={isWorkspaceOperationFile(file) && context?.sessionId ? () => { context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
-        }); }}>Review</Button> : undefined}>
+        }); } : undefined}>
         <OperationFileDetails file={file} />
       </FileChangeView>
       : <p key={`${file.scope ?? 'workspace'}:${file.path}`} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? 'Operation failed' : 'Changes unconfirmed'}{file.message ? ` · ${file.message}` : ''}</p>)}

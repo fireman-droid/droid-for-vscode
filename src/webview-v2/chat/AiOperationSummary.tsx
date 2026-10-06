@@ -27,15 +27,14 @@ export function AiOperationSummary({ summary, onInteract }: { readonly summary: 
   const undoReason = currentScope ? currentScope.lifecycle === 'writing' ? 'Wait for this turn to finish.' :
     currentScope.files.every(file => file.undone) ? 'These recorded operations have already been undone.' :
     currentScope.files.find(file => !file.undone && !file.restorable)?.undoReason : recordedReason;
-  const open = (path?: string, action?: 'undo', scopeKind: 'turn' | 'operations' = 'turn') => {
+  const open = (path?: string, action?: 'undo') => {
     if (context?.sessionId) context.port.postMessage({
-      type: 'review.panel.open', sessionId: context.sessionId, scopeKind: action ? 'operations' : scopeKind, turnId: summary.turnId,
+      type: 'review.panel.open', sessionId: context.sessionId, scopeKind: action ? 'operations' : 'turn', turnId: summary.turnId,
       ...(path ? { path } : {}), ...(action ? { action } : {}),
     });
   };
   return <ChangeSummaryView files={[...summary.files.values()]} onInteract={onInteract}
     onReview={connected ? () => open() : undefined} onUndo={connected ? () => open(undefined, 'undo') : undefined}
-    onReviewEdits={connected ? () => open(undefined, undefined, 'operations') : undefined}
     undoDisabled={undoReason !== undefined}
     undoReason={undoReason}
     onSelectFile={connected ? (path) => open(path) : undefined}

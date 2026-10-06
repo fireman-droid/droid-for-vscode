@@ -1,9 +1,10 @@
 import { useId, useState } from 'react';
-import { ChevronRight, FileCode2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
 import { ChangeLineStats } from './FileChangeView';
 import type { ChangeFile } from './changePresentation';
+import { ChangeFileIcon } from './ChangeFileIcon';
 
 export function ComposerChangesView({ files, disabled, onReview, onStop, stopLabel = 'Stop' }: {
   readonly files: readonly ChangeFile[];
@@ -21,11 +22,11 @@ export function ComposerChangesView({ files, disabled, onReview, onStop, stopLab
         <CollapsibleTrigger asChild>
           <Button variant="plain" size="none" className="v2-composer-changes-toggle" aria-controls={id} title="Confirmed edits in this turn">
             <ChevronRight aria-hidden className={expanded ? 'rotate-90' : undefined} />
-            <span>{files.length} {files.length === 1 ? 'File' : 'Files'}</span>
+            <span>{files.length} {files.length === 1 ? 'File' : 'Files'} Changed</span>
           </Button>
         </CollapsibleTrigger>
         {onStop ? <Button variant="plain" size="none" className="v2-composer-changes-stop" disabled={disabled} onClick={onStop}>{stopLabel}</Button> : null}
-        <Button variant="secondary" size="sm" className="v2-composer-changes-review" disabled={disabled} onClick={() => onReview()}>Review</Button>
+        <Button variant="plain" size="none" className="dvx-change-action v2-composer-changes-review" disabled={disabled} onClick={() => onReview()}>Review</Button>
       </div>
       <AnimatedCollapsibleContent id={id} open={expanded}>
         <ul className="v2-composer-changes-list">
@@ -36,7 +37,7 @@ export function ComposerChangesView({ files, disabled, onReview, onStop, stopLab
             return <li key={file.path}>
               <Button variant="plain" size="none" className="v2-composer-changes-file" disabled={disabled}
                 title={file.path} aria-label={`Review changes to ${file.path}`} onClick={() => onReview(file.path)}>
-                <FileCode2 aria-hidden />
+                <ChangeFileIcon path={file.path} />
                 <span className="v2-composer-changes-name">{name}{folder ? <span className="v2-composer-changes-folder">{folder}</span> : null}</span>
                 <ChangeLineStats additions={file.additions || null} deletions={file.deletions || null} />
               </Button>

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import type { ChangeFile } from './changePresentation';
+import { ChangeFileIcon } from './ChangeFileIcon';
 
 export type { ChangeFile } from './changePresentation';
 
@@ -10,8 +11,9 @@ export interface FileChangeViewProps {
   readonly file: ChangeFile;
   readonly children?: ReactNode;
   readonly onInteract?: () => void;
-  readonly actions?: ReactNode;
+  readonly onSelect?: () => void;
   readonly label?: string;
+  readonly compact?: boolean;
 }
 
 export function ChangeLineStats({ additions, deletions }: Pick<ChangeFile, 'additions' | 'deletions'>) {
@@ -28,14 +30,15 @@ export function ChangeLineStats({ additions, deletions }: Pick<ChangeFile, 'addi
   );
 }
 
-export function FileChangeView({ file, children, onInteract, actions, label }: FileChangeViewProps) {
+export function FileChangeView({ file, children, onInteract, onSelect, label, compact = false }: FileChangeViewProps) {
   const [open, setOpen] = useState(false);
-  const hasDetails = children !== null && children !== undefined && children !== false;
+  const hasDetails = !onSelect && children !== null && children !== undefined && children !== false;
   const contents = <>
+    {(onSelect || compact) && <ChangeFileIcon path={file.path} />}
     {hasDetails && <ChevronRight className="dvx-change-chevron" aria-hidden="true" />}
     <span className="dvx-change-label">{label ?? file.kind ?? 'Edited'}</span>
-    <span className="dvx-change-path" title={file.path}>{file.path}</span>
-    <ChangeLineStats additions={file.additions} deletions={file.deletions} />
+    <span className="dvx-change-path" title={file.path}>{compact ? file.path.split(/[\\/]/u).pop() : file.path}</span>
+    <ChangeLineStats additions={compact ? file.additions || null : file.additions} deletions={compact ? file.deletions || null : file.deletions} />
   </>;
   return (
     <Collapsible className="dvx-change-file" open={open} onOpenChange={(nextOpen) => {
@@ -43,14 +46,18 @@ export function FileChangeView({ file, children, onInteract, actions, label }: F
       setOpen(nextOpen);
     }}>
       <div className="dvx-change-file-header">
-        {hasDetails ? (
+        {onSelect ? (
+          <Button variant="plain" size="none" className="dvx-change-row" title={file.path} aria-label={`Review changes to ${file.path}`}
+            onClick={() => { onInteract?.(); onSelect(); }}>
+            {contents}
+          </Button>
+        ) : hasDetails ? (
           <CollapsibleTrigger asChild>
             <Button variant="plain" size="none" className="dvx-change-row" aria-label={`${open ? 'Hide' : 'Show'} changes to ${file.path}`}>
               {contents}
             </Button>
           </CollapsibleTrigger>
         ) : <div className="dvx-change-row dvx-change-row-static">{contents}</div>}
-        {actions && <div className="dvx-change-file-actions">{actions}</div>}
       </div>
       {hasDetails && <CollapsibleContent className="dvx-change-details">{children}</CollapsibleContent>}
     </Collapsible>
