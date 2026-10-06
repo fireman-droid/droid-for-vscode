@@ -43,7 +43,6 @@ import { normalizeMissionTaskText } from '../../shared/protocol/missionProtocol'
 import { MissionWorkspace } from '../mission/MissionWorkspace';
 import { SelectSessionContext } from './thread/messageContexts';
 import { useAnswerScroll } from './useAnswerScroll';
-import { ChatConnectionStatus } from './ChatConnectionStatus';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
 import { AppInfo } from './AppInfo';
 import { useAgentChatNavigation } from './AgentNavigation';
@@ -185,9 +184,11 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
         <div className="flex min-w-0 items-center gap-1.5">{!childChat ? <AppInfo /> : null}
-          <ChatConnectionStatus connection={state.connection} ide={state.ide} sessionId={state.sessionId} port={port} working={running}
+          <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
+            phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
+            blocked={transition.blocking && transition.overlay !== null}
             missionLabel={state.mission ? `${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : undefined}
-            blocked={transition.blocking || state.connection.status !== 'connected' || running ||
+            ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
         </div>
         {capabilities.navigateSessions ? <div className="flex shrink-0 items-center gap-1">
@@ -198,10 +199,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
-        {host.showHandshakeNotice && transition.overlay === null ? <p role="status" className="text-xs text-muted-foreground">Waiting for the extension. Session state refreshes automatically.</p> : null}
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
-        {statusMessage && !running && !ideReconnecting ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
-        <SessionRecovery state={state} blocked={transition.blocking && transition.overlay !== null} onReconnect={sessions.handleRetry} port={port} />
+        {statusMessage && !running && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
+          ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
         {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
@@ -219,9 +219,8 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         </div>
       </>}
       overlay={<>
-      {transition.overlay !== null ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
-        handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} port={port} sequence={state.sequence}
-        conversationId={state.conversationId} sessionId={state.sessionId} /> : null}
+      {transition.overlay !== null && state.transcript.length === 0 ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
+        handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} /> : null}
       </>}>
 
         <ToolActionsContext.Provider value={toolActions}>

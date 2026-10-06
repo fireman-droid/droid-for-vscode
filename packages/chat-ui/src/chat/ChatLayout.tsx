@@ -7,8 +7,10 @@ export function ChatLayout({ header, footer, overlay, children, ...props }: Omit
 }) {
   return <main {...props} className={`v2-chat-surface relative grid h-full min-w-0 flex-1 grid-rows-[40px_minmax(0,1fr)_auto] ${props.className ?? ''}`}>
     <header className="flex min-w-0 items-center justify-between border-b border-[var(--panel-edge)] px-3 py-1">{header}</header>
-    {children}
+    <div className="relative grid min-h-0 min-w-0">
+      {children}
+      {overlay}
+    </div>
     <footer className="v2-chat-footer space-y-2">{footer}</footer>
-    {overlay}
   </main>;
 }

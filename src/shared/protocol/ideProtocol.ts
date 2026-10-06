@@ -2,7 +2,7 @@ import { isId } from '../validation/guards';
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 
 export interface IdeState {
-  readonly status: 'preparing' | 'connected' | 'disconnected' | 'unavailable' | 'reconnect-required' | 'reconnecting' | 'error';
+  readonly status: 'preparing' | 'connected' | 'idle' | 'disconnected' | 'unavailable' | 'reconnect-required' | 'reconnecting' | 'error';
   readonly canReconnect: boolean;
   readonly message: string;
 }
@@ -28,7 +28,7 @@ export const UNAVAILABLE_IDE: IdeState = {
 export function parseIdeState(value: unknown): IdeState | undefined {
   if (!isStrictRecord(value) || !hasExactKeys(value, ['status', 'canReconnect', 'message']) ||
       typeof value.status !== 'string' ||
-      !['preparing', 'connected', 'disconnected', 'unavailable', 'reconnect-required', 'reconnecting', 'error'].includes(value.status) ||
+      !['preparing', 'connected', 'idle', 'disconnected', 'unavailable', 'reconnect-required', 'reconnecting', 'error'].includes(value.status) ||
       typeof value.canReconnect !== 'boolean' || typeof value.message !== 'string' ||
       value.message.length > 500 || /[\u0000-\u001f\u007f]/u.test(value.message)) return undefined;
   return { status: value.status as IdeState['status'], canReconnect: value.canReconnect, message: value.message };

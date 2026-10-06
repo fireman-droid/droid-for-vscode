@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { IdeState } from '../../shared/protocol/ideProtocol';
 import type { NativeIdeRelay } from '../ide/nativeIdeRelay';
+import { IdeReconnectError } from '../ide/ideReconnectError';
 import { createPersistentIdeRelay, restorePersistentIdeRelay, type PersistentIdeRelay } from '../ide/persistentIdeRelay';
 import type { DaemonApi, DaemonNotification, DaemonSessionHandle } from './api';
 import { openDaemonConnection, type DaemonConnection } from './daemonConnection';
@@ -79,10 +80,11 @@ export class WindowDaemonPool {
     const startedAt = Date.now();
     const recordState = () => {
       const state = ide.read();
+      const status = state.status === 'disconnected' && !ide.requiresSessionRestart() ? 'idle' : state.status;
       this.options.record({
-        level: state.status === 'error' || state.status === 'disconnected' ? 'warn' : 'info',
+        level: status === 'error' || status === 'disconnected' ? 'warn' : 'info',
         name: 'ide.native.relay-state',
-        attributes: { relay, status: state.status, durationMs: Date.now() - startedAt },
+        attributes: { relay, status, durationMs: Date.now() - startedAt },
         // Relay messages are fixed lifecycle explanations, never request payloads.
         detail: state.message,
       });
@@ -109,7 +111,8 @@ export class WindowDaemonPool {
         : 'This chat needs its own IDE connection. Reconnect when its background tasks finish.',
     };
     const state = entry.ide!.read();
-    return { ...state, status: state.status === 'connecting' ? 'preparing' : state.status,
+    return { ...state, status: state.status === 'connecting' ? 'preparing'
+      : state.status === 'disconnected' && !entry.ide!.requiresSessionRestart() ? 'idle' : state.status,
       ...(shared ? { message: `This agent shares its owning session’s IDE connection. ${state.message}` } : {}) };
   }
 
@@ -374,24 +377,36 @@ export class WindowDaemonPool {
     deferIfBlocked = false,
   ): Promise<boolean> {
     const blocked = (message: string): false => {
-      if (!deferIfBlocked) throw new Error(message);
+      if (!deferIfBlocked) throw new IdeReconnectError(message);
       return false;
     };
     const source = await this.forSession(sessionId);
     const preparation = await this.options.prepare();
     this.binding = preparation;
     if (preparation.port === null) return blocked(preparation.detail ?? 'The IDE service is unavailable.');
+    const handle = this.handles.get(sessionId);
+    if (!handle) return blocked('The active session must be attached before reconnecting IDE.');
+    if (!isCurrent()) return blocked('The selected session changed. IDE reconnection was cancelled.');
+    // Inactivity unloads the worker, not the retained session. Load it on its
+    // owner before checking opened sessions; absence does not mean it is busy.
+    await handle.ensureLoaded();
+    if (!isCurrent()) return blocked('The selected session changed. IDE reconnection was cancelled.');
+    if (!this.needsReconnect(sessionId) && !source.ide!.requiresSessionRestart()) {
+      await source.ide!.waitUntilReady();
+      this.options.record({ level: 'info', name: 'ide.native.session-restored',
+        detail: 'The existing session restored its IDE connection without migration or sending a prompt.' });
+      return true;
+    }
     const droid = source.connection.droid;
     const opened = await droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     const session = opened.find(({ id }) => id === sessionId);
-    if (!session || busySessionTree(opened, sessionId)) {
+    if (!session) return blocked('The session worker could not be loaded. Retry restoring this conversation.');
+    if (busySessionTree(opened, sessionId)) {
       return blocked('Wait for the session and its child tasks to finish before reconnecting IDE.');
     }
     if ((await droid.terminals.list(sessionId, {})).length > 0) {
       return blocked('Close this session’s managed terminals before reconnecting IDE.');
     }
-    const handle = this.handles.get(sessionId);
-    if (!handle) return blocked('The active session must be attached before reconnecting IDE.');
     if (!isCurrent()) return blocked('The selected session changed. IDE reconnection was cancelled.');
     // Never move the live worker in place. Its replacement receives a fresh relay.
     this.allocations.delete(sessionId);
@@ -414,7 +429,7 @@ export class WindowDaemonPool {
     await handle.close({ preserveEmptyDraft: true });
     this.handles.delete(sessionId);
     if ((await droid.sessions.listOpened()).some(({ id }) => id === sessionId)) {
-      throw new Error('The original daemon has not confirmed session closure. IDE reconnection was not started.');
+      throw new IdeReconnectError('The original daemon has not confirmed session closure. IDE reconnection was not started.');
     }
     await this.remember(sessionId, target);
     try { await this.retireEmpty(source); }

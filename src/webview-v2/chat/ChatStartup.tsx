@@ -1,7 +1,6 @@
-import { BookOpen, Folder, GitCompare } from 'lucide-react';
+import { BookOpen, Folder, GitCompare, LoaderCircle, Unplug } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { Button } from '../ui/button';
-import { DroidActivity } from '../ui/droid-motion';
 
 const starters = [
   { label: 'Understand this project', icon: BookOpen, prompt: 'Explain this codebase: identify the main entry points and how the key modules fit together. Do not change files.' },
@@ -13,12 +12,12 @@ export function ChatStartup({ state, blocked, onDraftSuggestion }: {
   readonly blocked: boolean;
   readonly onDraftSuggestion?: (prompt: string) => void;
 }) {
-  if (state.connection.status === 'unavailable') return <section className="px-3 py-12 text-center" aria-label="Droid unavailable">
-    <h2 className="text-sm font-medium">Droid is not ready</h2>
-    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{state.connection.message ?? 'Droid is unavailable. Check the connection message below before reconnecting.'}</p>
-  </section>;
-  if (state.connection.status !== 'connected' || state.sessionId === null) return <div role="status" className="flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground">
-    <DroidActivity phase="loading" /><span>{state.connection.status === 'connected' ? 'Waiting for the session state…' : 'Connecting to Droid…'}</span>
+  if (blocked) return null;
+  if (state.connection.status === 'unavailable') return <div role="alert" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 px-6 text-center text-xs text-muted-foreground">
+    <Unplug aria-hidden="true" className="size-3.5 shrink-0" /><span>Unable to connect. Open the connection status above.</span>
+  </div>;
+  if (state.connection.status !== 'connected' || state.sessionId === null) return <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 px-6 text-center text-xs text-muted-foreground">
+    <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" /><span>{state.connection.status === 'connected' ? 'Restoring session…' : 'Connecting to Droid…'}</span>
   </div>;
   const settings = state.settings;
   const modelId = settings.value?.interactionMode === 'spec'

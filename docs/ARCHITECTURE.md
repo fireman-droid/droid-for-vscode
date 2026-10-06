@@ -237,6 +237,8 @@ Host 拒绝旧页面回包。后续增量确认不会自动覆盖前面漏收的
 V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 秒退避持续重发 ready，
 隐藏时暂停。手动刷新由 `chat/ConnectionFeedback.tsx` 等待同会话且更新的完整快照，
 10 秒无响应恢复入口并说明未收到状态。以上路径均不重放用户请求、工具或模型调用。
+恢复请求状态由页头的 `SessionRecovery` 持有，`ChatConnectionStatus` 使用共享 Popover
+显示会话／IDE 详情与操作；弹层开关不重置在途请求。空会话等待层限制在正文网格区域。
 `postMessage` 成功仅表示平台接受消息，应用 ACK 也不证明 DOM 已绘制；
 `useTranscriptReceipt` 的 commit 诊断用于定位，不代替真实可见结果验收。
 
