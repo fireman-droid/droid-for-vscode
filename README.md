@@ -1,122 +1,110 @@
-<div align="center">
-
 # Droid
 
-**把聊天、改动审阅和代码补全，放进熟悉的编辑器。**
+**在 VS Code 里使用 Droid：阅读对话、随时旁问、审阅改动。**
 
-[开始使用](#开始使用) · [补全指南](docs/AUTOCOMPLETE.md) · [文档](docs/README.md) · [反馈问题](https://github.com/fireman-droid/droid-for-vscode/issues)
+[下载安装包](https://github.com/fireman-droid/droid-for-vscode/releases/latest) · [使用文档](docs/README.md) · [参与开发](docs/DEVELOPMENT.md) · [报告问题](https://github.com/fireman-droid/droid-for-vscode/issues)
 
-![Droid — Chat. Review. Keep coding. 在 VS Code / Cursor 中使用](assets/banner.webp)
+Droid 是 **Factory Droid CLI 的非官方开源 GUI**，支持 VS Code 和兼容版本的 Cursor。
+它连接你本机的 Droid，把终端里的会话、工具执行和文件修改带进编辑器，支持使用自己的模型渠道（BYOK）。
 
-</div>
+![Droid 实际界面：左侧审阅文件修改，右侧保留对话与工具执行过程](docs/images/review-split.png)
 
-Droid 是 **Factory Droid CLI 的非官方图形界面插件**，运行在 VS Code / Cursor 中。
-它复用本机 Droid 的会话与工具，让你在编辑器里讨论代码、查看执行过程、审阅修改，并继续写代码。
+*在同一个编辑器里看任务、读代码、检查修改。截图来自实际使用；界面会随版本演进。*
 
-做这个项目，是因为我更喜欢 Cursor 原生聊天那种简洁的体验：对话清楚，工具细节按需展开，
-文件改在哪里，可以顺着当前任务看下去。Droid 围绕这个习惯，加入了完整文件 Diff、BTW 旁问和编辑器补全。
+## 为什么做它
 
-## 日常写代码，会用到这些
+起因很简单：用 CLI 学习和写代码时，长回复、工具输出和代码修改读起来不够方便。
+找了一圈 GUI，没有遇到同时合自己习惯、又支持 BYOK 的，于是围绕日常使用的 Droid 做了这个插件。
 
-### 聊天和旁问，各有自己的位置
+外观与交互借鉴了 Cursor、Claude for VS Code、Codex 和 Kilo。
+希望它能让对话更好读，让文件改动更容易检查，也让临时冒出来的问题有个单独的位置。
 
-在侧栏中讨论项目，附上文件或图片，查看工具执行，回答提问和确认权限。
-计划、工具输出和子任务放在对应对话里，需要时再展开。
+## 可以用它做什么
 
-看到某段代码或解释，想顺便问一句？选中文字后打开 **BTW（By the Way）**，
-围绕这段上下文单独讨论。旁问支持图片和独立选择模型，关闭后可以继续看主对话。
-
-### 审阅修改，连着完整上下文一起看
-
-从聊天里的文件修改进入 **Review**，对照修改前后的完整文件，在改动位置查看红绿增删标记。
-支持统一视图、左右分栏和修改位置跳转，也可以集中审阅文件列表。
-
-完整对照依赖对应的版本记录；只保存了修改片段的旧会话，无法凭空补回当时的完整文件。
-
-### 写代码时，直接补全或接受下一处修改
-
-**代码补全**在编辑器中显示灰字，`Tab` 接受，`Esc` 关闭。
-**Next Edit** 提示下一处修改：修改在别处时，先跳转，再接受；接受后仍可撤销。
-
-补全默认关闭，可以独立启用，不需要先打开聊天。普通续写支持 Codestral、DeepSeek 兼容 FIM、
-Ollama 等服务，Next Edit 已接入 Mercury。从状态栏可以暂停、恢复或切换配置。
-[查看配置方法 →](docs/AUTOCOMPLETE.md)
-
-### 模型、工具和任务，也能在界面里管理
-
-| 功能 | 可以做什么 |
+| 场景 | Droid 提供的入口 |
 | --- | --- |
-| 模型管理 | 区分服务渠道，修改别名，临时禁用或恢复模型配置 |
-| Skills / MCP / 插件 | 查看和管理 Droid 提供的扩展能力 |
-| 子代理 | 查看任务活动，从卡片打开子会话；daemon 模式下可继续交流或停止任务 |
-| Mission | 查看任务进度与 Worker，进入对应子会话 |
+| 读一段长回复，跟进任务进度 | 聊天中查看 Markdown、代码、任务计划和工具执行，细节按需展开 |
+| 不打断主线，顺便问一句 | **BTW 旁问**引用选中文字，支持图片、独立模型和模型支持的推理强度 |
+| AI 改完文件，先检查再继续 | **Review** 查看逐次编辑、整轮工作区变化或 Git 差异，支持分栏、改动跳转和审阅标记 |
+| 使用自己的模型服务 | 管理 **BYOK** 渠道、模型别名和启停状态；可用能力取决于 Droid 与服务商 |
+| 配置 Droid 的工具能力 | 查看和管理 **Skills、MCP 与插件**，支持范围由当前 Droid 环境提供 |
+| 手动写代码时少打一些字 | **灰字补全与 Next Edit**，分别提供光标续写和下一处编辑建议 |
+| 跟进并行任务 | 从子代理卡片进入子会话，或在 **Mission Control** 查看任务与 Worker |
 
-具体支持范围见 [能力说明](docs/CAPABILITIES.md)。本项目仍在持续打磨，已知问题与验证范围记录在
-[当前状态](docs/STATUS.md)。
+补全默认关闭，单独配置服务，不读取聊天历史。普通补全支持 Codestral、DeepSeek 兼容 FIM、
+Ollama 等协议；Next Edit 接入 Mercury。配置方法见 [补全指南](docs/AUTOCOMPLETE.md)。
 
 ## 开始使用
 
-### 1. 准备编辑器和 Droid
+### 1. 准备 Droid CLI
 
-- **编辑器**：VS Code API `1.108.0` 或更高兼容版本的 VS Code / Cursor。
-- **Droid CLI**：按 [官方快速开始](https://docs.factory.ai/droid-cli/quickstart.md) 安装并完成认证，
-  在终端确认 `droid --version` 正常，所选模型可以使用。
-- **模型服务**：使用自己的 Factory 服务或按 [BYOK 说明](https://docs.factory.ai/model-independence/byok.md)
-  配置支持的模型。插件不附带订阅或免费额度；编辑器补全另外配置服务和计费。
+需要支持 VS Code API **1.108.0+** 的编辑器，以及已经安装、认证且可正常使用的 Droid CLI。
+先按 [Factory 快速开始](https://docs.factory.ai/droid-cli/quickstart.md) 完成配置，并在终端确认：
 
-目前主要在 Windows 上开发和验证；macOS、Linux、WSL、Remote SSH 和容器环境尚未完成同等验收。
+```sh
+droid --version
+```
 
-### 2. 安装扩展
+使用自己的 API Key 时，按 [Factory BYOK 文档](https://docs.factory.ai/model-independence/byok.md) 配置模型服务。
+**插件不附带模型订阅或免费额度**；聊天和编辑器补全的服务分别配置、分别计费。
 
-1. 打开 [最新版本](https://github.com/fireman-droid/droid-for-vscode/releases/latest)，
-   在 **Assets** 下载 `droid-版本号.vsix`。当前版本为
-   [droid-0.8.3.vsix](https://github.com/fireman-droid/droid-for-vscode/releases/download/v0.8.3/droid-0.8.3.vsix)。
-2. 在编辑器扩展面板的 `…` 菜单中选择 **Install from VSIX…**，安装下载的文件。
-3. 执行 **Developer: Reload Window**，再运行 **Droid: Open Chat** 打开侧栏。
+### 2. 安装 VSIX
 
-安装不需要克隆源码或配置 Node.js。需要自行开发时，见 [源码构建指南](docs/DEVELOPMENT.md)。
+1. 到 [Releases](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的 **Assets** 下载 `droid-版本号.vsix`。
+2. 在编辑器扩展面板的 `…` 菜单选择 **Install from VSIX…**，安装该文件。
+3. 执行 **Developer: Reload Window**，打开项目文件夹，再运行 **Droid: Open Chat**。
 
-需要代码补全时，运行 **Droid: Configure Autocomplete**，配置服务后选择 **Enable autocomplete**。
+安装包用户不需要 Node.js、pnpm 或源码。GitHub 下载版通过安装新版 VSIX 手动更新；
+内部扩展 ID 保持 `droidvisx.droidvisx`，无需先卸载旧版。
 
-GitHub 下载版需要手动安装新版 VSIX。更新会沿用扩展 ID `droidvisx.droidvisx`，
-已有设置与会话继续使用；无需卸载旧版。完整构建与更新方法见 [开发指南](docs/DEVELOPMENT.md)。
+### 3. 从一个小任务开始
 
-## 使用时需要了解
+选择可用模型，先让 Droid 介绍项目，再尝试修改一处文件：
 
-**任务与连接。** 默认 daemon 模式下，窗口重载后后台任务可能仍在运行，关闭面板不等于停止任务。
-遇到连接或进度异常时，可按 [排障指南](docs/TROUBLESHOOTING.md) 检查当前状态。
+> 阅读 README 和项目入口，解释各目录的用途。先不要修改文件。
 
-**数据与服务。** 提示词、附件和工具内容会按实际操作交给 Droid、所选模型及相关 MCP / 插件服务处理。
-扩展在本地保存恢复状态、图片附件和诊断日志，这些内容不随 Git 仓库迁移，也不保证卸载后自动清除。
-补全密钥保存在编辑器 SecretStorage 中，补全不读取聊天历史。
+接下来可以选中回复中的文字打开 BTW，或从文件修改记录进入 Review。
+完整步骤见 [安装与第一次对话](docs/GETTING_STARTED.md)。
 
-**反馈与隐私。** 日志可能包含对话、命令、文件路径和工具内容。诊断包由你手动导出，不会由导出命令自动上传；
-分享日志或截图前请去除个人信息和密钥。具体保存位置、保留规则及排障步骤见 [诊断说明](docs/TROUBLESHOOTING.md)。
+## 当前边界
+
+- **平台**：主要在 Windows 上开发和验证；macOS、Linux、WSL、Remote SSH 和容器环境尚未完成同等验收。
+- **会话**：默认 daemon 模式下，重载窗口或关闭面板不等于停止后台任务；遇到异常先确认任务状态。
+- **Diff 与撤销**：比较默认围绕改动展示。查看历史完整文件、撤销编辑，需要对应的版本或完整修改证据，不能从残缺记录补造。
+- **Mission**：已有入口和任务视图，但日常使用与验证较少，欢迎提供可复现的问题。
+
+功能范围见 [能力说明](docs/CAPABILITIES.md)，故障处理见 [排障指南](docs/TROUBLESHOOTING.md)。
+仓库 `main` 和 Releases 安装包可能处于不同进度，已发布内容以各版本说明为准。
+
+## 数据如何处理
+
+聊天、附件和工具内容会按你的操作交给 Droid、所选模型以及相关 MCP / 插件服务。
+扩展在本机保存恢复元数据、暂存附件和诊断日志；这些内容不随 Git 迁移，也不保证卸载后自动清除。
+编辑器补全密钥保存在编辑器 SecretStorage 中。
+
+诊断包需要手动导出，导出命令不会自动上传。公开截图或日志前请去除密钥、私人路径和对话内容。
+[数据保存位置与诊断步骤](docs/TROUBLESHOOTING.md)
 
 ## 文档与贡献
 
-欢迎提交 [Issue](https://github.com/fireman-droid/droid-for-vscode/issues) 和 PR。
-反馈问题时，请带上编辑器与 Droid CLI 版本、复现步骤，以及脱敏后的截图或日志；
-可以参考 [反馈模板](docs/FEEDBACK.md)。
-
-| 想了解什么 | 从这里开始 |
+| 我想…… | 从这里开始 |
 | --- | --- |
-| 补全、模型服务与 Next Edit 配置 | [补全指南](docs/AUTOCOMPLETE.md) |
-| 本地开发、前端预览与打包发布 | [开发指南](docs/DEVELOPMENT.md) |
-| 源码结构与各层职责 | [架构导航](docs/ARCHITECTURE.md) |
-| 已支持的功能与当前限制 | [能力说明](docs/CAPABILITIES.md) · [当前状态](docs/STATUS.md) |
-| 后续计划与版本变化 | [计划](docs/PLAN.md) · [更新记录](CHANGELOG.md) |
+| 学会聊天、模型、旁问和 Review | [使用文档](docs/README.md) |
+| 跑起源码，完成第一个修改 | [开发指南](docs/DEVELOPMENT.md) |
+| 理解发送、流式消息、恢复和状态归属 | [架构与代码导航](docs/ARCHITECTURE.md) |
+| 复用 React 聊天界面 | [独立 UI 包](packages/chat-ui/README.md) |
+| 提 Bug 或改进建议 | [Issue](https://github.com/fireman-droid/droid-for-vscode/issues) · [反馈要点](docs/FEEDBACK.md) |
 
-贡献前请阅读 [项目规则](AGENTS.md)。全部文档入口在 [docs/README.md](docs/README.md)。
+欢迎 PR。请说明解决的具体问题、复现步骤和验证结果；开发前阅读 [贡献与验证规则](AGENTS.md)。
+版本变化在 [CHANGELOG](CHANGELOG.md)，维护进度在 [STATUS](docs/STATUS.md)。
 
-社区友链：[LINUX DO](https://linux.do/)。感谢社区为开源项目提供交流与分享的平台。
+社区交流：[LINUX DO](https://linux.do/)。感谢社区为开源项目提供交流与分享的平台。
 
 ## 许可与致谢
 
-原创代码采用 [MIT](LICENSE) 许可证，第三方代码与依赖保留各自许可。
-补全实现参考并适配了 [Kilo Code](https://github.com/Kilo-Org/kilocode) 与
-[Continue](https://github.com/continuedev/continue)；分发包包含相应的第三方许可证。
+原创代码采用 [MIT](LICENSE)。补全实现参考并适配了 [Kilo Code](https://github.com/Kilo-Org/kilocode)
+和 [Continue](https://github.com/continuedev/continue)，第三方代码与依赖保留原许可，分发包附带对应条款。
 
 本项目由社区独立维护，不由 Factory 官方发布、维护或背书。
-风车标识来源于 [Factory](https://factory.com/)，名称与标识的权利归各自权利人，
-不随本项目 MIT 许可证重新授权。[标识来源说明](docs/DESIGN.md#分发标识)
+Factory 名称和风车标识归各自权利人所有，不随本项目 MIT 许可证重新授权。
+[标识来源](docs/DESIGN.md#分发标识)

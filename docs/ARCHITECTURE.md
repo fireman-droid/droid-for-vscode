@@ -1,8 +1,24 @@
 # 架构与代码导航
 
-本文面向第一次维护这个项目的人：先确定改动属于哪一层，再沿一条实际调用链阅读。
-当前能力和未验收事项见 [STATUS](STATUS.md)、[CAPABILITIES](CAPABILITIES.md)，
-界面规则见 [DESIGN](DESIGN.md)。这里说明代码如何协作，不把文档描述当作测试结果。
+**沿一次请求，理解界面、编辑器与 Droid 如何协作。**
+
+如果尚未跑起项目，先读 [开发指南](DEVELOPMENT.md)。本文从全局职责进入发送、流式消息和恢复，
+最后查阅各功能的实现细节。源码链接指向仓库中的对应入口；设计目标与验证状态分别查看
+[DESIGN](DESIGN.md) 和 [STATUS](STATUS.md)，不将它们混作运行结果。
+
+## 阅读地图
+
+| 你在追踪什么 | 先读这一节 | 要回答的问题 |
+| --- | --- | --- |
+| 模块之间怎样协作 | [系统分层](#layers) | 哪层能访问 SDK、文件和编辑器，哪层只负责展示 |
+| 点发送后发生了什么 | [一次发送](#send-turn) | 谁接受请求、谁执行、谁结算 |
+| 回复怎样逐步出现 | [流式消息](#streaming) | 增量、快照、序号和状态确认有什么区别 |
+| 刷新或切换后怎样恢复 | [会话恢复](#session-recovery) | 哪些状态从后台读取，哪些请求不能重放 |
+| 一个状态该放在哪 | [状态归属](#state-ownership) | 谁保存事实，谁持有视图与临时交互 |
+| 要修改具体功能 | [代码定位](#code-map) · [业务边界](#boundaries) | 顺着哪个入口读，哪些语义不能顺手改变 |
+| 补全为何独立于聊天 | [补全路径](#autocomplete) | 上下文、模型请求与建议失效由谁负责 |
+
+<a id="layers"></a>
 
 ## 先认识四个部分
 
@@ -24,110 +40,14 @@ flowchart LR
 | `src/runtime/` | 调用 SDK、连接 daemon、发送/恢复会话，把 SDK 事件转成项目事件 | VS Code API、React、页面状态 |
 | `src/extension/` | 扩展装配、工作区、当前会话、权限、文件、存储、各面板生命周期 | 页面排版、第二套模型执行器 |
 | `src/shared/` | 消息类型、上下限、严格校验、纯数据转换 | 文件/网络操作、VS Code、React、SDK 实例 |
-| `src/webview-v2/` | 全部前端页面、Droid 业务状态、接收 Host 消息、把数据接到公共组件 | SDK、文件系统、直接模型请求 |
+| `src/webview-v2/` | Droid 页面装配、业务状态、Host 消息和公共组件适配 | SDK、文件系统、直接模型请求 |
 | `packages/chat-ui/src/` | 可复用的控件、聊天/只读内容、Markdown、滚动、输入与 Diff 展示 | Droid 会话身份、Bridge、Host、VS Code API |
 
-前端只有 `src/webview-v2/` 一套实现，目录名保留，生产页面是 Chat、Models、Mission、
-Viewer、Review。`chat/` 按 composer、attachments、btw、interactions、queue 等业务
+前端由公共展示包和 Droid 业务适配组成。`src/webview-v2/` 的目录名保留，
+负责装配 Chat、Models、Mission、Viewer、Review 五个生产页面。`chat/` 按 composer、attachments、btw、interactions、queue 等业务
 划分；文件变更在 `review/`，模型、Mission、历史查看分别在 `models/`、`mission/`、
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
-
-### 主／子聊天的装配与状态归属
-
-主面板和子代理面板加载同一个 `ChatApp`，各自持有独立 `ChatController`。控制器通过
-`ChatControllerDependencies` 具名装配；窗口共用的模型目录、禁用偏好、系统提示及
-Provider 服务集中在 `chatSharedServices`，每个控制器独立订阅和退订。恢复存储、附件、
-Review、快照和 Runtime 的释放仍属于各自聊天，关闭子标签不会释放父聊天订阅。
-
-Host 在生成 HTML 时固定 `main`／`child` 角色，`chatSurfacePolicy` 集中导航、压缩、
-编辑历史及 Mission 的能力。前端按角色显示入口，Host 按自身角色校验命令。Agent 导航
-只负责列表与选中项，关联被移除不会改变已打开面板的角色；`agentPresentation` 为导航
-条目和工具卡片适配状态、文案及回调，分别保留历史列表和工具活动／耗时的语义。
-
-`sessions/sessionBinding` 集中提交会话身份、正文、回合和目录投影；显示已读历史与
-接管可用 Runtime 分开。异步准备、持久化、代次校验由调用流程负责。压缩沿用原
-conversationId，Fork／编辑重发建立新 conversation；恢复不再次提交消息。
-`turns/turnLifecycle` 集中回合的代次、活动、诊断和 IO 初始化，传输恢复保留原活动与
-后端回合 ID；结束继续走既有完成／失败结算。相关 Port 对身份及整个回合只暴露读取，
-通过命名操作请求变更。
-
-共享消息解析依赖基础校验，基础校验不反向调用总解析器。两种模型协议共用
-`customModelValues` 的常量、类型与校验规则，消息格式和公开解析入口保持不变。
-
-### SDK 0.9.1 设置与恢复
-
-模型元数据由 Runtime 的正式 `listModels` 目录投影到共享契约，禁用检查保留在 Host
-应用边界，Webview 只负责显示与交互。系统提示使用独立请求／确认消息和 Host 用户配置
-存储，工厂仅给新建目标注入 `systemPrompt`，恢复／分叉不注入。
-
-daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
-该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
-查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。
-
-历史记录追加使用 SDK 公开低层 Process 客户端，在 Host 空闲操作锁内关闭、追加并恢复
-原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开
-追加接口，不使用私有 SDK 字段或直接修改 CLI 历史。
-
-### 编辑器补全的独立路径
-
-`src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
-Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
-文档/光标/关联上下文版本，也负责接续语言服务的候选文本。CompletionHistory 复用 Kilo 的
-匹配策略，保留 20 条/30 秒历史；CompletionRequests 分离调用者取消与网络取消，
-兼容请求在 100ms 交接窗口内可保留，并在新调用收集上下文时持有租约；已被输入的
-结果前缀会剔除，不匹配则按当前上下文重新请求。防抖以近期延迟限幅，错误分类退避。
-`completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
-返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
-显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
-
-普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
-ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
-getSnippets 排序裁剪、模型模板。启用补全时立即建立浏览/编辑跟踪，不等首次 FIM 请求。
-原生定义和近期修改补充与 Kilo 片段合并，按来源优先级去重后再套用模型模板与总预算。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
-复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
-LSP 查询跟随请求取消，从首次查询起共享 150ms 等待预算；超时来源不阻塞已就绪的其他片段，
-记录 context.timeout，下一次请求可重试，其他错误仍向调用边界传播。导入缓存每次核对语法树中的
-完整导入语句与位置，只改主体时复用；外部定义、配置或忽略规则变化清理依赖缓存，迟到结果不能
-写回新一代缓存。读取到的新关联文件加入现有 watcher。
-解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
-静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
-
-`CompletionContextService` 为 FIM 收集原生定义、近期编辑和打开文件（最多 6 文件/400ms），
-另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
-浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
-`CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
-Codestral 在文件中间和末尾均使用多文件模板保留关联定义；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
-避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
-Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
-
-`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、Ollama generate
-或 SiliconFlow 的 prefix/suffix FIM 扩展。Runtime 不引用 VS Code；共享 transport 提供
-取消、12 秒超时、大小限制与固定错误。当前完整响应收齐后再返回灰字。
-Host 从 SecretStorage 即时读取完整 endpoint 的 key；仅官方 Mercury FIM/Edit 两个地址共用，
-配置只接受用户级值。本地无认证服务不附认证头，不进入 Droid 聊天 Session。
-
-Kilo 源码固定为 `7d977bce994af36f0edf752cb53e3aefc7aeb214`，位于 autocomplete/kilo。
-新接入的 Continue 子树保留 Apache-2.0 声明，Kilo 自身为 MIT；llamaTokenizer 保留原作者
-belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分发。CLI 文件系统适配器
-未引入生产包。普通补全的后处理接入上游模型、重复与语言过滤，Droid 额外保留明确的
-围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
-
-NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
-启用补全期间持续记录编辑；FIM/Next Edit 切换只清待接受建议，停用时销毁跟踪器并清空编辑历史。
-Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式；预算优先保留完整编辑区域、
-光标及最新可容纳的完整 diff，再分配较旧历史、浏览片段和邻近完整代码行，不截断 diff，
-请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
-NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
-SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。
-普通文件按配置选择 FIM 或 Next Edit；Notebook 在官方 Mercury 模式切换为其 FIM endpoint。
-自动/手动与 snooze 时间戳同时约束 Provider 和连续预测；定时器只刷新状态，不自动插入代码。
-补全不经过 Webview/Bridge，也不进入聊天队列。聊天 daemon 仍在聊天视图首次解析时预热。
-
-### 历史内部会话过滤
-
-`src/runtime/editorAssistance/sessionIdentity.ts` 仅保留旧 `droid-editor-assistance` 标签识别，
-供历史、归档和搜索过滤使用；不再注册编辑器辅助入口或创建这类请求。
 
 ### 第一次阅读按这个顺序
 
@@ -141,6 +61,8 @@ SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit �
 
 不必先通读所有文件。例如改输入框，先看 Composer；修正文不更新，先查消息接收和
 状态转换；调整 SDK 行为，再进入 Runtime。后面的定位表给出常见入口。
+
+<a id="send-turn"></a>
 
 ## 一次发送经过哪里
 
@@ -197,6 +119,55 @@ sequenceDiagram
 成功/完成；未确认时保留锁定和重试入口。恢复中的回合没有本地 iterator，必须由
 恢复路径依据后台终态完成结算。Spec Handoff 使用自己的接管流程，不偷偷开启第二次发送。
 
+<a id="streaming"></a>
+
+## 流式消息怎样到达页面
+
+Droid 持续产生正文、思考和工具事件。Runtime 将它们归一化，Host 更新自己的会话状态，
+再通过 Bridge 向页面发布。页面按顺序应用消息，公共 UI 只接收展示数据。
+
+```mermaid
+flowchart TD
+    SDK[Droid 事件] --> Runtime[Runtime 归一化]
+    Runtime --> Host[Host 更新转录并分配 sequence]
+    Host --> Parse[页面校验消息]
+    Parse --> Batch[按帧批量提交]
+    Batch --> Store[reducer 核对顺序与身份]
+    Store --> View[组件订阅并渲染]
+    Store --> ACK[回传已应用状态序号]
+    ACK --> Delivery[Host 跟踪投递缺口]
+    Delivery -->|需要补同步时| Snapshot[完整 Host 快照]
+    Snapshot --> Parse
+```
+
+### 四种容易混淆的信号
+
+| 信号 | 它确认了什么 | 它没有确认什么 |
+| --- | --- | --- |
+| `assistant.delta` 等增量 | 某次运行产生了更多内容 | 整轮已经成功结束 |
+| `host.snapshot` | Host 发出当前完整状态供页面重建 | 用户请求被重新执行 |
+| `sequence` | Host 消息的顺序 | SDK 工具或文件写入成功 |
+| `webview.state-applied` | 页面已按 reducer 规则消费对应状态消息 | DOM 已绘制或用户已经看见 |
+
+### 为什么批处理还要确认
+
+[`useHostMessageFlow.tsx`](../src/webview-v2/host/useHostMessageFlow.tsx) 将消息暂存，
+在下一帧或 50 ms 定时器触发时提交一个 `host.batch`，避免每个小片段都单独触发状态更新。
+50 ms 是调度兜底间隔，不是渲染延迟保证；主线程阻塞时仍会晚于这个时间。
+
+[`state/store.ts`](../src/webview-v2/state/store.ts) 拒绝非递增序号，再由各业务 reducer
+处理会话和回合身份。状态同步应用后，[`stateReceipt.ts`](../src/webview-v2/host/stateReceipt.ts)
+回传确认。Host 的投递模块据此发现缺口，通过快照补同步；迟到的旧页面回包不能确认新页面。
+
+**恢复显示状态与重新执行任务必须分开。** 连接恢复时可以补快照，不能为了补正文再次调用 `sendTurn`。
+后者可能重复调用模型、执行工具或写文件。
+
+源码入口：[消息校验](../src/webview-v2/host/hostMessageSource.ts) ·
+[Host 投递确认](../src/extension/webview/webviewStateDelivery.ts) ·
+[页面快照重放](../src/extension/chat/browserReplay.ts)。
+
+<a id="session-recovery"></a>
+
 ## 打开、切换和恢复经过哪里
 
 启动与发送是两条不同的链。恢复首先要找回同一会话及其权威历史，不能用缓存正文
@@ -246,6 +217,8 @@ flowchart TD
 | `sessionCleanup.ts` | 清理会话关联状态、关闭资源；Mission/模型发现的取消交回各自 state |
 | `SessionLifecycleState.ts` | 保存生命周期状态，并合并重复关闭、保留失败重试语义 |
 
+<a id="state-replay"></a>
+
 ### 页面重新打开不等于重新执行
 
 `DroidViewProvider` 先注册监听再加载 HTML。`browserReplay.ts` 等待初始化后给
@@ -266,6 +239,8 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 10 秒无响应恢复入口并说明未收到状态。以上路径均不重放用户请求、工具或模型调用。
 `postMessage` 成功仅表示平台接受消息，应用 ACK 也不证明 DOM 已绘制；
 `useTranscriptReceipt` 的 commit 诊断用于定位，不代替真实可见结果验收。
+
+<a id="state-ownership"></a>
 
 ## 状态由谁保存、谁可以改
 
@@ -321,6 +296,8 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 不是每条消息都携带上表全部字段。使用该业务已有的身份契约，不能新造一套平行 ID。
 同一 session 内也会连续运行多个 turn，仅检查 session 不能保护旧异步结算。
 
+<a id="code-map"></a>
+
 ## 改一个功能，先找哪里
 
 以下路径均相对于仓库根目录；生产入口改动要追到直接消费者，不按相邻文件猜行为。
@@ -343,9 +320,21 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 新增字段先稳定共享契约，再依次接 Runtime/Host/Bridge/UI。仅改某层的类型、按钮或
 样式不会自动接通整条功能。纯显示行为留在公共 UI；Droid 专属身份和权限留在业务适配。
 
+<a id="boundaries"></a>
+
 ## 几条容易改错的业务边界
 
+<a id="diff-evidence"></a>
+
 ### Diff 比较、AI 归因和撤销是三件事
+
+| 问题 | 依据 | 不能混用的结论 |
+| --- | --- | --- |
+| 文件前后有什么不同 | 版本快照或 Git 比较 | 有差异不代表都是 AI 修改 |
+| 哪次工具修改了什么 | 确认执行的逐文件操作记录 | 工作区净变化不能代替工具归因 |
+| 现在能否安全撤销 | 完整可逆记录、当前文件匹配与写前复核 | 有 Diff 可看不代表可自动回退 |
+
+下面列出各条路径的证据来源、读取上限和冲突处理，改动对应能力时再逐项阅读。
 
 - `changes/turnSnapshots.ts` 保存 before/after，使用私有 index/对象目录。
   非 Git 工作区可用扩展存储里的私有 bare Git 仓库；不修改项目 index 或创建项目 `.git`。
@@ -462,6 +451,106 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   执行命令、文件修改、计划、权限和委派继续由各自专属展示负责。
 - 工具结果按实际调用上下文有界投影；淘汰保留来源/原因及已有计数摘要，不等于执行失败或整段历史
   丢失。片段可从 Droid 历史重建，不以扩展全文缓存补造，未知敏感内容不能声称全已检测。
+
+## 主／子聊天与 SDK 适配
+
+### 主／子聊天的装配与状态归属
+
+主面板和子代理面板加载同一个 `ChatApp`，各自持有独立 `ChatController`。控制器通过
+`ChatControllerDependencies` 具名装配；窗口共用的模型目录、禁用偏好、系统提示及
+Provider 服务集中在 `chatSharedServices`，每个控制器独立订阅和退订。恢复存储、附件、
+Review、快照和 Runtime 的释放仍属于各自聊天，关闭子标签不会释放父聊天订阅。
+
+Host 在生成 HTML 时固定 `main`／`child` 角色，`chatSurfacePolicy` 集中导航、压缩、
+编辑历史及 Mission 的能力。前端按角色显示入口，Host 按自身角色校验命令。Agent 导航
+只负责列表与选中项，关联被移除不会改变已打开面板的角色；`agentPresentation` 为导航
+条目和工具卡片适配状态、文案及回调，分别保留历史列表和工具活动／耗时的语义。
+
+`sessions/sessionBinding` 集中提交会话身份、正文、回合和目录投影；显示已读历史与
+接管可用 Runtime 分开。异步准备、持久化、代次校验由调用流程负责。压缩沿用原
+conversationId，Fork／编辑重发建立新 conversation；恢复不再次提交消息。
+`turns/turnLifecycle` 集中回合的代次、活动、诊断和 IO 初始化，传输恢复保留原活动与
+后端回合 ID；结束继续走既有完成／失败结算。相关 Port 对身份及整个回合只暴露读取，
+通过命名操作请求变更。
+
+共享消息解析依赖基础校验，基础校验不反向调用总解析器。两种模型协议共用
+`customModelValues` 的常量、类型与校验规则，消息格式和公开解析入口保持不变。
+
+### SDK 0.9.1 设置与恢复
+
+模型元数据由 Runtime 的正式 `listModels` 目录投影到共享契约，禁用检查保留在 Host
+应用边界，Webview 只负责显示与交互。系统提示使用独立请求／确认消息和 Host 用户配置
+存储，工厂仅给新建目标注入 `systemPrompt`，恢复／分叉不注入。
+
+daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
+该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
+查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+
+历史记录追加使用 SDK 公开低层 Process 客户端，在 Host 空闲操作锁内关闭、追加并恢复
+原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开
+追加接口，不使用私有 SDK 字段或直接修改 CLI 历史。
+
+<a id="autocomplete"></a>
+
+## 编辑器补全的独立路径
+
+`src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
+Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
+文档/光标/关联上下文版本，也负责接续语言服务的候选文本。CompletionHistory 复用 Kilo 的
+匹配策略，保留 20 条/30 秒历史；CompletionRequests 分离调用者取消与网络取消，
+兼容请求在 100ms 交接窗口内可保留，并在新调用收集上下文时持有租约；已被输入的
+结果前缀会剔除，不匹配则按当前上下文重新请求。防抖以近期延迟限幅，错误分类退避。
+`completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
+返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
+显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
+
+普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
+ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
+getSnippets 排序裁剪、模型模板。启用补全时立即建立浏览/编辑跟踪，不等首次 FIM 请求。
+原生定义和近期修改补充与 Kilo 片段合并，按来源优先级去重后再套用模型模板与总预算。`KiloContextIde` 是唯一 Host 文件/LSP/剪贴板适配边界，
+复用 CompletionFilePolicy 的同根、真实路径、Git/Droid ignore 与大小限制，优先未保存文本。
+LSP 查询跟随请求取消，从首次查询起共享 150ms 等待预算；超时来源不阻塞已就绪的其他片段，
+记录 context.timeout，下一次请求可重试，其他错误仍向调用边界传播。导入缓存每次核对语法树中的
+完整导入语句与位置，只改主体时复用；外部定义、配置或忽略规则变化清理依赖缓存，迟到结果不能
+写回新一代缓存。读取到的新关联文件加入现有 watcher。
+解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
+静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
+
+`CompletionContextService` 为 FIM 收集原生定义、近期编辑和打开文件（最多 6 文件/400ms），
+另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
+浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
+`CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
+Codestral 在文件中间和末尾均使用多文件模板保留关联定义；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
+避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
+Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下文；缓存包含所有相关单元版本和顺序。
+
+`src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、Ollama generate
+或 SiliconFlow 的 prefix/suffix FIM 扩展。Runtime 不引用 VS Code；共享 transport 提供
+取消、12 秒超时、大小限制与固定错误。当前完整响应收齐后再返回灰字。
+Host 从 SecretStorage 即时读取完整 endpoint 的 key；仅官方 Mercury FIM/Edit 两个地址共用，
+配置只接受用户级值。本地无认证服务不附认证头，不进入 Droid 聊天 Session。
+
+Kilo 源码固定为 `7d977bce994af36f0edf752cb53e3aefc7aeb214`，位于 autocomplete/kilo。
+新接入的 Continue 子树保留 Apache-2.0 声明，Kilo 自身为 MIT；llamaTokenizer 保留原作者
+belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分发。CLI 文件系统适配器
+未引入生产包。普通补全的后处理接入上游模型、重复与语言过滤，Droid 额外保留明确的
+围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
+
+NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
+启用补全期间持续记录编辑；FIM/Next Edit 切换只清待接受建议，停用时销毁跟踪器并清空编辑历史。
+Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式；预算优先保留完整编辑区域、
+光标及最新可容纳的完整 diff，再分配较旧历史、浏览片段和邻近完整代码行，不截断 diff，
+请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
+NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
+SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。
+普通文件按配置选择 FIM 或 Next Edit；Notebook 在官方 Mercury 模式切换为其 FIM endpoint。
+自动/手动与 snooze 时间戳同时约束 Provider 和连续预测；定时器只刷新状态，不自动插入代码。
+补全不经过 Webview/Bridge，也不进入聊天队列。聊天 daemon 仍在聊天视图首次解析时预热。
+
+### 历史内部会话过滤
+
+`src/runtime/editorAssistance/sessionIdentity.ts` 仅保留旧 `droid-editor-assistance` 标签识别，
+供历史、归档和搜索过滤使用；不再注册编辑器辅助入口或创建这类请求。
 
 ## Runtime 与 IDE 兼容点
 

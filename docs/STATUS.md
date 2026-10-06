@@ -9,6 +9,20 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## README 与开发文档（2026-10-06）
+
+- README 按项目定位、真实界面、使用场景、安装与能力边界重写，下载入口统一指向
+  Releases；文档入口分别提供用户指南和开发者阅读路径。
+- 开发指南增加公共 UI／业务适配分工、三个修改示例、故障定位链、复现模板及构建／
+  发布的区别。架构文档将发送、流式消息、恢复和状态归属提前，补充流式消息图与
+  Diff 证据对照；保留原有实现细节。站点侧栏可直接进入关键章节。
+- 参考 [LearnGraph 开发者文档](https://sunnyboy-y.github.io/LearnGraph/#sandbox-egress)
+  的分层导航、机制说明与源码入口，以及
+  [website-rebuild-skill README](https://github.com/boyang-hu/website-rebuild-skill)
+  的用途、上手、过程与边界组织；正文按本项目源码编写，未复制参考站资产或实现。
+- VitePress 生产构建、`pnpm run typecheck` 和 `pnpm run lint:budgets` 通过；
+  文档构建仅提示部分资源块大于 500 kB。未运行测试或浏览器验收，未发布 Pages 或重打 VSIX。
+
 ## 空输入框展开（2026-10-06）
 
 - 空输入框首次 Shift+Enter 只展开为多行，草稿仍为空，光标保持第一行。
