@@ -343,7 +343,9 @@ function adaptDaemonSession(
   let attachmentOwned = true;
   let leaseOwned = true;
   let closeInFlight: Promise<void> | undefined;
-  let pendingRewind: { newSessionId: string; messageId: string } | undefined;
+  let pendingRewind: { newSessionId: string; messageId: string;
+    restoredCount: number; deletedCount: number; failedRestoreCount: number; failedDeleteCount: number;
+  } | undefined;
 
   const closeOwnedResources = async (): Promise<void> => {
     let cleanupFailed = false;
@@ -557,13 +559,14 @@ function adaptDaemonSession(
       }
       if (pendingRewind === undefined) {
         const result = await session.rewind(params);
-        pendingRewind = { newSessionId: result.newSessionId, messageId: params.messageId };
+        pendingRewind = { ...result, messageId: params.messageId };
       }
       const completed = pendingRewind;
       try {
         const replacement = await attachReplacement(completed.newSessionId);
         pendingRewind = undefined;
-        return { session: replacement };
+        return { session: replacement, restoredCount: completed.restoredCount, deletedCount: completed.deletedCount,
+          failedRestoreCount: completed.failedRestoreCount, failedDeleteCount: completed.failedDeleteCount };
       } catch (error) {
         throw new RewindAttachmentError(completed.newSessionId, completed.messageId, error);
       }

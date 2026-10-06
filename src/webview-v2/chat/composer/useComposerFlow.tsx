@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import { MAX_TURN_TEXT_LENGTH } from '../../../shared/protocol/bounds';
 import { TURN_SEND_REJECTED_CODE } from '../../../shared/protocol/turns';
+import { rewindResultNotice } from '../../../shared/protocol/rewindResult';
 import { persistDraft, restoreDraft } from '../../bridge/vscode';
 import { createTurnId, post, type ChatPort } from '../../host/chatIntent';
 import { subscribeHostMessages } from '../../host/hostMessageSource';
@@ -22,6 +23,7 @@ type InputState = Pick<
   | 'queueEditing'
   | 'btwAvailable'
   | 'settings'
+  | 'rewindResult'
 >;
 
 export function useComposerFlow(
@@ -45,6 +47,7 @@ export function useComposerFlow(
   const pending = useRef(false);
   const draftRevision = useRef(0);
   const pendingSend = useRef<{ sessionId: string; turnId: string; text: string; revision: number } | null>(null);
+  const lastRewindResult = useRef(-1);
   const previousDraft = useRef<string | null>(null);
   const currentSession = useRef(state.sessionId);
   if (currentSession.current !== state.sessionId) {
@@ -86,6 +89,22 @@ export function useComposerFlow(
     previousDraft.current = null;
     writeDraft(original, true);
   }, [dispatch, writeDraft]);
+  useEffect(() => {
+    const result = state.rewindResult;
+    if (!result || result.sessionId !== state.sessionId || result.sequence <= lastRewindResult.current) return;
+    lastRewindResult.current = result.sequence;
+    if (result.unsentText !== undefined) {
+      const original = previousDraft.current ?? draftValue.current;
+      const recovered = original ? `${original}\n\n${result.unsentText}` : result.unsentText;
+      if (previousDraft.current !== null) {
+        previousDraft.current = recovered;
+        persistDraft(vscode, recovered);
+      } else writeDraft(recovered, true);
+    }
+    setCommandNotice(rewindResultNotice(result.files) + (result.unsentText === undefined ? '' :
+      ' Your message was not resent. It is back in the input with its attachments; check the files before sending.'));
+    dispatch({ type: 'rewind.resultConsumed', sequence: result.sequence });
+  }, [state.rewindResult, state.sessionId, writeDraft, vscode, dispatch]);
   useEffect(() => {
     if (state.queueEditing === null && previousDraft.current !== null) finishQueueEdit();
   }, [state.queueEditing, finishQueueEdit]);

@@ -31,7 +31,7 @@ export interface EditResendPort
     Pick<SessionDirectoryState, 'sessions'>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly attachmentState: Readonly<Pick<AttachmentStagingState, 'sentAttachments'>> &
-    Pick<AttachmentStagingState, 'editStage' | 'attachmentIdCounter'>;
+    Pick<AttachmentStagingState, 'editStage' | 'attachmentIdCounter' | 'pendingAttachments'>;
   readonly queueState: Readonly<Pick<QueueState, 'queuedPrompts'>>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly effects: Pick<
@@ -42,6 +42,7 @@ export interface EditResendPort
     | 'createDurableForkConversation'
     | 'clearPendingAttachments'
     | 'emitEditAttachments'
+    | 'emitAttachments'
     | 'armReplayedSubagentWatch'
   >;
 }

@@ -117,6 +117,7 @@ export interface AssistantWebviewState {
   readonly sessionSearch: SessionSearchState | null;
   /** Latest rewind file-impact info for the edit-resend editor. */
   readonly rewindInfo: RewindFileImpact | null;
+  readonly rewindResult?: import('../../shared/protocol/rewindResult').RewindResultMessage | null;
   /** Latest branch-versus-base diff, or null before a request. */
   readonly branchDiff: GitBranchDiffState | null;
   readonly review: ReviewUiState;
@@ -211,6 +212,7 @@ export type StoreHostMessage = Exclude<
 >;
 
 export type AssistantWebviewAction =
+  | { readonly type: 'rewind.resultConsumed'; readonly sequence: number }
   | {
       readonly type: 'host.batch';
       readonly messages: readonly StoreHostMessage[];

@@ -362,9 +362,16 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   Branch 固定所选本地引用的 merge-base→HEAD；候选来自已有 heads/remotes，默认值
   仅取唯一 remote HEAD，不猜 main/master、不 fetch。无 HEAD 使用空树比较 Workspace/
   Staged，Unstaged 使用 Index tree；写入树对象不会修改项目 Index，也不创建提交。
-- `operationUndoFiles.ts` 只对完整、确认、可逆的文本更新做精确逆向匹配和写前复核，
-  使用恢复日志并保留冲突；未知顺序、歧义、链接、未保存编辑等拒绝自动写入。
-  整轮最多 200 文件，超量不做部分撤销；不宣称具有跨外部进程的原子事务。
+- `reviewOperationScope.ts` 对完整、确认、可逆文本补丁作精确逆向匹配；ApplyPatch
+  创建结果携带原始 UTF-8 内容 SHA-256，匹配后才能恢复到不存在。普通 Create／Write
+  不能证明原文件不存在。大补丁按原会话／调用／摘要读取；缺证据与内容冲突分别反馈。
+- `operationUndoFiles.ts` 在工作区事务锁内写前保存全部原始状态，临时完整文件替换
+  避免原地半写。失败立即补偿可安全恢复的路径；冲突保留日志和原内容。已提交阶段
+  与操作身份收据防止 Reload 后重复撤销，收据独立于 Review 偏好保留期限。
+  整轮最多 200 文件；未知顺序、歧义、链接、未保存编辑拒绝写入，不宣称跨外部进程原子性。
+- SDK 消息回退由 `session/replacements.ts` 调用 getRewindInfo／rewind。Runtime 保留
+  文件成功／失败计数，Host 先接管后继会话，再决定是否重发。结果缺失或部分失败保留
+  草稿和附件；daemon 重接保留原结果。它与文件 Undo 的会话范围和覆盖语义分开。
 - `file.diff.invalidate` 只使正文缓存失效，不证明写入。预览按身份读取、失败可重试，
   刷新期间保留旧正文但不能把旧内容标成最新已审阅。缺证据的历史片段明确只读。
 - Commit 的 Files 模式暂存所选当前文件，Staged 模式保持现有 Index；两者都核对全部

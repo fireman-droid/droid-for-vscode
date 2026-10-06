@@ -170,10 +170,10 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                   {[3, 20, 100].map((lines) => <DropdownMenuItem key={lines} onSelect={() => flow.setContext(lines as 3 | 20 | 100)}>{lines} context lines{flow.context === lines ? ' ✓' : ''}</DropdownMenuItem>)}
                 </> : null}
                 {!readOnly && current && operationsScope ? <>
-                {!current.restorable ? <p className="review-undo-hint">Undo needs a complete, reversible record. This file does not have one.</p> : null}
+                {!current.restorable ? <p className="review-undo-hint">{current.undoReason ?? 'Undo needs a complete, reversible record. This file does not have one.'}</p> : null}
                 {turnUndoTooLarge ? <p className="review-undo-hint">Undo individual files when a turn exceeds {MAX_REVIEW_UNDO_FILES} files.</p> : null}
                 <DropdownMenuItem disabled={writing || flow.scopePending || flow.fileRefreshing || !!flow.fileError || !current.restorable} onSelect={() => actions.onPreviewRestore('file')}><Undo2 />Undo this file…</DropdownMenuItem>
-                <DropdownMenuItem disabled={writing || flow.scopePending || turnUndoTooLarge || !review.files.length || !review.files.every((entry) => entry.restorable)} onSelect={() => actions.onPreviewRestore('turn')}>Undo all files in this turn…</DropdownMenuItem>
+                <DropdownMenuItem disabled={writing || flow.scopePending || turnUndoTooLarge || !review.files.some(entry => entry.restorable) || !review.files.every(entry => entry.restorable || entry.undone)} onSelect={() => actions.onPreviewRestore('turn')}>Undo remaining files in this turn…</DropdownMenuItem>
                 </> : null}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -212,10 +212,12 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       </DialogContent>
     </Dialog>
     <Dialog open={!!flow.preview && flow.preview.reviewScopeId === review?.reviewScopeId && valid} onOpenChange={(open) => { if (!open) flow.setPreview(null); }}>
-      <DialogContent className="border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Undo confirmed AI operations?</DialogTitle><DialogDescription className="review-dialog-description">Applies exact inverse changes from recorded tool results. Unrelated edits are preserved. Unsaved edits, ambiguous context or conflicting changes block undo. Workspace snapshots and legacy excerpts are not undo evidence.</DialogDescription>
-        {flow.preview ? <><ul className="review-restore-files">{[...flow.preview.restorable, ...flow.preview.conflicted].map((path) => <li key={path} data-conflict={flow.preview!.conflicted.includes(path)}>{path}{flow.preview!.conflicted.includes(path) ? ' · conflict' : ''}</li>)}</ul>
+      <DialogContent className="border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Undo confirmed AI operations?</DialogTitle><DialogDescription className="review-dialog-description">Reverses recorded edits and deletes confirmed new files whose contents still match. Conversation history stays unchanged. Unsaved edits, conflicting content or incomplete evidence block undo.</DialogDescription>
+        {flow.preview ? <><ul className="review-restore-files">{flow.preview.restorable.map(path => <li key={path}>{path}{flow.preview!.deleted.includes(path) ? ' · delete new file' : ' · reverse edits'}</li>)}
+          {(flow.preview.issues ?? flow.preview.conflicted.map(path => ({ path, status: 'conflicted', reason: 'The file has conflicting changes.' }))).map(issue => <li key={issue.path} data-conflict="true">{issue.path} · {issue.reason}</li>)}
+        </ul>
           <div className="review-dialog-actions"><Button variant="ghost" onClick={() => flow.setPreview(null)}>Cancel</Button>
-            <Button disabled={!!flow.preview.conflicted.length || !flow.preview.restorable.length} onClick={() => actions.onConfirmRestore(flow.preview!.target, flow.preview!.previewId)}>Confirm restore</Button>
+            <Button disabled={!!flow.preview.conflicted.length || !!flow.preview.issues?.length || !flow.preview.restorable.length} onClick={() => actions.onConfirmRestore(flow.preview!.target, flow.preview!.previewId)}>Confirm undo</Button>
           </div></> : null}
       </DialogContent>
     </Dialog>

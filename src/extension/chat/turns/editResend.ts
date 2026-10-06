@@ -1,5 +1,6 @@
 import type { EditResendPort } from './editResendPort';
-import type { DroidRuntime } from '../../../runtime/DroidRuntime';
+import type { DroidRuntime, RuntimeRewindResult } from '../../../runtime/DroidRuntime';
+import { rewindFilesIncomplete, rewindResultNotice } from '../../../shared/protocol/rewindResult';
 import { RewindAnchorConflictError, RewindAttachmentError } from '../../../runtime/session/rewindErrors';
 import { MAX_PENDING_ATTACHMENTS } from '../../../shared/protocol/bounds';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
@@ -33,7 +34,7 @@ const EDIT_RESEND_RESUME_FAILED_MESSAGE =
 const EDIT_RESEND_PENDING_MESSAGE =
   'A previous rewind already completed. Retry the original edited message before editing a different message.';
 const pendingRewinds = new WeakMap<DroidRuntime, {
-  sessionId: string; messageId: string; newSessionId: string;
+  sessionId: string; messageId: string; outcome: RuntimeRewindResult;
 }>();
 
 export function handleRewindInfo(
@@ -76,8 +77,12 @@ export function handleRewindInfo(
         });
       }
     },
-    () => {
-      // File info is advisory; the editor simply omits the option.
+    (error: unknown) => {
+      if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
+      ctl.emitSessionDiagnostic('rewind-preview-failed',
+        'Droid could not load the file checkpoints. Editing will rewind the conversation only; file restoration is unavailable.');
+      ctl.diagnostics?.record({ level: 'warn', name: 'host.rewind.preview-failed',
+        detail: error instanceof Error ? error.message : String(error) });
     },
   );
 }
@@ -172,9 +177,22 @@ export function handleEditResend(
     restoreFiles,
   ).finally(() => {
     if (ctl.sessionState.runtimeGeneration === generation) ctl.sessionState.sessionOperationInProgress = false;
-  }).then((forkedSessionId) => {
-    if (forkedSessionId === null || ctl.sessionState.runtime !== runtime ||
-      ctl.sessionState.runtimeGeneration !== generation || ctl.sessionState.sessionId !== forkedSessionId) {
+  }).then((outcome) => {
+    if (outcome === null || ctl.sessionState.runtime !== runtime ||
+      ctl.sessionState.runtimeGeneration !== generation || ctl.sessionState.sessionId !== outcome.sessionId) {
+      return;
+    }
+    const forkedSessionId = outcome.sessionId;
+    const filesRequested = restoreFiles || outcome.filesRequested === true;
+    if (filesRequested && rewindFilesIncomplete(outcome.files)) {
+      // The SDK has already created a successor. Keep its real state, but do not
+      // start a model turn against a partially restored workspace.
+      ctl.attachmentState.pendingAttachments = [...editAttachments];
+      ctl.emitSnapshot();
+      ctl.effects.emitAttachments();
+      ctl.emit({ type: 'rewind.result', sessionId: forkedSessionId, messageId,
+        ...(outcome.files === undefined ? {} : { files: outcome.files }), unsentText: text });
+      ctl.emitSessionDiagnostic('rewind-files-incomplete', `${rewindResultNotice(outcome.files)} The message was not resent. Check the files before sending again.`);
       return;
     }
     // Send first, then snapshot: the single snapshot then carries the
@@ -183,6 +201,8 @@ export function handleEditResend(
     // atomically.
     ctl.effects.handleSend(forkedSessionId, turnId, text, 'edit-resend', editAttachments);
     ctl.emitSnapshot();
+    if (filesRequested) ctl.emit({ type: 'rewind.result', sessionId: forkedSessionId, messageId,
+      ...(outcome.files === undefined ? {} : { files: outcome.files }) });
   }).catch((error: unknown) => {
     ctl.diagnostics?.record({ level: 'error', name: 'host.edit-resend.failed',
       detail: error instanceof Error ? error.stack ?? error.message : String(error) });
@@ -209,7 +229,7 @@ export function emitEditResendRejected(
 
 /**
  * Rewinds the runtime to `messageId` and adopts the forked session.
- * Returns the forked session id when the controller should resend the
+ * Returns the SDK outcome when the controller can decide whether to resend the
  * edited prompt, or null when the operation failed or became stale.
  */
 export async function performEditResend(
@@ -220,7 +240,7 @@ export async function performEditResend(
   text: string,
   truncated: HostTranscriptState,
   restoreFiles: boolean,
-): Promise<string | null> {
+): Promise<RuntimeRewindResult | null> {
   const generation = ctl.sessionState.runtimeGeneration;
   const cwd = ctl.sessionState.activeRuntimeCwd;
   const sourceConversationId = ctl.sessionState.conversationId;
@@ -230,15 +250,18 @@ export async function performEditResend(
   }
 
   let forkedSessionId: string;
+  let outcome: RuntimeRewindResult;
   try {
     const pending = pendingRewinds.get(runtime);
     if (pending !== undefined && (pending.sessionId !== sessionId || pending.messageId !== messageId)) {
       throw new RewindAnchorConflictError(pending.messageId);
     }
-    forkedSessionId = pending?.newSessionId ?? (await runtime.rewind!({
+    outcome = pending?.outcome ?? (await runtime.rewind!({
       messageId, forkTitle: forkTitleFromText(text), restoreFiles,
-    })).sessionId;
-    if (isSafeBridgeId(forkedSessionId)) pendingRewinds.set(runtime, { sessionId, messageId, newSessionId: forkedSessionId });
+    }));
+    forkedSessionId = outcome.sessionId;
+    if (isSafeBridgeId(forkedSessionId)) pendingRewinds.set(runtime, { sessionId, messageId,
+      outcome: { ...outcome, ...(restoreFiles ? { filesRequested: true } : {}) } });
   } catch (error) {
     if (ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
       const reason = error instanceof RewindAttachmentError ? 'resume-failed'
@@ -289,7 +312,7 @@ export async function performEditResend(
   ctl.effects.clearPendingAttachments();
   pendingRewinds.delete(runtime);
   ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, truncated);
-  return forkedSessionId;
+  return { ...outcome, ...(restoreFiles ? { filesRequested: true } : {}) };
 }
 
 /**

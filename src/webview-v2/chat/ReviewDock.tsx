@@ -86,8 +86,9 @@ export function ReviewDock(props: ReviewDockProps) {
             </div>
             {agentRunning ? <p role="status">{agent?.message ?? 'Agent Review running'}</p> : null}
             {preview !== null ? <div role="status" className="space-y-2 border-t border-[var(--panel-edge)] pt-2">
-              <p>{preview.conflicted.length > 0 ? `${preview.conflicted.length} conflict(s), restore is blocked.` : `${preview.restorable.length} file(s) can be restored.`}</p>
-              <Button variant="outline" size="sm" disabled={preview.conflicted.length > 0} onClick={() => props.onConfirmRestore(preview.target, preview.previewId)}>Confirm restore</Button>
+              <p>{preview.issues?.length || preview.conflicted.length ? 'Undo is blocked. Review the file details.' : `${preview.restorable.length} file(s) can be undone.`}</p>
+              {preview.issues?.map(issue => <p key={issue.path}>{issue.path}: {issue.reason}</p>)}
+              <Button variant="outline" size="sm" disabled={preview.conflicted.length > 0 || !!preview.issues?.length || !preview.restorable.length} onClick={() => props.onConfirmRestore(preview.target, preview.previewId)}>Confirm undo</Button>
             </div> : null}
             {operation?.reviewScopeId === review.reviewScopeId && (operation.operation !== 'open' || !operation.ok) ? <p role="status" className={!operation.ok ? 'text-destructive' : undefined}>{operation.message}</p> : null}
           </>}

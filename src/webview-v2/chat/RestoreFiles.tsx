@@ -25,13 +25,14 @@ export function RestoreFiles({ impact, checked, onChange, disabled = false, rest
     <div className="flex min-h-8 items-center justify-between gap-2 px-3 py-1.5">
       {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-2 rounded">
         <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
-        <span>{restored ? 'File restore will not be repeated when reconnecting' : `Restore ${count} ${count === 1 ? 'file' : 'files'} changed after this point`}</span>
+        <span>{restored ? 'File restore will not be repeated when reconnecting' : `Restore ${count} ${count === 1 ? 'file' : 'files'} using Droid checkpoints`}</span>
       </label> : <span>{unavailableCount} {unavailableCount === 1 ? 'file' : 'files'} cannot be restored</span>}
       <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-label="Restorable files" aria-controls={id} className="v2-chat-disclosure shrink-0 rounded">
         <ChevronDown className={`size-[13px] text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
       </Button></CollapsibleTrigger>
     </div>
     <AnimatedCollapsibleContent id={id} open={expanded}>
+      <p className="px-3 py-2 text-[10.5px] text-muted-foreground">Applies from this message onward, including later turns. Restores previous contents and deletes newly created files; later manual edits to those files can be replaced. Leave unchecked to rewind the conversation only.</p>
       <ul className="max-h-36 space-y-1 overflow-auto border-t border-[var(--panel-edge)] px-3 py-2 text-[11px]">
         {details.map((file, index) => <li key={`${file.action}:${file.label}:${index}`} className="flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0">

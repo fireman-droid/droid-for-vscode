@@ -1,5 +1,6 @@
 import type { RuntimeAvailability, RuntimeEvent } from './runtimeEvents';
 import type { RewindDetailFields } from '../shared/protocol/rewindDetails';
+import type { RewindFileResult } from '../shared/protocol/rewindResult';
 import type { RuntimeTurnOutcome } from './turnOutcome';
 export type { RuntimeTurnOutcome } from './turnOutcome';
 
@@ -280,6 +281,9 @@ export interface RuntimeRewindParams {
 
 export interface RuntimeRewindResult {
   readonly sessionId: string;
+  readonly filesRequested?: true;
+  /** Absent means the backend did not confirm file results; never assume zero failures. */
+  readonly files?: RewindFileResult;
 }
 
 /** A file a rewind cannot restore, with the backend's reason. */

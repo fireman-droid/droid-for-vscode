@@ -31,6 +31,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   archived: { status: 'idle', items: [] },
   sessionSearch: null,
   rewindInfo: null,
+  rewindResult: null,
   branchDiff: null,
   review: EMPTY_REVIEW_UI_STATE,
   editAttachments: null,

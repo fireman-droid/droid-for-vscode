@@ -39,6 +39,8 @@ export interface OperationDiffFile {
   readonly contentRestricted?: true;
   /** Only complete, exact result patches may be considered for inverse application. */
   readonly reversible?: boolean;
+  /** SHA-256 of exact UTF-8 contents reported by a confirmed ApplyPatch create result. */
+  readonly createdContentHash?: string;
   /** @@ without coordinates means the tool did not record absolute line numbers. */
   readonly patch: string;
   /** Content submitted to a successful Create/Write call; not a before/after diff or a file snapshot. */
@@ -71,7 +73,10 @@ export function isOperationDiff(value: unknown): value is OperationDiff {
       !/[\u0000-\u001f\u007f]/u.test(value.sourceSessionId)) && Array.isArray(value.files) &&
     value.files.length > 0 && value.files.length <= MAX_OPERATION_DIFF_FILES &&
     value.files.every((file) => isStrictRecord(file) &&
-      hasExactKeys(file, ['path', 'kind', 'patch'], ['scope', 'previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent', 'bodyRef']) &&
+      hasExactKeys(file, ['path', 'kind', 'patch'], ['scope', 'previousPath', 'outcome', 'message', 'reversible', 'contentRestricted', 'submittedContent', 'bodyRef', 'createdContentHash']) &&
+      (file.createdContentHash === undefined || value.source === 'tool-result' && file.outcome === 'applied' &&
+        file.kind === 'added' && file.scope === undefined && file.previousPath === undefined && !file.contentRestricted &&
+        typeof file.createdContentHash === 'string' && /^[a-f0-9]{64}$/u.test(file.createdContentHash)) &&
       isSafeWorkspaceRelativePath(file.path) &&
       (file.previousPath === undefined || isSafeWorkspaceRelativePath(file.previousPath)) &&
       (file.scope === undefined || file.scope === 'mission' && isMissionOperationPath(file.path) &&
@@ -160,6 +165,13 @@ export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: 
     if (incoming.status !== 'ready' || incoming.source !== 'tool-result' || saved.callId === undefined ||
       saved.callId !== incoming.callId || saved.sourceSessionId !== incoming.sourceSessionId) return saved;
     const files = saved.files.map((file) => {
+      const creation = incoming.files.find(candidate => candidate.path === file.path &&
+        candidate.kind === 'added' && candidate.outcome === 'applied' && candidate.scope === undefined &&
+        candidate.previousPath === undefined && candidate.createdContentHash !== undefined);
+      if (file.kind === 'added' && file.outcome === 'applied' && file.scope === undefined &&
+        file.previousPath === undefined && !file.contentRestricted && file.createdContentHash === undefined && creation &&
+        file.patch === creation.patch && file.bodyRef?.digest === creation.bodyRef?.digest)
+        return { ...file, createdContentHash: creation.createdContentHash };
       if (file.contentRestricted || file.outcome !== 'applied' ||
         file.submittedContent !== undefined || file.bodyRef !== undefined) return file;
       const complete = incoming.files.find((candidate) => candidate.path === file.path &&

@@ -64,6 +64,7 @@ export function reduceSnapshotMessage(
         archived: state.archived,
         sessionSearch: state.sessionSearch,
         rewindInfo: null,
+        rewindResult: sameSession ? state.rewindResult : null,
         branchDiff: sameConversation ? state.branchDiff : null,
         review: sameConversation ? state.review : EMPTY_REVIEW_UI_STATE,
         // A snapshot means the session identity may have changed (e.g.

@@ -9,7 +9,8 @@ import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
 import type { FactoryDroidSession } from './sessionTypes';
 import { type FactoryDroidSessionRewindParams } from './replacementTypes';
 import { RewindAnchorConflictError, RewindAttachmentError } from './rewindErrors';
-const pendingRewinds = new WeakMap<FactoryDroidSession, { messageId: string }>();
+import { isRewindFileResult, type RewindFileResult } from '../../shared/protocol/rewindResult';
+const pendingRewinds = new WeakMap<FactoryDroidSession, { messageId: string; restoreFiles: boolean }>();
 export interface ReplacementContext {
   readonly session: FactoryDroidSession;
   recordDiagnostic(event: Parameters<RuntimeDiagnosticSink['record']>[0]): void;
@@ -39,6 +40,8 @@ export async function rewind(
   });
 
   let nextSession: FactoryDroidSession;
+  let files: RewindFileResult | undefined;
+  const filesRequested = params.restoreFiles === true || pendingRewinds.get(session)?.restoreFiles === true;
   try {
     const pending = pendingRewinds.get(session);
     if (pending !== undefined && pending.messageId !== params.messageId) {
@@ -46,7 +49,8 @@ export async function rewind(
     }
     let filesToRestore: FactoryDroidSessionRewindParams['filesToRestore'] = [];
     let filesToDelete: FactoryDroidSessionRewindParams['filesToDelete'] = [];
-    if (pending === undefined && params.restoreFiles === true && typeof session.getRewindInfo === 'function') {
+    if (pending === undefined && params.restoreFiles === true) {
+      if (typeof session.getRewindInfo !== 'function') throw new Error('Droid cannot preview file restoration for this session.');
       const info = await session.getRewindInfo({
         messageId: params.messageId,
       });
@@ -60,9 +64,11 @@ export async function rewind(
       forkTitle: params.forkTitle,
     });
     nextSession = outcome.session;
+    const { session: _session, ...result } = outcome;
+    if (isRewindFileResult(result)) files = result;
     pendingRewinds.delete(session);
   } catch (error) {
-    if (error instanceof RewindAttachmentError) pendingRewinds.set(session, { messageId: error.messageId });
+    if (error instanceof RewindAttachmentError) pendingRewinds.set(session, { messageId: error.messageId, restoreFiles: filesRequested });
     context.recordDiagnostic({
       level: 'error',
       name: 'runtime.rewind.finished',
@@ -87,7 +93,8 @@ export async function rewind(
       outcome: 'success',
     },
   });
-  return { sessionId: nextSession.id };
+  return { sessionId: nextSession.id, ...(filesRequested ? { filesRequested: true } : {}),
+    ...(files === undefined ? {} : { files }) };
 }
 
 export async function compact(

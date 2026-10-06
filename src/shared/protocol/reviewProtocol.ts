@@ -36,6 +36,8 @@ export interface ReviewFile {
   readonly status: ReviewFileStatus;
   readonly version: string;
   readonly restorable: boolean;
+  readonly undoReason?: string;
+  readonly undone?: true;
 }
 
 export interface ReviewScopeState {
@@ -151,6 +153,7 @@ export interface ReviewRestorePreviewStateMessage {
   readonly target: 'file' | 'turn';
   readonly restorable: readonly string[];
   readonly conflicted: readonly string[];
+  readonly issues?: readonly { readonly path: string; readonly status: 'conflicted' | 'unsupported' | 'undone'; readonly reason: string }[];
   readonly created: readonly string[];
   readonly deleted: readonly string[];
 }
@@ -377,7 +380,11 @@ export function parseReviewHostMessage(value: unknown): ReviewHostMessage | unde
         'conflicted',
         'created',
         'deleted',
-      ]) &&
+      ], ['issues']) &&
+        (value.issues === undefined || Array.isArray(value.issues) && value.issues.length <= MAX_REVIEW_UNDO_FILES &&
+          value.issues.every(issue => isStrictRecord(issue) && hasExactKeys(issue, ['path', 'status', 'reason']) &&
+            pathArray([issue.path]) && ['conflicted', 'unsupported', 'undone'].includes(String(issue.status)) &&
+            typeof issue.reason === 'string' && issue.reason.length <= 2_000)) &&
         strings(value, ['sessionId', 'reviewScopeId', 'previewId']) &&
         (value.target === 'file' || value.target === 'turn') &&
         pathArray(value.restorable) &&
@@ -467,7 +474,9 @@ function isReviewFile(value: unknown): value is ReviewFile {
       'status',
       'version',
       'restorable',
-    ], ['changeKind']) &&
+    ], ['changeKind', 'undoReason', 'undone']) &&
+    (value.undoReason === undefined || typeof value.undoReason === 'string' && value.undoReason.length <= 2_000) &&
+    (value.undone === undefined || value.undone === true && value.restorable === false) &&
     (value.changeKind === undefined || ['added', 'modified', 'deleted', 'untracked'].includes(String(value.changeKind))) &&
     typeof value.path === 'string' &&
     nullableCount(value.additions) &&

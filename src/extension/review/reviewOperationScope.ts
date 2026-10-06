@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
+import { operationUndoUnavailable } from '../../shared/protocol/operationUndo';
+import { readOperationBody, type OperationBody, type OperationBodyRequest } from '../../runtime/tools/operationBody';
 import {
   hasOperationTextChanges,
-  isConfirmedOperationFile,
   isWorkspaceOperationFile,
   type OperationDiff,
   type OperationDiffFile,
@@ -29,9 +31,10 @@ export interface OperationRestoreEntry {
   readonly before: Buffer | null;
   readonly after: Buffer | null;
   readonly current: Buffer | null;
-  readonly status: 'restorable' | 'conflicted' | 'unsupported';
+  readonly status: 'restorable' | 'conflicted' | 'unsupported' | 'undone';
   readonly reason?: string;
   readonly identity?: string;
+  readonly operationKeys?: readonly string[];
 }
 
 const MAX_OPERATION_RESTORE_BYTES = 16 * 1024 * 1024;
@@ -41,6 +44,7 @@ export function loadOperationReviewScope(
   operations: readonly RecordedOperation[],
   persisted: ReadonlyMap<string, PersistedScope>,
   notices: readonly string[] = [],
+  undoneOperations: ReadonlySet<string> = new Set(),
 ): ActiveScope {
   const recordedOperations = flattenOperations(operations);
   const baseline = digest([message.sessionId, 'operations', message.turnId!]);
@@ -63,6 +67,10 @@ export function loadOperationReviewScope(
   const files: ScopeFile[] = paths.map((path) => {
     const matching = recordedOperations.filter((entry) => entry.path === path);
     const version = recordedOperationVersion(matching);
+    const pending = matching.filter(entry => !undoneOperations.has(operationUndoKey(entry)));
+    const undone = matching.some(entry => entry.outcome === 'applied') && pending.every(entry => entry.outcome === 'failed');
+    const undoReason = undone ? 'These recorded operations have already been undone.' :
+      operationUndoBlocked ?? operationPathEligibility(pending);
     return {
       path,
       additions: null,
@@ -70,8 +78,10 @@ export function loadOperationReviewScope(
       version,
       comparable: matching.some((entry) => entry.source === 'tool-result' && entry.outcome === 'applied' &&
         (entry.bodyRef !== undefined || entry.submittedContent !== undefined || hasOperationTextChanges(entry.patch))),
-      restorable: operationUndoBlocked === undefined && operationPathEligibility(matching) === undefined,
+      restorable: undoReason === undefined,
       restoreConflict: false,
+      ...(undoReason === undefined ? {} : { undoReason }),
+      ...(undone ? { undone: true as const } : {}),
     };
   });
   const savedIndex =
@@ -98,6 +108,7 @@ export function loadOperationReviewScope(
             : 0,
     reviewed,
     recordedOperations,
+    undoneOperations,
     ...(operationUndoBlocked === undefined ? {} : { operationUndoBlocked, message: operationUndoBlocked }),
     ...(files.length === 0
       ? { message: 'No attributed file operations were recorded for this turn.' }
@@ -109,11 +120,31 @@ export async function preflightOperationRestore(
   root: string,
   scope: ActiveScope,
   paths: readonly string[],
+  readBody: (request: OperationBodyRequest) => Promise<OperationBody | undefined> = readOperationBody,
 ): Promise<readonly OperationRestoreEntry[]> {
   const entries: OperationRestoreEntry[] = [];
   for (const path of paths) {
-    const matching = scope.recordedOperations?.filter((entry) => entry.path === path) ?? [];
+    let matching = scope.recordedOperations?.filter((entry) => entry.path === path &&
+      !scope.undoneOperations?.has(operationUndoKey(entry))) ?? [];
+    if (scope.files.find(file => file.path === path)?.undone) {
+      entries.push({ path, before: null, current: null, after: null, status: 'undone',
+        reason: 'These recorded operations have already been undone.' });
+      continue;
+    }
     let reason = scope.operationUndoBlocked ?? operationPathEligibility(matching);
+    if (reason === undefined) {
+      try {
+        const hydrated: typeof matching = [];
+        for (const entry of matching) {
+          if (entry.outcome !== 'applied' || !entry.bodyRef || entry.kind !== 'modified') { hydrated.push(entry); continue; }
+          const body = await readBody({ workspace: root, sourceSessionId: entry.sessionId,
+            callId: entry.callId ?? entry.toolUseId, file: entry });
+          if (!body) throw new Error('The recorded patch could not be read from its source session.');
+          hydrated.push({ ...entry, ...body });
+        }
+        matching = hydrated;
+      } catch (error) { reason = error instanceof Error ? error.message : 'The recorded patch is unavailable.'; }
+    }
     let identity: string | undefined;
     let current: Buffer | null | undefined;
     try {
@@ -127,8 +158,7 @@ export async function preflightOperationRestore(
     if (
       reason !== undefined ||
       current === undefined ||
-      current === null ||
-      current.length > MAX_OPERATION_RESTORE_BYTES
+      current !== null && current.length > MAX_OPERATION_RESTORE_BYTES
     ) {
       entries.push({
         path,
@@ -136,24 +166,29 @@ export async function preflightOperationRestore(
         after: null,
         current: current ?? null,
         status: 'unsupported',
-        reason,
+        reason: reason ?? 'This file exceeds the automatic undo size limit.',
       });
       continue;
     }
     try {
-      let planned = decodeUtf8(current);
+      let planned = current;
       for (const operation of [...matching].reverse()) {
         if (operation.outcome === 'failed') continue;
-        planned = applyInverseUnifiedPatch(planned, operation.patch);
+        if (planned === null) throw new Error('The file no longer exists at its recorded path.');
+        if (operation.kind === 'added') {
+          if (createHash('sha256').update(planned).digest('hex') !== operation.createdContentHash)
+            throw new Error('The created file has changed since this operation. Undo will not delete those changes.');
+          planned = null;
+        } else planned = Buffer.from(applyInverseUnifiedPatch(decodeUtf8(planned), operation.patch), 'utf8');
       }
-      const after = Buffer.from(planned, 'utf8');
       entries.push({
         path,
         before: current,
-        after,
+        after: planned,
         current,
         status: 'restorable',
         identity,
+        operationKeys: matching.filter(entry => entry.outcome === 'applied').map(operationUndoKey),
       });
     } catch (error) {
       entries.push({
@@ -161,7 +196,7 @@ export async function preflightOperationRestore(
         before: current,
         after: null,
         current,
-        status: 'conflicted',
+        status: error instanceof UnsupportedInversePatch ? 'unsupported' : 'conflicted',
         reason:
           error instanceof Error
             ? error.message
@@ -187,6 +222,7 @@ export function recordedOperationVersion(
     entry.kind,
     entry.outcome ?? '',
     entry.reversible === true ? 'true' : 'false',
+    entry.createdContentHash ?? '',
     entry.message ?? '',
     entry.patch,
     entry.submittedContent ?? '',
@@ -216,46 +252,35 @@ function flattenOperations(
   });
 }
 
+export function operationUndoKey(entry: { sessionId: string; toolUseId: string; path: string }): string {
+  return digest([entry.sessionId, entry.toolUseId, entry.path]);
+}
+
 function operationPathEligibility(
   entries: NonNullable<ActiveScope['recordedOperations']>,
 ): string | undefined {
   if (entries.length === 0) return 'No operation evidence was recorded.';
-  if (new Set(entries.map((entry) => entry.sessionId)).size > 1)
+  if (new Set(entries.map(entry => entry.sessionId)).size > 1)
     return 'The order of operations from different sessions cannot be established safely.';
   let applied = 0;
   for (const entry of entries) {
-    if (entry.source !== 'tool-result') {
-      return 'The operation was recorded only as proposed tool input.';
-    }
+    if (entry.source !== 'tool-result') return 'The operation was recorded only as proposed tool input.';
     if (entry.outcome === 'failed') continue;
-    if (entry.outcome !== 'applied') {
-      return 'The operation outcome is uncertain.';
-    }
+    const reason = operationUndoUnavailable(entry);
+    if (reason !== undefined) return reason;
     applied += 1;
-    const diff: Extract<OperationDiff, { status: 'ready' }> = {
-      status: 'ready',
-      source: entry.source,
-      ...(entry.callId === undefined ? {} : { callId: entry.callId }),
-      files: [entry],
-    };
-    if (
-      !isConfirmedOperationFile(diff, entry) ||
-      entry.reversible !== true ||
-      entry.kind !== 'modified' ||
-      entry.previousPath !== undefined ||
-      entry.patch.length === 0
-    ) {
-      return 'This operation does not contain a complete reversible text patch.';
-    }
   }
   return applied === 0 ? 'No applied operation is available to undo.' : undefined;
 }
 
+class UnsupportedInversePatch extends Error {}
+
 function decodeUtf8(value: Buffer): string {
-  if (value.includes(0)) throw new Error('Binary files cannot be undone as text.');
+  if (value.includes(0)) throw new UnsupportedInversePatch('Binary files cannot be undone as text.');
   if (value.length >= 3 && value[0] === 0xef && value[1] === 0xbb && value[2] === 0xbf)
-    throw new Error('Files with a byte order mark require manual restoration.');
-  return new TextDecoder('utf-8', { fatal: true }).decode(value);
+    throw new UnsupportedInversePatch('Files with a byte order mark require manual restoration.');
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(value); }
+  catch { throw new UnsupportedInversePatch('Non-UTF-8 files require manual restoration.'); }
 }
 
 interface InverseHunk {
@@ -266,7 +291,7 @@ interface InverseHunk {
 export function applyInverseUnifiedPatch(currentText: string, patch: string): string {
   const hunks = parseInverseHunks(patch);
   if (currentText.includes('\r') && (/\r(?!\n)/u.test(currentText) ||
-    /(?<!\r)\n/u.test(currentText))) throw new Error('Mixed line endings require manual restoration.');
+    /(?<!\r)\n/u.test(currentText))) throw new UnsupportedInversePatch('Mixed line endings require manual restoration.');
   const newline = currentText.includes('\r\n') ? '\r\n' : '\n';
   const finalNewline = currentText.endsWith('\n');
   const lines = currentText.split(/\r?\n/u);
@@ -310,9 +335,9 @@ function parseInverseHunks(patch: string): readonly InverseHunk[] {
   const finish = () => {
     if (current === null || replacement === null) return;
     if (current.length !== newCount || replacement.length !== oldCount)
-      throw new Error('The operation patch is incomplete.');
+      throw new UnsupportedInversePatch('The operation patch is incomplete.');
     if (current.length === 0) {
-      throw new Error('An inverse hunk has no exact current-text anchor.');
+      throw new UnsupportedInversePatch('An inverse hunk has no exact current-text anchor.');
     }
     hunks.push({ current, replacement });
   };
@@ -321,7 +346,7 @@ function parseInverseHunks(patch: string): readonly InverseHunk[] {
     if (line.startsWith('@@')) {
       const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$/u.exec(line);
       if (!header || header.slice(1).some((number) => number !== undefined && !Number.isSafeInteger(Number(number)))) {
-        throw new Error('The operation patch does not contain absolute hunk coordinates.');
+        throw new UnsupportedInversePatch('The operation patch does not contain absolute hunk coordinates.');
       }
       finish();
       oldCount = Number(header[2] ?? 1);
@@ -331,9 +356,9 @@ function parseInverseHunks(patch: string): readonly InverseHunk[] {
       continue;
     }
     if (current === null || replacement === null)
-      throw new Error('The operation patch contains unsupported headers.');
+      throw new UnsupportedInversePatch('The operation patch contains unsupported headers.');
     if (line.startsWith('\\ No newline at end of file')) {
-      throw new Error('The operation patch has unsupported newline-boundary metadata.');
+      throw new UnsupportedInversePatch('The operation patch has unsupported newline-boundary metadata.');
     }
     const prefix = line[0];
     const text = line.slice(1);
@@ -345,12 +370,12 @@ function parseInverseHunks(patch: string): readonly InverseHunk[] {
     } else if (prefix === '-') {
       replacement.push(text);
     } else if (line.length > 0 || index !== lines.length - 1) {
-      throw new Error('The operation patch contains an unsupported hunk line.');
+      throw new UnsupportedInversePatch('The operation patch contains an unsupported hunk line.');
     }
   }
   finish();
   if (hunks.length === 0) {
-    throw new Error('The operation patch contains no reversible hunks.');
+    throw new UnsupportedInversePatch('The operation patch contains no reversible hunks.');
   }
   return hunks;
 }

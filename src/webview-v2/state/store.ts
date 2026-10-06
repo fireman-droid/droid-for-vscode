@@ -117,6 +117,10 @@ function reduceHostMessage(
     case 'review.agentReviewState':
       return reduceChangesMessage(state, event);
 
+    case 'rewind.result':
+      return event.sessionId === state.sessionId
+        ? { ...state, sequence: event.sequence, rewindResult: event }
+        : advance(state, event.sequence);
     case 'rewind.info': {
       const { type: _type, sequence, sessionId, ...rewindInfo } = event;
       return sessionId === state.sessionId

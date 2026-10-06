@@ -34,11 +34,14 @@ export interface ScopeFile extends CommittedFileStat {
   comparable: boolean;
   restorable: boolean;
   restoreConflict: boolean;
+  undoReason?: string;
+  undone?: true;
 }
 
 export interface ActiveScope {
   baseBranch?: string;
   operationUndoBlocked?: string;
+  undoneOperations?: ReadonlySet<string>;
   sdkPatches?: ReadonlyMap<string, ReviewSdkPatch>;
   recordedOperations?: readonly {
     sequence: number;
@@ -58,6 +61,7 @@ export interface ActiveScope {
     outcome?: OperationDiffFile['outcome'];
     message?: string;
     reversible?: boolean;
+    createdContentHash?: string;
   }[];
   comparison?: ReviewComparison;
   reviewScopeId: string;

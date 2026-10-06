@@ -1,4 +1,5 @@
 import type { ModelsOpenMessage } from './protocol/modelManagerProtocol';
+import type { RewindResultMessage } from './protocol/rewindResult';
 import type { SystemPromptRequest, SystemPromptResponse } from './protocol/systemPromptProtocol';
 import type { IdeState, HostIdeMessage, IdeReconnectMessage, IdeRefreshMessage } from './protocol/ideProtocol';
 import type { ManagementOpenMessage } from './protocol/managementProtocol';
@@ -394,6 +395,7 @@ export type HostToWebviewMessage =
   | WorkspaceFilesMessage
   | WorkspaceImageDataMessage
   | RewindInfoStateMessage
+  | RewindResultMessage
   | AssistantDeltaMessage
   | ThinkingDeltaMessage
   | ThinkingCompleteMessage

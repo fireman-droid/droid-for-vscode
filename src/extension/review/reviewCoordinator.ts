@@ -43,21 +43,16 @@ import {
   loadOperationReviewScope,
   preflightOperationRestore,
   recordedOperationVersion,
+  type OperationRestoreEntry,
 } from './reviewOperationScope';
-import { applyOperationUndo, recoverOperationUndo } from './operationUndoFiles';
+import { applyOperationUndo, readOperationUndoState, recoverOperationUndo, type OperationUndoOutcome } from './operationUndoFiles';
 import { ReviewScopeRetention } from './reviewScopeRetention';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
 const MAX_PERSISTED_SCOPES = 16;
 type Unsequenced<T> = T extends { readonly sequence: number } ? Omit<T, 'sequence'> : never;
-interface RestoreEntry {
-  readonly path: string;
-  readonly before: Buffer | null;
-  readonly after: Buffer | null;
-  readonly current: Buffer | null;
-  readonly status: 'restorable' | 'conflicted' | 'unsupported';
-}
+type RestoreEntry = OperationRestoreEntry;
 interface RestorePreview {
   readonly id: string;
   readonly reviewScopeId: string;
@@ -332,11 +327,15 @@ export class ReviewCoordinator implements vscode.Disposable {
   }
   private async loadScope(message: ReviewOpenMessage): Promise<ActiveScope> {
     if (message.scopeKind === 'operations') {
+      const root = this.options.getWorkspaceRoot();
+      const undo = root === undefined ? { undone: new Set<string>(), blocked: 'The workspace is unavailable.' }
+        : await readOperationUndoState(this.options.storageDir, root);
       const scope = loadOperationReviewScope(
         message,
         this.options.readTurnOperations?.(message.sessionId, message.turnId!) ?? [],
         this.persisted,
-        this.options.readTurnOperationNotices?.(message.sessionId, message.turnId!) ?? [],
+        [...this.options.readTurnOperationNotices?.(message.sessionId, message.turnId!) ?? [], ...undo.blocked ? [undo.blocked] : []],
+        undo.undone,
       );
       if (this.options.isOperationWriting?.(message.sessionId, message.turnId!) ??
         this.options.isTurnWriting?.(message.sessionId, message.turnId!)) scope.lifecycle = 'writing';
@@ -595,6 +594,8 @@ export class ReviewCoordinator implements vscode.Disposable {
                     : 'unreviewed',
           version: file.version,
           restorable: file.restorable,
+          ...(file.undoReason === undefined ? {} : { undoReason: file.undoReason }),
+          ...(file.undone === undefined ? {} : { undone: file.undone }),
         })),
         currentIndex: scope.currentIndex,
         reviewedCount,
@@ -693,7 +694,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     const paths =
       message.target === 'file' && message.path !== undefined
         ? [message.path]
-        : scope.files.map(({ path }) => path);
+        : scope.files.filter(file => !file.undone).map(({ path }) => path);
     if (paths.length > MAX_REVIEW_UNDO_FILES) {
       throw new Error(`Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time. Undo individual files instead.`);
     }
@@ -722,12 +723,14 @@ export class ReviewCoordinator implements vscode.Disposable {
       previewId: preview.id,
       target: preview.target,
       restorable: entries.filter(({ status }) => status === 'restorable').map(({ path }) => path),
-      conflicted: entries.filter(({ status }) => status !== 'restorable').map(({ path }) => path),
+      conflicted: entries.filter(({ status }) => status === 'conflicted').map(({ path }) => path),
+      issues: entries.flatMap(entry => entry.status === 'restorable' ? [] : [{ path: entry.path,
+        status: entry.status, reason: (entry.reason ?? 'Undo is unavailable for this file.').slice(0, 2_000) }]),
       created: entries
-        .filter(({ before, after }) => before === null && after !== null)
+        .filter(({ before, after, status }) => status === 'restorable' && before === null && after !== null)
         .map(({ path }) => path),
       deleted: entries
-        .filter(({ before, after }) => before !== null && after === null)
+        .filter(({ before, after, status }) => status === 'restorable' && before !== null && after === null)
         .map(({ path }) => path),
     });
   }
@@ -743,7 +746,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     ) {
       return [];
     }
-    return preflightOperationRestore(root, scope, paths);
+    return preflightOperationRestore(root, scope, paths, this.options.readOperationBody);
   }
 
   private async restore(
@@ -760,7 +763,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       preview.baseline !== message.baseline ||
       preview.target !== (operation === 'restore-file' ? 'file' : 'turn') ||
       preview.versions.some((entry) => scope.files.find((file) => file.path === entry.path)?.version !== entry.version) ||
-      preview.target === 'turn' && preview.entries.length !== scope.files.length
+      preview.target === 'turn' && preview.entries.length !== scope.files.filter(file => !file.undone).length
     ) {
       this.result(
         message.sessionId,
@@ -799,7 +802,7 @@ export class ReviewCoordinator implements vscode.Disposable {
         message.reviewScopeId,
         operation,
         false,
-        `${outcome.reason ?? 'Undo stopped.'} ${outcome.written} file(s) completed. Any recovery journal was retained.`,
+        outcome.reason ?? 'Undo stopped before completion.',
       );
       return;
     }
@@ -820,7 +823,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   private async applyOperationRestore(
     scope: ActiveScope,
     entries: readonly RestoreEntry[],
-  ): Promise<{ readonly complete: boolean; readonly written: number; readonly reason?: string }> {
+  ): Promise<OperationUndoOutcome> {
     const root = this.options.getWorkspaceRoot();
     if (!root) return { complete: false, written: 0, reason: 'The workspace is unavailable.' };
     const outcome = await applyOperationUndo(this.options.storageDir, root, entries, () =>
@@ -835,7 +838,8 @@ export class ReviewCoordinator implements vscode.Disposable {
   private async recoverInterruptedRestore(): Promise<void> {
     try {
       if (!this.disposed) await recoverOperationUndo(this.options.storageDir, this.options.getWorkspaceRoot());
-    } catch { this.options.diagnostics?.record({ level: 'warn', name: 'host.review.recovery-blocked' }); }
+    } catch (error) { this.options.diagnostics?.record({ level: 'warn', name: 'host.review.recovery-blocked',
+      detail: error instanceof Error ? error.message : String(error) }); }
   }
 
   private noteWorkspaceChange(uri: vscode.Uri): void {

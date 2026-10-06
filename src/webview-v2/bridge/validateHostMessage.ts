@@ -1,5 +1,6 @@
 import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
 import { parseSystemPromptResponse } from '../../shared/protocol/systemPromptProtocol';
+import { parseRewindResult } from '../../shared/protocol/rewindResult';
 import { parseHostIde } from '../../shared/protocol/ideProtocol';
 import { parseFileDiffMessage, parseFileDiffInvalidateMessage } from '../../shared/protocol/inlineDiffProtocol';
 import {
@@ -100,6 +101,7 @@ const HOST_MESSAGE_PARSERS = {
   'workspace.files': parseWorkspaceFiles,
   'workspace.imageData': parseWorkspaceImageData,
   'rewind.info': parseRewindInfo,
+  'rewind.result': parseRewindResult,
   'assistant.delta': parseAssistantDelta,
   'thinking.delta': parseThinkingDelta,
   'thinking.complete': parseThinkingComplete,

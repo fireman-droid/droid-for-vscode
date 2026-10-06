@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   MAX_OPERATION_DIFF_FILES,
   MAX_OPERATION_BODY_UNITS,
@@ -66,7 +67,7 @@ export function parseOperationResultBody(
   const files = parsed.map((file) => {
     if (!eventIsError || file.outcome !== 'applied') return redactOperationFile(
       file.patch.length + (file.submittedContent?.length ?? 0) > MAX_OPERATION_BODY_UNITS ? omitOversizedOperationBody(file) : file, workspace);
-    const { submittedContent: _submittedContent, ...metadata } = file;
+    const { submittedContent: _submittedContent, createdContentHash: _createdContentHash, ...metadata } = file;
     return redactOperationFile({
       ...metadata,
       outcome: 'uncertain',
@@ -96,7 +97,7 @@ export function redactOperationFile(file: OperationDiffFile, workspace: string):
     !isRestrictedToolContent(file.patch) &&
     (file.submittedContent === undefined || !isRestrictedToolContent(file.submittedContent)) &&
     (file.message === undefined || !isRestrictedToolContent(file.message))) return file;
-  const { submittedContent: _submittedContent, ...metadata } = file;
+  const { submittedContent: _submittedContent, createdContentHash: _createdContentHash, ...metadata } = file;
   return {
     ...metadata,
     patch: '',
@@ -244,6 +245,7 @@ function parseApplyPatchResult(
     let reversible = false;
     let message: string | undefined;
     let oversized = false;
+    let createdContentHash: string | undefined;
     if (raw.display_operation === 'update') {
       if (typeof raw.diff !== 'string') return 'not-recorded';
       if (raw.diff.length > MAX_OPERATION_BODY_UNITS) oversized = true;
@@ -256,6 +258,8 @@ function parseApplyPatchResult(
       }
     } else if (raw.display_operation === 'create') {
       if (typeof raw.content !== 'string') return 'not-recorded';
+      if (expected.scope === undefined && kind === 'added')
+        createdContentHash = createHash('sha256').update(raw.content, 'utf8').digest('hex');
       if (raw.content.length > MAX_OPERATION_BODY_UNITS) oversized = true;
       else patch = addedContentPatch(raw.content);
     }
@@ -267,6 +271,7 @@ function parseApplyPatchResult(
       patch,
       outcome: 'applied',
       reversible: expected.scope === 'mission' ? false : reversible,
+      ...(createdContentHash === undefined ? {} : { createdContentHash }),
       ...(message === undefined ? {} : { message }),
     };
     files.push(oversized ? omitOversizedOperationBody(file) : file);

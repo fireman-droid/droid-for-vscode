@@ -11,6 +11,8 @@ export function reduceOptimisticIntent(
   state: AssistantWebviewState,
   action: Exclude<AssistantWebviewAction, { type: 'host.message' }>,
 ): AssistantWebviewState {
+  if (action.type === 'rewind.resultConsumed')
+    return state.rewindResult?.sequence === action.sequence ? { ...state, rewindResult: null } : state;
   if (action.type === 'turn.send') {
     if (state.sessionId === null || isTurnActive(state.turn)) {
       return state;

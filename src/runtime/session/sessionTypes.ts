@@ -16,6 +16,7 @@ import {
 } from './replacementTypes';
 import { type RuntimeInteractionHandler } from '../events/runtimeInteractions';
 import type { RuntimeTurnOutcome } from '../turnOutcome';
+import type { RewindFileResult } from '../../shared/protocol/rewindResult';
 
 export interface FactoryDroidSession {
   readonly id: string;
@@ -64,7 +65,7 @@ export interface FactoryDroidSession {
   readContextBreakdown?(): Promise<FactoryContextBreakdown>;
   rewind?(
     params: FactoryDroidSessionRewindParams,
-  ): Promise<{ session: FactoryDroidSession }>;
+  ): Promise<{ session: FactoryDroidSession } & Partial<RewindFileResult>>;
   getRewindInfo?(params: { messageId: string }): Promise<FactoryDroidSessionRewindInfo>;
   getGitDiff?(options?: RuntimeGitDiffOptions): Promise<FactoryDroidSessionGitDiff>;
   readOperationBody?(request: import('../tools/operationBody').OperationBodyRequest): Promise<import('../tools/operationBody').OperationBody | undefined>;
