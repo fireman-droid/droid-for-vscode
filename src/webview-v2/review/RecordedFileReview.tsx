@@ -48,10 +48,11 @@ function SavedEdit({ entry, index, path, split, fullContext, showHeader = false,
 }
 
 /** Displays saved evidence without treating it as a net workspace diff. */
-export function RecordedFileReview({ entries, content, fullContext = false, path, split, onSplit, onHunk, toolbarTarget, selectedToolUseId, onSelectEdit, readingKey, positions, loading = false }: {
+export function RecordedFileReview({ entries, content, fullContext = false, path, split, onSplit, onHunk, toolbarTarget, selectedToolUseId, onSelectEdit, readingKey, positions, loading = false, showDiffControls = true, preserveReadingPosition = true }: {
   readonly fullContext?: boolean;
   readonly entries: readonly ReviewRecordedEntry[]; readonly content?: ReviewRecordedContent; readonly path: string;
-  readonly split: boolean; readonly onSplit: (split: boolean) => void; readonly onHunk: (direction: number) => void;
+  readonly split: boolean; readonly onSplit?: (split: boolean) => void; readonly onHunk?: (direction: number) => void;
+  readonly showDiffControls?: boolean; readonly preserveReadingPosition?: boolean;
   readonly toolbarTarget: HTMLElement | null;
   readonly loading?: boolean;
   readonly selectedToolUseId?: string;
@@ -84,7 +85,7 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
   };
   const readingRevision = useMemo(() => ({ split, content, entries }), [split, content, entries]);
   useReviewReadingPosition(() => root.current?.closest<HTMLElement>('.review-code-scroll') ?? null,
-    JSON.stringify([readingKey ?? path, activeView, allEdits ? 'all' : selected?.key]),
+    preserveReadingPosition ? JSON.stringify([readingKey ?? path, activeView, allEdits ? 'all' : selected?.key]) : null,
     readingRevision,
     positions ?? localPositions.current);
   const toolbar = <>
@@ -108,13 +109,13 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
         {records.length > 1 ? <DropdownMenuItem onSelect={() => { setEditKey('all'); setView('edits'); onSelectEdit?.(undefined); }}>Show all saved excerpts</DropdownMenuItem> : null}
       </DropdownMenuContent>
     </DropdownMenu> : null}
-    {hasPatch ? <>
-      <ToggleGroup type="single" className="review-mode" aria-label="Diff layout" value={split ? 'split' : 'unified'} onValueChange={(value) => { if (value) onSplit(value === 'split'); }}>
+    {hasPatch && showDiffControls ? <>
+      <ToggleGroup type="single" className="review-mode" aria-label="Diff layout" value={split ? 'split' : 'unified'} onValueChange={(value) => { if (value) onSplit?.(value === 'split'); }}>
         <ToggleGroupItem className="h-7 w-7 p-1.5" value="unified" aria-label="Unified view" title="Unified view"><Rows3 /></ToggleGroupItem>
         <ToggleGroupItem className="h-7 w-7 p-1.5" value="split" aria-label="Split view" title="Split view"><Columns2 /></ToggleGroupItem>
       </ToggleGroup>
-      <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => onHunk(-1)}><ArrowUp /></ReviewIconButton>
-      <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => onHunk(1)}><ArrowDown /></ReviewIconButton>
+      <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => onHunk?.(-1)}><ArrowUp /></ReviewIconButton>
+      <ReviewIconButton variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => onHunk?.(1)}><ArrowDown /></ReviewIconButton>
     </> : null}
   </>;
   return <div className="review-recorded" ref={root}>

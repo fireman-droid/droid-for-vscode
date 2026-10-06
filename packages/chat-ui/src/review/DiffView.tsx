@@ -111,8 +111,7 @@ function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivEleme
     for (const [index, side] of ['before', 'after'].entries())
       root.current?.style.setProperty(`--diff-${side}-scroll`, `${-(scrollbars.current[index]?.scrollLeft ?? 0)}px`);
   }, [root, before, after]);
-  return <div className="review-split-labels">{(['before', 'after'] as const).map((side, index) => <div key={side} className="review-split-heading">
-    <span>{side === 'before' ? 'Before' : 'After'}</span>
+  return <div className="review-split-scrollbars">{(['before', 'after'] as const).map((side, index) => <div key={side}>
     <div ref={(element) => { scrollbars.current[index] = element; }} className="review-split-scrollbar"
       role="region" aria-label={`Scroll ${side} code horizontally`} tabIndex={0}
       onScroll={(event) => root.current?.style.setProperty(`--diff-${side}-scroll`, `${-event.currentTarget.scrollLeft}px`)}>
@@ -146,7 +145,6 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
     role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
-    {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
@@ -156,5 +154,6 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
             : <UnifiedRow key={index} line={row as InlineDiffLine} language={language} words={words} />)}
         </DeferredDiffChunk>)}
     </div>
+    {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}
   </div>;
 });

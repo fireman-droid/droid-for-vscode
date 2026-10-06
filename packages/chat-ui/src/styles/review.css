@@ -1,12 +1,14 @@
 @import './review-workbench.css';
 @import './review-records.css';
 @import './review-interactions.css';
+@import './review-stream.css';
 
 @layer components {
   .review-diff {
     --diff-line-height: 22px;
     --diff-code-font-size: 12px;
     font: var(--diff-code-font-size)/var(--diff-line-height) var(--font-mono); width: 100%; min-width: 0; outline: none;
+    overflow-anchor: none;
     color: var(--ink); background: var(--code-surface);
     --diff-add-ink: light-dark(#166534, #89e6a8);
     --diff-remove-ink: light-dark(#a51d35, #ffadb5);
@@ -41,9 +43,8 @@
   .review-diff .diff-word-change { border-radius: 2px; box-decoration-break: clone; }
   .review-diff .diff-add .diff-word-change { background: var(--diff-word-add); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--diff-add-ink) 45%, transparent); }
   .review-diff .diff-remove .diff-word-change { background: var(--diff-word-remove); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--diff-remove-ink) 45%, transparent); }
-  .review-split-labels { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); color: var(--secondary-ink); background: var(--code-surface); font: 11px var(--font-sans); }
-  .review-split-labels > div { min-width: 0; border-right: 1px solid var(--panel-edge); }
-  .review-split-labels span { display: block; padding: 6px 12px; }
+  .review-split-scrollbars { position: sticky; bottom: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--code-surface); }
+  .review-split-scrollbars > div { min-width: 0; border-right: 1px solid var(--panel-edge); }
   .review-split-scrollbar { overflow-x: auto; overflow-y: hidden; margin-left: 7ch; font: var(--diff-code-font-size) var(--font-mono); }
   .review-split-scrollbar:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .review-split-track { height: 1px; }

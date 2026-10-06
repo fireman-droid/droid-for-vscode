@@ -5,6 +5,14 @@ import { usePortalContainer } from './overlays';
 
 export const DropdownMenu = MenuPrimitive.Root;
 export const DropdownMenuTrigger = MenuPrimitive.Trigger;
+export const DropdownMenuRadioGroup = MenuPrimitive.RadioGroup;
+export function DropdownMenuRadioItem({ className, ...props }: ComponentProps<typeof MenuPrimitive.RadioItem>) {
+  return <MenuPrimitive.RadioItem className={cn('dvx-menu-item flex cursor-default select-none items-center gap-1.5 rounded px-2 py-1.5 text-xs data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props} />;
+}
+export const DropdownMenuItemIndicator = MenuPrimitive.ItemIndicator;
+export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof MenuPrimitive.Separator>) {
+  return <MenuPrimitive.Separator className={cn('my-1 h-px bg-border', className)} {...props} />;
+}
 export function DropdownMenuContent({ className, sideOffset = 4, ...props }: ComponentProps<typeof MenuPrimitive.Content>) {
   const container = usePortalContainer();
   return <MenuPrimitive.Portal container={container}>

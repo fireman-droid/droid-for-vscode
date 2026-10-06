@@ -6,8 +6,8 @@ export interface ReviewActions {
   readonly onOpenScope: (kind: ReviewScopeKind, turnId?: string, openCurrent?: true) => void;
   readonly onSelectFile: (path: string) => void;
   readonly onNavigate: (direction: 'previous' | 'next') => void;
-  readonly onMarkReviewed: (advance: boolean) => void;
-  readonly onPreviewRestore: (target: 'file' | 'turn') => void;
+  readonly onMarkReviewed: (advance: boolean, path?: string) => void;
+  readonly onPreviewRestore: (target: 'file' | 'turn', path?: string) => void;
   readonly onConfirmRestore: (target: 'file' | 'turn', previewId: string) => void;
   readonly onRunAgentReview: () => void;
 }
@@ -33,15 +33,17 @@ export function useReviewActions(
     onNavigate: (direction) => {
       if (scope !== null) post({ type: 'review.navigate', reviewScopeId: scope.reviewScopeId, baseline: scope.baseline, direction });
     },
-    onMarkReviewed: (advance) => {
-      const current = scope?.currentIndex == null ? null : scope.files[scope.currentIndex] ?? null;
+    onMarkReviewed: (advance, path) => {
+      const current = path ? scope?.files.find(file => file.path === path) ?? null
+        : scope?.currentIndex == null ? null : scope.files[scope.currentIndex] ?? null;
       if (scope !== null && current !== null) post({
         type: 'review.markReviewed', reviewScopeId: scope.reviewScopeId, baseline: scope.baseline,
         path: current.path, version: current.version, advance,
       });
     },
-    onPreviewRestore: (target) => {
-      const current = scope?.currentIndex == null ? null : scope.files[scope.currentIndex] ?? null;
+    onPreviewRestore: (target, path) => {
+      const current = path ? scope?.files.find(file => file.path === path) ?? null
+        : scope?.currentIndex == null ? null : scope.files[scope.currentIndex] ?? null;
       if (scope !== null && (target === 'turn' || current !== null)) post({
         type: 'review.restorePreview', reviewScopeId: scope.reviewScopeId, baseline: scope.baseline, target,
         ...(target === 'file' && current !== null ? { path: current.path, version: current.version } : {}),

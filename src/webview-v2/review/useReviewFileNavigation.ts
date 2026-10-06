@@ -20,12 +20,13 @@ export function useReviewFileNavigation(review: ReviewScopeState | null, visible
     const next = target.candidates.find(candidate => visiblePaths.includes(candidate));
     if (next) select(next);
   }, [review, visiblePaths, select]);
-  const markAndNext = () => {
-    const current = review?.files.find(file => file.path === path);
+  const markAndNext = (filePath?: string) => {
+    const current = review?.files.find(file => file.path === (filePath ?? path));
     if (!review || !current) return;
     pending.current = { scope: review.reviewScopeId, baseline: review.baseline, path: current.path,
-      version: current.version, candidates: visiblePaths.slice(index + 1) };
-    actions.onMarkReviewed(false);
+      version: current.version, candidates: visiblePaths.slice(visiblePaths.indexOf(current.path) + 1) };
+    if (filePath === undefined) actions.onMarkReviewed(false);
+    else actions.onMarkReviewed(false, current.path);
   };
   return { previous, next, markAndNext, navigate: (direction: 'previous' | 'next') => {
     const target = direction === 'previous' ? previous : next;

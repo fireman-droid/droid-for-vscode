@@ -9,6 +9,21 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 连续多文件 Review（2026-10-06）
+
+- 将用户确认的浏览器预览接入正式 Review：紧凑范围栏、默认 Split、连续文件区、
+  右侧可调整宽度的文件树；支持文件定位、逐文件／全部折叠、Unified 切换和文件筛选。
+- 文件读取按比较范围和路径隔离，邻近视口时加载；范围、会话和上下文变化使旧请求失效。
+  标记已查看、Native Diff 和撤销显式使用所在文件身份，保留原有版本与冲突校验。
+- 全局菜单保留刷新、上下文和 Agent Review，Commit 接现有真实提交流程。
+  不展示未接通的 Push、Create PR、忽略空白或自动换行；历史记录与净比较继续区分。
+- 底部横向滚动条和大 Diff 分块沿用当前滚动修复；不同文件不会互相恢复滚动位置。
+- `pnpm run package:vsix` 通过，包含 typecheck、lint:budgets、公共包及五个 Webview 构建；
+  `pnpm run verify:vsix` 校验 166 条目通过。已全局安装 Microsoft VS Code，扩展入口、
+  五个 Webview JS 与 CSS 共 7 项哈希一致，Reload Window 后生效。
+- 本轮未获新的回归及浏览器验收授权，未新增、修改或运行测试。真实视觉与交互
+  由用户在 VS Code 验收。
+
 ## 聊天文件改动卡片（2026-10-06）
 
 - 按用户提供的 Cursor 卡片参考调整为 12px 圆角、细边框、中性背景和紧凑文件列表；

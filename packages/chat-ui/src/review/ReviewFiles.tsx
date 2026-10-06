@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Key } from 'react';
-import { Check, ChevronDown, ChevronRight, FileCode2, Folder, FolderTree, List, Search, SlidersHorizontal } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Folder, FolderTree, List, Search, SlidersHorizontal } from 'lucide-react';
 export interface ReviewFile { readonly path: string; readonly status: string; readonly changeKind?: string; readonly additions: number | null; readonly deletions: number | null }
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
@@ -9,6 +9,7 @@ import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
 import { ResizeHandle } from '../ui/resize-handle';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useVirtualList } from '../ui/useVirtualList';
+import { ChangeFileIcon } from '../chat/ChangeFileIcon';
 type FileRow = { readonly key: string; readonly directory: string; readonly file?: ReviewFile };
 type VisibleRow = { readonly key: Key; readonly index: number; readonly start: number };
 const fileStatusLabels: Readonly<Record<string, string>> = {
@@ -21,16 +22,17 @@ export function filterReviewFiles<T extends ReviewFile>(files: readonly T[], fil
   const query = filters.query.toLowerCase();
   return files.filter(file => file.path.toLowerCase().includes(query) && (!filters.unreviewed || file.status !== 'reviewed'));
 }
-export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect, filters, onFiltersChange }: {
+export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect, filters, onFiltersChange, side = 'left' }: {
   files: readonly ReviewFile[]; selected: string | null; onSelect(path: string): void;
   filters?: ReviewFileFilters; onFiltersChange?(filters: ReviewFileFilters): void;
+  side?: 'left' | 'right';
 }) {
   const [localFilters, setLocalFilters] = useState<ReviewFileFilters>({ query: '', unreviewed: false });
   const { query: filter, unreviewed } = filters ?? localFilters;
   const updateFilters = onFiltersChange ?? setLocalFilters;
   const setFilter = (query: string) => updateFilters({ query, unreviewed });
   const setUnreviewed = (unreviewed: boolean) => updateFilters({ query: filter, unreviewed });
-  const [tree, setTree] = useState(false);
+  const [tree, setTree] = useState(side === 'right');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [width, setWidth] = useState(224);
   const [maxWidth, setMaxWidth] = useState(440);
@@ -102,7 +104,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     ref: virtual ? list.virtualizer.measureElement : undefined,
     style: { display: 'flow-root', ...(virtual ? { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` } : {}) } as CSSProperties,
   });
-  return <aside ref={panel} className="review-files" aria-label="Changed files" style={{ width: visibleWidth }}>
+  return <aside ref={panel} className="review-files" data-side={side} aria-label="Changed files" style={{ width: visibleWidth }}>
     <div className="review-files-tools">
       <div className="review-file-search"><Search aria-hidden="true" />
         <Input className="h-7 pl-7 text-xs" type="search" aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(event) => setFilter(event.target.value)} />
@@ -136,7 +138,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
             file.deletions === null ? null : `${file.deletions} deletions`].filter(Boolean).join(', ');
           return <div key={item.key} {...rowProps(item)}><Button variant="plain" size="none" className="review-file"
           data-review-status={file.status} aria-current={selected === file.path ? 'true' : undefined} aria-label={label} onClick={() => onSelect(file.path)} title={`${file.path}\n${reviewState}`}>
-          {file.status === 'reviewed' ? <Check className="review-file-check" aria-hidden="true" /> : <FileCode2 aria-hidden="true" />}
+          {file.status === 'reviewed' ? <Check className="review-file-check" aria-hidden="true" /> : <ChangeFileIcon path={file.path} />}
           <span className="review-file-name">
             <span className="review-file-basename" title={basename}>{basename}</span>
             {!tree && directory ? <small className="review-file-directory" title={directory}>{directory}</small> : null}
@@ -152,6 +154,6 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>Clear filters</Button> : null}
       </p> : null}
     </div>
-    <ResizeHandle value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label="Resize file sidebar" onValueChange={setWidth} />
+    <ResizeHandle edge={side === 'right' ? 'left' : 'right'} value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label="Resize file sidebar" onValueChange={setWidth} />
   </aside>;
 });

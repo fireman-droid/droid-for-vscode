@@ -53,6 +53,7 @@
   .dvx-menu-item:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .dvx-resize-handle { position: absolute; inset: 0 0 0 auto; z-index: 1; width: 8px; cursor: col-resize; touch-action: none; user-select: none; outline: none; }
   .dvx-resize-handle::after { content: ''; position: absolute; inset: 0 0 0 auto; width: 2px; background: transparent; }
+  .dvx-resize-handle[data-edge='left'], .dvx-resize-handle[data-edge='left']::after { inset: 0 auto 0 0; }
   .dvx-resize-handle:hover::after, .dvx-resize-handle:focus-visible::after, .dvx-resize-handle[data-dragging]::after { background: var(--focus); }
   @media (hover: hover) {
     .dvx-field:hover:not(:disabled, :focus, [data-disabled], [data-state='open']),
