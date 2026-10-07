@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
-import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
+import { CollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
 import { useProcessDisclosure } from './processPresentation';
 
 export function ActivityItem({
@@ -55,8 +55,8 @@ export function ActivityItem({
       </Button></CollapsibleTrigger>
       {actions ? <div className="flex shrink-0 items-center pr-1">{actions}</div> : null}
     </div>
-    <AnimatedCollapsibleContent id={detailsId} ref={disclosure.contentRef} open={selected} visible={disclosure.visible}>
-      {disclosure.mounted ? <div className="v2-activity-detail min-w-0 px-1.5 pb-1 pl-6">{children}</div> : null}
-    </AnimatedCollapsibleContent>
+    <CollapsibleContent id={detailsId} ref={disclosure.contentRef} className="v2-tool-content min-w-0 overflow-hidden">
+      <div className="v2-activity-detail min-w-0 px-1.5 pb-1 pl-6">{children}</div>
+    </CollapsibleContent>
   </Collapsible>;
 }

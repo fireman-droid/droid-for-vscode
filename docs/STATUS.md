@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 过程详情展开开销（2026-10-07）
+
+- 用户反馈流式回复中展开内容掉帧。源码确认 Activity 的 200ms 网格高度过渡和工具详情的
+  220ms 高度动画会持续改变虚拟行尺寸；原展开逻辑还包含两帧等待及 220ms 延迟卸载。
+- Activity、Read／Thought 等工具详情改为直接采用最终高度，只淡入内容；共享展开状态
+  去掉动画定时器。命令输出同样不再动画高度，保留已挂载 DOM 与内部滚动位置。
+- 保留按需挂载、展开选择、暂停尾部跟随、键盘收起焦点，以及 Worker 语法高亮和完整可用预览。
+- `pnpm run package:vsix`（含 typecheck、lint:budgets 与生产构建）及 `pnpm run verify:vsix` 通过；
+  已全局安装到 Microsoft VS Code，扩展入口、Chat、Viewer 和 CSS 的安装哈希与构建一致。
+- 未新增、修改或运行测试及浏览器自动化；没有采集帧率，实际掉帧改善仍需 VS Code 人工验收。
+
 ## 文件写入归入 Activity（2026-10-07）
 
 - 执行中的成功写入记录与前后的搜索、思考等工具过程归入同一 Activity，不再以独立的
