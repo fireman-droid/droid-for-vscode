@@ -49,6 +49,21 @@ flowchart LR
 `viewer/`。`state/` 保存根业务状态，`host/` 接收消息，`bridge/` 校验并发送消息，
 `shell/` 管页面挂载和主题，`content/` 接 Markdown/Mermaid，`dev/` 提供预览与真实联调。
 
+### 源码高亮
+
+公共包的 `syntax/` 使用 Shiki 4.5 / TextMate；`CodeSyntax` 与 `DiffView` 共用
+后台队列。参考 [Kilo 的 Worker 接线](https://github.com/Kilo-Org/kilocode/blob/113caf191616a10807cb7cb520d970dc197eb963/packages/kilo-vscode/webview-ui/pierre-worker.ts)，
+保留现有 Diff 渲染与滚动，采用 Shiki JavaScript 正则引擎，不放宽 Webview 的 WASM CSP。
+语法文件打入独立 `syntax.js`，首次展示源码时按页面 nonce 加载并创建 Blob Worker；
+主入口不包含语法库。公共包通过 `UiEnvironment.createSyntaxWorker` 注入工厂，独立构建
+产出可直接部署的 `dist/syntax/syntaxWorker.js`，不依赖 VS Code。
+
+Review Host 在有准确比较版本时通过 `reviewPanel.file.syntaxSource` 发送修改前后
+源码；Recorded Edits 只携带所选操作的历史版本，每侧最多 2 MiB，不用当前工作区
+填补历史。Worker 分别从两侧文件头解析并只回传展示行，前端核对行号和内容后使用。
+缺失版本时按独立片段解析，跳过区间不能假定语法连续。token 映射到现有语义颜色类，
+主题变化无需重新分词；异常保留可读源码并反馈，过时请求结果不会覆盖新内容。
+
 ### 第一次阅读按这个顺序
 
 1. [extension.ts](../src/extension/extension.ts)：扩展启动时创建哪些服务，以及谁负责释放它们。

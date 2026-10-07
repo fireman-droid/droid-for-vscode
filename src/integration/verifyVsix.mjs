@@ -26,6 +26,7 @@ const expectedEntries = [
   // Lazily injected mermaid bundle; ships alongside webview.js but is
   // only loaded when a completed ```mermaid block needs rendering.
   'extension/dist/webview/mermaid.js',
+  'extension/dist/webview/syntax.js',
   'extension/dist/webview/mission-control.js',
   'extension/dist/webview/models.js',
   'extension/dist/webview/session-viewer.js',

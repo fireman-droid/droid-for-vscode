@@ -12,7 +12,7 @@ import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { describeDiffBytes } from '../changes/diffDiagnostics';
 import { applySdkPatch } from './reviewSdkPatch';
 import { recordedOperationVersion } from './reviewOperationScope';
-import { MAX_REVIEW_PATCH_CHARS, type ReviewContext, type ReviewPanelFile } from '../../shared/protocol/reviewPanelProtocol';
+import { MAX_REVIEW_PATCH_CHARS, type ReviewContext, type ReviewPanelFile, type ReviewSyntaxSource } from '../../shared/protocol/reviewPanelProtocol';
 import { recordedFileContent } from './recordedFileContent';
 import { readOperationBody, type OperationBody, type OperationBodyRequest } from '../../runtime/tools/operationBody';
 
@@ -122,13 +122,15 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
         ...(bodyRef === undefined ? {} : { bodyRef }),
         ...(outcome === undefined ? {} : { outcome }), ...(message === undefined ? {} : { message }) });
     }
-    if (context === 'all') {
-      const full = await recordedFileDiffs(source, scope, path, displayEntries, MAX_REVIEW_PATCH_CHARS, matching.length, toolUseId);
+    {
+      const full = await recordedFileDiffs(source, scope, path, displayEntries, MAX_REVIEW_PATCH_CHARS, matching.length, toolUseId, context === 'all');
       for (let index = 0; index < recordedOperations.length; index++) {
         const originalIndex = indexes[index]!;
+        if (originalIndex === full.selectedIndex && full.syntaxSource)
+          recordedOperations[index] = { ...recordedOperations[index]!, syntaxSource: full.syntaxSource };
         const fullPatch = full.patches.get(originalIndex);
         if (fullPatch !== undefined) recordedOperations[index] = { ...recordedOperations[index]!, fullPatch };
-        else if (originalIndex === full.selectedIndex && full.unavailableReason)
+        else if (context === 'all' && originalIndex === full.selectedIndex && full.unavailableReason)
           recordedOperations[index] = { ...recordedOperations[index]!, fullPatchUnavailableReason: full.unavailableReason };
       }
     }
@@ -141,7 +143,16 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
     const entry = scope.sdkPatches.get(path);
     if (!entry) throw new Error('The SDK did not return a patch for this file. Refresh Review.');
     if (entry.binary) throw new Error('Binary files cannot be shown as a text Diff.');
-    return boundedPatch(digest([scope.baseline, path, entry.patch]), entry.patch);
+    let syntaxSource: ReviewSyntaxSource | undefined;
+    try { syntaxSource = sourceText(await readReviewContents(source, scope, path)); }
+    catch (error) {
+      // The SDK's saved patch remains readable even when its full baseline is
+      // missing or larger than our text limit. Report the lost syntax context.
+      source.diagnostics?.record({ level: 'warn', name: 'host.review.syntax_context_unavailable',
+        attributes: { reviewScopeId: scope.reviewScopeId, path, reason: error instanceof Error ? error.message : String(error) } });
+    }
+    return { ...boundedPatch(digest([scope.baseline, path, entry.patch]), entry.patch),
+      ...(syntaxSource ? { syntaxSource } : {}) };
   }
   const contents = await readReviewContents(source, scope, path);
   source.diagnostics?.record({ level: 'debug', name: 'host.changes.contents',
@@ -155,7 +166,13 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
     ? Math.max(contents.before.toString('utf8').split('\n').length, contents.after.toString('utf8').split('\n').length)
     : context;
   const full = await diffBytes(contents.before, contents.after, lines);
-  return boundedPatch(version, full);
+  return { ...boundedPatch(version, full), syntaxSource: sourceText(contents) };
+}
+function sourceText(contents: { before: Buffer; after: Buffer }): ReviewSyntaxSource {
+  return {
+    before: contents.before.toString('utf8').replace(/\r\n/g, '\n'),
+    after: contents.after.toString('utf8').replace(/\r\n/g, '\n'),
+  };
 }
 function boundedPatch(version: string, full: string) {
   const lines = full.split('\n');

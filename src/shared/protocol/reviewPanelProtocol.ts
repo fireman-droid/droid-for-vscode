@@ -26,7 +26,9 @@ export type ReviewPanelContext = {
   readonly toolUseId?: string;
   readonly resetReview?: true;
 };
+export interface ReviewSyntaxSource { readonly before: string; readonly after: string }
 export interface ReviewRecordedEntry {
+  readonly syntaxSource?: ReviewSyntaxSource;
   readonly toolUseId: string;
   readonly patch: string;
   /** Full context rebuilt from saved snapshots or full writes and verified result patches. */
@@ -52,6 +54,7 @@ export type ReviewPanelFile = {
   readonly type: 'reviewPanel.file'; readonly requestId: string; readonly reviewScopeId: string;
   readonly path: string; readonly version: string; readonly patch: string;
   readonly truncated: boolean; readonly error: string | null;
+  readonly syntaxSource?: ReviewSyntaxSource;
   readonly recordedOperations?: readonly ReviewRecordedEntry[];
   /** Reconstructed only from a saved write and exact subsequent result patches. */
   readonly recordedContent?: ReviewRecordedContent;
@@ -97,15 +100,16 @@ export function isReviewPanelContext(value: unknown): value is ReviewPanelContex
 }
 export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
   return isStrictRecord(value) && value.type === 'reviewPanel.file' &&
-    hasExactKeys(value, ['type', 'requestId', 'reviewScopeId', 'path', 'version', 'patch', 'truncated', 'error'], ['recordedOperations', 'recordedContent']) &&
+    hasExactKeys(value, ['type', 'requestId', 'reviewScopeId', 'path', 'version', 'patch', 'truncated', 'error'], ['recordedOperations', 'recordedContent', 'syntaxSource']) &&
     isId(value.requestId) && isId(value.reviewScopeId) && isSafeWorkspaceRelativePath(value.path) &&
     typeof value.version === 'string' && typeof value.patch === 'string' && value.patch.length <= MAX_REVIEW_PATCH_CHARS &&
     typeof value.truncated === 'boolean' && (value.error === null || typeof value.error === 'string') &&
+    (value.syntaxSource === undefined || isSyntaxSource(value.syntaxSource)) &&
     (value.recordedContent === undefined || isRecordedContent(value.recordedContent)) &&
     (value.recordedOperations === undefined || Array.isArray(value.recordedOperations) &&
       value.recordedOperations.length <= 200 &&
       value.recordedOperations.every((entry) => isStrictRecord(entry) &&
-        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent', 'bodyRef', 'fullPatch', 'fullPatchUnavailableReason']) && isId(entry.toolUseId) &&
+        hasExactKeys(entry, ['toolUseId', 'patch'], ['source', 'outcome', 'message', 'toolName', 'sequence', 'kind', 'submittedContent', 'bodyRef', 'fullPatch', 'fullPatchUnavailableReason', 'syntaxSource']) && isId(entry.toolUseId) &&
         (entry.fullPatchUnavailableReason === undefined || entry.fullPatch === undefined &&
           ['too-large', 'unavailable'].includes(String(entry.fullPatchUnavailableReason))) &&
         (entry.source === undefined || ['tool-input', 'tool-result', 'successful-tool-input'].includes(String(entry.source))) &&
@@ -117,8 +121,10 @@ export function isReviewPanelFile(value: unknown): value is ReviewPanelFile {
         (entry.submittedContent === undefined || isSafeOperationText(entry.submittedContent, entry.bodyRef ? MAX_OPERATION_BODY_UNITS : MAX_OPERATION_CONTENT_UNITS) && entry.patch === '' && entry.source === 'tool-result' && entry.outcome === 'applied') &&
         (entry.fullPatch === undefined || entry.source === 'tool-result' && entry.outcome === 'applied' &&
           typeof entry.fullPatch === 'string' && entry.fullPatch.length <= MAX_REVIEW_PATCH_CHARS) &&
+        (entry.syntaxSource === undefined || entry.source === 'tool-result' && entry.outcome === 'applied' && isSyntaxSource(entry.syntaxSource)) &&
         isRecordedBody(entry)) &&
       value.recordedOperations.filter((entry: ReviewRecordedEntry) => entry.bodyRef && (entry.patch !== '' || entry.submittedContent !== undefined)).length <= 1 &&
+      value.recordedOperations.filter((entry: ReviewRecordedEntry) => entry.syntaxSource !== undefined).length <= 1 &&
       value.recordedOperations.filter((entry: ReviewRecordedEntry) => entry.fullPatch !== undefined).length <= 1 &&
       value.recordedOperations.reduce((sum: number, entry: ReviewRecordedEntry) => sum + entry.patch.length + (entry.submittedContent?.length ?? 0), 0) <= 512_000);
 }
@@ -137,4 +143,10 @@ function isRecordedContent(value: unknown): value is ReviewRecordedContent {
     typeof value.content === 'string' && value.content.length <= 512_000 && isId(value.sourceToolUseId) &&
     Number.isSafeInteger(value.appliedEdits) && Number(value.appliedEdits) >= 0 &&
     Number.isSafeInteger(value.remainingOperations) && Number(value.remainingOperations) >= 0;
+}
+
+function isSyntaxSource(value: unknown): value is ReviewSyntaxSource {
+  return isStrictRecord(value) && hasExactKeys(value, ['before', 'after']) &&
+    typeof value.before === 'string' && value.before.length <= MAX_REVIEW_PATCH_CHARS &&
+    typeof value.after === 'string' && value.after.length <= MAX_REVIEW_PATCH_CHARS;
 }

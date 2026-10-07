@@ -1,57 +1,34 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { highlightCode, type CodeHighlightHints } from '../markdown/highlightCode';
+import type { CodeHighlightHints } from '../markdown/highlightCode';
+import { useSyntaxHighlight } from '../syntax/useSyntaxHighlight';
 
-const STREAM_HIGHLIGHT_INTERVAL_MS = 150;
+interface Source { readonly text: string; readonly language?: string | null; readonly path?: string }
+const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-interface HighlightSource {
-  readonly text: string;
-  readonly language?: string | null;
-  readonly path?: string;
-}
-
-/** Shared token rendering; each surface keeps its existing layout and actions. */
-export const CodeSyntax = memo(function CodeSyntax({ text, language, path, detect, streaming = false }: CodeHighlightHints & {
-  readonly text: string;
-  readonly streaming?: boolean;
+/** Shared worker-backed tokens; surfaces retain their own layout and actions. */
+export const CodeSyntax = memo(function CodeSyntax({ text, language, path, streaming = false }: CodeHighlightHints & {
+  readonly text: string; readonly streaming?: boolean;
 }) {
-  const [highlighted, setHighlighted] = useState<(HighlightSource & { readonly html: string | null }) | null>(null);
-  const latest = useRef<HighlightSource | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef<Source>({ text, language, path });
+  latest.current = { text: streaming && text.endsWith('\n') ? text.slice(0, -1) : text, language, path };
+  const [sample, setSample] = useState(latest.current);
   useEffect(() => {
-    if (!streaming) {
-      if (timer.current !== null) clearTimeout(timer.current);
-      timer.current = null;
-      latest.current = null;
-      return;
-    }
-    // Markdown adds a final LF even to an unfinished line. Leave it in the live
-    // tail so subsequent characters can extend the highlighted source prefix.
-    latest.current = { text: text.endsWith('\n') ? text.slice(0, -1) : text, language, path };
-    // Read the latest committed text on a fixed cadence; restarting this timer
-    // for every token would postpone highlighting until the stream pauses.
-    if (timer.current !== null) return;
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      const source = latest.current;
-      if (source) setHighlighted({ ...source, html: highlightCode(source.text, {
-        language: source.language, path: source.path, detect: false,
-      }) });
-    }, STREAM_HIGHLIGHT_INTERVAL_MS);
-  }, [text, language, path, streaming]);
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    latest.current = null;
-  }, []);
-
-  const settled = useMemo(() => streaming ? null : highlightCode(text, { language, path, detect }), [text, language, path, detect, streaming]);
-  const current = highlighted !== null && highlighted.language === language && highlighted.path === path && text.startsWith(highlighted.text) ? highlighted : null;
-  const html = streaming ? current?.html ?? null : settled;
-  // Keep every incoming character visible and React-escaped while coloring the
-  // last parsed prefix. Replaced text or language hints cannot reuse old spans.
-  // Own both foreground and background instead of inheriting host inline-code colors.
-  return <code className="bg-transparent text-foreground">{html === null ? text : <>
-    <span dangerouslySetInnerHTML={{ __html: html }} />
-    {streaming && current ? text.slice(current.text.length) : null}
-  </>}</code>;
+    if (!streaming) return;
+    const timer = setInterval(() => setSample(latest.current), 150);
+    return () => clearInterval(timer);
+  }, [streaming]);
+  const source = streaming ? sample : latest.current;
+  const request = useMemo(() => ({ documents: [{ text: source.text }], language: source.language, path: source.path }),
+    [source.text, source.language, source.path]);
+  const result = useSyntaxHighlight(request);
+  const parsed = useMemo(() => result?.documents[0] ? { ...source,
+    html: source.text.split('\n').map((line, index) => result.documents[0]![index] ?? escape(line)).join('\n'),
+  } : undefined, [source.text, source.language, source.path, result]);
+  const [previous, setPrevious] = useState<typeof parsed>();
+  useEffect(() => { if (parsed) setPrevious(parsed); }, [parsed]);
+  const candidate = parsed ?? (streaming ? previous : undefined);
+  const current = candidate && candidate.language === language && candidate.path === path && text.startsWith(candidate.text) ? candidate : undefined;
+  return <code className="bg-transparent text-foreground" title={result?.error}>{current ? <>
+    <span dangerouslySetInnerHTML={{ __html: current.html }} />{text.slice(current.text.length)}
+  </> : text}</code>;
 });

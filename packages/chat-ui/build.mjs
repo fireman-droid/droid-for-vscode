@@ -1,12 +1,13 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import { createThirdPartyNotices } from './scripts/thirdPartyNotices.mjs';
 import { createMarkdownWorkerBuild } from './scripts/markdownWorkerBuild.mjs';
+import { createSyntaxWorkerBuild } from './scripts/syntaxWorkerBuild.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const source = path.join(root, 'src');
@@ -84,4 +85,7 @@ const cssResult = await build({
   }],
 });
 await notices.add(cssResult.metafile);
+const syntaxWorker = createSyntaxWorkerBuild();
+await writeFile(path.join(out, 'syntax/syntaxWorker.js'), await syntaxWorker.workerSource());
+await syntaxWorker.addNotices(notices);
 await notices.write(path.join(out, 'THIRD_PARTY_LICENSES.txt'));

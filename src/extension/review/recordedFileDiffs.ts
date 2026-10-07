@@ -5,7 +5,7 @@ import { applySdkPatch } from './reviewSdkPatch';
 import { recoverRecordedPatchContext } from './recordedPatchRecovery';
 import { operationToolName } from '../../runtime/tools/operationDiff';
 import { isRestrictedToolContent } from '../../runtime/tools/toolResultPreview';
-import { MAX_REVIEW_PATCH_CHARS } from '../../shared/protocol/reviewPanelProtocol';
+import { MAX_REVIEW_PATCH_CHARS, type ReviewSyntaxSource } from '../../shared/protocol/reviewPanelProtocol';
 
 type FileVersion = { index: number; before: string; after: string };
 type VersionResult = FileVersion | { index: number; unavailableReason: 'too-large' } | undefined;
@@ -14,19 +14,21 @@ type VersionResult = FileVersion | { index: number; unavailableReason: 'too-larg
 export async function recordedFileDiffs(
   source: ReviewContentSource, scope: ActiveScope, path: string,
   entries: NonNullable<ActiveScope['recordedOperations']>, budget: number, visibleCount: number,
-  toolUseId?: string,
-): Promise<{ patches: ReadonlyMap<number, string>; selectedIndex: number; unavailableReason?: 'too-large' | 'unavailable' }> {
+  toolUseId?: string, fullContext = true,
+): Promise<{ syntaxSource?: ReviewSyntaxSource; patches: ReadonlyMap<number, string>; selectedIndex: number; unavailableReason?: 'too-large' | 'unavailable' }> {
   const patches = new Map<number, string>();
   const selectedIndex = selectedOperation(entries, toolUseId);
   const version = await rebuildRecordedFileVersion(source, scope, path, entries, toolUseId);
   if (!version || !('before' in version) || version.index >= visibleCount)
     return { patches, selectedIndex, unavailableReason: version && !('before' in version) ? version.unavailableReason : 'unavailable' };
+  const syntaxSource = { before: version.before, after: version.after };
+  if (!fullContext) return { patches, selectedIndex, syntaxSource };
   const context = Math.max(version.before.split('\n').length, version.after.split('\n').length);
   const patch = await diffBytes(Buffer.from(version.before), Buffer.from(version.after), context);
   if (patch.length > budget || patch.split('\n').length > 100_000)
-    return { patches, selectedIndex, unavailableReason: 'too-large' };
+    return { patches, selectedIndex, syntaxSource, unavailableReason: 'too-large' };
   patches.set(version.index, patch);
-  return { patches, selectedIndex };
+  return { patches, selectedIndex, syntaxSource };
 }
 
 /** Retain only the selected pair; long turns do not materialize every full-file diff. */

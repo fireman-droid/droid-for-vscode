@@ -86,6 +86,33 @@ export function ChatPane(props: {
 或 CLI 适配器，也不会执行命令。多分组回复、工具过程、附件和权限 UI 通过
 下列组件及插槽接入，不需要改消息列表／滚动实现。
 
+## 源码高亮
+
+`CodeSyntax`（Markdown、思考及文件内容）与 `DiffView` 共用 Shiki 4.5 的 TextMate
+语法和 Worker 队列。所有打包语言及别名本地可用；按代码块语言标记、文件名、扩展名或
+shebang 选择语法，未知语言保持纯文本。终端日志与命令参数不做源码语言猜测。
+颜色输出复用包内语义样式，随 `UiRoot` 主题变化。
+
+部署 `dist/syntax/syntaxWorker.js` 为本地静态资源，然后提供稳定的 Worker 工厂：
+
+```tsx
+const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
+
+<UiRoot environment={{
+  assistantName: 'Assistant',
+  copyText: text => navigator.clipboard.writeText(text),
+  createSyntaxWorker,
+}}>{children}</UiRoot>
+```
+
+资源路径由接入项目决定；没有配置工厂时，组件保留完整纯文本。每个工厂复用一个 Worker；
+解析在后台执行，流式代码按 150ms 采样，新文字即时显示。单个源码最多 2 MiB 字符单元，
+单行达到 10,000 字符时保持纯文本；20 秒超时会终止该 Worker 并反馈错误。
+
+`DiffView` 可接收 `source={{ before, after }}`，对应这个补丁的准确版本。高亮从文件头
+保留语法状态，只有内容和行号匹配的行才使用结果；未提供版本时按各侧连续片段解析，
+遇到省略区域重新开始，无法还原片段外的注释或内嵌语言上下文。
+
 ## 接口边界
 
 | 界面 | 公共入口／数据 |

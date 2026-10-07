@@ -1,19 +1,16 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
-import { highlightCode } from '../markdown/highlightCode';
-import { codeLanguageForPath } from '../markdown/codeLanguages';
+import { useDiffSyntax } from '../syntax/diffSyntax';
+import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
 export { findDiffChange } from './diffNavigation';
 
-const Code = memo(function Code({ text, language, changes }: { text: string; language?: string; changes?: () => readonly WordRange[] | undefined }) {
-  // Minified/generated lines remain complete without spending a frame on a
-  // syntax grammar for thousands of characters in one line.
+const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
   const html = useMemo(() => {
-    const highlighted = language && text.length <= 2_000 ? highlightCode(text, { language, detect: false }) : null;
     const ranges = changes?.();
-    return ranges?.length ? emphasizeWordRanges(highlighted ?? escapeDiffText(text), ranges) : highlighted;
-  }, [text, language, changes]);
+    return ranges?.length ? emphasizeWordRanges(highlighted ?? escapeDiffText(text), ranges) : highlighted ?? null;
+  }, [text, highlighted, changes]);
   return html === null ? <code>{text || ' '}</code> : <code dangerouslySetInnerHTML={{ __html: html || ' ' }} />;
 });
 export interface DiffRow { left: InlineDiffLine | null; right: InlineDiffLine | null; header?: string }
@@ -54,22 +51,22 @@ function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefine
   return blocks;
 }
 type WordDiffRanges = ReturnType<typeof wordDiffRanges>;
-function SplitRow({ row, language, words }: { row: DiffRow; language?: string; words: WordDiffRanges }) {
+function SplitRow({ row, syntax, words }: { row: DiffRow; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
   return <div className="review-split-row" data-diff-before={row.left?.before} data-diff-after={row.right?.after}>{(['left', 'right'] as const).map((side) => {
     const line = row[side];
     return <div key={side} data-side={side} className={`review-diff-cell ${line ? `diff-${line.kind}` : 'diff-empty'}`}>
       <span className="diff-number" aria-hidden>{line && (side === 'left' ? line.before : line.after)}</span>
       <span className="diff-sign" aria-hidden>{line?.kind === 'remove' ? '−' : line?.kind === 'add' ? '+' : ''}</span>
-      <div className="review-diff-code">{line ? <Code text={line.text} language={language} changes={words.get(line)} /> : null}</div>
+      <div className="review-diff-code">{line ? <Code text={line.text} highlighted={syntax.html(line, side === 'left' ? 'before' : 'after')} changes={words.get(line)} /> : null}</div>
     </div>;
   })}</div>;
 }
-function UnifiedRow({ line, language, words }: { line: InlineDiffLine; language?: string; words: WordDiffRanges }) {
+function UnifiedRow({ line, syntax, words }: { line: InlineDiffLine; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
   return <div className={`review-unified-row diff-${line.kind}`} data-diff-before={line.before} data-diff-after={line.after}>
     <span className="diff-number" aria-hidden>{line.before}</span>
     <span className="diff-number" aria-hidden>{line.after}</span>
     <span className="diff-sign" aria-hidden>{line.kind === 'remove' ? '−' : line.kind === 'add' ? '+' : ''}</span>
-    <Code text={line.text} language={language} changes={words.get(line)} />
+    <Code text={line.text} highlighted={syntax.html(line, line.kind === 'remove' ? 'before' : 'after')} changes={words.get(line)} />
   </div>;
 }
 
@@ -119,8 +116,8 @@ function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivEleme
     </div>
   </div>)}</div>;
 }
-export const DiffView = memo(function DiffView({ patch, path, split = false, limit }: {
-  patch: string; path: string; split?: boolean; limit?: number;
+export const DiffView = memo(function DiffView({ patch, path, split = false, limit, source }: {
+  patch: string; path: string; split?: boolean; limit?: number; source?: DiffSyntaxSource;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
@@ -141,17 +138,18 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   }, [lines]);
   const defer = lines.length > 128;
   const observe = useDeferredDiff(root, defer);
-  const language = codeLanguageForPath(path);
+  const syntax = useDiffSyntax(lines, path, source);
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
     role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
+    {syntax.error ? <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
           {() => block.rows.map((row, index) => split
-            ? <SplitRow key={index} row={row as DiffRow} language={language} words={words} />
-            : <UnifiedRow key={index} line={row as InlineDiffLine} language={language} words={words} />)}
+            ? <SplitRow key={index} row={row as DiffRow} syntax={syntax} words={words} />
+            : <UnifiedRow key={index} line={row as InlineDiffLine} syntax={syntax} words={words} />)}
         </DeferredDiffChunk>)}
     </div>
     {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}

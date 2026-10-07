@@ -39,9 +39,9 @@ function SavedEdit({ entry, index, path, split, fullContext, showHeader = false,
   return <section className="review-recorded-patch">
     {showHeader ? <header><span className="review-operation-number">Edit {index + 1}</span><strong>{operationName(entry)}</strong><OperationStats entry={entry} /></header> : null}
     {entry.message && !(fullContext && entry.fullPatch !== undefined) ? <p className="review-recorded-note">{entry.message}</p> : null}
-    {fullContext && entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} />
+    {fullContext && entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} source={entry.syntaxSource} />
       : entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
-      : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} />
+      : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} source={entry.syntaxSource} />
       : entry.bodyRef ? <p className="review-recorded-note" role="status">{showHeader ? 'Select this edit from History to read its saved content.' : loading ? 'Reading saved edit…' : 'Saved content is not loaded. Retry loading this edit.'}</p>
       : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>No saved text for this operation</strong><p>The operation result is retained; its code changes are unavailable.</p></div></div>}
   </section>;

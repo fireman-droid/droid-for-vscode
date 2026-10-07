@@ -90,7 +90,7 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
         : recordedEntries ? <RecordedFileReview entries={recordedEntries} content={recordedContent} path={entry.path}
           split={split} toolbarTarget={toolbar} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}
           selectedToolUseId={read.toolUseId} onSelectEdit={toolUseId => flow.selectRecordedEdit(toolUseId, entry.path)} />
-        : patch && patch !== '@@' ? <DiffView patch={patch} path={entry.path} split={split} />
+        : patch && patch !== '@@' ? <DiffView patch={patch} path={entry.path} split={split} source={file?.syntaxSource} />
         : operationFile?.contentRestricted ? null
         : <p className="review-empty">{operationFile ? `File ${operationFile.kind}. Text changes were not recorded.`
           : review?.scopeKind === 'operations' ? 'No text Diff evidence is available.' : 'No net text changes.'}</p>}

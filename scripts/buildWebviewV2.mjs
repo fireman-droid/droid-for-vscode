@@ -1,11 +1,12 @@
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createThirdPartyNotices } from '../packages/chat-ui/scripts/thirdPartyNotices.mjs';
 import { createMarkdownWorkerBuild } from '../packages/chat-ui/scripts/markdownWorkerBuild.mjs';
+import { createSyntaxWorkerBuild } from '../packages/chat-ui/scripts/syntaxWorkerBuild.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(repository, 'dist', process.argv.includes('--production') ? 'webview' : 'webview-v2');
@@ -96,4 +97,7 @@ for (const [entryPoint, filename] of [
   if (filename !== 'mermaid' && !usesChatUi) throw new Error(`Production view does not consume chat-ui: ${filename}`);
 }
 await markdownWorker.addNotices(notices);
+const syntaxWorker = createSyntaxWorkerBuild();
+await writeFile(path.join(output, 'syntax.js'), await syntaxWorker.webviewAsset());
+await syntaxWorker.addNotices(notices);
 await notices.write(path.join(output, 'THIRD_PARTY_LICENSES.txt'));

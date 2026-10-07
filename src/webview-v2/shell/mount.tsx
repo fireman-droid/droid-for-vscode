@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { Button } from '../ui/button';
 import { PortalContainerProvider, TooltipProvider } from '../ui/overlays';
 import { applyBootTheme } from './theme';
+import { createSyntaxWorker } from './syntaxWorker';
 
 class RenderBoundary extends Component<
   { readonly children: ReactNode; readonly report: (message: string) => void },
@@ -40,7 +41,7 @@ export function mountWebview(children: ReactNode, report: (message: string) => v
   createRoot(element).render(
     <RenderBoundary report={report}>
       <PortalContainerProvider container={element}>
-        <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText }}><TooltipProvider delayDuration={400}>{children}</TooltipProvider></UiEnvironmentProvider>
+        <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText, createSyntaxWorker }}><TooltipProvider delayDuration={400}>{children}</TooltipProvider></UiEnvironmentProvider>
       </PortalContainerProvider>
     </RenderBoundary>,
   );

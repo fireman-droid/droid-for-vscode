@@ -9,6 +9,26 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 统一源码高亮（2026-10-07）
+
+- Review 的 Unified／Split、聊天内 Diff、保存的文件版本、工具源码预览和 Markdown
+  代码块共用 Shiki 4.5 / TextMate 与后台 Worker。语法库作为本地独立资源延迟加载，
+  语言依据显式标记、文件名／扩展名或 shebang；未知语言保持纯文本，不处理普通聊天
+  或终端日志。既有主题、Diff 背景、词级变化强调和布局不变。
+- 根因修复包含上下文：Review 从准确比较版本恢复 HTML／Vue 内嵌语法、跨行注释和
+  字符串状态；修改前后分开解析，回传行与显示内容核对后使用。仅有历史片段时按连续
+  区间解析，不用当前文件补历史，也不能保证恢复片段之外的语法状态。
+- 包含 Shiki 的 242 种打包语法及别名；任意 JavaScript 字符串不会自动变成 GLSL，只有对应语法支持
+  的内嵌形式或显式 GLSL 源码才能按 GLSL 解析。每份源码最多 2 MiB 字符单元，超长行
+  保持纯文本，Worker 20 秒超时反馈并终止。流式新文字不等待高亮结果。
+- 用户本轮只授权类型检查、构建和安装；未新增、修改或运行测试、浏览器验收或截图。
+  `pnpm run package:vsix` 通过（含 typecheck、lint:budgets、公共包和生产构建），
+  `pnpm run verify:vsix` 校验 167 条目通过；包大小 11.34 MB，语法资源约 9 MB 延迟加载。
+  已全局安装 Microsoft VS Code，扩展入口、五个页面 JS、语法资源和 CSS 共 8 项哈希
+  与构建一致。Reload Window 后生效，真实视觉与运行时行为仍待人工验收。
+- 类型检查首次发现可空结果访问，以及接入时误传到 SavedEdit 的属性，已修复并通过
+  后续完整构建；没有把既有 Review 用例通过记录当作本轮语法行为验证。
+
 ## Review 功能自测（2026-10-07）
 
 - 按用户明确授权完成 Review 范围内验证，修复 Find file 菜单关闭时焦点被抢回的问题，

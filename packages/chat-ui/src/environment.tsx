@@ -1,8 +1,10 @@
 import { createContext, useContext, type ReactNode } from 'react';
+import type { SyntaxWorkerFactory } from './syntax/syntaxProtocol';
 
 export interface UiEnvironment {
   readonly assistantName: string;
   readonly copyText: (text: string) => Promise<void>;
+  readonly createSyntaxWorker?: SyntaxWorkerFactory;
 }
 
 const Environment = createContext<UiEnvironment>({
