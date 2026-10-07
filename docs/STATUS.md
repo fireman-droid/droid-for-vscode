@@ -17,6 +17,14 @@
 - typecheck、lint:budgets、生产构建和 VSIX 校验通过，已安装到 Microsoft VS Code；安装产物哈希一致。
 - 未新增、修改或运行测试及浏览器自动化；实际视觉由 VS Code Reload Window 后人工验收。
 
+## Plan 选区菜单（2026-10-07）
+
+- 问题卡和工具详情中的 Plan 步骤仍可拖选及使用 Ctrl+C；选区位于或跨越 Plan 时，
+  不再弹出 Copy／Add to Chat／By the Way 浮条，也不能通过已出现的浮条引用 Plan。
+- 只过滤引用菜单，保留原有的选区滚动保护、虚拟列表保留和普通消息／代码的引用能力。
+- typecheck、lint:budgets、生产构建和 VSIX 校验通过，已安装到 Microsoft VS Code；安装产物哈希一致。
+- 未新增、修改或运行测试及浏览器自动化；实际交互由 VS Code Reload Window 后人工验收。
+
 ## 普通子代理只读与任务卡片（2026-10-07）
 
 - 普通 Task 的正文卡片和父聊天 Agents 列表统一打开只读 Session Viewer，不再进入带输入框的

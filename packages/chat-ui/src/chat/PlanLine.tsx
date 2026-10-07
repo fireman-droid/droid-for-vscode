@@ -19,7 +19,7 @@ export function PlanLine({ anchor, running, override, onToggle }: {
   const title = anchor.allCompleted ? `Completed ${anchor.totalCount} ${anchor.totalCount === 1 ? 'step' : 'steps'}` : current;
   const progress = `${anchor.completedCount} of ${anchor.totalCount} steps completed`;
   return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild>
-    <section aria-label={`Task plan, ${progress}`} className="dvx-plan" data-live={live} data-complete={anchor.allCompleted}>
+    <section aria-label={`Task plan, ${progress}`} data-transcript-quote-exclude="" className="dvx-plan" data-live={live} data-complete={anchor.allCompleted}>
       <CollapsibleTrigger asChild>
         <Button variant="plain" size="none" className="dvx-plan-trigger" aria-controls={id}
           aria-label={`${expanded ? 'Hide' : 'Show'} plan steps: ${title}. ${progress}`} title={title}>
@@ -37,7 +37,7 @@ export function PlanLine({ anchor, running, override, onToggle }: {
 }
 
 export function PlanSteps({ steps }: { readonly steps: readonly PlanStep[] }) {
-  return <ol className="dvx-plan-steps" aria-label="Plan steps">
+  return <ol className="dvx-plan-steps" aria-label="Plan steps" data-transcript-quote-exclude="">
     {steps.map((step, index) => <li key={`${index}:${step.text}`} className="dvx-plan-step" data-status={step.status}
       aria-current={step.status === 'in_progress' ? 'step' : undefined}>
       <span aria-hidden="true" className="dvx-plan-step-marker"><Circle /><Check /></span>

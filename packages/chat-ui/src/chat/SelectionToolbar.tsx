@@ -5,6 +5,15 @@ import { usePortalContainer } from '../ui/overlays';
 import { useUiEnvironment } from '../environment';
 import { readTranscriptSelection } from './transcriptSelection';
 
+/** Plan text keeps native selection and scroll protection without quote actions. */
+function readQuoteSelection(root: HTMLElement | null): Selection | null {
+  const selection = readTranscriptSelection(root);
+  if (!selection || !root) return null;
+  const range = selection.getRangeAt(0);
+  return Array.from(root.querySelectorAll('[data-transcript-quote-exclude]'))
+    .some((element) => range.intersectsNode(element)) ? null : selection;
+}
+
 export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, onBtwQuote }: {
   readonly viewport: RefObject<HTMLElement | null>;
   readonly selectionRoot?: RefObject<HTMLElement | null>;
@@ -22,7 +31,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     let dragging = false;
     const read = () => {
       if (dragging) return;
-      const selected = readTranscriptSelection(selectionRoot.current);
+      const selected = readQuoteSelection(selectionRoot.current);
       const root = viewport.current;
       const text = selected?.toString() ?? '';
       if (!root || !selected || !text.trim()) {
@@ -71,7 +80,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
   }, [viewport, selectionRoot, onBtwQuote]);
   if (!selection) return null;
   const choose = (action: (text: string) => void) => {
-    const current = readTranscriptSelection(selectionRoot.current);
+    const current = readQuoteSelection(selectionRoot.current);
     if (!current || current.toString() !== selection.text) { setSelection(null); return; }
     action(current.toString());
     window.getSelection()?.removeAllRanges();
@@ -81,7 +90,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none gap-1 rounded border border-[var(--panel-edge)] bg-popover p-1 shadow-sm"
     style={{ left: selection.left, top: selection.top }} onMouseDown={(event) => event.preventDefault()}>
     <Button size="sm" variant="ghost" onClick={() => {
-      const current = readTranscriptSelection(selectionRoot.current);
+      const current = readQuoteSelection(selectionRoot.current);
       if (!current || current.toString() !== selection.text) { setSelection(null); return; }
       void copyText(selection.text).then(() => setCopyState('copied'), () => setCopyState('error'));
     }}>{copyState === 'copied' ? 'Copied' : 'Copy'}</Button>
