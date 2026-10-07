@@ -378,6 +378,7 @@ describe('ReviewCoordinator reload recovery', () => {
       { path: 'old.txt', additions: 1, deletions: 0 },
       { path: 'latest.txt', additions: null, deletions: null },
     ]);
+    await coordinator.replay('session-1');
     expect(publish).toHaveBeenLastCalledWith(
       expect.objectContaining({
         type: 'review.state',
@@ -813,6 +814,7 @@ describe('ReviewCoordinator reload recovery', () => {
     await vi.waitFor(() => {
       expect(readWorkspaceFiles).toHaveBeenCalledOnce();
     });
+    publish.mockClear();
     coordinator.dispose();
     releaseLoad?.({ baseline: 'head-baseline', files });
     await expect(running).resolves.toBeUndefined();

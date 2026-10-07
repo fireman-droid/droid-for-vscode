@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import './reviewBrowserTestSetup';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { ReviewApp } from './ReviewApp';
@@ -34,29 +35,33 @@ it('keeps navigation inside Review, rejects stale file responses and supports ra
   send(target);
   send({ type: 'review.state', sequence: 1, state: scope });
   const first = port.postMessage.mock.calls.find(([entry]) => entry.type === 'reviewPanel.readFile')![0];
-  fireEvent.click(screen.getByRole('button', { name: /b.ts/ }));
+  await user.click(screen.getByRole('button', { name: 'Show files' }));
+  fireEvent.click(within(screen.getByRole('complementary', { name: 'Changed files' })).getByRole('button', { name: /^b.ts,/ }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.selectFile', path: 'b.ts' }));
   send({ type: 'review.state', sequence: 2, state: { ...scope, currentIndex: 1 } });
   const second = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'reviewPanel.readFile').at(-1)![0];
   send({ type: 'reviewPanel.file', requestId: second.requestId, reviewScopeId: scope.reviewScopeId,
     path: 'b.ts', version: 'b.ts', patch: '@@ -1 +1 @@\n-old\n+selected', truncated: false, error: null });
   send({ type: 'reviewPanel.file', requestId: first.requestId, reviewScopeId: scope.reviewScopeId,
-    path: 'a.ts', version: 'a.ts', patch: '@@ -1 +1 @@\n-old\n+obsolete', truncated: false, error: null });
+    path: 'a.ts', version: 'a.ts', patch: '@@ -1 +1 @@\n-old\n+first-file', truncated: false, error: null });
   expect(screen.getByText('selected')).toBeDefined();
-  expect(screen.queryByText('obsolete')).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Mark viewed' }));
+  expect(screen.getByRole('region', { name: 'Diff for a.ts' }).textContent).toContain('first-file');
+  expect(screen.getByRole('region', { name: 'Diff for b.ts' }).textContent).not.toContain('first-file');
+  await user.click(screen.getByRole('button', { name: 'Mark b.ts viewed' }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.markReviewed', path: 'b.ts', version: 'b.ts', advance: false }));
-  await user.click(screen.getByRole('combobox', { name: 'Comparison scope' }));
-  await user.click(screen.getByRole('option', { name: 'Staged', exact: true }));
+  await user.click(screen.getByRole('button', { name: /^Uncommitted/ }));
+  await user.click(screen.getByRole('menuitemradio', { name: 'Staged', exact: true }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'review.open', sessionId: 's1', scopeKind: 'staged', requestId: expect.any(String) }));
   const scopeRequest = port.postMessage.mock.calls.filter(([entry]) => entry.type === 'review.open').at(-1)![0];
   send({ type: 'review.state', sequence: 3, state: scope });
   expect(screen.getByText(/Loading comparison…/)).toBeDefined();
   send({ type: 'review.state', sequence: 4, requestId: scopeRequest.requestId, state: { ...scope, scopeKind: 'staged', reviewScopeId: 'staged1', baseline: 'head:index' } });
-  expect(screen.getByRole('combobox', { name: 'Comparison scope' }).textContent).toBe('Staged');
-  const context = screen.getByRole('button', { name: 'More file actions' });
+  expect(screen.getByRole('button', { name: /^Staged/ })).toBeDefined();
+  send({ type: 'reviewPanel.file', requestId: first.requestId, reviewScopeId: scope.reviewScopeId, path: 'a.ts', version: 'a.ts', patch: '@@ -1 +1 @@\n-old\n+obsolete', truncated: false, error: null });
+  expect(screen.queryByText('obsolete')).toBeNull();
+  const context = screen.getByRole('button', { name: 'Review options' });
   await user.click(context);
-  await user.click(screen.getByRole('menuitem', { name: '20 context lines' }));
+  await user.click(screen.getByRole('menuitemradio', { name: '20 lines' }));
   expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.readFile', context: 20 }));
   await user.click(context);
   await user.keyboard('{Escape}');
@@ -100,7 +105,7 @@ it('offers undo only for AI operations and requires a conflict-free preview for 
   send({ type: 'reviewPanel.file', requestId: selectedRequest.requestId, reviewScopeId: turn.reviewScopeId,
     path: 'a.ts', version: 'a.ts', patch: '', truncated: false, error: null,
     recordedOperations: [{ toolUseId: 'applied', source: 'tool-result', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' }] });
-  await user.click(screen.getByRole('button', { name: 'More file actions' }));
+  await user.click(screen.getByRole('button', { name: 'Actions for a.ts' }));
   await user.click(screen.getByRole('menuitem', { name: 'Undo this file…' }));
   expect(port.postMessage).toHaveBeenCalledWith({
     type: 'review.restorePreview', sessionId: 's1', reviewScopeId: 'scope1',
@@ -109,9 +114,9 @@ it('offers undo only for AI operations and requires a conflict-free preview for 
   const preview = { type: 'review.restorePreview', sequence: 2, sessionId: 's1', reviewScopeId: 'scope1',
     previewId: 'preview1', target: 'file', restorable: [], conflicted: ['a.ts'], created: [], deleted: [] };
   send(preview);
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm restore' }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm undo' }).disabled).toBe(true);
   send({ ...preview, sequence: 3, restorable: ['a.ts'], conflicted: [] });
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm restore' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm undo' }));
   expect(port.postMessage).toHaveBeenCalledWith({
     type: 'review.restoreFile', sessionId: 's1', reviewScopeId: 'scope1', baseline: 'operations-t1', previewId: 'preview1',
   });
@@ -143,15 +148,31 @@ it('shows historical excerpts with working change navigation instead of inapplic
   for (const name of ['Native Diff', 'Undo file operations…', 'Undo turn operations…', 'Mark & next'])
     expect(screen.queryByRole('button', { name })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Context lines' })).toBeNull();
-  await user.click(screen.getByRole('radio', { name: 'Split view' }));
+  await user.click(screen.getByRole('button', { name: 'Review options' }));
+  await user.click(screen.getByRole('menuitemradio', { name: 'Split', exact: true }));
   const hunk = document.querySelector<HTMLElement>('[data-diff-changes]')!;
   hunk.getBoundingClientRect = () => ({ top: 100, height: 22 } as DOMRect);
   const scroller = hunk.closest<HTMLElement>('.review-code-scroll')!;
   scroller.getBoundingClientRect = () => ({ top: 10 } as DOMRect);
-  scroller.querySelector<HTMLElement>('.review-split-labels')!.getBoundingClientRect = () => ({ height: 32 } as DOMRect);
   scroller.scrollBy = vi.fn();
-  fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
-  expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 58, behavior: 'smooth' });
-  fireEvent.click(screen.getByRole('button', { name: 'Open current file' }));
+  await user.click(screen.getByRole('button', { name: 'Review options' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Next change' }));
+  expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 54, behavior: 'smooth' });
+  fireEvent.click(screen.getByRole('button', { name: 'Open a.ts' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.openPath', path: 'a.ts' });
+});
+
+it('moves keyboard focus to file search after the options menu closes', async () => {
+  const user = userEvent.setup();
+  render(<ReviewApp port={{ postMessage: vi.fn() }} />);
+  send(target);
+  send({ type: 'review.state', sequence: 1, state: scope });
+  for (const query of ['a.ts', 'b.ts']) {
+    await user.click(screen.getByRole('button', { name: 'Review options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Find file…' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Filter files' })));
+    await user.keyboard(query);
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'Filter files' }).value).toBe(query);
+    await user.clear(screen.getByRole('searchbox', { name: 'Filter files' }));
+  }
 });

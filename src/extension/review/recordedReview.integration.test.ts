@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('vscode', () => {
   const disposable = () => ({ dispose: vi.fn() });
@@ -26,17 +29,23 @@ function operation(index: number): RecordedOperation {
       patch: `@@ -1 +1 @@\n-value ${index}\n+value ${index + 1}`,
     }] } };
 }
+const roots: string[] = [];
 const controllers: ReviewCoordinator[] = [];
-afterEach(() => controllers.splice(0).forEach(controller => controller.dispose()));
+afterEach(async () => {
+  controllers.splice(0).forEach(controller => controller.dispose());
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
 async function open(before: string | undefined, operations: RecordedOperation[], prior: RecordedOperation[] = [], readOperationBody?: ReviewContentSource['readOperationBody']) {
+  const root = await mkdtemp(join(tmpdir(), 'dvx-recorded-review-'));
+  roots.push(root);
   const states: Extract<ReviewHostMessage, { type: 'review.state' }>[] = [];
   const openDiff = vi.fn<FileDiffOpener['openDiff']>(async () => 'opened-diff');
   const coordinator = new ReviewCoordinator({
     ...(readOperationBody === undefined ? {} : { readOperationBody }),
-    getWorkspaceRoot: () => 'Z:/not-read-for-recorded-review',
+    getWorkspaceRoot: () => root,
     snapshots: { readTreeBytes: async (_scope: unknown, _path: string, phase: string) => phase === 'before' && before !== undefined ? Buffer.from(before) : undefined } as unknown as TurnSnapshotStore,
     fileDiff: { openDiff }, persistence: { get: () => undefined, update: async () => {} },
-    storageDir: 'Z:/not-written-for-recorded-review',
+    storageDir: join(root, 'storage'),
     publish: message => { if (message.type === 'review.state') states.push(message as Extract<ReviewHostMessage, { type: 'review.state' }>); },
     readTurnOperations: () => operations, readCanonicalTurnFiles: () => undefined,
     readPriorFileOperations: () => loadOperationReviewScope({ type: 'review.open', sessionId: 'session', scopeKind: 'operations', turnId: 'prior' }, prior, new Map()).recordedOperations ?? [],

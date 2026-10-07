@@ -9,6 +9,26 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Review 功能自测（2026-10-07）
+
+- 按用户明确授权完成 Review 范围内验证，修复 Find file 菜单关闭时焦点被抢回的问题，
+  并去掉二进制／非文本文件重复显示的错误正文；保留失败提示与 Retry。
+- 155 项相关用例通过：129 项 Review／撤销／UI 用例、21 项模拟 VS Code Git API 的
+  工作流用例、2 项真实 Git 暂存对象用例及 3 项真实临时仓库提交用例。后者验证按文件
+  提交、仅提交暂存内容及 Hook 拒绝；未选文件和失败后的工作内容保留。
+- 同步旧用例的连续多文件入口和异步加载时序，补充菜单关闭后的搜索焦点、运行时断线
+  仍可本地 Review、新文件精确撤销及持久化撤销回执防重复执行的行为验证。
+- 隔离浏览器加载真实生产 Review bundle，检查六种范围、分支、上下文、布局、文件树、
+  搜索、折叠、导航、已查看、历史编辑、撤销预览／冲突、提交成功／失败、刷新及目标失效。
+  Auto／Dark／Light 与弹层颜色一致；4000 行 Diff 可到达首尾，离屏代码保持分块加载。
+- 浏览器宿主为模拟服务；临时文件／Git 集成使用真实磁盘与 Git。Native Diff、打开文件
+  和 Agent Review 已验证请求分派，未操作真实 VS Code 编辑器或调用模型；真实高速滚动
+  的短暂闪帧与 VS Code 内最终视觉仍需现场验收。未新增 Push／Create PR 等菜单能力。
+- `pnpm run package:vsix`（含 typecheck、lint:budgets、公共包及生产构建）和
+  `pnpm run verify:vsix` 通过，校验 166 条目；已全局安装 Microsoft VS Code，Review
+  JS 哈希一致。构建首次在 PATH 的 Node 22 下复制 WASM 失败，改用本机 Node 26 后通过，
+  未改构建脚本。Reload Window 后生效，未替换公开 Release 附件。
+
 ## Review 主题一致性（2026-10-06）
 
 - 修复 Review 固定黑色画布与根节点主题菜单混用的问题；移除工作台局部覆盖的背景、

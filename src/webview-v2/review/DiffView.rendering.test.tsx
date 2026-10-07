@@ -43,8 +43,8 @@ it('keeps every change target available before its content is mounted', () => {
   expect(screen.queryByText('last-after')).toBeNull();
   const observer = observers[0]!;
   observer.reveal([[...observer.elements].at(-1)!]);
-  expect(screen.getByText('last-before')).toBeDefined();
-  expect(screen.getByText('last-after')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'last-before')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'last-after')).toBeDefined();
 });
 
 it('navigates separate edits within the same deferred block by their actual line offsets', () => {
@@ -84,10 +84,10 @@ it('preserves both sides and tail content when changing to split view', () => {
   observers[0]!.reveal();
   view.rerender(<DiffView patch={edit} path="change.txt" split />);
   observers[0]!.reveal();
-  expect(screen.getByText('before-0')).toBeDefined();
-  expect(screen.getByText('after-0')).toBeDefined();
-  expect(screen.getByText('before-149')).toBeDefined();
-  expect(screen.getByText('after-149')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'before-0')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'after-0')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'before-149')).toBeDefined();
+  expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'after-149')).toBeDefined();
   expect(document.querySelectorAll('code')).toHaveLength(300);
 });
 

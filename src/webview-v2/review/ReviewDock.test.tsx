@@ -56,7 +56,7 @@ it('V2 counts confirmed AI files and opens their operation review independently 
       ] } },
   ], review: { ...initialAssistantWebviewState.review, scope: historicalReview } });
   render(<V2ReviewDockSlot store={store} vscode={{ postMessage }} />);
-  expect(screen.getByText('1 directly confirmed file')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Open Review' }).title).toBe('1 directly confirmed file in this turn');
   await userEvent.setup().click(screen.getByRole('button', { name: 'Open Review' }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({
     type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-latest',

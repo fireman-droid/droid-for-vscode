@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronDown, GitCompare, MoreHorizontal, PanelRight, RefreshCw, Search } from 'lucide-react';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
@@ -14,6 +15,7 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
   onFind(): void; onCollapse(): void; allCollapsed: boolean; onHunk(direction: number): void; onCommit(): void;
 }) {
   const { review, target, scopePending } = flow;
+  const findOnClose = useRef(false);
   const valid = target?.valid === true;
   const files = review?.files ?? [];
   const counts = files.length > 0 && files.every(file => file.additions !== null && file.deletions !== null);
@@ -40,13 +42,18 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
     </Select> : null}
     <span className="review-top-spacer" />
     <DropdownMenu><DropdownMenuTrigger asChild><ReviewIconButton variant="ghost" size="icon-sm" aria-label="Review options"><MoreHorizontal /></ReviewIconButton></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="review-menu review-options-menu">
+      <DropdownMenuContent align="end" className="review-menu review-options-menu" onCloseAutoFocus={event => {
+        if (!findOnClose.current) return;
+        findOnClose.current = false;
+        event.preventDefault();
+        onFind();
+      }}>
         <p className="review-menu-label">Layout</p>
         <DropdownMenuRadioGroup value={split ? 'split' : 'unified'} onValueChange={value => onSplit(value === 'split')}>
           {['unified', 'split'].map(value => <DropdownMenuRadioItem key={value} value={value}>{value === 'split' ? 'Split' : 'Unified'}<DropdownMenuItemIndicator className="review-menu-check"><Check /></DropdownMenuItemIndicator></DropdownMenuRadioItem>)}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onFind}><Search />Find file…</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { findOnClose.current = true; }}><Search />Find file…</DropdownMenuItem>
         <DropdownMenuItem onSelect={onCollapse}>{allCollapsed ? 'Expand all files' : 'Collapse all files'}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onHunk(-1)}><ArrowUp />Previous change</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onHunk(1)}><ArrowDown />Next change</DropdownMenuItem>

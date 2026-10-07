@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import './reviewBrowserTestSetup';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -26,14 +27,14 @@ beforeEach(() => {
   } });
 });
 afterEach(() => {
-  cleanup(); vi.restoreAllMocks();
+  cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   if (previousScrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', previousScrollTo);
   else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
 });
 
 it('keeps every long-list file reachable by End, arrows, Tab and activation', async () => {
   const user = userEvent.setup(), onSelect = vi.fn();
-  render(<ReviewFiles files={files} selected={files[0]!.path} onSelect={onSelect} />);
+  render(<ReviewFiles side="right" files={files} selected={files[0]!.path} onSelect={onSelect} />);
   const first = await screen.findByRole('button', { name: /file-0000.ts/ });
   expect(screen.queryByRole('button', { name: /file-0999.ts/ })).toBeNull();
   act(() => first.focus());
@@ -57,11 +58,11 @@ it('keeps every long-list file reachable by End, arrows, Tab and activation', as
 
 it('reveals externally selected files and recovers the viewport after filtering and collapse', async () => {
   const onSelect = vi.fn();
-  const view = render(<ReviewFiles files={files} selected={files[999]!.path} onSelect={onSelect} />);
+  const view = render(<ReviewFiles side="right" files={files} selected={files[999]!.path} onSelect={onSelect} />);
   expect((await screen.findByRole('button', { name: /file-0999.ts/ })).getAttribute('aria-current')).toBe('true');
-  view.rerender(<ReviewFiles files={files} selected={files[0]!.path} onSelect={onSelect} />);
+  view.rerender(<ReviewFiles side="right" files={files} selected={files[0]!.path} onSelect={onSelect} />);
   expect((await screen.findByRole('button', { name: /file-0000.ts/ })).getAttribute('aria-current')).toBe('true');
-  view.rerender(<ReviewFiles files={files} selected={files[999]!.path} onSelect={onSelect} />);
+  view.rerender(<ReviewFiles side="right" files={files} selected={files[999]!.path} onSelect={onSelect} />);
   const last = await screen.findByRole('button', { name: /file-0999.ts/ });
   expect(last.getAttribute('aria-current')).toBe('true');
   const viewport = view.container.querySelector<HTMLElement>('.review-file-list')!;
@@ -69,9 +70,9 @@ it('reveals externally selected files and recovers the viewport after filtering 
   fireEvent.change(screen.getByRole('searchbox', { name: 'Filter files' }), { target: { value: 'file-0000' } });
   expect(await screen.findByRole('button', { name: /file-0000.ts/ })).toBeDefined();
   expect(viewport.scrollTop).toBe(0);
-  fireEvent.click(screen.getByRole('button', { name: 'src', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse src', exact: true }));
   expect(screen.queryByRole('button', { name: /file-0000.ts/ })).toBeNull();
-  view.rerender(<ReviewFiles files={files} selected={files[0]!.path} onSelect={onSelect} />);
+  view.rerender(<ReviewFiles side="right" files={files} selected={files[0]!.path} onSelect={onSelect} />);
   expect((await screen.findByRole('button', { name: /file-0000.ts/ })).getAttribute('aria-current')).toBe('true');
   fireEvent.change(screen.getByRole('searchbox', { name: 'Filter files' }), { target: { value: '' } });
   expect(await screen.findByRole('button', { name: /file-0000.ts/ })).toBeDefined();

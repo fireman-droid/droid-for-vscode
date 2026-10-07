@@ -86,7 +86,7 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
       {read.error && !operation ? <div className="review-notice review-error" role="status">{read.error}{file && !file.error ? ' Showing the previous diff.' : ''}
         <Button variant="ghost" size="sm" onClick={() => flow.retryFile(entry.path)}>Retry</Button></div> : null}
       {!operation && !file ? <p className="review-file-placeholder" role="status">{read.error ? 'Diff unavailable.' : near ? 'Reading Diff…' : 'Diff loads as you scroll.'}</p>
-        : !operation && file?.error ? <p className="review-empty">{file.error}</p>
+        : !operation && file?.error ? read.error ? null : <p className="review-empty">{file.error}</p>
         : recordedEntries ? <RecordedFileReview entries={recordedEntries} content={recordedContent} path={entry.path}
           split={split} toolbarTarget={toolbar} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}
           selectedToolUseId={read.toolUseId} onSelectEdit={toolUseId => flow.selectRecordedEdit(toolUseId, entry.path)} />

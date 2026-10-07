@@ -214,15 +214,15 @@ it.each(['t1', 't2'])('cancels an earlier open even when reopening %s before its
   current.panel.dispose();
 });
 
-it.each(['disconnect', 'scope-switch', 'close'] as const)('cancels a pending undo on %s', async (reason) => {
+it.each(['session-change', 'scope-switch', 'close'] as const)('cancels a pending undo on %s', async (reason) => {
   const current = intentFixture();
   current.panel.open({ type: 'review.panel.open', sessionId: 's1', scopeKind: 'operations', turnId: 't1', action: 'undo' });
   fake.receive({ type: 'reviewPanel.ready' });
   await current.release(0);
-  if (reason === 'disconnect') {
-    current.state.connection.status = 'disconnected';
+  if (reason === 'session-change') {
+    current.state.sessionId = 'another-session';
     current.emit({ type: 'host.snapshot' });
-    current.state.connection.status = 'connected';
+    current.state.sessionId = 's1';
     current.emit({ type: 'host.snapshot' });
   } else if (reason === 'scope-switch') fake.receive({ type: 'review.open', sessionId: 's1', scopeKind: 'workspace' });
   else current.panel.dispose();
@@ -241,5 +241,18 @@ it('rejects undo while delegated operations are still writing and does not retry
   expect(current.handleMessage.mock.calls.map(([message]) => message.type)).toEqual(['review.open']);
   expect(fake.panel.webview.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.error',
     message: 'Wait for this turn and its delegated operations to finish before undoing changes.' });
+  current.panel.dispose();
+});
+
+it('keeps local review available through a runtime disconnect in the same workspace', async () => {
+  const current = intentFixture();
+  current.panel.open({ type: 'review.panel.open', sessionId: 's1', scopeKind: 'operations', turnId: 't1', action: 'undo' });
+  fake.receive({ type: 'reviewPanel.ready' });
+  await current.release(0);
+  current.state.connection.status = 'disconnected';
+  current.emit({ type: 'host.snapshot' });
+  current.finish(1, operationScope());
+  expect(current.handleMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'review.restorePreview' }));
+  expect(current.handleMessage.mock.calls.some(([message]) => message.type === 'review.restoreTurn')).toBe(false);
   current.panel.dispose();
 });

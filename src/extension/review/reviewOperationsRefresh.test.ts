@@ -109,6 +109,6 @@ it('rejects oversized undo before writing any file or recovery journal', async (
   }));
   expect(await applyOperationUndo('', '', entries, () => true)).toEqual({
     complete: false, written: 0,
-    reason: `Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time. Undo individual files instead.`,
+    reason: `Automatic undo supports up to ${MAX_REVIEW_UNDO_FILES} files at a time.`,
   });
 });
