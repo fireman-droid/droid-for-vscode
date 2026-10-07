@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useProcessDisclosure } from './processPresentation';
 import { Button } from '../ui/button';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
+import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
 export interface ActivityPresentation { readonly running: boolean; readonly action: string; readonly summary?: string; readonly target?: string | null; readonly facts: readonly string[]; readonly failed: boolean }
 export function ActivityGroupView({ messageId, groupId, presentation, children }: {
   readonly messageId: string; readonly groupId: string; readonly presentation: ActivityPresentation;
@@ -23,8 +23,9 @@ export function ActivityGroupView({ messageId, groupId, presentation, children }
       </span>
       {presentation.facts.length ? <span className={`shrink-0 text-[10.5px] ${presentation.failed ? 'text-destructive' : ''}`}>{presentation.facts.join(' · ')}</span> : null}
     </Button></CollapsibleTrigger>
-    <CollapsibleContent id={id} ref={disclosure.contentRef} className="v2-tool-content min-w-0 overflow-hidden">
-      <div className="v2-activity-items min-w-0">{children}</div>
-    </CollapsibleContent>
+    <AnimatedCollapsibleContent id={id} ref={disclosure.contentRef} open={disclosure.expanded} visible={disclosure.visible}
+      className={`transition-[grid-template-rows,opacity] motion-reduce:transition-none ${disclosure.visible ? 'opacity-100' : 'opacity-0'}`}>
+      {disclosure.mounted ? <div className="v2-activity-items min-w-0">{children}</div> : null}
+    </AnimatedCollapsibleContent>
   </Collapsible>;
 }

@@ -1,10 +1,17 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { ProcessPresentationProvider } from './processPresentation';
 import { useTranscriptScroll } from './useTranscriptScroll';
 import { Button } from '../ui/button';
 import type { TranscriptMessage } from './TranscriptView';
+// Keep the message subtree stable when only its virtual row size changes.
+const ReadOnlyMessageContent = memo(function ReadOnlyMessageContent({ id, renderMessage, stopFollowing }: {
+  readonly id: string; readonly stopFollowing: () => void;
+  readonly renderMessage: (id: string, stopFollowing: () => void) => ReactNode;
+}) {
+  return renderMessage(id, stopFollowing);
+});
 export function ReadOnlyTranscriptView({ messages, truncated = false, renderMessage }: {
   readonly messages: readonly TranscriptMessage[];
   readonly truncated?: boolean;
@@ -49,7 +56,9 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {visible.map((row) => {
               const descriptor = descriptors[row.index];
-              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className={`flow-root ${descriptor.role === 'user' ? 'pb-2' : 'pb-6'}`}>{renderMessage(descriptor.id, scrolling.stopFollowing)}</div>;
+              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className={`flow-root ${descriptor.role === 'user' ? 'pb-2' : 'pb-6'}`}>
+                <ReadOnlyMessageContent id={descriptor.id} renderMessage={renderMessage} stopFollowing={scrolling.stopFollowing} />
+              </div>;
             })}
           </div>
         </ProcessPresentationProvider>

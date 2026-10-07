@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -41,6 +41,13 @@ export interface TranscriptViewProps {
 const PINNED_QUESTION_GAP = 12;
 const DEFAULT_MESSAGE_WINDOW = 60;
 const MESSAGE_WINDOW_STEP = 120;
+// Resizing a virtual turn during disclosure motion must not call the business
+// renderer again. New transcript data still arrives through renderMessage.
+const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, renderMessage, placeholder, placeholderHeight }: MessagePresentation & {
+  readonly id: string; readonly renderMessage: TranscriptViewProps['renderMessage'];
+}) {
+  return renderMessage(id, { placeholder, placeholderHeight });
+});
 export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, onQuote, onBtwQuote, reportLayout, ref }: TranscriptViewProps) {
   const selectionRoot = useRef<HTMLDivElement>(null);
   const selecting = useTranscriptSelection(selectionRoot);
@@ -250,7 +257,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
                 {turns[row.index].messageIds.map((id) => {
                   const message = byId.get(id)!;
                   return <div key={id} className={message.replyEnd ? 'pb-6' : 'pb-2'}>
-                    {renderMessage(id, { placeholder: pinned?.id === id && pinEntered, placeholderHeight: pinnedHeight })}
+                    <TranscriptMessageContent id={id} renderMessage={renderMessage} placeholder={pinned?.id === id && pinEntered} placeholderHeight={pinnedHeight} />
                   </div>;
                 })}
               </div>
@@ -263,7 +270,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       {pinned === null ? null : <>
         <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, transform: `translateY(${push}px)`, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
           <div ref={pin} data-pinned-question={pinned.id} data-selection-turn={candidate?.index} className="pointer-events-auto max-h-full overflow-y-auto bg-background">
-            {renderMessage(pinned.id, { placeholder: false, placeholderHeight: 0 })}
+            <TranscriptMessageContent id={pinned.id} renderMessage={renderMessage} placeholder={false} placeholderHeight={0} />
           </div>
         </div>
         <div data-pinned-top-mask="" aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background" style={{ height: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} />

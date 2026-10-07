@@ -82,6 +82,7 @@ export function useProcessDisclosure(
   preserveExpanded = false,
 ) {
   const presentation = useContext(ProcessPresentationContext);
+  const reducedMotion = useReducedMotion();
   const [override, setOverride] = useState<boolean | null>(
     () =>
       start === undefined ? null : presentation?.choices.get(messageId)?.get(start) ?? null,
@@ -100,8 +101,32 @@ export function useProcessDisclosure(
     presentation.automaticChoices.set(messageId, saved);
   }, [presentation, messageId, start, automaticValue]);
   const expanded = override ?? automatic.current;
+  const [mounted, setMounted] = useState(expanded);
+  const [visible, setVisible] = useState(expanded);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expanded) {
+      setVisible(false);
+      if (reducedMotion) {
+        setMounted(false);
+        return undefined;
+      }
+      const timer = window.setTimeout(() => setMounted(false), 220);
+      return () => window.clearTimeout(timer);
+    }
+    setMounted(true);
+    if (reducedMotion) {
+      setVisible(true);
+      return undefined;
+    }
+    // Newly mounted details need a collapsed layout before their first transition.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setVisible(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [expanded, reducedMotion]);
 
   const toggle = (event?: { readonly detail: number }): void => {
     presentation?.pauseFollowing();
@@ -119,11 +144,11 @@ export function useProcessDisclosure(
       selected.set(start, next);
       choices.set(messageId, selected);
     }
+    if (next) setMounted(true);
+    else setVisible(false);
     setOverride(next);
   };
-  // Content takes its final height immediately so virtual rows are not resized
-  // on every animation frame while the same reply is streaming.
-  return { expanded, mounted: expanded, visible: expanded, toggle, buttonRef, contentRef };
+  return { expanded, mounted, visible, toggle, buttonRef, contentRef };
 }
 
 export function useProcessSelection(
