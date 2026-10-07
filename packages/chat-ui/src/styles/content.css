@@ -14,9 +14,11 @@
     transition: outline-color var(--motion-fast) var(--motion-ease),
       border-color var(--motion-fast) var(--motion-ease);
   }
+  /* Start the hover fade from transparent, not outline:none's current text color. */
+  .v2-media-trigger:not(:focus-visible) { outline: 1px solid transparent; }
   .v2-diagram-trigger { border-color: var(--panel-edge); border-radius: 8px; }
   @media (hover: hover) {
-    .v2-media-trigger:hover:not(:focus-visible) { outline: 1px solid var(--control-border-hover); }
+    .v2-media-trigger:hover:not(:focus-visible) { outline-color: var(--control-border-hover); }
     .v2-diagram-trigger:hover { border-color: var(--control-border-hover); }
   }
   .markdown-content a:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; border-radius: 2px; }

@@ -9,6 +9,15 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 图片 hover 描边闪白（2026-10-07）
+
+- 图片缩略图的非键盘焦点状态使用固定宽度的透明描边，hover 只过渡到主题描边色。
+  避免从 `outline: none` 切换到实线时，颜色动画先显示深色主题下的亮色文字色；
+  移出时也平滑退回透明。键盘焦点提示、图片尺寸和预览行为不变。
+- `pnpm run package:vsix`（含类型检查、文件规模检查与生产构建）以及
+  `pnpm run verify:vsix` 通过；已全局安装 Microsoft VS Code。
+  本轮未新增或运行测试、浏览器自动化或截图，hover 视觉效果在 Reload Window 后人工验收。
+
 ## 暂停底部文件汇总（2026-10-07）
 
 - 按用户要求，ChatApp 暂不挂载输入框上方的 `ComposerChanges` 文件汇总；
