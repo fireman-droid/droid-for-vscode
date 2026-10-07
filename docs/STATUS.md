@@ -9,6 +9,15 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 只读过程条目间距（2026-10-07）
+
+- 只读 Session Viewer 不再给每个助手片段统一添加 24px 底部留白；复用主聊天已有的
+  `replyEnd` 标记，同一回复中的 Read／Activity 等过程片段间留白为 8px，回复结束保留 24px。
+- 复用原有消息分组与虚拟列表测量，保留展开动画、内容和交互。
+- 使用项目指定的 pnpm 10.2.0 完成 `package:vsix`（含 typecheck、lint:budgets 与生产构建）
+  和 `verify:vsix`；已全局安装到 Microsoft VS Code，扩展入口、Viewer 和 CSS 安装哈希一致。
+- 未新增、修改或运行测试及浏览器自动化；实际间距由 VS Code Reload Window 后人工验收。
+
 ## 子代理任务卡透明交互（2026-10-07）
 
 - 普通子代理任务卡及 Agents 列表中的任务行在默认、悬停和按下时均保持透明背景；

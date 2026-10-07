@@ -56,7 +56,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {visible.map((row) => {
               const descriptor = descriptors[row.index];
-              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className={`flow-root ${descriptor.role === 'user' ? 'pb-2' : 'pb-6'}`}>
+              return <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" style={{ '--markdown-row-height': `${row.size}px` } as CSSProperties} className={`flow-root ${descriptor.replyEnd ? 'pb-6' : 'pb-2'}`}>
                 <ReadOnlyMessageContent id={descriptor.id} renderMessage={renderMessage} stopFollowing={scrolling.stopFollowing} />
               </div>;
             })}
