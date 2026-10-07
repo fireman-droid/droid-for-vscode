@@ -15,8 +15,10 @@ import { recordedOperationVersion } from './reviewOperationScope';
 import { MAX_REVIEW_PATCH_CHARS, type ReviewContext, type ReviewPanelFile, type ReviewSyntaxSource } from '../../shared/protocol/reviewPanelProtocol';
 import { recordedFileContent } from './recordedFileContent';
 import { readOperationBody, type OperationBody, type OperationBodyRequest } from '../../runtime/tools/operationBody';
+import { reviewReadKey, type ReviewReadCache } from './reviewReadCache';
 
 export interface ReviewContentSource {
+  readonly contentCache?: ReviewReadCache<{ before: Buffer; after: Buffer }>;
   readonly readOperationBody?: (request: OperationBodyRequest) => Promise<OperationBody | undefined>;
   readonly snapshots: TurnSnapshotStore;
   readonly getWorkspaceRoot: () => string | undefined;
@@ -24,6 +26,15 @@ export interface ReviewContentSource {
   readonly diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
 }
 export async function readReviewContents(source: ReviewContentSource, scope: ActiveScope, path: string, maxBytes = MAX_REVIEW_PATCH_CHARS) {
+  if (!source.contentCache) return readContents(source, scope, path, maxBytes);
+  const key = await reviewReadKey(source, scope, path);
+  return source.contentCache.read(`${key}:${maxBytes}`, async () => {
+    const result = await readContents(source, scope, path, maxBytes);
+    if (await reviewReadKey(source, scope, path) !== key) throw new Error('The file changed while loading. Refresh Review.');
+    return result;
+  });
+}
+async function readContents(source: ReviewContentSource, scope: ActiveScope, path: string, maxBytes: number) {
   const root = source.getWorkspaceRoot();
   if (!root || !scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
   if (scope.scopeKind === 'turn') {

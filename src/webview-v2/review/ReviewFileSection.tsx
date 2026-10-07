@@ -38,6 +38,10 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
   const canMark = !readOnly && !flow.scopePending && review?.lifecycle !== 'stale' && !!file && !file.error && !file.truncated &&
     !read.pending && !read.error && file.version === entry.version && entry.version !== 'unavailable' && entry.status !== 'reviewed' && !writing;
   useEffect(() => {
+    fileReads.retain(entry.path);
+    return () => fileReads.forget(entry.path);
+  }, [fileReads, entry.path]);
+  useEffect(() => {
     const element = root.current;
     if (!element) return;
     const observer = new IntersectionObserver(entries => setNear(entries.some(entry => entry.isIntersecting)),

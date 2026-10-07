@@ -13,7 +13,7 @@ import type {
 } from '../../shared/protocol/reviewProtocol';
 import type { CommittedFileStat } from '../changes/changeStats';
 import { loadTurnReviewScope } from './reviewTurnScope';
-import { readReviewContents, readReviewPatch, reviewFileVersion } from './reviewContent';
+import { readReviewContents, reviewFileVersion } from './reviewContent';
 import { recordedFileVersion } from './recordedFileDiffs';
 import {
   refreshScopeVersions,
@@ -47,6 +47,9 @@ import {
 } from './reviewOperationScope';
 import { applyOperationUndo, readOperationUndoState, recoverOperationUndo, type OperationUndoOutcome } from './operationUndoFiles';
 import { ReviewScopeRetention } from './reviewScopeRetention';
+import { reviewDisplayVersion } from './reviewReadCache';
+import { ReviewPreviewReads } from './reviewPreviewReads';
+import { ReviewReadQueue } from './reviewReadQueue';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
@@ -74,8 +77,11 @@ export class ReviewCoordinator implements vscode.Disposable {
   private disposed = false;
   private readonly writingScopes: ReviewWritingScopeHost;
   private readonly watcherRefresh: ReviewWatcherRefresh;
+  private readonly previewReads: ReviewPreviewReads;
+  private readonly reads = new ReviewReadQueue();
 
   constructor(private readonly options: ReviewCoordinatorOptions) {
+    this.previewReads = new ReviewPreviewReads(options);
     this.retention = new ReviewScopeRetention(options.snapshots);
     this.persisted = readPersistedScopes(
       options.persistence,
@@ -136,10 +142,13 @@ export class ReviewCoordinator implements vscode.Disposable {
     });
   }
   async readFile(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: ReviewContext; toolUseId?: string }) {
+    return this.reads.run(() => this.readFileNow(message), () => this.active?.files[this.active.currentIndex ?? -1]?.path === message.path);
+  }
+  private async readFileNow(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; context: ReviewContext; toolUseId?: string }) {
     await this.operation;
     const scope = this.requireScope(message);
-    if (!scope) throw new Error('The review scope changed. Refresh the review.');
-    return readReviewPatch(this.options, scope, message.path, message.context, message.toolUseId);
+    if (!scope || !scope.files.some(file => file.path === message.path)) throw new Error('The review scope changed. Refresh the review.');
+    return this.previewReads.read(scope, message, () => !this.disposed && this.active === scope);
   }
   async openNative(message: { sessionId: string; reviewScopeId: string; baseline: string; path: string; toolUseId?: string }) {
     await this.operation;
@@ -246,6 +255,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.publishState(this.active, publish);
   }
   dispose(): void {
+    this.previewReads.clear();
     this.retention.dispose();
     this.disposed = true;
     this.watcherRefresh.dispose();
@@ -311,12 +321,16 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
   }
   private async open(message: ReviewOpenMessage): Promise<void> {
+    const started = performance.now();
     const loaded = await this.loadScope(message);
     if (this.disposed || this.options.isSessionCurrent?.(message.sessionId) === false) return;
     await this.refreshVersions(loaded);
     if (this.disposed) return;
     this.active = loaded;
     this.publishState(loaded, this.options.publish, message.requestId);
+    this.options.diagnostics?.record({ level: 'debug', name: 'host.review.list_ready',
+      attributes: { reviewScopeId: loaded.reviewScopeId, fileCount: loaded.files.length,
+        elapsedMs: Math.round(performance.now() - started) } });
     if (this.disposed) return;
     if (message.openCurrent === true) {
       (await this.openCurrent(loaded, false))
@@ -465,6 +479,13 @@ export class ReviewCoordinator implements vscode.Disposable {
       this.publishState(scope);
       return;
     }
+    if (this.options.openSelectionInEditor === false && !scope.recordedOperations) {
+      if (!await this.previewReads.verify(scope, currentScope, file.path)) {
+        this.result(message.sessionId, message.reviewScopeId, 'mark-reviewed', false,
+          'The displayed contents could not be verified. Refresh this file before marking it reviewed.');
+        return;
+      }
+    }
     scope.reviewed.set(file.path, file.version);
     if (
       message.advance &&
@@ -552,7 +573,8 @@ export class ReviewCoordinator implements vscode.Disposable {
     scope.lifecycle = this.scopeLifecycle(scope);
   }
   private async fileVersion(scope: ActiveScope, path: string): Promise<string> {
-    return reviewFileVersion(this.options, scope, path, this.options.openSelectionInEditor === false);
+    return this.options.openSelectionInEditor === false ? reviewDisplayVersion(this.options, scope, path)
+      : reviewFileVersion(this.options, scope, path, false);
   }
   private publishState(
     scope: ActiveScope,

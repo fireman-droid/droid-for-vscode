@@ -1,6 +1,7 @@
 import type { ReviewContentSource } from './reviewContent';
 import type { ActiveScope } from './reviewCoordinatorSupport';
 import { diffBytes, isText } from '../changes/inlineDiff';
+import { readSnapshotBytes } from '../changes/readSnapshotBytes';
 import { applySdkPatch } from './reviewSdkPatch';
 import { recoverRecordedPatchContext } from './recordedPatchRecovery';
 import { operationToolName } from '../../runtime/tools/operationDiff';
@@ -56,9 +57,9 @@ async function rebuildRecordedFileVersion(
   };
   // A saved before image remains useful before the turn settles or if the after
   // capture fails. Never use today's worktree to fill in historical versions.
-  const before = await source.snapshots.readTreeBytes(snapshotScope, path, 'before');
+  const before = await readSnapshotBytes(source.snapshots, snapshotScope, path, 'before', maxBytes);
   let current = savedText(before, maxBytes);
-  let blockedBySize = (before?.length ?? 0) > maxBytes;
+  let blockedBySize = before === 'too-large' || (before?.length ?? 0) > maxBytes;
   let selectedTooLarge = false;
   const prior = current === undefined
     ? source.readPriorFileOperations?.(scope.sessionId, scope.turnId, path) ?? [] : [];
@@ -151,7 +152,7 @@ async function rebuildRecordedFileVersion(
   if (selected && selectedNeedsVerification && (scope.lifecycle === 'writing' ||
     selected.index + history.length <= lastGap)) return undefined;
   if (selected && selected.index + history.length > lastGap && scope.lifecycle !== 'writing') {
-    const expected = savedText(await source.snapshots.readTreeBytes(snapshotScope, path, 'after'), maxBytes);
+    const expected = savedText(await readSnapshotBytes(source.snapshots, snapshotScope, path, 'after', maxBytes), maxBytes);
     // A completed snapshot can disprove the assumed edit chain. A missing
     // snapshot cannot, unless omitted context was recovered and needs proof.
     // A moving worktree is never a historical authority.
@@ -172,8 +173,8 @@ function usableText(value: string, maxBytes: number): boolean {
   return Buffer.byteLength(value) <= maxBytes && !isRestrictedToolContent(value);
 }
 
-function savedText(value: Buffer | null | undefined, maxBytes: number): string | undefined {
-  if (value === undefined || !isText(value)) return undefined;
+function savedText(value: Buffer | null | undefined | 'too-large', maxBytes: number): string | undefined {
+  if (value === undefined || value === 'too-large' || !isText(value)) return undefined;
   const text = value?.toString('utf8').replace(/\r\n/g, '\n') ?? '';
   return usableText(text, maxBytes) ? text : undefined;
 }

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReviewFile } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, TooltipProvider } from '../ui/overlays';
-import { findDiffChange } from './DiffView';
+import { useReviewHunkNavigation } from './useReviewHunkNavigation';
 import { ReviewFiles, filterReviewFiles, type ReviewFileFilters } from './ReviewFiles';
 import { ReviewCommit } from './ReviewCommit';
 import { useReviewWorkbench, type ReviewPort } from './useReviewWorkbench';
@@ -11,6 +11,7 @@ import { OPERATION_UNAVAILABLE } from '../content/OperationDiff';
 import { ReviewFileSection } from './ReviewFileSection';
 import { ReviewToolbar } from './ReviewToolbar';
 import { useReviewFileNavigation } from './useReviewFileNavigation';
+import { VirtualReviewFiles } from './VirtualReviewFiles';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
   const flow = useReviewWorkbench(port);
@@ -23,6 +24,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const [jump, setJump] = useState<{ path: string } | null>(null);
   const [findRequest, setFindRequest] = useState(0);
   const scroll = useRef<HTMLDivElement>(null);
+  const pendingReveal = useRef<string | null>(null);
   const root = useRef<HTMLElement>(null);
   const closeCommit = useCallback(() => setCommit(false), []);
   const operation = target?.operation?.status === 'ready' ? target.operation : null;
@@ -34,24 +36,26 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const valid = target?.valid === true;
   const selectedPath = jump?.path ?? current?.path ?? target?.operationPath ?? files[0]?.path ?? null;
   const reveal = useCallback((path: string) => {
+    pendingReveal.current = path;
     setCollapsed(previous => { const next = new Set(previous); next.delete(path); return next; });
     setJump({ path });
   }, []);
   useEffect(() => { setCollapsed(new Set()); setFilters({ query: '', unreviewed: false }); }, [scopeKey]);
   const hostPath = operation ? target?.operationPath ?? files[0]?.path : current?.path;
-  useEffect(() => { if (hostPath) reveal(hostPath); }, [scopeKey, hostPath, reveal]);
-  useLayoutEffect(() => {
-    const container = scroll.current;
-    if (!jump || !container) return;
-    const element = [...container.querySelectorAll<HTMLElement>('[data-review-path]')].find(element => element.dataset.reviewPath === jump.path);
-    if (element) container.scrollTop += element.getBoundingClientRect().top - container.getBoundingClientRect().top;
-  }, [jump]);
+  useEffect(() => { if (hostPath) reveal(hostPath); }, [scopeKey, hostPath, flow.context, reveal]);
+  useEffect(() => {
+    const path = pendingReveal.current;
+    if (!path) return;
+    const read = flow.fileReads.get(path);
+    if (read.file && !read.pending) { pendingReveal.current = null; setJump({ path }); }
+  });
   useEffect(() => {
     if (findRequest && showFiles) root.current?.querySelector<HTMLInputElement>('.review-file-search input')?.focus();
   }, [findRequest, showFiles]);
   const selectFile = (path: string) => {
     if (flow.scopePending) return;
     reveal(path);
+    flow.fileReads.prioritize(path);
     if (!operation) actions.onSelectFile(path);
     if (window.innerWidth <= 700) setShowFiles(false);
   };
@@ -61,14 +65,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     const next = filtered[index + direction];
     if (next) selectFile(next.path);
   };
-  const hunk = (direction: number) => {
-    const container = scroll.current;
-    if (!container) return;
-    const top = container.getBoundingClientRect().top + 36;
-    const next = findDiffChange(container, top + direction * 8, direction);
-    if (next !== null) container.scrollBy({ top: next - top,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-  };
+  const hunk = useReviewHunkNavigation(scroll, filtered.map(file => file.path), selectFile, scopeKey);
   const allCollapsed = filtered.length > 0 && filtered.every(file => collapsed.has(file.path));
   return <TooltipProvider><main ref={root} className="review-workbench">
     <ReviewToolbar flow={flow} split={split} onSplit={setSplit} showFiles={showFiles} onFiles={() => setShowFiles(value => !value)}
@@ -84,14 +81,14 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
         <section className="review-code" aria-label="File comparisons">
-          <div className="review-code-scroll review-stream" ref={scroll}>
+          <div className="review-code-scroll review-stream" ref={scroll} onWheelCapture={() => { pendingReveal.current = null; }}>
             {target?.operation?.status === 'unavailable' ? <p className="review-empty">{OPERATION_UNAVAILABLE[target.operation.reason]}</p>
               : !files.length ? <p className="review-empty">{flow.scopePending ? 'Reading comparison…' : 'No changes in this comparison.'}</p>
               : !filtered.length ? <p className="review-empty">No matching files. <Button variant="link" size="sm" onClick={() => setFilters({ query: '', unreviewed: false })}>Clear filters</Button></p>
-              : filtered.map((entry, index) => <ReviewFileSection key={`${scopeKey}:${entry.path}`} entry={entry} flow={flow} port={port} split={split}
+              : <VirtualReviewFiles key={`${scopeKey}:${flow.context}:${allCollapsed}`} files={filtered} scroll={scroll} jump={jump} collapsed={collapsed} render={(entry, index) => <ReviewFileSection entry={entry} flow={flow} port={port} split={split}
                 open={!collapsed.has(entry.path)} onOpenChange={open => setCollapsed(previous => {
                   const next = new Set(previous); if (open) next.delete(entry.path); else next.add(entry.path); return next;
-                })} onNavigate={navigate} onMarkAndNext={navigation.markAndNext} hasPrevious={index > 0} hasNext={index < filtered.length - 1} />)}
+                })} onNavigate={navigate} onMarkAndNext={navigation.markAndNext} hasPrevious={index > 0} hasNext={index < filtered.length - 1} />} />}
           </div>
         </section>
         {showFiles ? <ReviewFiles side="right" files={files} selected={selectedPath} onSelect={selectFile} filters={filters} onFiltersChange={setFilters} /> : null}

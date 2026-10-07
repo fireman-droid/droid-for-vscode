@@ -4,6 +4,7 @@ import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type { CommittedFileStat } from '../changes/changeStats';
 import { isText, MAX_INLINE_DIFF_FILE_BYTES, readCurrentFile } from '../changes/inlineDiff';
 import type { ReviewSdkPatch } from './reviewSdkPatch';
+import { createGitTreeReader } from '../workspace/gitTreeReader';
 export interface ReviewComparison {
   readonly before: string;
   readonly after: string | 'worktree';
@@ -110,6 +111,7 @@ export async function loadReviewGitScope(
     ...(commitCount === undefined ? {} : { commitCount }),
   };
 }
+const treeReader = createGitTreeReader(reviewGit);
 export async function readReviewVersion(root: string, version: string, path: string, maxBytes = MAX_INLINE_DIFF_FILE_BYTES): Promise<Buffer | null> {
   if (!isSafeWorkspaceRelativePath(path)) throw new Error('Invalid review path.');
   if (version === 'worktree') {
@@ -118,13 +120,7 @@ export async function readReviewVersion(root: string, version: string, path: str
     if (value === 'too-large') throw new Error('File exceeds the text preview limit. Open the native Diff.');
     return value;
   }
-  const entry = (await reviewGit(root, ['ls-tree', '-z', version, '--', path])).toString();
-  if (!entry) return null;
-  const match = /^100[0-7]{3} blob ([0-9a-f]+)\t/.exec(entry);
-  if (!match) throw new Error('This file type cannot be compared as text.');
-  const size = Number((await reviewGit(root, ['cat-file', '-s', match[1]!])).toString());
-  if (size > maxBytes) throw new Error('File exceeds the text preview limit.');
-  return reviewGit(root, ['cat-file', 'blob', match[1]!], maxBytes);
+  return treeReader.read(root, version, path, maxBytes);
 }
 export function textContents(before: Buffer | null, after: Buffer | null) {
   if (!isText(before) || !isText(after)) throw new Error('Binary files cannot be shown as a text Diff.');

@@ -69,7 +69,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
   ]), [groups, collapsed]);
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
   const virtual = rows.length > 200;
-  const list = useVirtualList({ keys, enabled: virtual, revealKey: selected ? `file:${selected}` : null,
+  const list = useVirtualList({ keys, enabled: virtual, useFlushSync: false, revealKey: selected ? `file:${selected}` : null,
     estimateSize: (index) => {
       const file = rows[index]?.file;
       if (!file) return 34;

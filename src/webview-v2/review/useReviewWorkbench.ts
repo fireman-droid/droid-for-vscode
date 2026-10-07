@@ -105,9 +105,9 @@ export function useReviewWorkbench(port: ReviewPort) {
   }, [port, fileReads]);
   useEffect(() => {
     fileReads.update(target, review, context);
-    if (current) fileReads.ensure(current.path);
+    if (current) fileReads.prioritize(current.path);
   }, [fileReads, target, review, context, current]);
-  useEffect(() => () => fileReads.reset(), [fileReads]);
+  useEffect(() => () => fileReads.dispose(), [fileReads]);
   const { actions } = useReviewActions(port, target?.valid ? target.sessionId : null, review);
   useEffect(() => {
     if (sessionId && review?.scopeKind === 'branch' && !requests.branches && !requests.pending && listedBranchSession.current !== sessionId) {

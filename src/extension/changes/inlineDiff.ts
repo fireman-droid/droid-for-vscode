@@ -10,6 +10,7 @@ import {
 import type { TurnSnapshotScope, TurnSnapshotStore } from './turnSnapshots';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { describeDiffBytes } from './diffDiagnostics';
+import { readSnapshotBytes } from './readSnapshotBytes';
 
 export const MAX_INLINE_DIFF_FILE_BYTES = 512 * 1024;
 
@@ -41,13 +42,11 @@ export async function readTurnDiffContents(
   phase: 'live' | 'settled',
   maxBytes = MAX_INLINE_DIFF_FILE_BYTES,
 ): Promise<{ status: 'ready'; before: Buffer; after: Buffer } | Exclude<InlineDiffResult, { status: 'ready' }>> {
-  const before = await snapshots.readTreeBytes(scope, path, 'before');
-  if (before === undefined) return { status: 'unavailable' };
-  const after = phase === 'settled'
-    ? await snapshots.readTreeBytes(scope, path, 'after')
-    : await readCurrentFile(root, path, maxBytes);
-  if (after === undefined) return { status: 'unavailable' };
-  if (after === 'too-large' ||
+  const read = (side: 'before' | 'after') => readSnapshotBytes(snapshots, scope, path, side, maxBytes);
+  const [before, after] = await Promise.all([read('before'),
+    phase === 'settled' ? read('after') : readCurrentFile(root, path, maxBytes)]);
+  if (before === undefined || after === undefined) return { status: 'unavailable' };
+  if (before === 'too-large' || after === 'too-large' ||
     (before?.length ?? 0) > maxBytes ||
     (after?.length ?? 0) > maxBytes
   ) return { status: 'too-large' };

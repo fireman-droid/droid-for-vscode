@@ -28,6 +28,7 @@ import {
 } from './turnSnapshotRecords';
 import { snapshotWorkspaceFiles } from './snapshotWorkspaceFiles';
 import { pruneSnapshotObjects } from './snapshotPruning';
+import { createGitTreeReader } from '../workspace/gitTreeReader';
 export {
   MAX_SNAPSHOT_SESSIONS,
   MAX_SNAPSHOT_TURNS_PER_SESSION,
@@ -99,6 +100,7 @@ export interface TurnSnapshotStore {
     path: string,
     phase: 'before' | 'after',
   ): Promise<Buffer | null | undefined>;
+  readTreeBytesBatched?(scope: TurnSnapshotScope, path: string, phase: 'before' | 'after', maxBytes: number): Promise<Buffer | null | undefined>;
   read(sessionId: string, turnId?: string): TurnSnapshotRecord | undefined;
   readTurns(sessionId: string): readonly TurnSnapshotRecord[];
   /** Keep a currently viewed/running turn readable while newer history rotates. */
@@ -263,7 +265,16 @@ export function createTurnSnapshotStore(
     }
     return 'ok';
   };
-  const resolveLayout = async (
+  let resolvingLayout: { root: string; work: Promise<GitLayout | undefined> } | undefined;
+  const resolveLayout = async (root: string, deadline: number): Promise<GitLayout | undefined> => {
+    if (layout?.root === root) return layout;
+    if (resolvingLayout?.root === root) return resolvingLayout.work;
+    const work = resolveLayoutNow(root, deadline);
+    resolvingLayout = { root, work };
+    try { return await work; }
+    finally { if (resolvingLayout?.work === work) resolvingLayout = undefined; }
+  };
+  const resolveLayoutNow = async (
     root: string,
     deadline: number,
   ): Promise<GitLayout | undefined> => {
@@ -575,6 +586,14 @@ export function createTurnSnapshotStore(
     return null;
   };
 
+  const treeReader = createGitTreeReader(async (root, args, maxBytes, input) => {
+    const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+    const layout = await resolveLayout(root, deadline);
+    if (!layout || disposed || storeDisabled) throw new Error('The saved baseline is unavailable.');
+    const result = await git(root, args, readEnv(layout.repoObjectsDir), deadline, maxBytes, input);
+    if (result.timedOut || result.code !== 0) throw new Error('The saved baseline could not be read.');
+    return result.stdout;
+  }, true);
   return {
     capture(scope, phase) {
       if (closing) {
@@ -671,6 +690,16 @@ export function createTurnSnapshotStore(
       return bytes.includes(0) ? undefined : bytes.toString('utf8');
     },
     readTreeBytes,
+    async readTreeBytesBatched(scope, path, phase, maxBytes) {
+      if (!isSafeWorkspaceRelativePath(path) || disposed || storeDisabled) return undefined;
+      const oid = recordFor(scope)?.[phase];
+      const root = getWorkspaceRoot();
+      if (!oid || !root) return undefined;
+      const bytes = await treeReader.read(root, oid, path, maxBytes);
+      // Missing ignored paths require the original evidence checks; absence from
+      // a partial tree alone never proves that a file was newly created.
+      return bytes === null ? readTreeBytes(scope, path, phase) : bytes;
+    },
     read(sessionId, turnId) {
       return cloneRecord(turnId === undefined ? readTurn(sessions, sessionId) : recordFor({ sessionId, turnId }));
     },

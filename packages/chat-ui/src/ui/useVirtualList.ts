@@ -2,11 +2,12 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type FocusEven
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
 
 /** Window long button lists while keeping native Tab order and keyboard navigation. */
-export function useVirtualList({ keys, estimateSize, revealKey, enabled }: {
+export function useVirtualList({ keys, estimateSize, revealKey, enabled, useFlushSync = true }: {
   readonly keys: readonly string[];
   readonly estimateSize: (index: number) => number;
   readonly revealKey?: string | null;
   readonly enabled: boolean;
+  readonly useFlushSync?: boolean;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
@@ -14,7 +15,7 @@ export function useVirtualList({ keys, estimateSize, revealKey, enabled }: {
   const indices = useMemo(() => new Map(keys.map((key, index) => [key, index])), [keys]);
   const focused = focusedKey === null ? undefined : indices.get(focusedKey);
   const virtualizer = useVirtualizer({
-    count: keys.length, enabled, getScrollElement: () => viewport.current,
+    count: keys.length, enabled, useFlushSync, getScrollElement: () => viewport.current,
     getItemKey: (index) => keys[index]!, estimateSize, overscan: 6,
     rangeExtractor: useCallback((range: Range) => {
       const visible = defaultRangeExtractor(range);

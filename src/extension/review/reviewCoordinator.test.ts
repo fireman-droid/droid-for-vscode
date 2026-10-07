@@ -82,7 +82,7 @@ describe('ReviewCoordinator reload recovery', () => {
     expect(await readReviewPatch(options, recorded, 'old.txt', 3)).toMatchObject({
       patch: '', truncated: false, recordedOperations: operations.map(({ toolUseId, patch }) => ({ toolUseId, patch })),
     });
-    expect(snapshots.readTreeBytes).not.toHaveBeenCalled();
+    expect(snapshots.readTreeBytes).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' }, 'old.txt', 'before');
     await expect(readReviewPatch(options, recorded, 'latest.txt', 3)).rejects.toThrow('Review file is no longer available');
     await expect(readReviewContents(options, scope, 'old.txt')).rejects.toThrow('saved baseline for this turn is unavailable');
   });

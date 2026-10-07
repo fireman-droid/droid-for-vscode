@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readInlineDiff, MAX_INLINE_DIFF_FILE_BYTES } from './inlineDiff';
 import type { TurnSnapshotStore } from './turnSnapshots';
 import { MAX_INLINE_DIFF_LINES, MAX_INLINE_DIFF_PATCH_LENGTH } from '../../shared/protocol/inlineDiffProtocol';
+import { GitObjectTooLargeError } from '../workspace/gitTreeReader';
 
 const scope = { sessionId: 'session-1', turnId: 'turn-1' };
 let directory: string;
@@ -12,7 +13,7 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'dvx-inline-te
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 function snapshots(before: Buffer | null | undefined, after: Buffer | null | undefined) {
   const readTreeBytes = vi.fn(async (_scope: unknown, _path: string, phase: string) => phase === 'before' ? before : after);
-  return { store: { readTreeBytes } as unknown as TurnSnapshotStore, readTreeBytes };
+  return { store: { readTreeBytes, read: () => undefined } as unknown as TurnSnapshotStore, readTreeBytes };
 }
 
 describe('turn inline diff contents', () => {
@@ -54,10 +55,11 @@ describe('turn inline diff contents', () => {
   });
 
   it('reports missing snapshots instead of substituting HEAD or an empty baseline', async () => {
-    for (const [before, after] of [[undefined, Buffer.from('a')], [Buffer.from('a'), undefined], [null, null]]) {
+    for (const [before, after] of [[undefined, Buffer.from('a')], [Buffer.from('a'), undefined]]) {
       const { store } = snapshots(before, after);
       expect(await readInlineDiff(store, scope, directory, 'app.ts', 'settled')).toEqual({ status: 'unavailable' });
     }
+    expect(await readInlineDiff(snapshots(null, null).store, scope, directory, 'app.ts', 'settled')).toEqual({ status: 'not-found' });
   });
 
   it('bounds binary, non-UTF-8 and oversized file reads', async () => {
@@ -68,6 +70,9 @@ describe('turn inline diff contents', () => {
     expect(await readInlineDiff(snapshots(null, huge).store, scope, directory, 'app.ts', 'settled')).toEqual({ status: 'too-large' });
     await writeFile(join(directory, 'app.ts'), huge);
     expect(await readInlineDiff(snapshots(null, null).store, scope, directory, 'app.ts', 'live')).toEqual({ status: 'too-large' });
+    const batched = snapshots(null, null).store;
+    batched.readTreeBytesBatched = async () => { throw new GitObjectTooLargeError(); };
+    expect(await readInlineDiff(batched, scope, directory, 'app.ts', 'settled')).toEqual({ status: 'too-large' });
   });
 
   it('truncates preview output on complete lines without claiming there are no changes', async () => {
