@@ -421,8 +421,12 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   的真实 prompt 顺序推进，旧父历史刷新不能退回已经结束的调用。
 - Viewer 消费 Host 核验的只读身份，不持有另一套执行器。缺映射、部分历史、未知时间
   明确说明；不能根据相似文本猜 child 或把迟到工具事件改成新的运行状态。
-- daemon Task／Mission 卡片经 `panels/agentChat/AgentChatManager` 打开独立 ChatController
-  与普通 ChatApp，使用现有 history／recovery／turn／interaction 链路。导航采用独立版本
+- 普通 Task 经 `SubagentTranscriptService` 和 `SessionViewerPanelController` 打开只读详情，
+  正文卡片与 Agents 导航均使用该入口。Host 以 parentSessionId／toolUseId 区分本次调用，
+  使用 ledger prompt 边界截取任务正文和执行过程；边界缺失不回退整段 child 历史。
+  调用身份只留在 Host，不新增可写 Bridge 命令；查看器不创建聊天输入或发送模型请求。
+- Mission 卡片经 `panels/agentChat/AgentChatManager` 打开独立 ChatController 与普通
+  ChatApp，使用现有 history／recovery／turn／interaction 链路。导航采用独立版本
   的 `agentChatProtocol`，仅 Host 保存 child 身份映射；主 Bridge 和转录不保存导航状态。
   child target 始终固定，启动不依赖主会话目录，routed daemon 经原 owner 的 attachChild
   保留来源。面板关闭保留控制器，扩展关闭释放独立恢复、Review、Diff 和快照资源。

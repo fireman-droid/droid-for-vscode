@@ -9,6 +9,19 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 普通子代理只读与任务卡片（2026-10-07）
+
+- 普通 Task 的正文卡片和父聊天 Agents 列表统一打开只读 Session Viewer，不再进入带输入框的
+  ChatApp；不提供跟进发送、模型设置或编辑重发。Mission Worker 继续使用可聊天的独立面板。
+- 详情按父会话和 Task 调用定位本次派发，复用同一 child 的后续任务不会混入旧卡片。
+  调用边界不可用时不回退显示整段 child 历史；首条任务卡直接展示父代理派发的正文，
+  去掉摘要／类型头和 Task instructions、Invocation details 的嵌套折叠。
+- 普通任务卡改为状态图标、单行任务名与类型、次行活动及耗时；不伪造模型信息。
+  底部 Agents 折叠栏从 38px 收紧为 28px，只读详情页头从 40px 收紧为 32px。
+- `pnpm run package:vsix`（含 typecheck、lint:budgets 与生产构建）和 `pnpm run verify:vsix`
+  通过，167 条目安装包已全局安装到 Microsoft VS Code；CLI 的 url.parse 弃用提示未阻断安装。
+  本轮未新增、修改或运行测试及浏览器自动化；真实只读行为和视觉由 Reload Window 后人工验收。
+
 ## 多文件 Review 加载（2026-10-07）
 
 - 文件列表使用快照／Git 树标识或工作区文件元数据计算展示版本，不再在首屏前读取所有文件正文。
@@ -490,8 +503,8 @@
 
 ## 子代理任务卡片
 
-- 正文子代理卡片改为轻边框、圆角和图标布局；任务标题、状态、角色／耗时／工具数、
-  最新活动分层展示。长标题限制两行并保留全文提示；底部列表仍采用紧凑行。
+- 正文子代理卡片使用紧凑两行：状态图标、任务标题和类型在首行，活动与耗时在次行。
+  长标题单行省略并保留全文提示，点击打开只读任务详情；底部列表采用紧凑行。
 - 打开反馈置于独立底栏，暂未关联和打开失败提供 Retry；隐藏重复的等待占位，仍
   保留真实最新活动。任务生命周期与打开结果分开，后台运行、终态及未知状态沿用原数据。
 - 展示复用公共 `AgentTask` 和共享 Button；会话身份、活动订阅与打开动作由 Droid
@@ -650,10 +663,10 @@
 
 ## 子会话交互与 Mission 模型选择
 
-- 按用户确认的 GUI 入口保留 `/mission` 和右侧创建卡片；daemon 模式下普通 Task 与
-  Mission Worker 卡片打开原会话的交互式 ChatApp。父聊天 Agents 列表包含已完成任务和
-  Mission 早期尝试；原父会话保持连接，子会话顶部仅显示连接状态。
-- 子会话复用正文、工具、输入、附件、模型设置、权限、队列、Stop 和 Review。启动／重连
+- 按用户确认的 GUI 入口保留 `/mission` 和右侧创建卡片；daemon 模式下 Mission Worker
+  卡片打开原会话的交互式 ChatApp，普通 Task 打开只读任务详情。父聊天 Agents 列表包含
+  已完成任务和 Mission 早期尝试；原父会话保持连接，Mission 子会话顶部仅显示连接状态。
+- Mission 子会话复用正文、工具、输入、附件、模型设置、权限、队列、Stop 和 Review。启动／重连
   固定原 child ID，使用 SDK child attach 保留来源；Stop 只中断当前会话，不调用会使
   Mission 任务失败并重新排队的 killWorker。关闭标签保留控制器和待回答请求。
 - 会创建后继会话的 Fork、Compact、编辑重发，以及 New、History、Mission 创建在子会话

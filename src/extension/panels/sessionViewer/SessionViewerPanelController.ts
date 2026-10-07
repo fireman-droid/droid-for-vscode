@@ -27,6 +27,8 @@ export interface SessionViewerPanelTarget {
   readonly sessionId: string;
   readonly title: string;
   readonly cwd: string;
+  /** Host-only identity of one delegation in a possibly continued child session. */
+  readonly subagent?: { readonly parentSessionId: string; readonly toolUseId: string };
 }
 
 export interface SessionViewerSource {
@@ -243,7 +245,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       const source = this.resolveSource(entry.target.kind);
       const live = source?.readTranscript?.(entry.target) ?? null;
       const [loaded, running] = await Promise.all([
-        live === null
+        live === null && entry.target.subagent === undefined
           ? this.history.loadHistory({
               cwd: entry.target.cwd,
               sessionId: entry.target.sessionId,
@@ -422,7 +424,8 @@ export class SessionViewerPanelController implements vscode.Disposable {
 }
 
 function targetKey(target: SessionViewerPanelTarget): string {
-  return `${target.kind}:${target.mode}:${target.sessionId}`;
+  return JSON.stringify([target.kind, target.mode, target.sessionId,
+    target.subagent?.parentSessionId, target.subagent?.toolUseId]);
 }
 
 function publicTarget(target: SessionViewerPanelTarget): SessionViewerTarget {

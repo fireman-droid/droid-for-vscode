@@ -52,8 +52,8 @@ export function presentSubagent(item: ToolTranscriptItem, extras: SubagentRowExt
   const elapsed = startedAt !== undefined ? formatElapsed(now - startedAt)
     : subagent.durationMs !== undefined ? formatDuration(subagent.durationMs) : undefined;
   const opening = extras?.openStatus === 'opening';
-  const feedback = opening ? 'Opening agent chat…' : extras?.openStatus === 'unavailable'
-    ? 'Agent chat is not linked yet.' : extras?.openStatus === 'failed' ? 'Could not open agent chat.' : undefined;
+  const feedback = opening ? 'Opening task…' : extras?.openStatus === 'unavailable'
+    ? 'Task transcript is not linked yet.' : extras?.openStatus === 'failed' ? 'Could not open task transcript.' : undefined;
   const latestActivity = extras?.activities[0];
   const activity = latestActivity ? [latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')
     : feedback ? undefined : (subagent.toolUseCount ?? 0) > 0

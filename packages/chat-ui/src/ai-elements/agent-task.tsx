@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Circle, CircleAlert, LoaderCircle, RotateCw, Users } from 'lucide-react';
+import { Check, Circle, CircleAlert, LoaderCircle, RotateCw } from 'lucide-react';
 import { Button } from '../ui/button';
 
 export interface AgentTaskProps {
@@ -22,23 +22,21 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
   return <div className="dvx-agent-task" data-variant={variant} data-tone={tone}>
     <Button variant="plain" size="none" className="dvx-agent-task-open"
       disabled={!onOpen} onClick={onOpen} aria-busy={feedback?.opening || undefined}>
-      <span className="dvx-agent-task-icon"><Users aria-hidden="true" /></span>
+      <span className="dvx-agent-task-icon" title={statusLabel}>
+        <StatusIcon aria-hidden="true" className={tone === 'running' ? 'motion-safe:animate-spin' : undefined} />
+      </span>
       <span className="dvx-agent-task-body">
         <span className="dvx-agent-task-heading">
           <span className="dvx-agent-task-title" title={title}>{title}</span>
-          <span className="dvx-agent-task-status">
-            <StatusIcon aria-hidden="true" className={tone === 'running' ? 'motion-safe:animate-spin' : undefined} />
-            <span>{statusLabel}</span>
-          </span>
+          <span className="dvx-agent-task-role" title={role}>{role}<span className="sr-only"> subagent</span></span>
+          <span className="dvx-agent-task-status">{statusLabel}</span>
         </span>
         <span className="dvx-agent-task-meta">
-          <span className="dvx-agent-task-role">{role}<span className="sr-only"> subagent</span></span>
+          {activity ? <span className="dvx-agent-task-activity" title={activity}>{activity}</span> : null}
           {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">Elapsed {elapsed}</span> : null}
           {toolCount !== undefined ? <span>{toolCount} {toolCount === 1 ? 'tool' : 'tools'}</span> : null}
         </span>
-        {activity ? <span className="dvx-agent-task-activity" title={activity}>{activity}</span> : null}
       </span>
-      <ChevronRight aria-hidden="true" className="dvx-agent-task-chevron" />
     </Button>
     {feedback ? <div className="dvx-agent-task-feedback" data-failed={feedback.failed || undefined}>
       <span role="status" className="dvx-agent-task-feedback-message">

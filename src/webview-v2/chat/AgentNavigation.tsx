@@ -30,7 +30,7 @@ export function AgentSection({ count, running, children }: {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   return <Collapsible open={expanded} onOpenChange={setExpanded} asChild>
-    <section className="v2-composer-changes" aria-label="Agent conversations">
+    <section className="v2-composer-changes v2-composer-agents" aria-label="Agents">
       <div className="v2-composer-changes-header v2-composer-agents-header">
         <CollapsibleTrigger asChild>
           <Button variant="plain" size="none" className="v2-composer-changes-toggle" aria-controls={id}>

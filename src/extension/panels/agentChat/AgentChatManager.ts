@@ -55,6 +55,7 @@ export class AgentChatManager implements vscode.Disposable {
     extensionUri: vscode.Uri;
     root: ChatController;
     diagnostics: RuntimeDiagnosticSink;
+    openTask?: (target: { parentSessionId: string; childSessionId: string; toolUseId: string; title: string; cwd: string }) => void;
     createChild(target: { sessionId: string; cwd: string }): {
       controller: ChatController;
       openReview(message: ReviewPanelOpen): void;
@@ -82,7 +83,12 @@ export class AgentChatManager implements vscode.Disposable {
       return;
     }
     binding.sessionId = target.childSessionId;
-    this.open(target.parentSessionId, family, binding);
+    if (!this.options.openTask) {
+      void vscode.window.showWarningMessage('The read-only task viewer is unavailable.');
+      return;
+    }
+    this.options.openTask(target);
+    this.publish();
   }
 
   openMission(target: { sessionId: string; title: string }): void {
@@ -259,6 +265,12 @@ export class AgentChatManager implements vscode.Disposable {
   }
 
   private open(parentId: string, family: Family, binding: Binding): void {
+    // Ordinary Tasks expose their delegated work in a read-only viewer.
+    // Only Mission workers enter a chat panel with a composer.
+    if (binding.toolUseId && binding.turnId) {
+      family.controller.subagentState.subagentTranscripts?.open(parentId, binding.turnId, binding.toolUseId);
+      return;
+    }
     const child = this.childFor(parentId, family, binding);
     if (child) this.showChild(child);
     this.publish();

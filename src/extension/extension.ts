@@ -265,7 +265,7 @@ export function activate(context: vscode.ExtensionContext): void {
     () => ({
       async isRunning(target) {
         if (target.mode === 'subagent-readonly') {
-          return subagentTranscripts?.readViewer(target.sessionId)?.running ?? null;
+          return subagentTranscripts?.readViewer(target.sessionId, target.subagent)?.running ?? null;
         }
         const rows = await (await daemonSidecar.droid()).sessions.listOpened();
         const row = rows.find(({ id }) => id === target.sessionId);
@@ -276,7 +276,7 @@ export function activate(context: vscode.ExtensionContext): void {
       },
       readTranscript(target) {
         return target.mode === 'subagent-readonly'
-          ? (subagentTranscripts?.readViewer(target.sessionId) ?? null)
+          ? (subagentTranscripts?.readViewer(target.sessionId, target.subagent) ?? null)
           : null;
       },
       subscribe(target, listener) {
@@ -314,11 +314,12 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     openViewer: (target) => {
       if (agentChats) { agentChats.openTask(target); return; }
-      const { childSessionId, title, cwd } = target;
+      const { childSessionId, title, cwd, parentSessionId, toolUseId } = target;
       sessionViewer.open({
         kind: 'daemon-session',
         mode: 'subagent-readonly',
         sessionId: childSessionId,
+        subagent: { parentSessionId, toolUseId },
         title,
         cwd,
       });
@@ -533,6 +534,10 @@ export function activate(context: vscode.ExtensionContext): void {
   if (daemonSessions) {
     agentChats = new AgentChatManager({
       extensionUri: context.extensionUri, root: controller, diagnostics,
+      openTask: ({ childSessionId, parentSessionId, toolUseId, title, cwd }) => sessionViewer.open({
+        kind: 'daemon-session', mode: 'subagent-readonly', sessionId: childSessionId,
+        subagent: { parentSessionId, toolUseId }, title, cwd,
+      }),
       createChild: (target) => createAgentChatController({
         context, persistence, diagnostics, parent: controller, sessionViewer,
         createSdkSession: daemonSessions.factory, target,

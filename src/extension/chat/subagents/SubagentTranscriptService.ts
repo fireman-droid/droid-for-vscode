@@ -347,16 +347,19 @@ export class SubagentTranscriptService {
       ? binding : undefined;
   }
 
-  readViewer(childSessionId: string): SubagentViewerSnapshot | null {
+  readViewer(childSessionId: string, invocation?: { readonly parentSessionId: string; readonly toolUseId: string }): SubagentViewerSnapshot | null {
     const entry = this.byChild.get(childSessionId);
-    return entry === undefined
-      ? null
-      : {
-          items: entry.state.transcript,
-          truncated: entry.state.truncated,
-          running: entry.running,
-          lifecycle: entry.lifecycle,
-        };
+    if (entry === undefined) return null;
+    if (invocation) {
+      const key = rowKey(invocation.parentSessionId, invocation.toolUseId);
+      const row = entry.rows.get(key);
+      const items = invocationTranscripts(entry).get(key);
+      if (!row || !items) return null;
+      return { items, truncated: entry.state.truncated,
+        running: invocationRunning(row.lifecycle), lifecycle: row.lifecycle };
+    }
+    return { items: entry.state.transcript, truncated: entry.state.truncated,
+      running: entry.running, lifecycle: entry.lifecycle };
   }
 
   subscribeViewer(childSessionId: string, listener: () => void): () => void {
@@ -839,7 +842,7 @@ function activitiesOf(items: readonly SessionTranscriptItem[]): readonly Subagen
 function viewerTitle(type: string, description: string): string {
   const safeType = sanitizeSubagentType(type);
   const safeDescription = sanitizeSubagentDescription(description);
-  const title = `${safeType} subagent · ${safeDescription}`;
+  const title = safeDescription || `${safeType ?? 'Task'} subagent`;
   return title.length <= 512 ? title : `${title.slice(0, 511)}…`;
 }
 
