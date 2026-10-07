@@ -20,12 +20,12 @@ export function RestoreFiles({ impact, checked, onChange, disabled = false, rest
   const count = impact.restorableCount + impact.createdCount;
   const { details, unavailableCount, omittedAffected, omittedUnavailable } = rewindDetailSummary(impact);
   if (count === 0 && unavailableCount === 0) return null;
-  return <Popover><div data-transcript-selection-exclude="" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 select-none text-[11.5px]" role="group" aria-label="File restoration">
-      {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-2 rounded">
+  return <Popover><div data-transcript-selection-exclude="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 select-none text-[11.5px]" role="group" aria-label="File restoration">
+      {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-1.5 rounded">
         <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
         <span>{restored ? 'File restore already requested' : <>Also restore files <span className="text-muted-foreground">({count})</span></>}</span>
       </label> : <span>{unavailableCount} {unavailableCount === 1 ? 'file' : 'files'} cannot be restored</span>}
-      <PopoverTrigger asChild><Button variant="link" size="none" className="min-h-7 shrink-0 text-[11.5px]">View details</Button></PopoverTrigger>
+      <PopoverTrigger asChild><Button variant="link" size="none" className="min-h-6 shrink-0 text-[11.5px]">View details</Button></PopoverTrigger>
     <PopoverContent side="top" align="start" className="w-[420px] p-3 text-[11.5px]" data-editor-popup-owner={impact.messageId} data-transcript-selection-exclude="" aria-labelledby={id}>
       <div className="flex items-center justify-between gap-2">
         <span id={id} className="font-medium">Restore to before this message</span>

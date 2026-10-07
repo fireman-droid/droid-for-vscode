@@ -13,6 +13,8 @@
 
 - Restore 从编辑框与 Plan 之间的独立卡片移入编辑框底部，与重发按钮相邻。
   默认不勾选；勾选后按钮显示 `Restore & resend`，文件清单通过 `View details` 打开共享 Popover。
+- 按实际截图进一步收紧：恢复选项并入原有附件／模型工具栏，删除独立操作行、分隔线和
+  8px 上方留白；详情与发送按钮从 28px 收紧为 24px。仅空间不足时模型设置和发送一起换行。
 - 保留 SDK 原生恢复范围、删除新建文件、无法恢复条目及手动修改影响说明；查看详情和文件
   不执行恢复。重连接管失败的后继会话时显示 `Reconnect & resend`，沿用不重复恢复的逻辑。
 - `pnpm run package:vsix`（含 typecheck、lint:budgets 和生产构建）与 `pnpm run verify:vsix`

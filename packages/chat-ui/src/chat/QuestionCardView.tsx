@@ -139,11 +139,11 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           <div className="v2-user-edit-footer">
             {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label="Attach files to edited message" title="Attach files"
               disabled={editDisabled} onClick={onAttach}>+</Button> : null}
-            {editSettings}
-          </div>
-          <div className="v2-user-edit-actions">
             {restoreFiles}
-            <Button variant="plain" size="none" className="v2-user-edit-send" disabled={!canResend || !draft.text.trim()} onClick={submit}><span>{resendLabel}</span><ArrowUp aria-hidden="true" /></Button>
+            <div className={cn('v2-user-edit-controls', Boolean(editSettings) && 'v2-user-edit-controls-with-settings')}>
+              {editSettings}
+              <Button variant="plain" size="none" className="v2-user-edit-send" disabled={!canResend || !draft.text.trim()} onClick={submit}><span>{resendLabel}</span><ArrowUp aria-hidden="true" /></Button>
+            </div>
           </div>
         </div>
       ) : (
