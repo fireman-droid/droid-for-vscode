@@ -9,6 +9,14 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 文件写入归入 Activity（2026-10-07）
+
+- 执行中的成功写入记录与前后的搜索、思考等工具过程归入同一 Activity，不再以独立的
+  Written／Created／Edited 文件卡切断分组。单条写入也使用普通活动行，展开保留操作详情与 Review。
+- 轮次结束后，已确认的写入沿用现有文件汇总；失败与未确认结果的展示、统计和撤销证据不变。
+- typecheck、lint:budgets、生产构建和 VSIX 校验通过，已安装到 Microsoft VS Code；安装产物哈希一致。
+- 未新增、修改或运行测试及浏览器自动化；实际视觉由 VS Code Reload Window 后人工验收。
+
 ## 普通子代理只读与任务卡片（2026-10-07）
 
 - 普通 Task 的正文卡片和父聊天 Agents 列表统一打开只读 Session Viewer，不再进入带输入框的

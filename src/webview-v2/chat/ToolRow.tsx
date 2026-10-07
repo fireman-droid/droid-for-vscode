@@ -95,7 +95,14 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {item.backgroundHint?.fireAndForget ? <p className="px-2 text-[11px] text-muted-foreground">Background process · Keeps running until you stop it manually</p> : null}
     </div>;
   }
-  if (isFoldableFileOperation(item)) return hideConfirmedOperations ? null : <OperationDiff item={item} onInteract={onInteract} />;
+  if (isFoldableFileOperation(item)) {
+    const operationTarget = target ?? (item.operationDiff?.status === 'ready'
+      ? item.operationDiff.files.map((file) => file.path).join(', ') : undefined);
+    return hideConfirmedOperations ? null : <ActivityItem id={item.id} messageId={messageId}
+      icon={<FileText />} title={action} target={operationTarget} status={status || undefined}>
+      <OperationDiff item={item} onInteract={onInteract} />
+    </ActivityItem>;
+  }
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
     return <ActivityItem id={item.id} messageId={messageId} icon={<ListChecks />} title="Task plan"

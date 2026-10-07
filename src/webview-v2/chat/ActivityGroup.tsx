@@ -3,7 +3,6 @@ import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
 import { type GroupCandidatePart } from './transcript/activityGrouping';
-import { isFoldableFileOperation } from './operationSummary';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;
 export interface ActivityCluster { readonly id: string; readonly items: readonly SessionTranscriptItem[]; readonly grouped: boolean }
@@ -12,7 +11,7 @@ export function clusterActivity(items: readonly SessionTranscriptItem[]): readon
   const groups: { id: string; items: SessionTranscriptItem[]; grouped: boolean }[] = [];
   for (const item of items) {
     // Delegations outlive the parent reply and must remain visible outside folded activity.
-    const grouped = item.kind === 'thinking' || item.kind === 'tool' && item.subagent === undefined && !isFoldableFileOperation(item);
+    const grouped = item.kind === 'thinking' || item.kind === 'tool' && item.subagent === undefined;
     const prior = groups.at(-1);
     if (grouped && prior?.grouped) prior.items.push(item);
     else groups.push({ id: item.id, items: [item], grouped });
