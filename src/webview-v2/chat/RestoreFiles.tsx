@@ -1,9 +1,9 @@
 import type { RewindFileInfo } from './editing/editTypes';
-import { useId, useState } from 'react';
-import { ChevronDown, ExternalLink } from 'lucide-react';
+import { useId } from 'react';
+import { ExternalLink, X } from 'lucide-react';
 import { Checkbox } from '../ui/selection';
 import { Button } from '../ui/button';
-import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { rewindDetailSummary } from '../../shared/protocol/rewindDetails';
 import { useContent } from '../content/context';
 
@@ -16,24 +16,24 @@ export function RestoreFiles({ impact, checked, onChange, disabled = false, rest
   readonly openDisabled?: boolean;
 }) {
   const { actions } = useContent();
-  const [expanded, setExpanded] = useState(false);
   const id = useId();
   const count = impact.restorableCount + impact.createdCount;
   const { details, unavailableCount, omittedAffected, omittedUnavailable } = rewindDetailSummary(impact);
   if (count === 0 && unavailableCount === 0) return null;
-  return <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section data-transcript-selection-exclude="" className="mt-2 select-none overflow-hidden rounded-[10px] border border-[var(--panel-edge)] bg-input-background text-[11.5px]" aria-label="File restoration">
-    <div className="flex min-h-8 items-center justify-between gap-2 px-3 py-1.5">
+  return <Popover><div data-transcript-selection-exclude="" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 select-none text-[11.5px]" role="group" aria-label="File restoration">
       {count > 0 ? <label className="v2-chat-choice flex min-w-0 items-center gap-2 rounded">
         <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} />
-        <span>{restored ? 'File restore will not be repeated when reconnecting' : `Restore ${count} ${count === 1 ? 'file' : 'files'} using Droid checkpoints`}</span>
+        <span>{restored ? 'File restore already requested' : <>Also restore files <span className="text-muted-foreground">({count})</span></>}</span>
       </label> : <span>{unavailableCount} {unavailableCount === 1 ? 'file' : 'files'} cannot be restored</span>}
-      <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-label="Restorable files" aria-controls={id} className="v2-chat-disclosure shrink-0 rounded">
-        <ChevronDown className={`size-[13px] text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
-      </Button></CollapsibleTrigger>
-    </div>
-    <AnimatedCollapsibleContent id={id} open={expanded}>
-      <p className="px-3 py-2 text-[10.5px] text-muted-foreground">Applies from this message onward, including later turns. Restores previous contents and deletes newly created files; later manual edits to those files can be replaced. Leave unchecked to rewind the conversation only.</p>
-      <ul className="max-h-36 space-y-1 overflow-auto border-t border-[var(--panel-edge)] px-3 py-2 text-[11px]">
+      <PopoverTrigger asChild><Button variant="link" size="none" className="min-h-7 shrink-0 text-[11.5px]">View details</Button></PopoverTrigger>
+    <PopoverContent side="top" align="start" className="w-[420px] p-3 text-[11.5px]" data-editor-popup-owner={impact.messageId} data-transcript-selection-exclude="" aria-labelledby={id}>
+      <div className="flex items-center justify-between gap-2">
+        <span id={id} className="font-medium">Restore to before this message</span>
+        <PopoverClose asChild><Button variant="ghost" size="icon-sm" aria-label="Close file restoration details"><X aria-hidden="true" /></Button></PopoverClose>
+      </div>
+      <p className="py-2 text-muted-foreground">Applies from this message onward, including later turns. Restores previous contents and deletes newly created files; later manual edits to those files can be replaced. Leave unchecked to rewind the conversation only.</p>
+      {restored ? <p role="status" className="pb-2 text-muted-foreground">File restore will not be repeated when reconnecting.</p> : null}
+      <ul className="space-y-2 border-t border-[var(--panel-edge)] py-2">
         {details.map((file, index) => <li key={`${file.action}:${file.label}:${index}`} className="flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0">
             {file.location === 'workspace' && actions?.openPath ? <Button textSelectable variant="link" size="none"
@@ -50,9 +50,9 @@ export function RestoreFiles({ impact, checked, onChange, disabled = false, rest
         {omittedAffected > 0 ? <li className="text-muted-foreground">{omittedAffected} additional affected {omittedAffected === 1 ? 'file is' : 'files are'} not listed. Restore applies to all {count} affected {count === 1 ? 'file' : 'files'}.</li> : null}
         {omittedUnavailable > 0 ? <li className="text-muted-foreground">{omittedUnavailable} additional {omittedUnavailable === 1 ? 'file cannot' : 'files cannot'} be restored.</li> : null}
       </ul>
-      {actions?.openPath && details.some((file) => file.location === 'workspace') ? <p role="note" className="px-3 pb-2 text-[10.5px] text-muted-foreground">Click a filename to inspect its current contents in the editor. This is not a restore Diff; opening a file does not restore or delete it.</p> : null}
-      {count > 0 && unavailableCount > 0 ? <p role="status" className="px-3 pb-2 text-[10.5px] text-muted-foreground">{unavailableCount} {unavailableCount === 1 ? 'file cannot' : 'files cannot'} be restored and will stay unchanged.</p> : null}
-      {details.some((file) => file.location !== 'workspace' && file.action !== 'unavailable') ? <p role="note" className="px-3 pb-2 text-[10.5px] text-muted-foreground">Restoring also affects the listed files outside this workspace.</p> : null}
-    </AnimatedCollapsibleContent>
-  </section></Collapsible>;
+      {actions?.openPath && details.some((file) => file.location === 'workspace') ? <p role="note" className="pb-2 text-muted-foreground">Click a filename to inspect its current contents in the editor. This is not a restore Diff; opening a file does not restore or delete it.</p> : null}
+      {count > 0 && unavailableCount > 0 ? <p role="status" className="pb-2 text-muted-foreground">{unavailableCount} {unavailableCount === 1 ? 'file cannot' : 'files cannot'} be restored and will stay unchanged.</p> : null}
+      {details.some((file) => file.location !== 'workspace' && file.action !== 'unavailable') ? <p role="note" className="text-muted-foreground">Restoring also affects the listed files outside this workspace.</p> : null}
+    </PopoverContent>
+  </div></Popover>;
 }

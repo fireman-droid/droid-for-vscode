@@ -26,6 +26,7 @@ export interface QuestionCardViewProps {
   readonly stagedAttachments?: ReactNode;
   readonly editSettings?: ReactNode;
   readonly restoreFiles?: ReactNode;
+  readonly resendLabel?: string;
   readonly plan?: ReactNode;
   readonly onResend: () => void;
   readonly onAttach?: () => void;
@@ -36,7 +37,7 @@ export interface QuestionCardViewProps {
   readonly onDrop?: DragEventHandler;
   readonly onDragOver?: DragEventHandler;
 }
-export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, editAvailable = true, originalAttachments, stagedAttachments, editSettings, restoreFiles, plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
+export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, editAvailable = true, originalAttachments, stagedAttachments, editSettings, restoreFiles, resendLabel = 'Resend', plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
   const draft = editor.draft?.messageId === item.messageId ? editor.draft : null;
   const draftQuote = draft ? parseSelectionQuotes(draft.text) : null;
   const draftBody = draftQuote?.body ?? draft?.text ?? '';
@@ -139,7 +140,10 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
             {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label="Attach files to edited message" title="Attach files"
               disabled={editDisabled} onClick={onAttach}>+</Button> : null}
             {editSettings}
-            <Button variant="plain" size="none" className="v2-user-edit-send" aria-label="Resend edited message" disabled={!canResend || !draft.text.trim()} onClick={submit}><ArrowUp /></Button>
+          </div>
+          <div className="v2-user-edit-actions">
+            {restoreFiles}
+            <Button variant="plain" size="none" className="v2-user-edit-send" disabled={!canResend || !draft.text.trim()} onClick={submit}><span>{resendLabel}</span><ArrowUp aria-hidden="true" /></Button>
           </div>
         </div>
       ) : (
@@ -150,7 +154,6 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           {messageCopy}
         </UserMessageBubble>
       )}
-      {draft !== null && !placeholder ? restoreFiles : null}
       {draft?.phase === 'resending' ? <p role="status" className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><DroidActivity phase="loading" />{draft.resumeOnly ? 'Reconnecting the restored conversation…' : draft.restoreFiles ? 'Restoring files and preparing the conversation…' : 'Preparing the conversation to resend…'}</p> : null}
       {draft?.phase !== 'resending' ? plan : null}
     </div>

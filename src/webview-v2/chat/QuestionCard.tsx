@@ -60,6 +60,7 @@ export function QuestionCard({
   const impact = edit.impact?.messageId === messageId ? edit.impact : null;
   const draft = editor.draft?.messageId === messageId ? editor.draft : null;
   const pending = draft?.phase === 'resending';
+  const restoreOnResend = Boolean(draft?.restoreFiles && impact && impact.restorableCount + impact.createdCount > 0);
   const attachmentDisabled = edit.disabled || stage === null || pending;
   const rejection = draft && edit.rejection !== null && edit.rejection.messageId === messageId && edit.rejection.sequence > draft.rejectionSequence ? EDIT_REJECT_COPY[edit.rejection.reason] : null;
   const originalAttachments = <>
@@ -77,7 +78,8 @@ export function QuestionCard({
     stagedAttachments={stage === null ? originalAttachments : stage.attachments.length ? <StagedAttachments stage="edit" attachments={stage.attachments} images={edit.images} actions={edit.actions} disabled={attachmentDisabled} /> : null}
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}
     onPaste={edit.onPaste} onDrop={edit.onDrop} onDragOver={edit.onDragOver}
-    onResend={() => { if (messageId && draft && !edit.isPreparing()) editor.submit(messageId, draft.restoreFiles && impact !== null && impact.restorableCount + impact.createdCount > 0); }}
+    resendLabel={draft?.resumeOnly ? 'Reconnect & resend' : restoreOnResend ? 'Restore & resend' : 'Resend'}
+    onResend={() => { if (messageId && draft && !edit.isPreparing()) editor.submit(messageId, restoreOnResend); }}
     restoreFiles={draft && impact ? <RestoreFiles impact={impact} checked={draft.restoreFiles} disabled={pending || draft.resumeOnly} restored={draft.resumeOnly && draft.restoreFiles} openDisabled={edit.disabled || pending} onChange={(restoreFiles) => editor.update(draft.messageId, { restoreFiles })} /> : null}
     plan={plan && onPlanToggle ? <PlanLine key={plan.anchorToolUseId} anchor={plan} running={planRunning} override={planChoice?.id === plan.anchorToolUseId ? planChoice.expanded : null} onToggle={onPlanToggle} /> : null} />;
 }

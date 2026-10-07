@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 编辑重发的文件恢复入口（2026-10-07）
+
+- Restore 从编辑框与 Plan 之间的独立卡片移入编辑框底部，与重发按钮相邻。
+  默认不勾选；勾选后按钮显示 `Restore & resend`，文件清单通过 `View details` 打开共享 Popover。
+- 保留 SDK 原生恢复范围、删除新建文件、无法恢复条目及手动修改影响说明；查看详情和文件
+  不执行恢复。重连接管失败的后继会话时显示 `Reconnect & resend`，沿用不重复恢复的逻辑。
+- `pnpm run package:vsix`（含 typecheck、lint:budgets 和生产构建）与 `pnpm run verify:vsix`
+  通过，已全局安装到 Microsoft VS Code；扩展入口、Chat、Viewer 和 CSS 安装哈希与构建一致。
+- 本轮未新增、修改或运行测试及浏览器自动化；真实交互与视觉由 Reload Window 后人工验收。
+
 ## 过程详情动画与渲染（2026-10-07）
 
 - 用户明确要求保留平滑展开；上一版直接切换高度的方案已撤回。Activity、Read／Thought

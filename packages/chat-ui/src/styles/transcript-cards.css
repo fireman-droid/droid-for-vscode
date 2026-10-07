@@ -295,6 +295,15 @@
     box-shadow: none;
   }
   .v2-user-edit-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .v2-user-edit-footer:empty { display: none; }
+  .v2-user-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--panel-edge);
+  }
   .v2-user-edit-attach {
     display: grid;
     width: 26px;
@@ -313,13 +322,17 @@
   .v2-user-edit-attach:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-user-edit-attach:disabled { opacity: .45; }
   .v2-user-edit-send {
-    display: grid;
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
+    display: inline-flex;
+    min-height: 28px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     margin-left: auto;
-    place-items: center;
-    padding: 0;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    line-height: 16px;
+    white-space: nowrap;
     border: 1px solid var(--panel-edge);
     border-radius: 6px;
     background: var(--control-surface-hover);
