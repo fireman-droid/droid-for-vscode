@@ -9,6 +9,13 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 暂停底部文件汇总（2026-10-07）
+
+- 按用户要求，ChatApp 暂不挂载输入框上方的 `ComposerChanges` 文件汇总；
+  聊天消息内的文件卡片、文件行跳转和 Review 入口保留。
+- 类型检查、文件规模检查、生产构建和 VSIX 校验通过，已全局安装 Microsoft VS Code。
+  未新增或运行视觉自动化测试，Reload Window 后人工验收。
+
 ## 历史文件卡片打开 Review（2026-10-07）
 
 - 真实会话日志确认：历史消息与完整的轮次 Diff 已恢复，但 Droid 初始化失败。

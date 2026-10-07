@@ -17,7 +17,6 @@ import { LiveTranscript } from './Transcript';
 import { useMessageActions } from './editing/useMessageActions';
 import { InteractionPanel } from './InteractionPanel';
 import { QueueBar } from './QueueBar';
-import { ComposerChanges } from './ComposerChanges';
 import { SessionMenu } from './SessionMenu';
 import { useSessionActions } from './sessions/useSessionActions';
 import { ComposerControls } from './ComposerControls';
@@ -206,7 +205,6 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         <div className="v2-composer-panels">
         {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
-        <ComposerChanges store={store} port={port} blocked={operationsBlocked} onStop={() => void composer.callbacks.onCancel()} />
         </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
