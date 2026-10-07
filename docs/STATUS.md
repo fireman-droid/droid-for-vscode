@@ -9,6 +9,15 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子代理任务卡透明交互（2026-10-07）
+
+- 普通子代理任务卡及 Agents 列表中的任务行在默认、悬停和按下时均保持透明背景；
+  悬停以主题化的 1px 内描边提示可点击，按下时加强描边，避免整块灰色填充。
+- 保留失败图标与状态文字、键盘焦点轮廓、减少动态效果设置，以及原有尺寸和只读入口。
+- 使用项目指定的 pnpm 10.2.0 完成 `package:vsix`（含 typecheck、lint:budgets 与生产构建）
+  和 `verify:vsix`；已全局安装到 Microsoft VS Code，扩展入口、Viewer 和 CSS 安装哈希一致。
+- 未新增、修改或运行测试及浏览器自动化；实际视觉由 VS Code Reload Window 后人工验收。
+
 ## 编辑重发的文件恢复入口（2026-10-07）
 
 - Restore 从编辑框与 Plan 之间的独立卡片移入编辑框底部，与重发按钮相邻。
