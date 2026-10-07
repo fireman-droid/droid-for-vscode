@@ -26,6 +26,7 @@ import { SubagentReviewEvidence } from '../chat/subagents/SubagentReviewEvidence
 import type { RecordedOperation } from './reviewOperationScope';
 import { priorFileOperations } from './recordedFileHistory';
 import { readOperationBody } from '../../runtime/tools/operationBody';
+import { reviewWorkspaceRoot } from './reviewWorkspaceRoot';
 
 type UnsequencedReviewMessage = ReviewHostMessage extends infer Message
   ? Message extends { readonly sequence: number }
@@ -58,7 +59,7 @@ export function createReviewFeature(options: {
   readonly sessionViewer: SessionViewerPanelController;
 }): { coordinator: ReviewCoordinator; start(): void } {
   const getRoot = (): string | undefined =>
-    options.getController().sessionState.activeRuntimeCwd ?? undefined;
+    reviewWorkspaceRoot(options.getController());
   let coordinator: ReviewCoordinator | null = null;
   const childEvidence = new SubagentReviewEvidence(
     options.getController,

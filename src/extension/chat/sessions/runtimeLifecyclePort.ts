@@ -60,7 +60,7 @@ export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
   readonly nativeIde?: Pick<NativeIdeBackend, 'read'>;
   readonly sessionState: SessionGuardPort['sessionState'] &
     Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> & Pick<SessionLifecycleState,
-    'runtime' | 'activeRuntimeCwd' | 'connection' |
+    'runtime' | 'activeRuntimeCwd' | 'historyWorkspace' | 'connection' |
     'closeRuntime' | 'managedRuntimes'>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly catalogState: Pick<SessionDirectoryState, 'sessions'>;

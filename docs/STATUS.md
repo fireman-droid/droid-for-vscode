@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 历史文件卡片打开 Review（2026-10-07）
+
+- 真实会话日志确认：历史消息与完整的轮次 Diff 已恢复，但 Droid 初始化失败。
+  旧入口要求 `activeRuntimeCwd` 非空，导致聊天文件行和 Review 点击后直接返回。
+- 历史加载通过会话与工作区检查后，独立保存其会话 ID 和目录；Review 面板打开、
+  有效性检查与 Diff 内容读取统一使用该绑定。Droid 未连接时也能查看本地历史改动，
+  会话不匹配、工作区变化或未受信任时不使用历史目录；目录不可用时显示明确提示。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix`
+  和 `pnpm run verify:vsix` 通过，167 个包条目校验成功，已全局安装 Microsoft VS Code。
+  本轮未新增或运行自动化测试、浏览器验收；原会话点击行为需 Reload Window 后人工验收。
+
 ## 统一源码高亮（2026-10-07）
 
 - Review 的 Unified／Split、聊天内 Diff、保存的文件版本、工具源码预览和 Markdown

@@ -27,6 +27,7 @@ export async function prepareHistory(
         ctl.sessionState.connection.status === 'connecting') {
       // Show verified history while the native handshake continues. No runtime
       // ownership or recovery checkpoint is committed at this display boundary.
+      ctl.sessionState.historyWorkspace = { sessionId: target.sessionId, cwd: target.cwd };
       ctl.effects.showSessionHistory({
         sessionId: target.sessionId,
         conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId,

@@ -14,6 +14,7 @@ import { operationDiffWithChanges, workspaceOperationDiff } from '../../../share
 import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 import { gitStatusPages } from '../../../shared/protocol/gitStatusPaging';
 import { isId } from '../../../shared/validation/guards';
+import { reviewWorkspaceRoot } from '../../review/reviewWorkspaceRoot';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -38,7 +39,7 @@ export class ReviewPanelController implements vscode.Disposable {
         if (message.type === 'review.agentReviewState' && message.reviewSessionId && this.target?.sessionId === message.sessionId)
           this.agentTarget = { sessionId: message.sessionId, reviewSessionId: message.reviewSessionId, root: this.target.root };
         if (message.type === 'host.snapshot') {
-          if (this.target && (this.target.sessionId !== controller.sessionState.sessionId || this.target.root !== controller.sessionState.activeRuntimeCwd))
+          if (this.target && (this.target.sessionId !== controller.sessionState.sessionId || this.target.root !== reviewWorkspaceRoot(controller)))
             this.invalidated = true;
           if (!this.current()) this.cancelPendingOpen();
           this.postContext();
@@ -56,8 +57,13 @@ export class ReviewPanelController implements vscode.Disposable {
     ];
   }
   open(message?: ReviewPanelOpen): void {
-    const { sessionId, activeRuntimeCwd: root } = this.controller.sessionState;
-    if (!sessionId || !root || (message && message.sessionId !== sessionId)) return;
+    const { sessionId } = this.controller.sessionState;
+    if (!sessionId || (message && message.sessionId !== sessionId)) return;
+    const root = reviewWorkspaceRoot(this.controller);
+    if (!root) {
+      void vscode.window.showWarningMessage('The workspace for these changes is unavailable. Open the session in its original trusted workspace.');
+      return;
+    }
     const latestOperation = this.latestOperationTurn();
     const latest = this.controller.effects.readLatestConversationChanges();
     this.cancelPendingOpen();
@@ -104,7 +110,7 @@ export class ReviewPanelController implements vscode.Disposable {
   }
   private current(): boolean {
     return !this.invalidated && !!this.target && this.target.sessionId === this.controller.sessionState.sessionId &&
-      this.target.root === this.controller.sessionState.activeRuntimeCwd &&
+      this.target.root === reviewWorkspaceRoot(this.controller) &&
       !this.controller.sessionState.disposed;
   }
   private initialize(): void {

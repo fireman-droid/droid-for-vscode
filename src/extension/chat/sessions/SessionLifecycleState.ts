@@ -8,6 +8,7 @@ export class SessionLifecycleState {
   sessionId: string | null = null;
   runtimeGeneration = 0;
   activeRuntimeCwd: string | null = null;
+  historyWorkspace: { readonly sessionId: string; readonly cwd: string } | null = null;
   initialization: Promise<void> | null = null;
   workspaceContextGeneration = 0;
   workspaceTransition: Promise<void> | null = null;
