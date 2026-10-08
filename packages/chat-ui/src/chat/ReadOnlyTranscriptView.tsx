@@ -44,7 +44,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
   });
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
     !scrolling.follow.current.following && scrolling.navigation.current === null &&
-    instance.scrollDirection !== 'backward' && item.end <= (instance.scrollOffset ?? 0);
+    (instance.itemSizeCache.has(item.key) ? item.end <= (instance.scrollOffset ?? 0) : item.start < (instance.scrollOffset ?? 0));
   const visible = virtualizer.getVirtualItems();
   return <div className="relative flex min-h-0 flex-col overflow-hidden">
     <div ref={viewport} aria-label="Read-only session transcript" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">

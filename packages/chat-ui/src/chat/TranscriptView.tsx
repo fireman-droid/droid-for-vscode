@@ -124,9 +124,11 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       scrolling.writeTop(offset + (adjustments ?? 0), behavior);
     },
   });
+  // Rows above the reading position must retain their anchor in either scroll
+  // direction, including when an estimated row receives its first measurement.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
     !scrolling.follow.current.following && scrolling.navigation.current === null &&
-    instance.scrollDirection !== 'backward' && item.end <= (instance.scrollOffset ?? 0);
+    (instance.itemSizeCache.has(item.key) ? item.end <= (instance.scrollOffset ?? 0) : item.start < (instance.scrollOffset ?? 0));
   const readBoundary = useCallback(() => {
     const element = viewport.current;
     const offset = (element?.scrollTop ?? 0) + PINNED_QUESTION_GAP;
