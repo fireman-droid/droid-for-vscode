@@ -9,6 +9,19 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Markdown 公式处理保留代码原文（2026-10-08）
+
+- 共享解析器先按 Markdown 语法识别行内代码、围栏和缩进代码，只对正文执行公式／货币
+  归一化；代码里的 `\(…\)`、`\[…\]` 和美元符号保持原样，复制代码与显示使用同一原文。
+- 归一化移到现有同步／Worker 共用的解析入口；长回复和流式回复沿原阈值卸载到 Worker，
+  主线程不再预先处理整段公式。保留既有单美元公式、货币识别和裸 LaTeX 支持。
+- 参考 Kilo 的代码区域保护思路，沿用本项目 React／unified 渲染链，没有替换整个渲染器。
+- 已授权的代码保护 11 项、Worker 流式复制 1 项和既有公式 6 项回归通过。Worker 新用例
+  首次混用了源码与构建产物的 Context，复制断言失败；统一该用例的源码 Provider 后通过。
+- `package:vsix`（含 typecheck、lint:budgets、公共包及生产构建）和 `verify:vsix` 通过；
+  本轮三项 Markdown 修复已安装到 Cursor，7 个主要安装产物与 VSIX 哈希一致。
+  npm 环境配置及 Cursor url.parse 弃用提示未阻断构建／安装；未执行浏览器或真实 UI 验收。
+
 ## Markdown 短表格宽度（2026-10-08）
 
 - 共享 Markdown 的表格按内容自动计算宽度，取消强制撑满消息宽度，避免编号等短列

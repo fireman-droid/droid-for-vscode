@@ -3,7 +3,6 @@ import type { Components } from 'react-markdown';
 import type { RootContent } from 'hast';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { jsx, jsxs } from 'react/jsx-runtime';
-import { normalizeMathDelimiters } from '../markdown/mathNormalization';
 import { decodeImagePath, isSafeMarkdownUrl } from '../markdown/markdownPolicy';
 import { detectPathLink } from '../markdown/pathLink';
 import { useLocalImageVisit } from './useLocalImageVisit';
@@ -90,11 +89,10 @@ export const Markdown = memo(function Markdown({ text, streaming = false, thinki
 }) {
   const deferred = useDeferredValue(text);
   const displayed = streaming ? deferred : text;
-  const normalized = useMemo(() => normalizeMathDelimiters(displayed), [displayed]);
-  const parsed = useParsedMarkdown(normalized, thinking, streaming);
-  const mounted = useMarkdownMount(parsed.nodes, parsed.background, normalized);
+  const parsed = useParsedMarkdown(displayed, thinking, streaming);
+  const mounted = useMarkdownMount(parsed.nodes, parsed.background, displayed);
   const pending = parsed.pending || mounted.pending;
-  const [initialLength] = useState(normalized.length);
+  const [initialLength] = useState(displayed.length);
   const renderingStream = streaming || pending;
   const markdownState = useMemo(() => ({ streaming: renderingStream, thinking }), [renderingStream, thinking]);
   const typography = thinking

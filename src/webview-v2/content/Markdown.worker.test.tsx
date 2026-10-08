@@ -7,6 +7,7 @@ import { parseMarkdown } from '../../../packages/chat-ui/src/markdown/parseMarkd
 import { createMarkdownTreeDelta, type MarkdownParseRequest, type MarkdownParseResponse } from '../../../packages/chat-ui/src/markdown/markdownWorkerProtocol';
 import { Markdown } from '../../../packages/chat-ui/src/content/Markdown';
 import { ContentProvider } from '../../../packages/chat-ui/src/content/context';
+import { UiEnvironmentProvider as SourceEnvironmentProvider } from '../../../packages/chat-ui/src/environment';
 
 vi.mock('../../../packages/chat-ui/src/markdown/markdownWorkerSource', () => ({ markdownWorkerSource: 'local test worker' }));
 
@@ -36,6 +37,28 @@ beforeEach(() => {
   });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it('normalizes streamed math in the worker without rewriting displayed or copied code', async () => {
+  const code = String.raw`const pattern = /\(value\)/; // $5 and $10` + '\n';
+  const prefix = `${padding}\n\nFormula: \\(x^2\\).\n\n`;
+  const source = prefix + '```javascript\n' + code + '```';
+  const copyText = vi.fn(async () => {});
+  const view = (text: string, streaming: boolean) => <SourceEnvironmentProvider value={{ assistantName: 'Droid', copyText }}>
+    <Markdown text={text} streaming={streaming} />
+  </SourceEnvironmentProvider>;
+  const { rerender, container } = render(view(prefix, true));
+  const worker = ControlledWorker.instances[0]!;
+  expect(worker.requests[0]?.text).toBe(prefix);
+  rerender(view(source, false));
+  act(() => worker.complete());
+  expect(worker.requests[1]?.text).toBe(source);
+  act(() => worker.complete());
+  await waitFor(() => expect(container.querySelector('[data-markdown-pending]')).toBeNull());
+  expect(screen.getByRole('math', { hidden: true }).querySelector('annotation')?.textContent).toBe('x^2');
+  expect(screen.getByRole('region', { name: 'javascript code' }).textContent).toBe(code);
+  fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+  await waitFor(() => expect(copyText).toHaveBeenCalledWith(code));
+});
 
 it('keeps a medium streamed reply responsive while preserving its visible prefix and final references', async () => {
   const prefix = 'Visible before background parsing.\n\n[Earlier reference][docs]\n\n';

@@ -1,6 +1,32 @@
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import { visit } from 'unist-util-visit';
 import { escapeCurrencyDollars } from './currencyMath';
 
+const codeParser = unified().use(remarkParse).use(remarkGfm);
+
 export function normalizeMathDelimiters(input: string): string {
+  if (!/[\\$]/u.test(input)) return input;
+  const ranges: { start: number; end: number }[] = [];
+  // Let the Markdown parser identify inline, fenced and indented code, including
+  // unfinished fences and code nested in lists/quotes. Preserve its source bytes.
+  visit(codeParser.parse(input), ['code', 'inlineCode'], node => {
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (start !== undefined && end !== undefined) ranges.push({ start, end });
+  });
+  let cursor = 0;
+  const output: string[] = [];
+  for (const { start, end } of ranges) {
+    output.push(normalizeProse(input.slice(cursor, start)), input.slice(start, end));
+    cursor = end;
+  }
+  output.push(normalizeProse(input.slice(cursor)));
+  return output.join('');
+}
+
+function normalizeProse(input: string): string {
   const normalized = input
     .replace(/\\\[([\s\S]*?)\\\]/gu, (_match, formula: string) => `$$\n${formula.trim()}\n$$`)
     .replace(/\\\(([\s\S]*?)\\\)/gu, (_match, formula: string) => `$${formula.trim()}$`);

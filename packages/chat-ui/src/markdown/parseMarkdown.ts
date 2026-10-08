@@ -10,6 +10,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { markdownUrlTransform, safeMarkdownUrlTransform } from './markdownPolicy';
 import { rehypeStreamingText } from './streamingTree';
+import { normalizeMathDelimiters } from './mathNormalization';
 
 // The same pipeline as react-markdown, including its raw-HTML removal and URL
 // attribute transform. Parsing remains whole-document: definitions, loose lists
@@ -20,7 +21,7 @@ const processor = unified().use(remarkParse).use(remarkGfm)
   .use(rehypeKatex).use(rehypeStreamingText);
 
 export function parseMarkdown(text: string, thinking: boolean): readonly RootContent[] {
-  const file = new VFile(text);
+  const file = new VFile(normalizeMathDelimiters(text));
   const tree = processor.runSync(processor.parse(file), file) as Root;
   visit(tree, (node, index, parent) => {
     if (node.type === 'raw' && parent && index !== undefined) {
