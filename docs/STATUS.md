@@ -9,6 +9,20 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子代理活动文字向上切换（2026-10-08）
+
+- AgentTask 的活动摘要更新时，旧文字在 180ms 内向上淡出，新文字在 240ms 内从下方
+  推入并淡入。动画只改变文字的 transform／opacity，限制在原有单行高度中，保留透明
+  背景、字号、截断和卡片尺寸，不影响标题、运行状态、耗时及工具计数。
+- 初次显示直接呈现真实活动；只有活动文字变化触发切换，耗时刷新不会重启动画。
+  每次只保留当前与上一条文字，后续活动到达时直接替换，不排队播放过期摘要。
+  旧文字对读屏隐藏；系统要求减少动态效果时直接更新文字。
+- 正文卡片和复用 AgentTask 的活动行共用实现；Host／Runtime 活动采集和打开行为未改。
+  本次未获测试／浏览器验收授权，没有新增、修改或运行测试。
+- `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）与 `verify:vsix` 通过，
+  167 个包条目校验通过；安装至此前指定的 Cursor，7 个主要安装产物与 VSIX 哈希一致。
+  npm 环境配置和 Cursor url.parse 弃用提示未阻断交付；实际动效待 Reload Window 后验收。
+
 ## 子代理卡片加载占位与鼠标边框（2026-10-08）
 
 - 没有真实活动数据时，不再插入 Waiting for activity／Open to view activity 占位文字。
