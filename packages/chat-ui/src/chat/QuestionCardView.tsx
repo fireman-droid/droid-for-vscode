@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, type ClipboardEventHandler, type DragEventHandler, type ReactNode, type RefObject } from 'react';
-import { ArrowUp } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
+import { Tooltip } from '../ui/overlays';
 import { Textarea } from '../ui/input';
 import { DroidActivity } from '../ui/droid-motion';
 import { UserMessageBubble } from './UserMessageView';
@@ -142,7 +143,8 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
             {restoreFiles}
             <div className={cn('v2-user-edit-controls', Boolean(editSettings) && 'v2-user-edit-controls-with-settings')}>
               {editSettings}
-              <Button variant="plain" size="none" className="v2-user-edit-send" disabled={!canResend || !draft.text.trim()} onClick={submit}><span>{resendLabel}</span><ArrowUp aria-hidden="true" /></Button>
+              <Tooltip content={resendLabel}><Button variant="plain" size="none" className="v2-user-edit-send" aria-label={resendLabel}
+                disabled={!canResend || !draft.text.trim()} onClick={submit}><RotateCcw aria-hidden="true" /></Button></Tooltip>
             </div>
           </div>
         </div>

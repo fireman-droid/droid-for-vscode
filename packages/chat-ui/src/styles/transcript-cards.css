@@ -323,16 +323,13 @@
   .v2-user-edit-attach:disabled { opacity: .45; }
   .v2-user-edit-send {
     display: inline-flex;
-    min-height: 24px;
+    width: 24px;
+    height: 24px;
     flex: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
     margin-left: auto;
-    padding: 3px 6px;
-    font-size: 11.5px;
-    line-height: 16px;
-    white-space: nowrap;
+    padding: 0;
     border: 1px solid var(--panel-edge);
     border-radius: 6px;
     background: var(--control-surface-hover);

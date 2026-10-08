@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 编辑消息的图标重发按钮（2026-10-08）
+
+- 编辑消息底部将 Resend 文字与向上箭头改为 24×24px 的单个回转箭头按钮，图标为
+  14px RotateCcw；沿用原有边框、圆角、禁用和焦点样式，不增加编辑栏高度。
+- 共享 Tooltip 与 aria-label 保留动作含义，普通重发、恢复文件并重发、重连并重发
+  仍使用各自原有标签。提交回调、可用条件、Enter／IME 行为和恢复选项未改。
+- `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）和 `verify:vsix` 通过，
+  167 个包条目校验通过。与本轮表格边框一起安装至此前指定的 Cursor；7 个主要安装产物
+  与 VSIX 哈希一致。npm 环境配置和 Cursor url.parse 弃用提示未阻断交付。本次未获
+  测试／浏览器验收授权，没有新增、修改或运行测试，待 Reload Window 后确认视觉。
+
 ## Markdown 表格完整网格（2026-10-08）
 
 - 共享聊天样式给 Markdown 表头和数据单元格统一增加 1px 的四边边框，使用主题的
