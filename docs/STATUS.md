@@ -22,6 +22,14 @@
   本轮三项 Markdown 修复已安装到 Cursor，7 个主要安装产物与 VSIX 哈希一致。
   npm 环境配置及 Cursor url.parse 弃用提示未阻断构建／安装；未执行浏览器或真实 UI 验收。
 
+## Markdown 列表中的段落间距（2026-10-08）
+
+- 同一个列表项内，从第二个连续段落起恢复 8px 上间距，避免多个段落挤成一块。
+  第一段、紧凑列表和嵌套列表的既有间距保持不变；参考 Kilo 对列表首段与后续段落的区分。
+- 仅修改共享聊天排版规则。`package:vsix`（含 typecheck、lint:budgets、生产构建）和
+  `verify:vsix` 通过；已随本轮 Markdown 修复安装到 Cursor，主要安装产物哈希一致。
+  未为 CSS 文本或类名添加测试，真实间距待 Reload Window 后人工验收。
+
 ## Markdown 短表格宽度（2026-10-08）
 
 - 共享 Markdown 的表格按内容自动计算宽度，取消强制撑满消息宽度，避免编号等短列

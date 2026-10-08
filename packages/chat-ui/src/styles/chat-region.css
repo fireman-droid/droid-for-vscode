@@ -161,6 +161,7 @@
   .v2-chat-surface .markdown-prose li { padding-block: 4px; }
   .v2-chat-surface .markdown-prose li + li { margin-top: 0; }
   .v2-chat-surface .markdown-prose li > p { margin: 0; }
+  .v2-chat-surface .markdown-prose li > p + p { margin-top: 8px; }
   .v2-chat-surface .markdown-prose li > :is(ul, ol) { margin: 0; }
   .v2-chat-surface .markdown-prose ul ul { list-style-type: circle; }
   .v2-chat-surface .markdown-prose strong { font-weight: 600; }
