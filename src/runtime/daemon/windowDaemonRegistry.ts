@@ -17,12 +17,15 @@ export interface WindowDaemonRecord {
   /** Absent on legacy shared daemons and the window's metadata-only daemon. */
   readonly rootSessionId?: string;
   readonly ideRelay?: PersistentIdeRelayDescriptor;
+  /** Generation from the shared discovery file; absent on window daemons. */
+  readonly legacyStartedAt?: number;
 }
 
 const root = join(homedir(), '.droidvisx', 'window-daemons');
 const instanceId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const pendingWrites = new Map<string, Promise<void>>();
 const renameRetryDelaysMs = [25, 50, 100, 200, 400] as const;
+let retiredLegacy: Pick<WindowDaemonRecord, 'pid' | 'port' | 'legacyStartedAt'> | undefined;
 
 export function windowDaemonUrl(record: WindowDaemonRecord): string {
   return `ws://127.0.0.1:${record.port}`;
@@ -33,6 +36,12 @@ export async function writeWindowDaemon(record: WindowDaemonRecord): Promise<voi
 }
 
 export async function removeWindowDaemon(record: WindowDaemonRecord): Promise<void> {
+  if (record.id === 'legacy') {
+    // Keep shared discovery read-only, but do not probe this confirmed-dead
+    // generation on every poll. A replacement remains discoverable.
+    retiredLegacy = { pid: record.pid, port: record.port, legacyStartedAt: record.legacyStartedAt };
+    return;
+  }
   if (!instanceId.test(record.id)) return;
   const file = join(root, `${record.id}.json`);
   const value = await readRecord(file);
@@ -44,8 +53,11 @@ export async function removeWindowDaemon(record: WindowDaemonRecord): Promise<vo
 export async function readWindowDaemon(id: string): Promise<WindowDaemonRecord | null> {
   if (id === 'legacy') {
     const legacy = readDaemonDiscovery(defaultDiscoveryFile());
+    if (legacy && retiredLegacy?.pid === legacy.pid && retiredLegacy.port === legacy.port &&
+        retiredLegacy.legacyStartedAt === legacy.startedAt) return null;
     return legacy ? {
-      id, port: legacy.port, pid: legacy.pid, ownerPid: 0, cwd: '', idePort: null,
+      id, port: legacy.port, pid: legacy.pid, legacyStartedAt: legacy.startedAt,
+      ownerPid: 0, cwd: '', idePort: null,
     } : null;
   }
   if (!instanceId.test(id)) throw new Error('Invalid daemon instance identity.');

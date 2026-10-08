@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 失效旧 daemon 的重复发现（2026-10-08）
+
+- 确认 legacy daemon 已退出或进程已被替换后，在当前扩展进程中记住其 PID、端口和
+  启动时间；相同发现记录不再进入后续进程／监听端口探测，避免每次轮询重复启动查询。
+- 继续只读兼容旧共享发现文件，不删除文件、不停止其端口上的进程；发现记录身份变化后
+  重新验证。Reload 后重新验证一次；仍存活或身份未确认的 daemon 不进入失效缓存。
+- 使用 pnpm 10.2.0 完成 `package:vsix`（含 typecheck、lint:budgets 与生产构建）和
+  `verify:vsix`；已安装到 Cursor，7 个安装产物的哈希与 VSIX 一致。
+- 本轮未新增、修改或运行测试及浏览器自动化；真实发现行为待 Cursor Reload Window 后验收。
+
 ## Review 基线跨重载保留（2026-10-08）
 
 - 长会话的最近 24 轮快照继续按原窗口保留；当前选中的轮次 Review 额外保存一份基线索引，
