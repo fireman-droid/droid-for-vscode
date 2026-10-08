@@ -70,7 +70,7 @@ export function AgentNavigation({ navigation, port }: {
           <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{row.statusLabel}</span>
         </Button>
         {row.onStop ? <Button variant="plain" size="none"
-          className="v2-composer-changes-stop min-h-7 w-[68px] shrink-0 whitespace-nowrap"
+          className="v2-composer-changes-stop min-h-6 w-[68px] shrink-0 whitespace-nowrap"
           disabled={row.stopPending} aria-busy={row.stopPending || undefined}
           aria-label={`${row.stopPending ? 'Stopping' : 'Stop'} agent task: ${row.title}`}
           title={`${row.stopPending ? 'Stopping' : 'Stop'} ${row.title}`}

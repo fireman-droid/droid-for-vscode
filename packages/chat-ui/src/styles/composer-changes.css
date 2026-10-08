@@ -4,8 +4,16 @@
   .v2-composer-changes-toggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; text-align: left; font-size: 13px; min-height: 28px; padding: 2px 5px; }
   .v2-composer-changes-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: rotate 180ms var(--motion-ease); }
   .v2-composer-agents { padding-block: 0; }
-  .v2-composer-agents :is(.v2-composer-changes-header, .v2-composer-changes-toggle) { min-height: 28px; }
-  .v2-composer-agents .v2-composer-changes-toggle { padding-block: 0; font-size: 12px; line-height: 20px; }
+  .v2-composer-agents :is(.v2-composer-changes-header, .v2-composer-changes-toggle) { min-height: 22px; }
+  .v2-composer-agents .v2-composer-changes-toggle { gap: 6px; padding-block: 0; font-size: 12px; line-height: 18px; }
+  .v2-composer-agents .v2-composer-changes-file { min-height: 24px; gap: 6px; padding-block: 2px; font-size: 12px; line-height: 18px; }
+  .v2-composer-agents .v2-composer-changes-file > svg { width: 12px; height: 12px; flex: none; }
+  .v2-composer-agents .dvx-agent-task-open { gap: 6px; padding: 3px 5px; }
+  .v2-composer-agents .dvx-agent-task-heading { line-height: 18px; }
+  .v2-composer-agents .dvx-agent-task-title { font-size: 12px; }
+  .v2-composer-agents .dvx-agent-task-icon { width: 12px; height: 18px; }
+  .v2-composer-agents .dvx-agent-task-icon > svg { width: 12px; height: 12px; }
+  .v2-composer-agents .dvx-agent-task-meta { margin-top: 0; line-height: 16px; }
   .v2-composer-changes-stop { color: var(--muted-ink); padding: 2px 4px; font-size: 11px; }
   .v2-composer-changes-review { flex-shrink: 0; }
   .v2-composer-changes-list { list-style: none; margin: 0; max-height: min(128px, 20vh); overflow-y: auto; padding: 0 6px; }
