@@ -18,22 +18,7 @@
   .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 2px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .dvx-agent-task-meta:empty { display: none; }
   .dvx-agent-task-meta > span { flex: none; white-space: nowrap; }
-  .dvx-agent-task-meta .dvx-agent-task-activity { position: relative; flex: 1; min-width: 0; height: 1lh; overflow: hidden; }
-  .dvx-agent-task-activity-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dvx-agent-task-activity-line[data-entering] { animation: dvx-agent-activity-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  .dvx-agent-task-activity-out { position: absolute; inset: 0; animation: dvx-agent-activity-out 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  @keyframes dvx-agent-activity-in {
-    from { opacity: 0; transform: translateY(100%); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes dvx-agent-activity-out {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(-100%); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .dvx-agent-task-activity-line[data-entering] { animation: none; }
-    .dvx-agent-task-activity-out { display: none; animation: none; }
-  }
+  .dvx-agent-task-meta .dvx-agent-task-activity { flex: 1; }
   .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
   .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 30px; }
   .dvx-agent-task-feedback-message { display: flex; min-width: 0; flex: 1 1 140px; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }

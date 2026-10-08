@@ -1,6 +1,6 @@
 import { Check, Circle, CircleAlert, LoaderCircle, RotateCw } from 'lucide-react';
-import { useState } from 'react';
 import { Button } from '../ui/button';
+import { SlidingText } from '../ui/sliding-text';
 
 export interface AgentTaskProps {
   readonly title: string;
@@ -34,7 +34,7 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
           <span className="dvx-agent-task-status">{statusLabel}</span>
         </span>
         <span className="dvx-agent-task-meta">
-          {activity ? <AgentActivity text={activity} /> : null}
+          {activity ? <SlidingText text={activity} className="dvx-agent-task-activity" /> : null}
           {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">Elapsed {elapsed}</span> : null}
           {toolCount !== undefined ? <span>{toolCount} {toolCount === 1 ? 'tool' : 'tools'}</span> : null}
         </span>
@@ -49,22 +49,4 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         onClick={onOpen} aria-label={`Retry opening ${title}`}><RotateCw aria-hidden="true" />Retry</Button> : null}
     </div> : null}
   </div>;
-}
-
-function AgentActivity({ text }: { readonly text: string }) {
-  const [frame, setFrame] = useState<{ current: string; previous?: string; revision: number }>({
-    current: text, revision: 0,
-  });
-  // Keep both lines in the same frame; elapsed-time renders must not restart the transition.
-  if (frame.current !== text) {
-    setFrame({ current: text, previous: frame.current, revision: frame.revision + 1 });
-  }
-  return <span className="dvx-agent-task-activity" title={text}>
-    {frame.previous !== undefined ? <span key={`out-${frame.revision}`} aria-hidden="true"
-      className="dvx-agent-task-activity-line dvx-agent-task-activity-out">{frame.previous}</span> : null}
-    <span key={`in-${frame.revision}`} className="dvx-agent-task-activity-line"
-      data-entering={frame.previous !== undefined || undefined}
-      onAnimationEnd={() => setFrame((current) => current.revision === frame.revision
-        ? { current: current.current, revision: current.revision } : current)}>{frame.current}</span>
-  </span>;
 }

@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Activity 摘要切换动效（2026-10-08）
+
+- Activity 折叠行的动作、目标及汇总文字切换时，旧文字在 180ms 内向上淡出，新文字
+  在 240ms 内从下方推入；保持单行高度、截断省略与完整文字提示，不通过高度动画推动聊天。
+- 与子代理活动摘要共用 UI 层 SlidingText；首次显示不播放替换动画，无关重渲染不会重播，
+  快速更新直接替换为最新文字。退出文字不参与无障碍名称，减少动态效果模式直接显示新内容。
+- 本轮只做构建、类型检查、文件预算及安装包校验；未新增或运行测试、浏览器及真实 UI 验收。
+  `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）及 `verify:vsix` 通过，
+  校验 167 个包条目后安装至此前指定的 Cursor，7 个主要安装产物与 VSIX 哈希一致。
+  npm 配置及 Cursor url.parse 弃用提示未阻断构建或安装，实际动画由用户 Reload Window 后验收。
+
 ## 恢复连接的重复启动与等待累加（2026-10-08）
 
 - 在保留完整 daemon 发现与重复归属检查的前提下，根会话不在 listOpened 时，若保存的
