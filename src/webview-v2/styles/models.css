@@ -79,11 +79,8 @@
   .models-key-note { padding: 12px; border-radius: 7px; background: var(--control-surface-hover); }
   .models-check-label { cursor: pointer; border-radius: var(--control-radius); }
   .models-check-label:has(:disabled) { cursor: default; }
-  .models-advanced { border-block: 1px solid var(--panel-edge); }
-  .models-advanced:has([data-state='open']), .models-advanced:focus-within { border-color: var(--control-border-focus); }
-  .models-advanced-trigger { border-radius: var(--control-radius); }
-  .models-advanced-trigger:hover:not(:disabled), .models-advanced-trigger[data-state='open'] { background: var(--control-surface-hover); color: var(--ink); }
-  .models-advanced-trigger:active:not(:disabled) { background: var(--control-surface-active); }
+  .models-advanced-trigger { border-radius: var(--control-radius); background: transparent; }
+  .models-advanced-trigger:hover:not(:disabled), .models-advanced-trigger[data-state='open'] { color: var(--ink); }
   .models-form-actions { position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 12px 20px; border-top: 1px solid var(--panel-edge); background: var(--overlay-surface); }
   .models-form-actions > button { min-height: 34px; padding-inline: 12px; }
   .models-form-intro h3 { font-size: 14px; font-weight: 500; margin-bottom: 4px; }

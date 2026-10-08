@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown, LoaderCircle } from 'lucide-react';
+import { ChevronRight, LoaderCircle } from 'lucide-react';
 import { CUSTOM_MODEL_PROVIDERS, type CustomModelProvider } from '../../shared/protocol/customModelsProtocol';
 import type { ConnectionDraft, ManagedModel, ManagedModelDraft, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import { PROTOCOLS } from './protocols';
@@ -188,11 +188,12 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
         <p id={`${formId}-name-hint`} className="models-field-hint">用于聊天中的模型选择。同名模型会自动补充渠道标识。</p>
       </div>
       <Collapsible open={advanced} onOpenChange={setAdvanced} className="models-advanced">
-        <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="models-advanced-trigger flex w-full items-center justify-between py-2 text-[13px] text-muted-foreground">
-          <span>高级设置{tokensMessage ? <span className="models-field-error"> · 需要修正</span> : null}</span><ChevronDown aria-hidden="true" className={`size-3.5 transition-transform motion-reduce:transition-none ${advanced ? 'rotate-180' : ''}`} />
+        <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="models-advanced-trigger inline-flex min-h-6 max-w-full items-center gap-1 py-0.5 text-left text-xs leading-[18px] text-muted-foreground">
+          <ChevronRight aria-hidden="true" className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${advanced ? 'rotate-90' : ''}`} />
+          <span>高级设置{tokensMessage ? <span className="text-[var(--error-ink)]"> · 需要修正</span> : null}</span>
         </Button></CollapsibleTrigger>
         <CollapsibleContent forceMount hidden={!advanced}>
-          <div className="space-y-4 pb-2 pt-3">
+          <div className="space-y-3 pb-2 pt-2">
             <div className="models-field">
               <label htmlFor={`${formId}-tokens`}>最大输出 Token <span className="models-optional">可选</span></label>
               <Input id={`${formId}-tokens`} ref={tokensRef} inputMode="numeric" value={tokens} placeholder="使用 Droid 默认值"
