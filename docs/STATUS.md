@@ -9,6 +9,20 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 子代理卡片加载占位与鼠标边框（2026-10-08）
+
+- 没有真实活动数据时，不再插入 Waiting for activity／Open to view activity 占位文字。
+  收到活动后才显示活动摘要；已有任务标题、角色、运行状态、耗时和工具计数保留。
+- 点击打开子代理时，不再增添 Opening task 临时反馈行；复用标题行原有图标显示忙碌，
+  保留 aria-busy。确实无法打开或尚未关联 transcript 时仍显示原因和 Retry，不吞掉失败。
+- 移除 AgentTask 的 hover／按下描边阴影及相应过渡，卡片保持透明；键盘 focus-visible
+  轮廓保留。正文卡片与输入框上方复用 AgentTask 的活动行同步生效。
+- 本次只调整呈现，没有修改子代理初始化、关联、打开和重试的 Host／Runtime 逻辑。
+  本次未获测试／浏览器验收授权，没有新增、修改或运行测试。
+- `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）与 `verify:vsix` 通过，
+  167 个包条目校验通过；安装至此前指定的 Cursor，7 个主要安装产物与 VSIX 哈希一致。
+  npm 环境配置和 Cursor url.parse 弃用提示未阻断交付；真实视觉待 Reload Window 后验收。
+
 ## 模型高级设置的轻量折叠入口（2026-10-08）
 
 - 新增与编辑模型共用的 ModelForm，将高级设置从全宽灰色栏改为内容宽度的透明入口：

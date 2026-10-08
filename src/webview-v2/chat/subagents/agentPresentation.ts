@@ -56,8 +56,7 @@ export function presentSubagent(item: ToolTranscriptItem, extras: SubagentRowExt
     ? 'Task transcript is not linked yet.' : extras?.openStatus === 'failed' ? 'Could not open task transcript.' : undefined;
   const latestActivity = extras?.activities[0];
   const activity = latestActivity ? [latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')
-    : feedback ? undefined : (subagent.toolUseCount ?? 0) > 0
-      ? 'Open to view activity' : status === 'running' ? 'Waiting for activity…' : undefined;
+    : undefined;
   return {
     title: subagent.description || `${subagent.type} subagent`,
     role: subagent.type,

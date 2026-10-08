@@ -17,13 +17,14 @@ export interface AgentTaskProps {
 /** Presentation only: session resolution and lifecycle stay with the caller. */
 export function AgentTask({ title, role, statusLabel, tone, variant = 'card', elapsed,
   toolCount, activity, feedback, onOpen }: AgentTaskProps) {
-  const StatusIcon = tone === 'running' ? LoaderCircle : tone === 'completed' ? Check
+  const busy = tone === 'running' || feedback?.opening === true;
+  const StatusIcon = busy ? LoaderCircle : tone === 'completed' ? Check
     : tone === 'failed' ? CircleAlert : Circle;
   return <div className="dvx-agent-task" data-variant={variant} data-tone={tone}>
     <Button variant="plain" size="none" className="dvx-agent-task-open"
       disabled={!onOpen} onClick={onOpen} aria-busy={feedback?.opening || undefined}>
-      <span className="dvx-agent-task-icon" title={statusLabel}>
-        <StatusIcon aria-hidden="true" className={tone === 'running' ? 'motion-safe:animate-spin' : undefined} />
+      <span className="dvx-agent-task-icon" title={feedback?.opening ? feedback.text : statusLabel}>
+        <StatusIcon aria-hidden="true" className={busy ? 'motion-safe:animate-spin' : undefined} />
       </span>
       <span className="dvx-agent-task-body">
         <span className="dvx-agent-task-heading">
@@ -38,12 +39,12 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         </span>
       </span>
     </Button>
-    {feedback ? <div className="dvx-agent-task-feedback" data-failed={feedback.failed || undefined}>
+    {feedback && !feedback.opening ? <div className="dvx-agent-task-feedback" data-failed={feedback.failed || undefined}>
       <span role="status" className="dvx-agent-task-feedback-message">
-        {feedback.opening ? <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" /> : <CircleAlert aria-hidden="true" />}
+        <CircleAlert aria-hidden="true" />
         <span>{feedback.text}</span>
       </span>
-      {!feedback.opening && onOpen ? <Button variant="ghost" size="sm" className="dvx-agent-task-retry"
+      {onOpen ? <Button variant="ghost" size="sm" className="dvx-agent-task-retry"
         onClick={onOpen} aria-label={`Retry opening ${title}`}><RotateCw aria-hidden="true" />Retry</Button> : null}
     </div> : null}
   </div>;
