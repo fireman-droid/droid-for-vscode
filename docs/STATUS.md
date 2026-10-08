@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 主题过渡取消的异常处理（2026-10-08）
+
+- 保留可见面板的主题切换动画、最新选择优先和减少动态效果设置；隐藏的面板直接更新主题，
+  避免启动无法显示的过渡。Chat、Models、Mission、Viewer、Review 继续复用同一入口。
+- 接住 View Transition 的动画就绪、DOM 更新与结束 Promise：动画被跳过不会再产生
+  未处理拒绝；真正的 DOM 更新失败仍报告一次错误，不把主题应用失败当成成功。
+- 使用 pnpm 10.2.0 完成 `package:vsix`（含 typecheck、lint:budgets 与生产构建）和
+  `verify:vsix`；包含本轮三处修复的安装包已安装到 Cursor，7 个安装产物的哈希与 VSIX 一致。
+- 本轮未新增、修改或运行测试及浏览器自动化；主题交互待 Cursor Reload Window 后验收。
+
 ## 失效旧 daemon 的重复发现（2026-10-08）
 
 - 确认 legacy daemon 已退出或进程已被替换后，在当前扩展进程中记住其 PID、端口和
