@@ -3,7 +3,7 @@ import type { Components } from 'react-markdown';
 import type { RootContent } from 'hast';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { jsx, jsxs } from 'react/jsx-runtime';
-import { decodeImagePath, isSafeMarkdownUrl } from '../markdown/markdownPolicy';
+import { decodeImagePath, isSafeMarkdownUrl, MAX_IMAGE_PATH_LENGTH } from '../markdown/markdownPolicy';
 import { detectPathLink } from '../markdown/pathLink';
 import { useLocalImageVisit } from './useLocalImageVisit';
 import { CodeBlock } from './CodeBlock';
@@ -55,21 +55,24 @@ function InlineCode({ children }: ComponentProps<'code'>) {
 function MarkdownImage({ src, alt }: ComponentProps<'img'>) {
   const { thinking } = useContext(MarkdownState);
   if (thinking || typeof src !== 'string' || src.length === 0) return null;
-  if (isSafeMarkdownUrl(src)) return <img src={src} alt={alt ?? ''} loading="lazy" className="max-h-64 max-w-full rounded object-contain" />;
-  return <LocalImage path={decodeImagePath(src)} alt={alt ?? ''} />;
+  if (isSafeMarkdownUrl(src) && (src.length > MAX_IMAGE_PATH_LENGTH || /[\u0000-\u001f\u007f]/u.test(src)))
+    return <span className="text-xs text-muted-foreground">Image preview unavailable: <SafeLink href={src}>{alt || 'Open image'}</SafeLink></span>;
+  return <ReferencedImage path={isSafeMarkdownUrl(src) ? src : decodeImagePath(src)} alt={alt ?? ''} />;
 }
 
-function LocalImage({ path, alt }: { readonly path: string; readonly alt: string }) {
+function ReferencedImage({ path, alt }: { readonly path: string; readonly alt: string }) {
   const { images, actions } = useContent();
   const host = useRef<HTMLSpanElement>(null);
   useLocalImageVisit(host, path, images?.request);
   const image = images?.entries[path];
-  const link = detectPathLink(path);
+  const remote = isSafeMarkdownUrl(path);
+  const link = remote ? null : detectPathLink(path);
   return <span ref={host}>
     {image?.status === 'ok' && image.mediaType !== null
       ? image.data.length === 0 ? <span role="note">Image preview unavailable</span> : <ImageContent src={`data:${image.mediaType};base64,${image.data}`} alt={alt || 'Message image'} />
       : image === undefined && images !== undefined ? <span role="status" className="text-xs text-muted-foreground">Loading image…</span>
-        : <span className="text-xs text-muted-foreground">{alt ? `${alt}: ` : ''}{link && actions?.openPath ? <Button textSelectable variant="plain" size="none" className="text-link hover:underline" onClick={() => actions.openPath?.(link)}>{path}</Button> : <code>{path}</code>}{image?.status === 'too-large' ? ' (too large to preview)' : image?.status === 'unsupported' ? ' (not a previewable image)' : ''}</span>}
+        : remote ? <span className="text-xs text-muted-foreground">Image preview unavailable: <SafeLink href={path}>{alt || 'Open image'}</SafeLink>{image?.status === 'too-large' ? ' (too large)' : image?.status === 'unsupported' ? ' (unsupported source or format)' : ''}</span>
+          : <span className="text-xs text-muted-foreground">{alt ? `${alt}: ` : ''}{link && actions?.openPath ? <Button textSelectable variant="plain" size="none" className="text-link hover:underline" onClick={() => actions.openPath?.(link)}>{path}</Button> : <code>{path}</code>}{image?.status === 'too-large' ? ' (too large to preview)' : image?.status === 'unsupported' ? ' (not a previewable image)' : ''}</span>}
   </span>;
 }
 

@@ -1,4 +1,4 @@
-const MAX_IMAGE_PATH_LENGTH = 1024;
+export const MAX_IMAGE_PATH_LENGTH = 1024;
 import { isPreviewableFilePath, isSafeWorkspaceRelativePath } from './pathPolicy';
 import { toWorkspaceRelativePath, type PathLink } from './pathLink';
 

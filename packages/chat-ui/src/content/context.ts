@@ -14,6 +14,7 @@ export interface ContentEnvironment {
   readonly actions?: ContentActions;
   readonly images?: {
     readonly entries: Readonly<Record<string, LocalImageEntry>>;
+    /** Resolve local paths or remote URLs through the embedding application's image policy. */
     readonly request: (path: string) => void;
   };
   readonly workspaceRoot: string | null;

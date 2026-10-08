@@ -105,8 +105,8 @@ export interface AssistantWebviewState {
     readonly files: readonly string[];
   } | null;
   /**
-   * Workspace-local images resolved for markdown references, keyed
-   * by the path exactly as written in the markdown source.
+   * Host-resolved Markdown images, keyed by the local path or remote
+   * URL exactly as written in the source.
    */
   readonly localImages: Readonly<Record<string, LocalImageEntry>>;
   /** Archived sessions load lazily; 'idle' means not requested yet. */

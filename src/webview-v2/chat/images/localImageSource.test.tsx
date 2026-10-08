@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { assistantWebviewReducer } from '../../state/store';
@@ -9,6 +9,30 @@ import { useLocalImageSource, useLocalImageVisit } from './localImageSource';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it('isolates remote image responses and pending requests when the active session changes', () => {
+  const path = 'https://images.example.test/chart.png';
+  const port = { postMessage: vi.fn() };
+  let state = { ...initialAssistantWebviewState, sessionId: 'session-a' };
+  function View() {
+    const source = useLocalImageSource(port, state.sessionId, 'connected', state.localImages);
+    useEffect(() => source.request(path), [source.request]);
+    return null;
+  }
+  const { rerender } = render(<View />);
+  expect(port.postMessage).toHaveBeenLastCalledWith({ type: 'workspace.readImage', sessionId: 'session-a', path });
+  state = { ...initialAssistantWebviewState, sessionId: 'session-b' };
+  rerender(<View />);
+  expect(port.postMessage).toHaveBeenLastCalledWith({ type: 'workspace.readImage', sessionId: 'session-b', path });
+  const message = { type: 'workspace.imageData' as const, sequence: 1, sessionId: 'session-a', path,
+    status: 'ok' as const, mediaType: 'image/png' as const, data: 'aGk=' };
+  state = assistantWebviewReducer(state, { type: 'host.message', message });
+  expect(state.localImages[path]).toBeUndefined();
+  state = assistantWebviewReducer(state, { type: 'host.message', message: { ...message, sequence: 2, sessionId: 'session-b' } });
+  expect(state.localImages[path]?.data).toBe('aGk=');
+  rerender(<View />);
+  expect(port.postMessage).toHaveBeenCalledTimes(2);
 });
 
 it('coalesces pending reads, allows a new visible visit after eviction, and does not loop while visible', () => {

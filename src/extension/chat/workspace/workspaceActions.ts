@@ -1,4 +1,5 @@
 import type { WorkspaceActionsPort } from './workspaceActionsPort';
+import type { AttachmentPickOutcome } from '../../attachments/attachmentSources';
 // Workspace-scoped file, preview, Git, and attachment actions.
 import { isAbsolute, relative } from 'node:path';
 
@@ -512,11 +513,9 @@ export function recordWorkspaceSearch(
 }
 
 /**
- * Reads a workspace-local image referenced by transcript markdown.
- * Reuses the attachment reader, which enforces workspace
- * containment and per-kind size caps; anything that is not a
- * displayable image degrades to a non-ok status so the webview can
- * fall back to a clickable path link.
+ * Resolves a Markdown image through the existing local/remote attachment
+ * readers. Preserve workspace containment, public HTTPS policy and size caps;
+ * return explicit failure states so the Webview can show a source link.
  */
 export function handleWorkspaceReadImage(
   ctl: WorkspaceActionsPort,
@@ -543,24 +542,28 @@ export function handleWorkspaceReadImage(
       data,
     });
   };
-  const cwd = ctl.getWorkspaceContext().cwd;
-  if (cwd === null) {
-    respond('not-found');
-    return;
+  let reading: Promise<AttachmentPickOutcome>;
+  if (/^https?:\/\//iu.test(path)) {
+    if (!ctl.attachmentSources.readRemoteImage) {
+      respond('unsupported');
+      return;
+    }
+    reading = ctl.attachmentSources.readRemoteImage(path);
+  } else {
+    const cwd = ctl.getWorkspaceContext().cwd;
+    if (cwd === null) {
+      respond('not-found');
+      return;
+    }
+    // Rebase inside-root absolute paths; the reader accepts relative paths only.
+    const relativePath = isAbsolute(path) ? relative(cwd, path) : path;
+    if (relativePath.length === 0 || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+      respond('not-found');
+      return;
+    }
+    reading = ctl.attachmentSources.readWorkspaceFile(relativePath.replaceAll('\\', '/'));
   }
-  // Markdown may reference the file absolutely; the reader only
-  // accepts workspace-relative paths, so rebase inside-root
-  // absolutes and refuse everything else.
-  const relativePath = isAbsolute(path) ? relative(cwd, path) : path;
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith('..') ||
-    isAbsolute(relativePath)
-  ) {
-    respond('not-found');
-    return;
-  }
-  void ctl.attachmentSources.readWorkspaceFile(relativePath.replaceAll('\\', '/')).then(
+  void reading.then(
     (outcome) => {
       switch (outcome.status) {
         case 'picked': {

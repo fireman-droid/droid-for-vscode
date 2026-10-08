@@ -79,9 +79,9 @@ export interface AttachmentRemoveMessage {
 }
 
 /**
- * Asks the host to read a workspace-local image referenced by
- * transcript markdown so the webview can display it. The reply is a
- * `workspace.imageData` message keyed by the same path.
+ * Asks the host to resolve a Markdown image: a workspace-local path or
+ * public HTTPS URL. Remote reads use the attachment image policy, never
+ * Webview network access. The reply is keyed by the unchanged path/URL.
  */
 export interface WorkspaceReadImageMessage {
   readonly type: 'workspace.readImage';
