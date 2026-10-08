@@ -20,6 +20,11 @@ export interface TurnSnapshotRecord {
   readonly files?: readonly CommittedFileStat[];
 }
 
+export interface SavedReviewSnapshot {
+  readonly sessionId: string;
+  readonly turn: TurnSnapshotRecord;
+}
+
 export function readTurn(
   sessions: Map<string, TurnSnapshotRecord[]>,
   sessionId: string,
@@ -77,8 +82,9 @@ export function cloneSessions(
   );
 }
 
-export function serializeSessions(sessions: Map<string, TurnSnapshotRecord[]>): {
+export function serializeSessions(sessions: Map<string, TurnSnapshotRecord[]>, review: SavedReviewSnapshot | null = null): {
   readonly version: typeof TURN_SNAPSHOTS_VERSION;
+  readonly review?: SavedReviewSnapshot;
   readonly sessions: ReadonlyArray<{
     readonly sessionId: string;
     readonly turns: readonly TurnSnapshotRecord[];
@@ -86,11 +92,26 @@ export function serializeSessions(sessions: Map<string, TurnSnapshotRecord[]>): 
 } {
   return {
     version: TURN_SNAPSHOTS_VERSION,
+    ...(review ? { review: { sessionId: review.sessionId, turn: withoutFiles(review.turn) } } : {}),
     sessions: [...sessions.entries()].map(([sessionId, turns]) => ({
       sessionId,
-      turns: turns.map(({ files: _files, ...turn }) => turn),
+      turns: turns.map(withoutFiles),
     })),
   };
+}
+
+function withoutFiles({ files: _files, ...turn }: TurnSnapshotRecord): TurnSnapshotRecord {
+  return turn;
+}
+
+export function readSavedReviewSnapshot(persistence: ChangeStatsPersistence): SavedReviewSnapshot | null {
+  const value = persistence.get<unknown>('droidvisx.turnSnapshots');
+  if (!value || typeof value !== 'object' || (value as { version?: unknown }).version !== TURN_SNAPSHOTS_VERSION) return null;
+  const review = (value as { review?: unknown }).review;
+  if (!review || typeof review !== 'object') return null;
+  const { sessionId, turn } = review as { sessionId?: unknown; turn?: unknown };
+  const parsed = parseSessionEntry({ sessionId, turns: [turn] });
+  return parsed ? { sessionId: parsed.sessionId, turn: parsed.turns[0]! } : null;
 }
 
 export function readPersistedSessions(

@@ -24,7 +24,7 @@ export function loadTurnReviewScope(
   if (live) scope.lifecycle = 'writing';
   else if (!complete) {
     scope.lifecycle = 'unavailable';
-    scope.message = 'This turn has no complete saved workspace snapshot.';
+    scope.message = 'The saved workspace snapshot for this turn is unavailable or has expired.';
   }
   options.diagnostics?.record({ level: 'info', name: 'host.review.scope',
     attributes: { sessionId, snapshotSessionId, turnId, reviewScopeId: scope.reviewScopeId,

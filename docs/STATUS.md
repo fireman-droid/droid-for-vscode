@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Review 基线跨重载保留（2026-10-08）
+
+- 长会话的最近 24 轮快照继续按原窗口保留；当前选中的轮次 Review 额外保存一份基线索引，
+  与普通快照使用同一次持久写入。进行中轮次采集到后续版本时同步更新这份索引。
+- 启动读取、文件正文读取及对象可达性清理均纳入已保存的 Review，避免旧轮次在内存中
+  可读、Reload 后失效。切换 Review 时替换额外保留项，不无限保留所有历史快照。
+- 缺少基线时说明快照不可用或已过期；本次不能重建旧版本已经淘汰的基线。
+- 使用 pnpm 10.2.0 完成 `package:vsix`（含 typecheck、lint:budgets 与生产构建）和
+  `verify:vsix`；已安装到 Cursor，7 个安装产物的哈希与 VSIX 一致。
+- 本轮未新增、修改或运行测试及浏览器自动化；真实行为待 Cursor Reload Window 后验收。
+
 ## 只读过程条目间距（2026-10-07）
 
 - 只读 Session Viewer 不再给每个助手片段统一添加 24px 底部留白；复用主聊天已有的

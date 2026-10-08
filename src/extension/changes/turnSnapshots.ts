@@ -21,9 +21,11 @@ import {
   cloneRecord,
   cloneSessions,
   readPersistedSessions,
+  readSavedReviewSnapshot,
   readTurn,
   serializeSessions,
   type TurnSnapshotRecord,
+  type SavedReviewSnapshot,
   upsertTurn,
 } from './turnSnapshotRecords';
 import { snapshotWorkspaceFiles } from './snapshotWorkspaceFiles';
@@ -105,6 +107,8 @@ export interface TurnSnapshotStore {
   readTurns(sessionId: string): readonly TurnSnapshotRecord[];
   /** Keep a currently viewed/running turn readable while newer history rotates. */
   retain?(scope: TurnSnapshotScope): () => void;
+  /** Preserve the selected Review baseline across history rotation and reload. */
+  saveReview?(scope: TurnSnapshotScope | null): Promise<void>;
   prune(): Promise<void>;
   dispose(): Promise<void>;
 }
@@ -137,13 +141,16 @@ export function createTurnSnapshotStore(
   };
   const objectsDir = join(storageDir, 'objects');
   let sessions = readPersistedSessions(persistence);
+  let savedReview = readSavedReviewSnapshot(persistence);
   let pendingSessions: Map<string, TurnSnapshotRecord[]> | undefined;
+  let pendingReview: SavedReviewSnapshot | null = null;
   const failedTurns = new Set<string>();
   const turnKey = (scope: TurnSnapshotScope) => JSON.stringify([scope.sessionId, scope.turnId]);
   const retained = new Map<string, { count: number; record: TurnSnapshotRecord | undefined }>();
   const running = new Map<string, () => void>();
   const recordFor = (scope: TurnSnapshotScope) =>
-    readTurn(sessions, scope.sessionId, scope.turnId) ?? retained.get(turnKey(scope))?.record;
+    readTurn(sessions, scope.sessionId, scope.turnId) ?? retained.get(turnKey(scope))?.record ??
+    (savedReview?.sessionId === scope.sessionId && savedReview.turn.turnId === scope.turnId ? savedReview.turn : undefined);
   const retain = (scope: TurnSnapshotScope): (() => void) => {
     const key = turnKey(scope);
     const entry = retained.get(key) ?? { count: 0, record: cloneRecord(recordFor(scope)) };
@@ -177,19 +184,23 @@ export function createTurnSnapshotStore(
 
   const persist = async (
     nextSessions: Map<string, TurnSnapshotRecord[]>,
+    nextReview: SavedReviewSnapshot | null = savedReview,
   ): Promise<void> => {
     try {
       await Promise.resolve().then(() =>
-        persistence.update(TURN_SNAPSHOTS_STORAGE_KEY, serializeSessions(nextSessions)),
+        persistence.update(TURN_SNAPSHOTS_STORAGE_KEY, serializeSessions(nextSessions, nextReview)),
       );
     } catch (error) {
       pendingSessions = nextSessions;
+      pendingReview = nextReview;
       persistenceFailure = error;
       persistenceFailed = true;
       throw error;
     }
     sessions = nextSessions;
+    savedReview = nextReview;
     pendingSessions = undefined;
+    pendingReview = null;
     persistenceFailure = undefined;
     persistenceFailed = false;
   };
@@ -197,7 +208,7 @@ export function createTurnSnapshotStore(
   const flushPending = async (): Promise<void> => {
     const pending = pendingSessions;
     if (pending !== undefined) {
-      await persist(pending);
+      await persist(pending, pendingReview);
     }
   };
 
@@ -209,7 +220,9 @@ export function createTurnSnapshotStore(
     const nextSessions = cloneSessions(sessions);
     const { turnId: _turnId, ...previous } = recordFor(scope) ?? { turnId: scope.turnId };
     upsertTurn(nextSessions, scope, { ...previous, ...patch });
-    await persist(nextSessions);
+    const nextReview = savedReview?.sessionId === scope.sessionId && savedReview.turn.turnId === scope.turnId
+      ? { sessionId: scope.sessionId, turn: cloneRecord(readTurn(nextSessions, scope.sessionId, scope.turnId))! } : savedReview;
+    await persist(nextSessions, nextReview);
     const held = retained.get(turnKey(scope));
     if (held) held.record = cloneRecord(readTurn(nextSessions, scope.sessionId, scope.turnId));
   };
@@ -707,6 +720,14 @@ export function createTurnSnapshotStore(
       return (sessions.get(sessionId) ?? []).map((record) => cloneRecord(record)!);
     },
     retain,
+    saveReview(scope) {
+      if (closing) return Promise.reject(new Error('Turn snapshot storage is closing.'));
+      return enqueue(async () => {
+        await flushPending();
+        const turn = scope ? cloneRecord(recordFor(scope)) : undefined;
+        await persist(sessions, scope && turn ? { sessionId: scope.sessionId, turn } : null);
+      });
+    },
     prune() {
       return enqueue(async () => {
         if (disposed || closing) {
@@ -717,6 +738,7 @@ export function createTurnSnapshotStore(
         if (bytes <= MAX_SNAPSHOT_OBJECT_BYTES) return;
         const roots = [...new Set([
           ...[...sessions.values()].flat(), ...[...retained.values()].flatMap(entry => entry.record ? [entry.record] : []),
+          ...(savedReview ? [savedReview.turn] : []),
         ].flatMap(record => [record.before, record.after].filter((oid): oid is string => oid !== undefined)))];
         // A store with no records may belong to another live controller. Do not
         // infer that its objects are disposable from an empty local index.

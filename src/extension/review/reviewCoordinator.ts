@@ -668,6 +668,7 @@ export class ReviewCoordinator implements vscode.Disposable {
 
   private async persistScope(scope: ActiveScope): Promise<void> {
     if (this.disposed) return;
+    await this.retention.persist(scope);
     const record: PersistedScope = {
       ...(scope.baseBranch === undefined ? {} : { baseBranch: scope.baseBranch }),
       reviewScopeId: scope.reviewScopeId,
