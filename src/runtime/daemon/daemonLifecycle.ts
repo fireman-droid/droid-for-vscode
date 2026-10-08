@@ -564,6 +564,8 @@ export async function resolveDaemonListenerPid(
     : null;
 }
 
+type IdentityQueryFailure = 'timeout' | 'spawn-failed' | 'exit-failed' | 'empty-output' | 'output-limit' | 'invalid-output';
+
 export type DaemonListenerVerification = (
   | { readonly status: 'verified'; readonly pid: number }
   | { readonly status: 'not-listening' }
@@ -571,6 +573,7 @@ export type DaemonListenerVerification = (
 ) & {
   /** Recorded PIDs now confirmed to belong to a different kind of process. */
   readonly replacedPids?: readonly number[];
+  readonly queryFailure?: `listeners:${IdentityQueryFailure}` | `processes:${IdentityQueryFailure}`;
 };
 
 /**
@@ -592,7 +595,9 @@ export async function verifyDaemonListeners(
   const [command, args] = process.platform === 'win32'
     ? (['netstat.exe', ['-ano', '-p', 'tcp']] as const)
     : (['ss', ['-ltnp']] as const);
-  const output = await runBoundedCommandOutput(command, args, true);
+  let queryFailure: DaemonListenerVerification['queryFailure'];
+  const output = await runBoundedCommandOutput(command, args, true,
+    reason => { queryFailure = `listeners:${reason}`; });
   const listeners = new Map<number, number>();
   for (const { port } of targets) {
     const pid = output === null ? 'unverified'
@@ -602,7 +607,7 @@ export async function verifyDaemonListeners(
   }
   const commands = await queryProcessCommandLines([
     ...new Set([...listeners.values(), ...targets.map(({ pid }) => pid)]),
-  ]);
+  ], reason => { queryFailure ??= `processes:${reason}`; });
   for (const [port, pid] of listeners) {
     const commandLine = commands?.get(pid);
     results.set(port, commandLine !== undefined && looksLikeDroidDaemon(commandLine, executable)
@@ -618,10 +623,15 @@ export async function verifyDaemonListeners(
       replacedPids: [...new Set([...(verification.replacedPids ?? []), pid])],
     });
   }
+  if (queryFailure) for (const [port, verification] of results) {
+    results.set(port, { ...verification, queryFailure });
+  }
   return results;
 }
 
-async function queryProcessCommandLines(pids: readonly number[]): Promise<ReadonlyMap<number, string> | null> {
+async function queryProcessCommandLines(
+  pids: readonly number[], onFailure?: (reason: IdentityQueryFailure) => void,
+): Promise<ReadonlyMap<number, string> | null> {
   // PIDs originate in the parsed system listener table or validated daemon
   // records. Neither paths nor untrusted command-line text enter the query.
   const [command, args] = process.platform === 'win32'
@@ -631,7 +641,7 @@ async function queryProcessCommandLines(pids: readonly number[]): Promise<Readon
       pids.map(pid => `ProcessId=${String(pid)}`).join(' OR ') +
       '" | Select-Object ProcessId,CommandLine)']] as const)
     : (['ps', ['-p', pids.join(','), '-o', 'pid=,args=']] as const);
-  const output = await runBoundedCommandOutput(command, args, true);
+  const output = await runBoundedCommandOutput(command, args, true, onFailure);
   if (output === null) return null;
   const commands = new Map<number, string>();
   if (process.platform !== 'win32') {
@@ -642,13 +652,14 @@ async function queryProcessCommandLines(pids: readonly number[]): Promise<Readon
     return commands;
   }
   let rows: unknown;
-  try { rows = JSON.parse(output); } catch { return null; }
-  if (!Array.isArray(rows)) return null;
+  const invalid = () => { onFailure?.('invalid-output'); return null; };
+  try { rows = JSON.parse(output); } catch { return invalid(); }
+  if (!Array.isArray(rows)) return invalid();
   for (const row of rows) {
-    if (typeof row !== 'object' || row === null) return null;
+    if (typeof row !== 'object' || row === null) return invalid();
     const value = row as { ProcessId?: unknown; CommandLine?: unknown };
     if (typeof value.ProcessId !== 'number' || !Number.isSafeInteger(value.ProcessId) ||
-        !pids.includes(value.ProcessId)) return null;
+        !pids.includes(value.ProcessId)) return invalid();
     if (typeof value.CommandLine === 'string') commands.set(value.ProcessId, value.CommandLine);
   }
   return commands;
@@ -760,14 +771,16 @@ function runBoundedCommandOutput(
   command: string,
   args: readonly string[],
   completeSnapshot = false,
+  onFailure?: (reason: IdentityQueryFailure) => void,
 ): Promise<string | null> {
   return new Promise((resolve) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (value: string | null): void => {
+    const finish = (value: string | null, failure?: IdentityQueryFailure): void => {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
+        if (failure) onFailure?.(failure);
         resolve(value);
       }
     };
@@ -779,12 +792,12 @@ function runBoundedCommandOutput(
         windowsHide: true,
       });
     } catch {
-      finish(null);
+      finish(null, 'spawn-failed');
       return;
     }
     timer = setTimeout(() => {
       child.kill();
-      finish(null);
+      finish(null, 'timeout');
     }, IDENTITY_QUERY_TIMEOUT_MS);
 
     let output = '';
@@ -796,17 +809,19 @@ function runBoundedCommandOutput(
       output += chunk;
       if (output.length > IDENTITY_QUERY_OUTPUT_MAX_CHARS) {
         child.kill();
-        finish(null);
+        finish(null, 'output-limit');
       }
     });
     child.once('error', () => {
-      finish(null);
+      finish(null, 'spawn-failed');
     });
     // Batch JSON may span stdout chunks after the child exit event. Snapshot
     // callers require fully closed stdio and a successful system query.
     child.once(completeSnapshot ? 'close' : 'exit', (code: number | null) => {
       const trimmed = output.trim();
-      finish((completeSnapshot && code !== 0) || trimmed === '' ? null : trimmed);
+      if (completeSnapshot && code !== 0) finish(null, 'exit-failed');
+      else if (trimmed === '') finish(null, 'empty-output');
+      else finish(trimmed);
     });
   });
 }

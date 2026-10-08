@@ -91,6 +91,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   for (const value of pools.splice(0)) await value.dispose();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -122,17 +123,70 @@ describe('cold daemon owner discovery', () => {
   });
 
   it.each(['not-listening', 'unverified'] as const)('does not create a replacement when a live original PID is %s', async status => {
+    vi.useFakeTimers();
     const original = record(0); fake.records = [original];
     fake.verification.set(original.port, { status });
-    await expect(pool().forSession('chat', true)).rejects.toThrow('unavailable');
+    const rejected = expect(pool().forSession('chat', true)).rejects.toThrow('unavailable');
+    await vi.advanceTimersByTimeAsync(1250);
+    await rejected;
+    expect(fake.verify).toHaveBeenCalledTimes(3);
+    expect(fake.events).toHaveBeenCalledWith(expect.objectContaining({ name: 'daemon.discovery.identity-unavailable' }));
     expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.open).not.toHaveBeenCalled();
     expect(fake.remove).not.toHaveBeenCalled(); expect(fake.singleVerify).not.toHaveBeenCalled();
+  });
+
+  it.each(['not-listening', 'unverified'] as const)('recovers a first %s result for concurrent callers without rechecking healthy records', async status => {
+    vi.useFakeTimers();
+    const original = record(0), healthy = record(1); fake.records = [original, healthy];
+    fake.opened.set(original.port, [{ id: 'chat', workingState: 'idle' }]);
+    fake.opened.set(healthy.port, [{ id: 'other', workingState: 'idle' }]);
+    fake.verify.mockResolvedValueOnce(new Map<number, DaemonListenerVerification>([
+      [original.port, { status, queryFailure: 'processes:timeout' }],
+      [healthy.port, { status: 'verified', pid: healthy.pid }],
+    ]));
+    const value = pool();
+    const pending = Promise.all([value.forSession('chat', true), value.forSession('chat', true), value.forSession('other', true)]);
+    await vi.advanceTimersByTimeAsync(250);
+    const [first, same, other] = await pending;
+    expect(first).toBe(same); expect(first.record.id).toBe(original.id); expect(other.record.id).toBe(healthy.id);
+    expect(fake.listRecords).toHaveBeenCalledOnce(); expect(fake.verify).toHaveBeenCalledTimes(2);
+    expect(fake.verify.mock.calls[1]?.[0]).toEqual([original]);
+    expect(fake.open).toHaveBeenCalledTimes(2); expect(fake.spawn).not.toHaveBeenCalled();
+    expect(fake.events).toHaveBeenCalledWith(expect.objectContaining({ name: 'daemon.discovery.identity-retry',
+      attributes: expect.objectContaining({ pid: original.pid, attempt: 2, reason: 'processes:timeout' }) }));
+  });
+
+  it('retires an old PID only after the retry confirms it belongs to another process', async () => {
+    vi.useFakeTimers();
+    const original = record(0); fake.records = [original];
+    fake.verify.mockResolvedValueOnce(new Map([[original.port, { status: 'unverified' }]]));
+    fake.verification.set(original.port, { status: 'not-listening', replacedPids: [original.pid] });
+    const pending = pool().forSession('chat', true);
+    await vi.advanceTimersByTimeAsync(250);
+    await pending;
+    expect(fake.verify).toHaveBeenCalledTimes(2); expect(fake.remove).toHaveBeenCalledExactlyOnceWith(original);
+    expect(fake.spawn).toHaveBeenCalledOnce(); expect(fake.stop).not.toHaveBeenCalled();
+  });
+
+  it('stops pending recovery when its pool is disposed', async () => {
+    vi.useFakeTimers();
+    const original = record(0); fake.records = [original];
+    fake.verification.set(original.port, { status: 'unverified' });
+    const value = pool();
+    const rejected = expect(value.forSession('chat', true)).rejects.toThrow('disposed');
+    await vi.advanceTimersByTimeAsync(0);
+    await value.dispose();
+    await vi.advanceTimersByTimeAsync(250);
+    await rejected;
+    expect(fake.verify).toHaveBeenCalledOnce(); expect(fake.open).not.toHaveBeenCalled();
+    expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.remove).not.toHaveBeenCalled();
   });
 
   it('rejects a reused port with a different listener identity', async () => {
     const original = record(0); fake.records = [original];
     fake.verification.set(original.port, { status: 'verified', pid: original.pid + 1 });
     await expect(pool().forSession('chat', true)).rejects.toThrow('listener process');
+    expect(fake.verify).toHaveBeenCalledOnce();
     expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.remove).not.toHaveBeenCalled();
   });
 

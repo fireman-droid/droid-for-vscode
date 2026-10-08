@@ -63,15 +63,18 @@ describe('batched daemon discovery', () => {
     expect([...result].sort(([a], [b]) => a - b)).toEqual([
       [41000, { status: 'verified', pid: 9999 }],
       [41001, { status: 'not-listening' }],
-      ...[41002, 41003, 41004, 41005].map(port => [port, { status: 'unverified' }]),
+      [41002, { status: 'unverified', replacedPids: [8002] }],
+      [41003, { status: 'unverified' }], [41004, { status: 'unverified' }],
+      [41005, { status: 'unverified', replacedPids: [8005] }],
     ]);
   });
 
   it('does not trust listener output when the system query exits unsuccessfully', async () => {
     reply(listener(41000, 8000), 1);
+    reply(JSON.stringify([command(8000)]));
     expect([...await verifyDaemonListeners([{ port: 41000, pid: 8000 }])])
-      .toEqual([[41000, { status: 'unverified' }]]);
-    expect(spawn).toHaveBeenCalledTimes(1);
+      .toEqual([[41000, { status: 'unverified', queryFailure: 'listeners:exit-failed' }]]);
+    expect(spawn).toHaveBeenCalledTimes(2);
   });
 
   it.each(['invalid JSON', '[{"ProcessId":8000,"CommandLine":null}]'])
@@ -79,7 +82,7 @@ describe('batched daemon discovery', () => {
       reply(listener(41000, 8000));
       reply(output);
       expect([...await verifyDaemonListeners([{ port: 41000, pid: 8000 }])])
-        .toEqual([[41000, { status: 'unverified' }]]);
+        .toEqual([[41000, { status: 'unverified', ...(output === 'invalid JSON' ? { queryFailure: 'processes:invalid-output' } : {}) }]]);
     });
 
   it('preserves known absence when process identity lookup fails for another port', async () => {
@@ -91,7 +94,8 @@ describe('batched daemon discovery', () => {
     });
     expect([...await verifyDaemonListeners([{ port: 41000, pid: 8000 }, { port: 41001, pid: 8001 }])]
       .sort(([a], [b]) => a - b)).toEqual([
-      [41000, { status: 'unverified' }], [41001, { status: 'not-listening' }],
+      [41000, { status: 'unverified', queryFailure: 'processes:spawn-failed' }],
+      [41001, { status: 'not-listening', queryFailure: 'processes:spawn-failed' }],
     ]);
   });
 
@@ -116,11 +120,23 @@ describe('batched daemon discovery', () => {
     vi.useFakeTimers();
     const child = queryProcess();
     spawn.mockReturnValueOnce(child);
+    reply(JSON.stringify([command(8000)]));
     const pending = verifyDaemonListeners([{ port: 41000, pid: 8000 }]);
     await vi.advanceTimersByTimeAsync(5000);
-    expect([...await pending]).toEqual([[41000, { status: 'unverified' }]]);
+    expect([...await pending]).toEqual([[41000, { status: 'unverified', queryFailure: 'listeners:timeout' }]]);
     expect(child.kill).toHaveBeenCalledOnce();
-    expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('identifies a process-query timeout after a successful listener lookup', async () => {
+    vi.useFakeTimers();
+    reply(listener(41000, 8000));
+    const child = queryProcess();
+    spawn.mockReturnValueOnce(child);
+    const pending = verifyDaemonListeners([{ port: 41000, pid: 8000 }]);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect([...await pending]).toEqual([[41000, { status: 'unverified', queryFailure: 'processes:timeout' }]]);
+    expect(child.kill).toHaveBeenCalledOnce();
   });
 });
 

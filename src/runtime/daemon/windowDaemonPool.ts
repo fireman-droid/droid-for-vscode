@@ -310,7 +310,7 @@ export class WindowDaemonPool {
       const startedAt = Date.now();
       const records = await listWindowDaemons();
       const uncached = records.filter((record) => !this.connections.has(record.id));
-      const verified = await verifyDaemonListeners(uncached);
+      const verified = await this.verifyRecords(uncached);
       const entries = await mapConcurrent(records, (record) => this.existing(record, verified.get(record.port)));
       const connected = entries.filter((entry): entry is WindowDaemonEntry => entry !== null);
       this.options.record({ level: 'info', name: 'daemon.discovery.finished', attributes: {
@@ -322,6 +322,32 @@ export class WindowDaemonPool {
     const clear = () => { if (this.discovery === pending) this.discovery = undefined; };
     void pending.then(clear, clear);
     return pending;
+  }
+
+  private async verifyRecords(records: readonly WindowDaemonRecord[]): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
+    const results = new Map(await verifyDaemonListeners(records));
+    // A cold OS query can fail before it can identify a live or reused PID.
+    // Retry only unresolved records, keeping the shared discovery promise pending.
+    for (const [index, delayMs] of [250, 1000].entries()) {
+      if (this.disposed) throw new Error('Window daemon is disposed.');
+      const pending = records.filter(record => {
+        const result = results.get(record.port);
+        return result?.status !== 'verified' && !result?.replacedPids?.includes(record.pid) && isProcessAlive(record.pid);
+      });
+      if (pending.length === 0) return results;
+      for (const record of pending) {
+        const result = results.get(record.port);
+        this.options.record({ level: 'info', name: 'daemon.discovery.identity-retry', attributes: {
+          instanceId: record.id, pid: record.pid, port: record.port, attempt: index + 2,
+          status: result?.status ?? 'unverified', reason: result?.queryFailure ?? 'listener-or-identity-unavailable',
+        } });
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (this.disposed) throw new Error('Window daemon is disposed.');
+      for (const [port, result] of await verifyDaemonListeners(pending)) results.set(port, result);
+    }
+    if (this.disposed) throw new Error('Window daemon is disposed.');
+    return results;
   }
 
   private discoverOpened(): NonNullable<WindowDaemonPool['openedDiscovery']> {
@@ -612,7 +638,7 @@ export class WindowDaemonPool {
       entry.connection.dispose();
       this.connections.delete(record.id);
     }
-    const verification = verified ?? (await verifyDaemonListeners([record])).get(record.port);
+    const verification = verified ?? (await this.verifyRecords([record])).get(record.port);
     const pid = verification?.status === 'verified' ? verification.pid : null;
     const processReplaced = verification?.replacedPids?.includes(record.pid) === true;
     if (processReplaced || (pid !== record.pid && !isProcessAlive(record.pid))) {
@@ -634,6 +660,10 @@ export class WindowDaemonPool {
     }
     if (pid === null) {
       // A matching or unverifiable live worker may still own running tasks.
+      this.options.record({ level: 'warn', name: 'daemon.discovery.identity-unavailable', attributes: {
+        instanceId: record.id, pid: record.pid, port: record.port,
+        status: verification?.status ?? 'unverified', reason: verification?.queryFailure ?? 'listener-or-identity-unavailable',
+      } });
       throw new Error('An existing session daemon is unavailable. Retry without starting a duplicate session.');
     }
     if (pid !== record.pid) throw new Error('Daemon discovery no longer matches its listener process.');
