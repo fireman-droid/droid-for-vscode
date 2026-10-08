@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Markdown 表格完整网格（2026-10-08）
+
+- 共享聊天样式给 Markdown 表头和数据单元格统一增加 1px 的四边边框，使用主题的
+  chat-edge 颜色；移除最后一列取消右边框的规则。单列表格也具有左右与上下外框，
+  多列表格保留内部横竖分隔线，主聊天、BTW 及使用同一聊天样式的只读回复同步生效。
+- 保留透明背景、按内容确定列宽、原有字号／内边距和横向滚动，不扩展表格尺寸。
+- `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）和 `verify:vsix` 通过，
+  167 个包条目校验通过。与本轮重发按钮一起安装至此前指定的 Cursor；7 个主要安装产物
+  与 VSIX 哈希一致。本次仅修改 CSS，没有新增、修改或运行测试／浏览器验收，待
+  Reload Window 后确认实际边框。
+
 ## BTW 与主聊天共享回复呈现（2026-10-08）
 
 - 主聊天 TranscriptRow 与 BTW 都使用公共 AssistantMessage（Message、MessageContent、

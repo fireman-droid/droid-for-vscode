@@ -222,15 +222,12 @@
   .v2-chat-surface .v2-markdown-table table { font-size: 13px; line-height: 22.2858px; }
   .v2-chat-surface .v2-markdown-table :is(th, td) {
     padding: 5px 9px;
-    border: 0;
-    border-right: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+    border: 1px solid var(--chat-edge);
     background: transparent;
     font-size: 12px;
     line-height: 16px;
   }
   .v2-chat-surface .v2-markdown-table th { text-align: left; font-weight: 600; }
-  .v2-chat-surface .v2-markdown-table tr > :last-child { border-right: 0; }
   .v2-chat-surface .v2-command-card {
     margin: 4px 0;
     border-color: var(--chat-edge);
