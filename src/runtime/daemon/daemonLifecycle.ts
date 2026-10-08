@@ -9,6 +9,8 @@ const PORT_POLL_INTERVAL_MS = 100;
 const STDERR_TAIL_MAX_CHARS = 2048;
 /** Cap on the pre-kill identity query; unverifiable means no kill. */
 const IDENTITY_QUERY_TIMEOUT_MS = 5_000;
+/** Listener and process queries, including retries, share this total budget. */
+const IDENTITY_VERIFICATION_TIMEOUT_MS = 10_000;
 /** Bounds output from system identity/listener queries. */
 const IDENTITY_QUERY_OUTPUT_MAX_CHARS = 1024 * 1024;
 
@@ -63,6 +65,7 @@ export interface DaemonLifecycleDeps {
     port: number,
     host: string,
     executable: string,
+    timeoutMs?: number,
   ) => Promise<number | null>;
   readonly killProcessTree: (pid: number) => Promise<void>;
   /** Resolves the command line of a live pid, or null when unknown. */
@@ -145,12 +148,14 @@ export async function startDetachedDaemon(
   }
 
   let listenerPid: number | null = null;
+  const identityDeadline = Date.now() + IDENTITY_VERIFICATION_TIMEOUT_MS;
   // A listening daemon can precede Windows' process-identity snapshot. Recheck
   // this same endpoint before disposing it; never spawn another daemon here.
   for (const delay of [0, 250, 1000]) {
+    if (identityDeadline - Date.now() <= delay) break;
     if (delay > 0) await new Promise<void>(resolve => setTimeout(resolve, delay));
     try {
-      listenerPid = await resolveListenerPid(port, host, droidPath);
+      listenerPid = await resolveListenerPid(port, host, droidPath, identityDeadline - Date.now());
     } catch {
       listenerPid = null;
     }
@@ -558,12 +563,14 @@ export async function resolveDaemonListenerPid(
   port: number,
   host = '127.0.0.1',
   executable = 'droid',
+  timeoutMs = IDENTITY_VERIFICATION_TIMEOUT_MS,
 ): Promise<number | null> {
-  const pid = await queryListeningPid(port, host);
+  const deadline = Date.now() + timeoutMs;
+  const pid = await queryListeningPid(port, host, timeoutMs);
   if (pid === null) {
     return null;
   }
-  const commandLine = await defaultQueryProcessCommandLine(pid);
+  const commandLine = await defaultQueryProcessCommandLine(pid, deadline - Date.now());
   return commandLine !== null &&
     looksLikeDroidDaemon(commandLine, executable)
     ? pid
@@ -595,7 +602,9 @@ export async function verifyDaemonListeners(
   targets: readonly { readonly port: number; readonly pid: number }[],
   host = '127.0.0.1',
   executable = 'droid',
+  timeoutMs = IDENTITY_VERIFICATION_TIMEOUT_MS,
 ): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
+  const deadline = Date.now() + timeoutMs;
   const results = new Map<number, DaemonListenerVerification>();
   if (targets.length === 0) return results;
   const [command, args] = process.platform === 'win32'
@@ -603,7 +612,7 @@ export async function verifyDaemonListeners(
     : (['ss', ['-ltnp']] as const);
   let queryFailure: DaemonListenerVerification['queryFailure'];
   const output = await runBoundedCommandOutput(command, args, true,
-    reason => { queryFailure = `listeners:${reason}`; });
+    reason => { queryFailure = `listeners:${reason}`; }, timeoutMs);
   const listeners = new Map<number, number>();
   for (const { port } of targets) {
     const pid = output === null ? 'unverified'
@@ -613,7 +622,7 @@ export async function verifyDaemonListeners(
   }
   const commands = await queryProcessCommandLines([
     ...new Set([...listeners.values(), ...targets.map(({ pid }) => pid)]),
-  ], reason => { queryFailure ??= `processes:${reason}`; });
+  ], reason => { queryFailure ??= `processes:${reason}`; }, deadline - Date.now());
   for (const [port, pid] of listeners) {
     const commandLine = commands?.get(pid);
     results.set(port, commandLine !== undefined && looksLikeDroidDaemon(commandLine, executable)
@@ -637,6 +646,7 @@ export async function verifyDaemonListeners(
 
 async function queryProcessCommandLines(
   pids: readonly number[], onFailure?: (reason: IdentityQueryFailure) => void,
+  timeoutMs = IDENTITY_QUERY_TIMEOUT_MS,
 ): Promise<ReadonlyMap<number, string> | null> {
   // PIDs originate in the parsed system listener table or validated daemon
   // records. Neither paths nor untrusted command-line text enter the query.
@@ -647,7 +657,7 @@ async function queryProcessCommandLines(
       pids.map(pid => `ProcessId=${String(pid)}`).join(' OR ') +
       '" | Select-Object ProcessId,CommandLine)']] as const)
     : (['ps', ['-p', pids.join(','), '-o', 'pid=,args=']] as const);
-  const output = await runBoundedCommandOutput(command, args, true, onFailure);
+  const output = await runBoundedCommandOutput(command, args, true, onFailure, timeoutMs);
   if (output === null) return null;
   const commands = new Map<number, string>();
   if (process.platform !== 'win32') {
@@ -674,12 +684,13 @@ async function queryProcessCommandLines(
 async function queryListeningPid(
   port: number,
   host: string,
+  timeoutMs: number,
 ): Promise<number | null> {
   const [command, args] =
     process.platform === 'win32'
       ? (['netstat.exe', ['-ano', '-p', 'tcp']] as const)
       : (['ss', ['-ltnp']] as const);
-  const output = await runBoundedCommandOutput(command, args, true);
+  const output = await runBoundedCommandOutput(command, args, true, undefined, timeoutMs);
   return output === null
     ? null
     : parseListeningPid(output, port, host, process.platform);
@@ -757,7 +768,7 @@ function matchesEndpoint(
  * 11), `ps` elsewhere. Resolves null when the process is gone, the
  * query fails, or it exceeds {@link IDENTITY_QUERY_TIMEOUT_MS}.
  */
-function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
+function defaultQueryProcessCommandLine(pid: number, timeoutMs = IDENTITY_QUERY_TIMEOUT_MS): Promise<string | null> {
   const [command, args] =
     process.platform === 'win32'
       ? ([
@@ -770,7 +781,7 @@ function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
           ],
         ] as const)
       : (['ps', ['-p', String(pid), '-o', 'args=']] as const);
-  return runBoundedCommandOutput(command, args, true);
+  return runBoundedCommandOutput(command, args, true, undefined, timeoutMs);
 }
 
 function runBoundedCommandOutput(
@@ -778,7 +789,9 @@ function runBoundedCommandOutput(
   args: readonly string[],
   completeSnapshot = false,
   onFailure?: (reason: IdentityQueryFailure) => void,
+  timeoutMs = IDENTITY_QUERY_TIMEOUT_MS,
 ): Promise<string | null> {
+  if (timeoutMs <= 0) { onFailure?.('timeout'); return Promise.resolve(null); }
   return new Promise((resolve) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -804,7 +817,7 @@ function runBoundedCommandOutput(
     timer = setTimeout(() => {
       child.kill();
       finish(null, 'timeout');
-    }, IDENTITY_QUERY_TIMEOUT_MS);
+    }, Math.min(IDENTITY_QUERY_TIMEOUT_MS, timeoutMs));
 
     let output = '';
     child.stdout?.setEncoding('utf8');

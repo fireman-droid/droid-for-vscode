@@ -197,7 +197,11 @@ export class WindowDaemonPool {
     const [owner, found] = await Promise.all([
       ownerId ? readWindowDaemon(ownerId) : null, this.findOpenedOwner(sessionId),
     ]);
-    const entry = found ?? (attach
+    // An idle worker can disappear from listOpened while its dedicated daemon
+    // and relay survive. Restore that verified owner instead of launching anew.
+    const retained = !found && attach && owner?.rootSessionId === sessionId && owner.ideRelay
+      ? await this.existing(owner) : null;
+    const entry = found ?? retained ?? (attach
       ? await this.allocate(sessionId, owner?.cwd)
       : (owner ? await this.existing(owner) : null) ?? await this.current());
     if (attach) await this.attachIde(entry);
@@ -325,7 +329,10 @@ export class WindowDaemonPool {
   }
 
   private async verifyRecords(records: readonly WindowDaemonRecord[]): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
-    const results = new Map(await verifyDaemonListeners(records));
+    const deadline = Date.now() + 10_000;
+    const verify = (targets: readonly WindowDaemonRecord[]) =>
+      verifyDaemonListeners(targets, '127.0.0.1', 'droid', Math.max(0, deadline - Date.now()));
+    const results = new Map(await verify(records));
     // A cold OS query can fail before it can identify a live or reused PID.
     // Retry only unresolved records, keeping the shared discovery promise pending.
     for (const [index, delayMs] of [250, 1000].entries()) {
@@ -335,6 +342,7 @@ export class WindowDaemonPool {
         return result?.status !== 'verified' && !result?.replacedPids?.includes(record.pid) && isProcessAlive(record.pid);
       });
       if (pending.length === 0) return results;
+      if (deadline - Date.now() <= delayMs) break;
       for (const record of pending) {
         const result = results.get(record.port);
         this.options.record({ level: 'info', name: 'daemon.discovery.identity-retry', attributes: {
@@ -344,7 +352,7 @@ export class WindowDaemonPool {
       }
       await new Promise(resolve => setTimeout(resolve, delayMs));
       if (this.disposed) throw new Error('Window daemon is disposed.');
-      for (const [port, result] of await verifyDaemonListeners(pending)) results.set(port, result);
+      for (const [port, result] of await verify(pending)) results.set(port, result);
     }
     if (this.disposed) throw new Error('Window daemon is disposed.');
     return results;
