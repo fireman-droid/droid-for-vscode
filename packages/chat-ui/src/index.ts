@@ -8,6 +8,8 @@ export { ReadOnlyTranscriptView } from './chat/ReadOnlyTranscriptView';
 export { QuestionCardView, type QuestionCardViewProps, type QuestionEditor } from './chat/QuestionCardView';
 export { UserMessageView } from './chat/UserMessageView';
 export { ReplyView } from './chat/ReplyView';
+export { AssistantMessage } from './chat/AssistantMessage';
+export { ThinkingView } from './chat/ThinkingView';
 export { PlanLine, PlanSteps, type PlanPresentation, type PlanStep } from './chat/PlanLine';
 export { ActivityItem } from './chat/ActivityItem';
 export { ActivityGroupView, type ActivityPresentation } from './chat/ActivityGroupView';

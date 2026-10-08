@@ -9,6 +9,27 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## BTW 与主聊天共享回复呈现（2026-10-08）
+
+- 主聊天 TranscriptRow 与 BTW 都使用公共 AssistantMessage（Message、MessageContent、
+  Markdown），统一回复容器、字号、行距及代码、表格、公式和链接的渲染入口。
+  BTW 同时复用 ReplyView 的正文复制操作；不显示它没有保存的回复时间。
+- 主聊天 ThinkingRow 的呈现移入公共 ThinkingView，两处共用展开、流式更新、耗时标签、
+  等待提示、思考 Markdown 和截断说明；保留主聊天 Activity 分组与展开状态管理。
+  删除 BTW 独立的 SideThinking 和思考滚动框样式，避免维护第二套显示规则。
+- 已返回思考事件但文本为空时，展开显示等待或未返回文本的说明；没有任何思考数据的
+  回复与主聊天一样不生成思考段。Runtime、Host、Bridge 现有思考转发和 32,000 字符
+  保留上限未改，未伪造模型没有返回的思考文本。
+- 只读检查本机最近两份 BTW 历史，并按 forkedAtMessageId 排除继承的主聊天内容：
+  一份分叉后的 8 条 assistant 消息有 7 条包含思考文本，另一份的 2 条均只有正文。
+  SDK 0.9.1 源码确认 create_message 用于提交完整消息；本次未确认事件转发漏掉
+  已返回思考文本的具体故障，也未连接模型或改动原会话。
+- `package:vsix`（含 typecheck、lint:budgets、公共包声明和生产构建）与 `verify:vsix`
+  通过，167 个包条目校验通过；沿用此前指定的 Cursor 安装目标完成全局安装，7 个主要
+  安装产物与 VSIX 哈希一致。npm 环境配置和 Cursor url.parse 弃用提示未阻断交付。
+  本次定向回归尚未获授权，没有新增、修改或运行测试及浏览器验收；真实行为待
+  Reload Window 后验收。
+
 ## 输入框上方代理列表密度（2026-10-08）
 
 - Agents 标题栏最小高度从 28px 缩至 22px；代理导航行由默认 24px 图标加 8px

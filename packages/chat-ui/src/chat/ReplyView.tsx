@@ -3,10 +3,10 @@ import { Check, Copy, GitBranch, LoaderCircle, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { MessageTimestamp } from './MessageTimestamp';
 import { useUiEnvironment } from '../environment';
-export function ReplyView({ children, replyText, running = false, completedAt, regenerate, fork, readOnly = false, diagnosticOnly = false, label }: {
+export function ReplyView({ children, replyText, running = false, completedAt, regenerate, fork, readOnly = false, diagnosticOnly = false, label, showTimestamp = true }: {
   readonly children: ReactNode; readonly replyText?: string; readonly running?: boolean;
   readonly completedAt?: number; readonly regenerate?: () => void; readonly fork?: () => void;
-  readonly readOnly?: boolean; readonly diagnosticOnly?: boolean; readonly label?: string;
+  readonly readOnly?: boolean; readonly diagnosticOnly?: boolean; readonly label?: string; readonly showTimestamp?: boolean;
 }) {
   const { copyText, assistantName } = useUiEnvironment();
   const [copied, setCopied] = useState(false);
@@ -14,7 +14,7 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
   const reset = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (reset.current) clearTimeout(reset.current); }, []);
   const showActions = replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0);
-  const showTime = !running && !diagnosticOnly && replyText !== undefined;
+  const showTime = showTimestamp && !running && !diagnosticOnly && replyText !== undefined;
   return <div className="v2-assistant-reply flex min-w-0 flex-col gap-1" aria-label={label ?? assistantName}>
     {children}
     {showActions || showTime ? (

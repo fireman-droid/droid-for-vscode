@@ -1,7 +1,7 @@
 import { memo, useContext } from 'react';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { Message, MessageContent } from '../ai-elements/message';
-import { Markdown } from '../content/Markdown';
+import { AssistantMessage } from '@droidvisx/chat-ui/chat/AssistantMessage';
 import { ImageContent } from '../content/MediaPreview';
 import { ToolRow } from './ToolRow';
 import { ThinkingRow } from './ThinkingRow';
@@ -15,7 +15,7 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
 }) {
   const selectSession = useContext(SelectSessionContext);
   if (item.kind === 'user') return <Message from="user" className="rounded-md border border-[var(--panel-edge)] bg-muted/40 p-2.5"><MessageContent className="whitespace-pre-wrap">{item.text}</MessageContent></Message>;
-  if (item.kind === 'assistant') return <Message from="assistant"><MessageContent><Markdown text={item.text} streaming={streaming} /></MessageContent></Message>;
+  if (item.kind === 'assistant') return <AssistantMessage text={item.text} streaming={streaming} />;
   if (item.kind === 'thinking') return <ThinkingRow item={item} messageId={messageId} grouped={grouped} streaming={streaming} />;
   if (item.kind === 'tool') return <ToolRow item={item} messageId={messageId} grouped={grouped} hideConfirmedOperations={hideConfirmedOperations} onInteract={onInteract} />;
   if (item.kind === 'diagnostic') {
