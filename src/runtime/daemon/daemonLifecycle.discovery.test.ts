@@ -32,6 +32,14 @@ const listener = (port: number, pid: number | string) =>
 const command = (pid: number, commandLine: string | null = 'droid daemon --host 127.0.0.1') =>
   ({ ProcessId: pid, CommandLine: commandLine });
 
+function delayedReply(output: string, milliseconds: number) {
+  spawn.mockImplementationOnce(() => {
+    const child = queryProcess();
+    setTimeout(() => { child.stdout.end(output); child.emit('close', 0); }, milliseconds);
+    return child;
+  });
+}
+
 beforeEach(() => { spawn.mockReset(); });
 afterEach(() => { vi.useRealTimers(); });
 
@@ -177,5 +185,38 @@ describe('single-listener identity compatibility', () => {
     reply(listener(41000, ''));
     await expect(resolveDaemonListenerPid(41000)).resolves.toBeNull();
     expect(spawn).toHaveBeenCalledOnce();
+  });
+});
+
+describe('shared identity query deadline', () => {
+  it.each(['single', 'batch'] as const)('limits the %s process lookup to time left after the listener query', async mode => {
+    vi.useFakeTimers();
+    delayedReply(listener(41000, 8000), 4000);
+    const child = queryProcess();
+    spawn.mockReturnValueOnce(child);
+    const pending = mode === 'single'
+      ? resolveDaemonListenerPid(41000, '127.0.0.1', 'droid', 6000)
+      : verifyDaemonListeners([{ port: 41000, pid: 8000 }], '127.0.0.1', 'droid', 6000);
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(5999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await pending;
+    if (mode === 'single') expect(result).toBeNull();
+    else expect([...(result as Map<number, unknown>)])
+      .toEqual([[41000, { status: 'unverified', queryFailure: 'processes:timeout' }]]);
+    expect(child.kill).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['single', 'batch'] as const)('does not start a %s system query after the budget expires', async mode => {
+    if (mode === 'single') {
+      await expect(resolveDaemonListenerPid(41000, '127.0.0.1', 'droid', 0)).resolves.toBeNull();
+    } else {
+      expect([...await verifyDaemonListeners([{ port: 41000, pid: 8000 }], '127.0.0.1', 'droid', 0)])
+        .toEqual([[41000, { status: 'unverified', queryFailure: 'listeners:timeout' }]]);
+    }
+    expect(spawn).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { WindowDaemonPool } from './windowDaemonPool';
 import { createRoutedDaemon } from './routedDaemon';
 
 const fake = vi.hoisted(() => ({
+  ownerId: 'legacy-owner',
   records: [] as Array<Record<string, unknown>>,
   opened: [] as Array<Record<string, unknown>>,
   openedByUrl: new Map<string, Array<Record<string, unknown>>>(),
@@ -59,7 +60,7 @@ vi.mock('./daemonLifecycle', () => ({
 }));
 vi.mock('./windowDaemonRegistry', () => ({
   listWindowDaemons: async () => fake.records,
-  readSessionDaemon: async () => 'legacy-owner',
+  readSessionDaemon: async () => fake.ownerId,
   readWindowDaemon: async (id: string) => fake.records.find(record => record.id === id) ?? null,
   writeSessionDaemon: async () => {},
   writeWindowDaemon: fake.writeRecord,
@@ -106,12 +107,13 @@ async function original(value: WindowDaemonPool, workingState: string) {
   // Preparing a fresh channel also establishes the current window binding.
   await value.allocate('other-chat', 'C:/workspace');
   const entry = await value.forSession('old-chat', true);
-  await value.remember('old-chat', entry, { close: fake.close } as unknown as DaemonSessionHandle);
+  await value.remember('old-chat', entry, await fake.resume('old-chat') as DaemonSessionHandle);
   return entry;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fake.ownerId = 'legacy-owner';
   fake.records = [];
   fake.opened = [];
   fake.openedByUrl.clear();
@@ -159,6 +161,25 @@ function savedRelay(ownerPid = 999999, cwd = 'C:/workspace') {
 }
 
 describe('persistent IDE relay restoration', () => {
+  it('resumes an unloaded idle root through its saved daemon without starting another backend', async () => {
+    const record = savedRelay();
+    fake.ownerId = record.id;
+    fake.opened = [];
+    const value = pool();
+    const routed = createRoutedDaemon(value);
+    try {
+      const root = await routed.sessions.resume('root-chat');
+      expect(root.id).toBe('root-chat');
+      expect(fake.restoreRelay).toHaveBeenCalledExactlyOnceWith({ descriptor: record.ideRelay,
+        sessionId: 'root-chat', upstreamPort: 44000 });
+      expect(value.readIde('root-chat').status).toBe('connected');
+      expect(fake.wait).toHaveBeenCalled();
+      expect(fake.spawn).not.toHaveBeenCalled();
+      expect(fake.close).not.toHaveBeenCalled();
+      expect(fake.stream).not.toHaveBeenCalled();
+    } finally { routed.disconnect(); await value.dispose(); }
+  });
+
   it('attaches an early-opened child to the daemon that announces it without allocating or polling', async () => {
     vi.useFakeTimers();
     savedRelay();

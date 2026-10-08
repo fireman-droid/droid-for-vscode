@@ -156,6 +156,21 @@ describe('cold daemon owner discovery', () => {
       attributes: expect.objectContaining({ pid: original.pid, attempt: 2, reason: 'processes:timeout' }) }));
   });
 
+  it('shares ten seconds across slow discovery retries without replacing a live owner', async () => {
+    vi.useFakeTimers();
+    const original = record(0); fake.records = [original];
+    fake.verify.mockImplementation(async (_records: unknown, _host: string, _executable: string, budget: number) => {
+      await delay(Math.min(7000, budget));
+      return new Map([[original.port, { status: 'unverified', queryFailure: 'processes:timeout' }]]);
+    });
+    const rejected = expect(pool().forSession('chat', true)).rejects.toThrow('unavailable');
+    await vi.advanceTimersByTimeAsync(10000);
+    await rejected;
+    expect(fake.verify.mock.calls.map(call => call[3])).toEqual([10000, 2750]);
+    expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.remove).not.toHaveBeenCalled();
+    expect(fake.open).not.toHaveBeenCalled(); expect(fake.stop).not.toHaveBeenCalled();
+  });
+
   it('retires an old PID only after the retry confirms it belongs to another process', async () => {
     vi.useFakeTimers();
     const original = record(0); fake.records = [original];

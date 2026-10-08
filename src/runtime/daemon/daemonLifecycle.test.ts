@@ -316,6 +316,25 @@ describe('startDetachedDaemon', () => {
     expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(6001);
   });
 
+  it('shares ten seconds across slow identity retries before cleaning up once', async () => {
+    vi.useFakeTimers();
+    const spawn = fakeSpawn(6001);
+    const killProcessTree = vi.fn(async () => undefined);
+    const resolveListenerPid = vi.fn((_port: number, _host: string, _executable: string, budget = 0) =>
+      new Promise<null>(resolve => setTimeout(() => resolve(null), Math.min(7000, budget))));
+    const rejected = expect(startDetachedDaemon({}, {
+      spawnDetachedDaemon: spawn.spawnDaemon, pickFreePort: async () => 45900,
+      waitForPort: async () => undefined, resolveListenerPid, killProcessTree,
+    })).rejects.toThrow('listener identity could not be verified');
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(killProcessTree).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await rejected;
+    expect(resolveListenerPid.mock.calls.map(call => call[3])).toEqual([10000, 2750]);
+    expect(spawn.calls).toHaveLength(1);
+    expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(6001);
+  });
+
   it('reaps an undiscovered daemon when its listener never starts', async () => {
     const spawn = fakeSpawn(6001);
     const killProcessTree = vi.fn(async () => undefined);
