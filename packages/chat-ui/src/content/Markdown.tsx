@@ -76,7 +76,7 @@ function LocalImage({ path, alt }: { readonly path: string; readonly alt: string
 
 const components: Components = {
   a: SafeLink, pre: MarkdownPre, code: InlineCode, img: MarkdownImage, span: StreamingSpan,
-  table: ({ children }) => <div className="v2-markdown-table my-3 max-w-full overflow-x-auto"><table className="w-full border-collapse text-xs">{children}</table></div>,
+  table: ({ children }) => <div className="v2-markdown-table my-3 max-w-full overflow-x-auto"><table className="w-auto border-collapse text-xs">{children}</table></div>,
 };
 
 const ParsedNode = memo(function ParsedNode({ node }: { readonly node: RootContent }) {

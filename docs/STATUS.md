@@ -9,6 +9,16 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Markdown 短表格宽度（2026-10-08）
+
+- 共享 Markdown 的表格按内容自动计算宽度，取消强制撑满消息宽度，避免编号等短列
+  右对齐时出现大块空白、内容聚在表格中部。保留 GFM 的逐列对齐和外层横向滚动。
+- Chat、只读 Viewer 等通过同一共享 Markdown 入口获得修复；不改原始消息、列对齐语法、
+  字号、边框或主题。
+- `package:vsix`（含 typecheck、lint:budgets、生产构建）及 `verify:vsix` 通过，
+  已安装到 Cursor，7 个主要安装产物与 VSIX 哈希一致。CLI 的 url.parse 弃用提示未阻断安装。
+  本轮未新增、修改或运行测试及浏览器自动化；实际表格布局待 Reload Window 后人工验收。
+
 ## 首次连接的 daemon 身份检查恢复（2026-10-08）
 
 - 冷启动发现现存 daemon 时，存活但尚未确认监听端口／进程身份的记录最多重查两次，
