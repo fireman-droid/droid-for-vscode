@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   detachedDaemonSpawnOptions,
@@ -221,6 +221,8 @@ describe('ensurePrivateDaemon', () => {
 });
 
 describe('startDetachedDaemon', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
   it('spawns a detached daemon with no parent-pid guard', async () => {
     const spawn = fakeSpawn(6001);
 
@@ -267,22 +269,50 @@ describe('startDetachedDaemon', () => {
     expect(endpoint.pid).toBe(7001);
   });
 
-  it('reaps a fresh daemon whose listener identity cannot be verified', async () => {
+  it.each(['unavailable', 'query error'])('rechecks a fresh listener after %s without respawning it', async failure => {
+    vi.useFakeTimers();
     const spawn = fakeSpawn(6001);
     const killProcessTree = vi.fn(async () => undefined);
+    const resolveListenerPid = vi.fn<() => Promise<number | null>>().mockResolvedValue(7001);
+    if (failure === 'unavailable') resolveListenerPid.mockResolvedValueOnce(null);
+    else resolveListenerPid.mockRejectedValueOnce(new Error('CIM unavailable'));
+    const pending = startDetachedDaemon({}, {
+      spawnDetachedDaemon: spawn.spawnDaemon,
+      pickFreePort: async () => 45900,
+      waitForPort: async () => undefined,
+      resolveListenerPid, killProcessTree,
+    }).then(endpoint => ({ endpoint }), error => ({ error }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(killProcessTree).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(await pending).toEqual({ endpoint: expect.objectContaining({ pid: 7001, port: 45900 }) });
+    expect(resolveListenerPid).toHaveBeenCalledTimes(2);
+    expect(spawn.calls).toHaveLength(1);
+    expect(killProcessTree).not.toHaveBeenCalled();
+  });
 
-    await expect(
+  it('reaps a fresh daemon only after bounded listener identity retries fail', async () => {
+    vi.useFakeTimers();
+    const spawn = fakeSpawn(6001);
+    const killProcessTree = vi.fn(async () => undefined);
+    const resolveListenerPid = vi.fn(async () => null);
+
+    const rejected = expect(
       startDetachedDaemon(
         {},
         {
           spawnDetachedDaemon: spawn.spawnDaemon,
           pickFreePort: async () => 45900,
           waitForPort: async () => undefined,
-          resolveListenerPid: async () => null,
+          resolveListenerPid,
           killProcessTree,
         },
       ),
     ).rejects.toThrow('listener identity could not be verified');
+    await vi.advanceTimersByTimeAsync(1250);
+    await rejected;
+    expect(resolveListenerPid).toHaveBeenCalledTimes(3);
+    expect(spawn.calls).toHaveLength(1);
     expect(killProcessTree).toHaveBeenCalledExactlyOnceWith(6001);
   });
 

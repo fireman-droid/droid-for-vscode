@@ -144,11 +144,17 @@ export async function startDetachedDaemon(
     throw error;
   }
 
-  let listenerPid: number | null;
-  try {
-    listenerPid = await resolveListenerPid(port, host, droidPath);
-  } catch {
-    listenerPid = null;
+  let listenerPid: number | null = null;
+  // A listening daemon can precede Windows' process-identity snapshot. Recheck
+  // this same endpoint before disposing it; never spawn another daemon here.
+  for (const delay of [0, 250, 1000]) {
+    if (delay > 0) await new Promise<void>(resolve => setTimeout(resolve, delay));
+    try {
+      listenerPid = await resolveListenerPid(port, host, droidPath);
+    } catch {
+      listenerPid = null;
+    }
+    if (listenerPid !== null) break;
   }
   if (listenerPid === null) {
     try {
@@ -673,7 +679,7 @@ async function queryListeningPid(
     process.platform === 'win32'
       ? (['netstat.exe', ['-ano', '-p', 'tcp']] as const)
       : (['ss', ['-ltnp']] as const);
-  const output = await runBoundedCommandOutput(command, args);
+  const output = await runBoundedCommandOutput(command, args, true);
   return output === null
     ? null
     : parseListeningPid(output, port, host, process.platform);
@@ -764,7 +770,7 @@ function defaultQueryProcessCommandLine(pid: number): Promise<string | null> {
           ],
         ] as const)
       : (['ps', ['-p', String(pid), '-o', 'args=']] as const);
-  return runBoundedCommandOutput(command, args);
+  return runBoundedCommandOutput(command, args, true);
 }
 
 function runBoundedCommandOutput(

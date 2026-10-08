@@ -141,6 +141,32 @@ describe('batched daemon discovery', () => {
 });
 
 describe('single-listener identity compatibility', () => {
+  it.each(['listener', 'command line'])('waits for the complete %s output after query exit', async stage => {
+    const child = queryProcess();
+    let queryStarted!: () => void;
+    const started = new Promise<void>(resolve => { queryStarted = resolve; });
+    if (stage === 'command line') reply(listener(41000, 8000));
+    spawn.mockImplementationOnce(() => { queryStarted(); return child; });
+    if (stage === 'listener') reply('droid daemon --port 41000');
+    const pending = resolveDaemonListenerPid(41000);
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await started;
+    child.stdout.write(stage === 'listener' ? 'TCP 127.0.0.1:41000 ' : 'droid ');
+    child.emit('exit', 0);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    child.stdout.end(stage === 'listener' ? '0.0.0.0:0 LISTENING 8000\r\n' : 'daemon --port 41000');
+    child.emit('close', 0);
+    await expect(pending).resolves.toBe(8000);
+  });
+
+  it.each(['listener', 'command line'])('rejects %s output from an unsuccessful query', async stage => {
+    reply(listener(41000, 8000), stage === 'listener' ? 1 : 0);
+    reply('droid daemon --port 41000', stage === 'command line' ? 1 : 0);
+    await expect(resolveDaemonListenerPid(41000)).resolves.toBeNull();
+  });
+
   it('still resolves a verified listener using its exact executable identity', async () => {
     reply(listener(41000, 8000));
     reply('"C:\\tools\\droid.exe" daemon --port 41000');

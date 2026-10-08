@@ -9,6 +9,24 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 新启动 daemon 的首次恢复失败（2026-10-08）
+
+- Cursor 19:25 的真实启动日志显示：会话历史已加载，但初始化在约 34 秒后以
+  `droid daemon listener identity could not be verified` 失败；19:28 手动重连后约
+  19 秒成功。该错误来自新启动 daemon 的单次身份检查，上次重试只覆盖现存 daemon
+  的批量发现。原日志不能进一步区分系统查询超时、空输出或输出尚未读完。
+- 新启动 daemon 在端口可用后，身份未确认时按 250ms、1000ms 间隔最多重查两次，
+  保留同一进程与端口；确认身份前不返回可用连接，不重复创建 daemon 或会话。
+  持续无法验证时仍清理本次启动的进程并明确失败。
+- 单端口与单进程身份查询统一等待 stdout 关闭且查询成功后读取结果，修复 exit
+  先于输出读完时被误判的分支；沿用每条查询 5 秒超时与输出大小限制。
+- 沿用此前首连故障的定向回归授权，补充新启动路径的暂时不可用／查询异常恢复、
+  持续失败后停止，以及分段输出与查询非零退出的回归；修改前复现失败，修复后两个
+  daemonLifecycle 文件共 43 项通过。没有发送模型消息、改动真实会话或运行浏览器验收。
+- `package:vsix`（含 typecheck、lint:budgets、公共包与生产构建）和 `verify:vsix` 通过，
+  167 个包条目校验通过；安装至此前指定的 Cursor，7 个主要安装产物与 VSIX 哈希一致。
+  npm 环境配置和 Cursor url.parse 弃用提示未阻断交付；实际冷启动恢复待 Reload Window 后验收。
+
 ## 子代理活动文字向上切换（2026-10-08）
 
 - AgentTask 的活动摘要更新时，旧文字在 180ms 内向上淡出，新文字在 240ms 内从下方
