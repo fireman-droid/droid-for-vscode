@@ -45,6 +45,9 @@
 - 已通过确认属于 Microsoft VS Code 的 CLI 全局安装；扩展入口、五个 Webview JS 与
   公共 CSS 共 7 文件和 VSIX 哈希一致，需 Reload Window 加载。构建／安装只出现已有
   npm 配置及 `url.parse()` 弃用提示；真实 VS Code 界面仍待人工验收，未更新公开 Release。
+- 随后按用户明确指定，将同一份 `0.8.3` 修复包补装到 Cursor 当前用户目录；已确认
+  Cursor CLI 产品身份、校验 167 个 VSIX 条目，并核对扩展入口、五个 Webview JS 与
+  公共 CSS 共 7 文件哈希一致。Cursor 安装成功，仅有 `url.parse()` 弃用提示，需 Reload Window。
 
 ## Activity 摘要切换动效（2026-10-08）
 
