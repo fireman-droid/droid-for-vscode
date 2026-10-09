@@ -32,7 +32,7 @@ async function setup(count = 2) {
   const read = vi.fn(() => entries);
   const coordinator = new ReviewCoordinator({
     getWorkspaceRoot: () => undefined,
-    snapshots: {} as TurnSnapshotStore,
+    snapshots: { read: () => undefined } as unknown as TurnSnapshotStore,
     fileDiff: { openDiff: async () => 'opened-diff' }, openSelectionInEditor: false,
     persistence: { get: <T>() => undefined as T | undefined, update }, storageDir: '', publish,
     readTurnOperations: read, readCanonicalTurnFiles: () => undefined,
@@ -89,7 +89,7 @@ it('delivers and selects the 201st file while rejecting an oversized whole-turn 
   const file = await fixture.coordinator.readFile({ sessionId: 'session', reviewScopeId: state.reviewScopeId,
     baseline: state.baseline, path: 'file-200.txt', context: 3 });
   expect('recordedOperations' in file).toBe(true);
-  if (!('recordedOperations' in file)) throw new Error('Recorded operation details were omitted.');
+  if (!file.recordedOperations) throw new Error('Recorded operation details were omitted.');
   expect(file.recordedOperations[0]?.toolUseId).toBe('edit-200');
   fixture.coordinator.handle({ type: 'review.restorePreview', sessionId: 'session', reviewScopeId: state.reviewScopeId,
     baseline: state.baseline, target: 'turn' });

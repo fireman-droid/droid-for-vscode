@@ -197,3 +197,9 @@ export function enrichOperationDiff(saved: OperationDiff | undefined, incoming: 
 export function isConfirmedOperationFile(diff: OperationDiff, file: OperationDiffFile): boolean {
   return diff.status === 'ready' && diff.source === 'tool-result' && file.outcome === 'applied';
 }
+
+/** Shared attribution rule for the chat card and its Review file list. */
+export function isConfirmedWorkspaceChange(diff: OperationDiff, file: OperationDiffFile): boolean {
+  return isWorkspaceOperationFile(file) && isConfirmedOperationFile(diff, file) &&
+    (file.contentRestricted === true || file.patch === '' || hasOperationChanges(file));
+}

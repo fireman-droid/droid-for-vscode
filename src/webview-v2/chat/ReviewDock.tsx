@@ -110,7 +110,7 @@ function selectOperationReview({ state }: ChatState) {
   const count = turnId === null ? 0 : summarizeOperations(state.transcript, turnId).get(turnId)?.files.size ?? 0;
   const sessionId = state.connection.status === 'connected' ? state.sessionId : null;
   const review = state.review.scope;
-  const complete = review?.sessionId === sessionId && review.scopeKind === 'operations' &&
+  const complete = review?.sessionId === sessionId && review.scopeKind === 'turn' &&
     review.turnId === turnId && review.lifecycle === 'complete';
   return { turnId, count, sessionId, complete };
 }
@@ -125,7 +125,7 @@ export function ReviewDockSlot({ store, vscode }: {
   return <Button variant="plain" size="none" className="review-launcher" aria-label="Open Review"
     title={`${count} directly confirmed ${count === 1 ? 'file' : 'files'} in this turn${status ? ` · ${status}` : ''}`}
     disabled={sessionId === null} onClick={() => vscode.postMessage({
-    type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'operations', turnId,
+    type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'turn', turnId,
   })}>
     <FileDiff className="review-launcher-icon" aria-hidden="true" />
     <span className="review-launcher-summary">

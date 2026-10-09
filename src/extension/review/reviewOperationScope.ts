@@ -232,7 +232,7 @@ export function recordedOperationVersion(
   ]));
 }
 
-function flattenOperations(
+export function flattenOperations(
   operations: readonly RecordedOperation[],
 ): NonNullable<ActiveScope['recordedOperations']> {
   return operations.flatMap((operation) => {

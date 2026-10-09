@@ -13,8 +13,7 @@ import type {
 } from '../../shared/protocol/reviewProtocol';
 import type { CommittedFileStat } from '../changes/changeStats';
 import { loadTurnReviewScope } from './reviewTurnScope';
-import { readReviewContents, reviewFileVersion } from './reviewContent';
-import { recordedFileVersion } from './recordedFileDiffs';
+import { readNativeReviewDiff, readReviewContents, reviewFileVersion } from './reviewContent';
 import {
   refreshScopeVersions,
   ReviewWatcherRefresh,
@@ -90,9 +89,10 @@ export class ReviewCoordinator implements vscode.Disposable {
       MAX_PERSISTED_SCOPES,
     );
     this.writingScopes = {
-      snapshots: options.snapshots,
-      persisted: this.persisted,
       getActive: () => this.active,
+      loadWriting: (sessionId, turnId, measured) => loadTurnReviewScope({ ...options,
+        isTurnWriting: () => true, readCanonicalTurnFiles: () => measured,
+      }, this.persisted, this.active, sessionId, turnId),
       setActive: (scope) => {
         if (!this.disposed) this.active = scope;
       },
@@ -154,17 +154,9 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.operation;
     const scope = this.requireScope(message);
     if (!scope) throw new Error('The review scope changed.');
-    const recorded = scope.scopeKind === 'operations' ? await recordedFileVersion(this.options, scope, message.path,
-      scope.recordedOperations?.filter(entry => entry.path === message.path) ?? [], message.toolUseId, 8 * 1024 * 1024) : undefined;
-    if (scope.scopeKind === 'operations' && !recorded)
-      throw new Error('This edit has no complete saved file versions. Open the current file to inspect its present contents.');
-    const contents = recorded ?? await readReviewContents(this.options, scope, message.path, 8 * 1024 * 1024);
-    return this.options.fileDiff.openDiff(message.path, { sessionId: scope.sessionId, turnId: scope.turnId ?? scope.reviewScopeId }, {
-      baselineLabel: recorded ? 'Before edit → after edit' : scope.baselineLabel,
-      turnSnapshot: { before: typeof contents.before === 'string' ? contents.before : contents.before.toString('utf8'),
-        after: typeof contents.after === 'string' ? contents.after : contents.after.toString('utf8'),
-        phase: recorded ? 'settled' : scope.lifecycle === 'writing' ? 'live' : 'settled' },
-    });
+    const diff = await readNativeReviewDiff(this.options, scope, message.path, message.toolUseId);
+    return this.options.fileDiff.openDiff(message.path,
+      { sessionId: scope.sessionId, turnId: scope.turnId ?? scope.reviewScopeId }, diff);
   }
   openWritingTurn(sessionId: string, turnId: string, files: readonly CommittedFileStat[]): void {
     if (this.disposed) return;
@@ -190,7 +182,7 @@ export class ReviewCoordinator implements vscode.Disposable {
   refreshOperationsTurn(sessionId: string, turnId: string): void {
     if (
       this.disposed ||
-      this.active?.scopeKind !== 'operations' ||
+      (this.active?.scopeKind !== 'operations' && this.active?.scopeKind !== 'turn') ||
       this.active.sessionId !== sessionId ||
       this.active.turnId !== turnId
     ) return;
@@ -203,17 +195,22 @@ export class ReviewCoordinator implements vscode.Disposable {
       this.pendingOperationRefreshes.delete(key);
       const current = this.active;
       if (
-        current?.scopeKind !== 'operations' ||
+        (current?.scopeKind !== 'operations' && current?.scopeKind !== 'turn') ||
         current.sessionId !== sessionId ||
         current.turnId !== turnId
       ) return;
       const refreshed = await this.loadScope({
         type: 'review.open',
         sessionId,
-        scopeKind: 'operations',
+        scopeKind: current.scopeKind,
         turnId,
       });
       if (this.disposed || this.active !== current || this.options.isSessionCurrent?.(sessionId) === false) return;
+      const path = current.currentIndex === null ? undefined : current.files[current.currentIndex]?.path;
+      const index = refreshed.files.findIndex(file => file.path === path);
+      if (index >= 0) refreshed.currentIndex = index;
+      if (current.scopeKind === 'turn') await this.refreshVersions(refreshed);
+      if (this.disposed || this.active !== current) return;
       this.active = refreshed;
       this.publishState(refreshed);
       await this.persistScope(refreshed);
@@ -503,6 +500,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     if (scope.lifecycle === 'unavailable') return false;
     if (scope.currentIndex === null) return true;
     if (this.options.openSelectionInEditor === false) return true;
+    if (scope.recordedOperations) return false;
     if (refresh) await this.refreshVersions(scope);
     if (this.disposed) return false;
     const file = scope.files[scope.currentIndex];

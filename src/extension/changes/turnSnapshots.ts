@@ -589,6 +589,17 @@ export function createTurnSnapshotStore(
       4096,
     );
     if (tree.timedOut || tree.code !== 0) return undefined;
+    // A gitlink records the nested repository's commit, not its file bytes.
+    // A failed show beneath it must never become an empty/new-file baseline.
+    const parts = path.split('/');
+    for (let index = 1; index <= parts.length; index++) {
+      const entry = await git(root, ['ls-tree', '-z', oid, '--', parts.slice(0, index).join('/')],
+        { ...env, GIT_LITERAL_PATHSPECS: '1' }, deadline, 4096);
+      if (entry.timedOut || entry.code !== 0) return undefined;
+      const value = entry.stdout.toString('utf8');
+      if (value.startsWith('160000 ') || index === parts.length && value.length > 0) return undefined;
+      if (!value.length) break;
+    }
     if (!record?.snapshotPaths?.includes(path)) {
       // An ignored file omitted from a snapshot is not proof that it did not
       // exist. Otherwise watchers count its entire contents as a new file.

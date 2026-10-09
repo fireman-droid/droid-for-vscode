@@ -31,6 +31,12 @@ async function fixture() {
     persistence: { get: () => undefined, update: async () => {} },
     publish: message => { if (message.type === 'review.state') state = message.state; },
     readCanonicalTurnFiles: () => Array.from({ length: 100 }, (_, index) => ({ path: `file-${index}.ts`, additions: 1, deletions: 1 })),
+    readTurnOperations: () => Array.from({ length: 100 }, (_, index) => ({
+      sequence: index, sessionId: 'session', toolUseId: `edit-${index}`, toolName: 'Edit',
+      operationDiff: { status: 'ready', source: 'tool-result', files: [{
+        path: `file-${index}.ts`, kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after',
+      }] },
+    })),
     readWorkspaceFiles: async () => undefined, readBranchDiff: async () => undefined,
   });
   coordinators.push(coordinator);

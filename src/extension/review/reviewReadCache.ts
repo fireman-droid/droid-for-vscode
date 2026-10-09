@@ -59,5 +59,6 @@ export class ReviewReadCache<T> {
 export async function reviewReadKey(source: ReviewContentSource, scope: ActiveScope, path: string): Promise<string> {
   const record = scope.turnId ? source.snapshots.read(scope.snapshotSessionId ?? scope.sessionId, scope.turnId) : undefined;
   return JSON.stringify([source.getWorkspaceRoot(), scope.reviewScopeId, scope.baseline, scope.lifecycle === 'writing' ? 'writing' : 'settled',
-    record?.before, record?.after, await reviewDisplayVersion(source, scope, path), path]);
+    record?.before, record?.after, await reviewDisplayVersion(source, scope, path), path,
+    scope.turnOperations ? recordedOperationVersion(scope.turnOperations.filter(entry => entry.path === path)) : undefined]);
 }

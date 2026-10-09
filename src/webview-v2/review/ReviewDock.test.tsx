@@ -59,7 +59,7 @@ it('V2 counts confirmed AI files and opens their operation review independently 
   expect(screen.getByRole('button', { name: 'Open Review' }).title).toBe('1 directly confirmed file in this turn');
   await userEvent.setup().click(screen.getByRole('button', { name: 'Open Review' }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({
-    type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-latest',
+    type: 'review.panel.open', sessionId: 'session-1', scopeKind: 'turn', turnId: 'turn-latest',
   });
   expect(screen.queryByRole('button', { name: 'Restore file' })).toBeNull();
 });

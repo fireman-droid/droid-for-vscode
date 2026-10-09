@@ -43,6 +43,7 @@ export interface ActiveScope {
   operationUndoBlocked?: string;
   undoneOperations?: ReadonlySet<string>;
   sdkPatches?: ReadonlyMap<string, ReviewSdkPatch>;
+  turnOperations?: ActiveScope['recordedOperations'];
   recordedOperations?: readonly {
     sequence: number;
     sessionId: string;

@@ -483,7 +483,7 @@ describe('createTurnSnapshotStore', () => {
       if (command === 'show') {
         return gitResult('exists', 128);
       }
-      if (command === 'cat-file') {
+      if (command === 'cat-file' || command === 'ls-tree') {
         return gitResult('');
       }
       return gitResult('', 1);

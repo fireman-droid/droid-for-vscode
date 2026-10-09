@@ -1,7 +1,7 @@
 import type { ChangeFile } from '@droidvisx/chat-ui/chat/changePresentation';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import { isConfirmedWorkspaceChange, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 
 export interface OperationSummaryFile extends ChangeFile {
   readonly records: readonly OperationDiffFile[];
@@ -38,7 +38,7 @@ export function isFoldableFileOperation(item: SessionTranscriptItem): boolean {
     item.detailKind === 'command' || !['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase())) return false;
   const diff = item.operationDiff && changedDiff(item.operationDiff);
   return diff?.status === 'ready' && diff.files.length > 0 &&
-    diff.files.every((file) => isWorkspaceOperationFile(file) && isConfirmedOperationFile(diff, file));
+    diff.files.every((file) => isConfirmedWorkspaceChange(diff, file));
 }
 
 /** Recorded operation totals, never a workspace/net-diff approximation. */
@@ -56,7 +56,7 @@ export function summarizeOperations(items: readonly SessionTranscriptItem[], tur
     if (summary.calls.has(identity)) continue;
     summary.calls.add(identity);
     for (const file of workspaceFiles) {
-      if (!isConfirmedOperationFile(diff, file)) { summary.unconfirmed += 1; continue; }
+      if (!isConfirmedWorkspaceChange(diff, file)) { summary.unconfirmed += 1; continue; }
       const previous = summary.files.get(file.path);
       const stats = operationFileStats(file);
       summary.files.set(file.path, { ...stats,

@@ -1,4 +1,4 @@
-import { recordedFileDiffs } from './recordedFileDiffs';
+import { recordedFileDiffs, recordedFileVersion } from './recordedFileDiffs';
 import { diffBytes, readTurnDiffContents } from '../changes/inlineDiff';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import type { ActiveScope } from './reviewCoordinatorSupport';
@@ -17,6 +17,8 @@ import { recordedFileContent } from './recordedFileContent';
 import { readOperationBody, type OperationBody, type OperationBodyRequest } from '../../runtime/tools/operationBody';
 import { reviewReadKey, type ReviewReadCache } from './reviewReadCache';
 
+class SnapshotContentsUnavailable extends Error {}
+
 export interface ReviewContentSource {
   readonly contentCache?: ReviewReadCache<{ before: Buffer; after: Buffer }>;
   readonly readOperationBody?: (request: OperationBodyRequest) => Promise<OperationBody | undefined>;
@@ -24,6 +26,27 @@ export interface ReviewContentSource {
   readonly getWorkspaceRoot: () => string | undefined;
   readonly readPriorFileOperations?: (sessionId: string, turnId: string, path: string) => NonNullable<ActiveScope['recordedOperations']>;
   readonly diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
+}
+export async function readNativeReviewDiff(source: ReviewContentSource, scope: ActiveScope, path: string, toolUseId?: string) {
+  if (!scope.files.some(file => file.path === path)) throw new Error('Review file is no longer available.');
+  let entries = scope.recordedOperations;
+  let contents: { before: string | Buffer; after: string | Buffer } | undefined;
+  if (!entries) {
+    try { contents = await readReviewContents(source, scope, path, 8 * 1024 * 1024); }
+    catch (error) {
+      if (!(error instanceof SnapshotContentsUnavailable) || !scope.turnOperations) throw error;
+      entries = scope.turnOperations;
+    }
+  }
+  if (entries) contents = await recordedFileVersion(source, scope, path,
+    entries.filter(entry => entry.path === path), toolUseId, 8 * 1024 * 1024);
+  if (!contents) throw new Error('This edit has no complete saved file versions. Open the current file to inspect its present contents.');
+  return {
+    baselineLabel: entries ? 'Before edit → after edit' : scope.baselineLabel,
+    turnSnapshot: { before: typeof contents.before === 'string' ? contents.before : contents.before.toString('utf8'),
+      after: typeof contents.after === 'string' ? contents.after : contents.after.toString('utf8'),
+      phase: entries || scope.lifecycle !== 'writing' ? 'settled' as const : 'live' as const },
+  };
 }
 export async function readReviewContents(source: ReviewContentSource, scope: ActiveScope, path: string, maxBytes = MAX_REVIEW_PATCH_CHARS) {
   if (!source.contentCache) return readContents(source, scope, path, maxBytes);
@@ -49,6 +72,7 @@ async function readContents(source: ReviewContentSource, scope: ActiveScope, pat
         binary: 'This file is binary or not UTF-8 text.',
         'read-failed': 'The Diff could not be read. Try refreshing Review.',
       };
+      if (contents.status === 'unavailable') throw new SnapshotContentsUnavailable(messages[contents.status]);
       throw new Error(messages[contents.status]);
     }
     return contents;
@@ -71,8 +95,9 @@ async function readContents(source: ReviewContentSource, scope: ActiveScope, pat
   return textContents(before, after);
 }
 export async function reviewFileVersion(source: ReviewContentSource, scope: ActiveScope, path: string, exact: boolean): Promise<string> {
-  if (scope.scopeKind === 'operations')
-    return recordedOperationVersion(scope.recordedOperations?.filter((entry) => entry.path === path) ?? []);
+  if (scope.recordedOperations)
+    return recordedOperationVersion(scope.recordedOperations.filter((entry) => entry.path === path &&
+      (scope.scopeKind === 'operations' || hasOperationChanges(entry))));
   if (scope.sdkPatches !== undefined) {
     const entry = scope.sdkPatches.get(path);
     return entry && !entry.binary ? digest([scope.baseline, path, entry.patch]) : 'unavailable';
@@ -81,7 +106,11 @@ export async function reviewFileVersion(source: ReviewContentSource, scope: Acti
     try {
       const contents = await readReviewContents(source, scope, path);
       return digest([scope.baseline, path, contents.before, contents.after]);
-    } catch { return 'unavailable'; }
+    } catch (error) {
+      if (error instanceof SnapshotContentsUnavailable && scope.turnOperations)
+        return recordedOperationVersion(scope.turnOperations.filter(entry => entry.path === path && hasOperationChanges(entry)));
+      return 'unavailable';
+    }
   }
   const root = source.getWorkspaceRoot();
   if (!root) return 'unavailable';
@@ -90,7 +119,7 @@ export async function reviewFileVersion(source: ReviewContentSource, scope: Acti
   catch (error) { current = isNotFound(error) ? null : Buffer.from('unavailable'); }
   return digest([scope.baseline, path, current === null ? '<deleted>' : current]);
 }
-export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: ReviewContext, toolUseId?: string) {
+export async function readReviewPatch(source: ReviewContentSource, scope: ActiveScope, path: string, context: ReviewContext, toolUseId?: string): Promise<Pick<ReviewPanelFile, 'version' | 'patch' | 'truncated' | 'recordedOperations' | 'recordedContent' | 'syntaxSource'>> {
   if (scope.recordedOperations) {
     if (!scope.files.some((file) => file.path === path)) throw new Error('Review file is no longer available.');
     const matching = scope.recordedOperations.filter((entry) => entry.path === path &&
@@ -165,7 +194,13 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
     return { ...boundedPatch(digest([scope.baseline, path, entry.patch]), entry.patch),
       ...(syntaxSource ? { syntaxSource } : {}) };
   }
-  const contents = await readReviewContents(source, scope, path);
+  let contents: Awaited<ReturnType<typeof readReviewContents>>;
+  try { contents = await readReviewContents(source, scope, path); }
+  catch (error) {
+    if (error instanceof SnapshotContentsUnavailable && scope.turnOperations?.some(entry => entry.path === path))
+      return readReviewPatch(source, { ...scope, recordedOperations: scope.turnOperations }, path, context, toolUseId);
+    throw error;
+  }
   source.diagnostics?.record({ level: 'debug', name: 'host.changes.contents',
     attributes: { sessionId: scope.sessionId, snapshotSessionId: scope.snapshotSessionId ?? scope.sessionId,
       turnId: scope.turnId ?? null, reviewScopeId: scope.reviewScopeId, scopeKind: scope.scopeKind,

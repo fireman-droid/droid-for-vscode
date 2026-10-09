@@ -9,6 +9,7 @@ import type { ChangeStatsPersistence } from './changeStats';
 import { readInlineDiff } from './inlineDiff';
 import { readReviewPatch } from '../review/reviewContent';
 import { loadTurnReviewScope } from '../review/reviewTurnScope';
+import type { RecordedOperation } from '../review/reviewOperationScope';
 
 vi.mock('vscode', () => ({}));
 
@@ -66,6 +67,9 @@ it('captures real before/after bytes in a non-Git workspace containing a nested 
   expect((await reloaded.diff(scope)).get('project/created.ts')).toEqual({ additions: 1, deletions: 0 });
   const options = { snapshots: reloaded, getWorkspaceRoot: () => root,
     readCanonicalTurnFiles: () => [{ path: 'project/app.ts', additions: 1, deletions: 1 }],
+    readTurnOperations: (): RecordedOperation[] => [{ sequence: 0, sessionId: scope.sessionId, toolUseId: 'edit', toolName: 'Edit',
+      operationDiff: { status: 'ready', source: 'tool-result', files: [{ path: 'project/app.ts',
+        kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after' }] } }],
   };
   const review = loadTurnReviewScope(options, new Map(), null, scope.sessionId, scope.turnId);
   expect(review.lifecycle).toBe('settled');
@@ -104,6 +108,36 @@ it('preserves the original Git baseline when Execute changes precede a named fil
   expect(await readInlineDiff(store, scope, root, 'file.ts', 'settled')).toMatchObject({
     status: 'ready', patch: expect.stringContaining('-original\n+final'),
   });
+}, 30_000);
+
+it('never treats files below a Git submodule as newly added when the snapshot contains only its gitlink', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dvx-gitlink-review-'));
+  directories.push(directory);
+  const root = join(directory, 'workspace');
+  const nested = join(root, '.cursor', 'skills');
+  await mkdir(nested, { recursive: true });
+  const git = (cwd: string, ...args: string[]) => execute('git', ['-C', cwd, ...args], { windowsHide: true });
+  await git(root, 'init', '--quiet');
+  await git(nested, 'init', '--quiet');
+  await writeFile(join(nested, 'mcp.json'), '{"fixture":true}\n');
+  await git(nested, 'add', 'mcp.json');
+  await git(nested, '-c', 'user.name=Diff regression', '-c', 'user.email=diff@example.invalid', 'commit', '-qm', 'fixture');
+  await writeFile(join(root, 'app.ts'), 'before\n');
+  await git(root, 'add', 'app.ts', '.cursor/skills');
+  const index = await readFile(join(root, '.git', 'index'));
+  const store = createTurnSnapshotStore(() => root, join(directory, 'store'), memory());
+  stores.push(store);
+  expect(await store.capture(scope, 'before')).toMatch(/^[0-9a-f]{40}$/);
+  expect(await store.readTreeBytes(scope, '.cursor/skills/mcp.json', 'before')).toBeUndefined();
+  expect(await store.readTreeBytesBatched!(scope, '.cursor/skills/mcp.json', 'before', 1024)).toBeUndefined();
+  expect(await store.readTreeBytes(scope, '.cursor/skills/new.json', 'before')).toBeUndefined();
+  expect(await store.readTreeBytes(scope, 'new.ts', 'before')).toBeNull();
+  await writeFile(join(root, 'app.ts'), 'after\n');
+  await store.capture(scope, 'after');
+  expect([...await store.diff(scope)].map(([path]) => path)).toEqual(['app.ts']);
+  expect(await store.readTreeBytes(scope, 'app.ts', 'before')).toEqual(Buffer.from('before\n'));
+  expect(await store.readTreeBytes(scope, 'app.ts', 'after')).toEqual(Buffer.from('after\n'));
+  expect(await readFile(join(root, '.git', 'index'))).toEqual(index);
 }, 30_000);
 
 it('prunes unreachable private objects while keeping retained history after reload', async () => {

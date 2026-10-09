@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-06。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
+更新：2026-10-09。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,26 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## Agent Turn 文件归属与快照修复（2026-10-09）
+
+- 聊天卡片与 Agent Turn 共用 SDK 成功文件操作的筛选规则；运行中打开／刷新、结算、
+  重开历史均不再用工作区快照或 watcher 扩充文件名单。单纯 Execute 副作用若没有结构化
+  逐文件成功记录，不列为 Agent Turn 文件；可通过 Uncommitted 等 Git 范围查看当前变化。
+- 保留轮次 before/after 快照与全文展示。整轮或个别文件正文不可用时保留 SDK 片段，
+  无法恢复的上下文明确标注不可用；不会把当前正文充当历史版本。同文件的快照净变化
+  仍可能包含手工编辑，文件归属筛选不证明每一行都是 AI 写入，撤销规则保持独立。
+- 修复父 Git 树中 gitlink 路径读取失败被当成文件不存在：子模块正文未知时不会产生
+  “整个文件新增”。已有快照没有保存的子模块全文不能凭此修复补回。
+- 用户授权的 10 个定向测试文件、94 项回归通过，含真实临时 Git 子模块、索引不被修改、
+  SDK 与 Review 名单一致、运行中到历史重开、完整上下文、缺正文片段及真实读取错误反馈。
+  初轮发现旧测试夹具与当前卡片行为不一致，已在上述范围修正并重跑通过；未运行浏览器验收。
+- `pnpm run package:vsix` 完成 typecheck、lint:budgets、公共 UI 独立构建与五个 Webview
+  构建；初次文件预算检查失败后，将 Native Diff 正文读取移入内容模块，重跑通过。
+  该调整后的 43 项相关回归再次通过。`verifyVsix.mjs` 校验 167 条目及扩展入口通过。
+- 已通过确认属于 Microsoft VS Code 的 CLI 全局安装；扩展入口、五个 Webview JS 与
+  公共 CSS 共 7 文件和 VSIX 哈希一致，需 Reload Window 加载。构建／安装只出现已有
+  npm 配置及 `url.parse()` 弃用提示；真实 VS Code 界面仍待人工验收，未更新公开 Release。
 
 ## Activity 摘要切换动效（2026-10-08）
 

@@ -356,6 +356,8 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - `changes/turnSnapshots.ts` 保存 before/after，使用私有 index/对象目录。
   非 Git 工作区可用扩展存储里的私有 bare Git 仓库；不修改项目 index 或创建项目 `.git`。
   快照说明文件变化，不证明作者。无原始基线不回退 HEAD，忽略且未捕获的文件不当空文件。
+  父树中 gitlink（160000）只保存子仓库提交，不含其文件正文；读取子模块路径失败返回
+  unknown，不作为 absent，也不从当前文件补出“整文件新增”。
 - `runtime/tools/operationResult.ts` 从实际工具结果建立逐文件操作证据。
   拟议输入、失败和未知结果不能算已应用；Create 没有旧内容就不能编造旧正文。
   共享 `protocol/operationDiff.ts` 过滤纯上下文/相同替换，保留真正元数据变化。
@@ -369,9 +371,14 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   getMessages 分页接口，不为阅读创建或恢复会话。单文件正文最多 512,000 UTF-16
   字符单元，超限保留该文件元数据而不丢同操作其他文件；没有新增全文缓存数据库。
   旧大正文引用若绑定了行数异常告警，按原计数重放解析并校验原摘要，不隐式重签或放宽匹配。
-- `reviewTurnScope.ts` 负责轮次工作区比较，`reviewOperationScope.ts` 负责记录操作。
-  聊天 AI 汇总只用已确认操作；手动保存不能混进 AI 计数。子代理须有父调用/实际来源
-  关联，描述相似或 Viewer 的导航映射不足以作为撤销证据。
+- `reviewTurnScope.ts` 负责 Agent Turn，`reviewOperationScope.ts` 负责逐次操作。
+  Chat 与 `reviewTurnFiles.ts` 共用 `isConfirmedWorkspaceChange`：只有 SDK 结果确认成功的
+  工作区文件进入 Agent Turn；快照、canonical 行数与 watcher 只提供版本及计数，不能扩充名单。
+  运行中入口、刷新、结算和历史重开使用同一 loader；操作结果到达同时刷新 Agent Turn。
+  完整 before/after 支持全文；整轮或单文件正文缺失时，`reviewContent.ts` 展示已存 SDK
+  片段并说明全文不可用。版本校验与预览缓存包含操作证据，避免后补结果沿用旧片段。
+  文件入选不代表快照中每一行独占归属于 AI，撤销仍使用操作证据。子代理须有父调用/实际
+  来源关联，描述相似或 Viewer 的导航映射不足以作为撤销证据。
 - `reviewGitComparison.ts` 统一读取本地 Git：Workspace 是 HEAD→工作树，Staged 是
   HEAD→Index，Unstaged 是 Index→工作树；Workspace/Unstaged 包含未跟踪文件。
   Branch 固定所选本地引用的 merge-base→HEAD；候选来自已有 heads/remotes，默认值

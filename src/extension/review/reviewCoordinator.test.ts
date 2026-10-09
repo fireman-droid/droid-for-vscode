@@ -25,7 +25,14 @@ import { scopeId } from './reviewCoordinatorSupport';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import { loadTurnReviewScope } from './reviewTurnScope';
 import { readReviewContents, readReviewPatch } from './reviewContent';
-import { loadOperationReviewScope } from './reviewOperationScope';
+import type { RecordedOperation } from './reviewOperationScope';
+
+const editsFor = (...paths: string[]): RecordedOperation[] => paths.map((path, sequence) => ({
+  sequence, sessionId: 'session-1', toolUseId: `edit-${sequence}`, toolName: 'Edit',
+  operationDiff: { status: 'ready', source: 'tool-result', files: [{
+    path, kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-before\n+after',
+  }] },
+}));
 
 const files = [
   { path: 'old.txt', additions: 1, deletions: 0 },
@@ -48,6 +55,7 @@ function createCoordinator(
     storageDir: 'Z:\\missing-review-storage',
     publish,
     readCanonicalTurnFiles: () => undefined,
+    readTurnOperations: () => editsFor('old.txt', 'latest.txt'),
     readWorkspaceFiles: async () => ({
       baseline: 'head-baseline',
       files,
@@ -59,31 +67,18 @@ function createCoordinator(
 }
 
 describe('ReviewCoordinator reload recovery', () => {
-  it('keeps historical operation excerpts separate when no turn snapshot exists', async () => {
-    const operations = [
-      { toolUseId: 'first', path: 'old.txt', patch: '@@ -1 +1 @@\n-before\n+middle' },
-      { toolUseId: 'second', path: 'old.txt', patch: '@@ -1 +1 @@\n-middle\n+after' },
-    ];
+  it('shows confirmed historical excerpts in Agent Turn when full snapshots are missing', async () => {
+    const operations = editsFor('old.txt');
     const snapshots = { read: () => undefined, readTreeBytes: vi.fn(async () => undefined) } as unknown as TurnSnapshotStore;
-    const options = { snapshots, getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
-      readCanonicalTurnFiles: () => files, readTurnOperations: () => [
-        { toolUseId: 'context-only', path: 'old.txt', patch: '@@\n unchanged context' },
-        { toolUseId: 'identical', path: 'latest.txt', patch: '@@\n-same\n+same' },
-        ...operations,
-      ],
-    };
+    const options = { snapshots, getWorkspaceRoot: () => 'Z:/missing-review-workspace',
+      readCanonicalTurnFiles: () => files, readTurnOperations: () => operations };
     const scope = loadTurnReviewScope(options, new Map(), null, 'session-1', 'turn-1');
-    expect(scope).toMatchObject({ lifecycle: 'unavailable', baselineLabel: 'Before turn → after turn' });
-    expect(scope.files.every((file) => !file.comparable && !file.restorable)).toBe(true);
-    const recorded = loadOperationReviewScope({ type: 'review.open', sessionId: 'session-1', scopeKind: 'operations', turnId: 'turn-1' },
-      operations.map((operation, sequence) => ({ sequence, sessionId: 'session-1', toolUseId: operation.toolUseId, toolName: 'Edit',
-        operationDiff: { status: 'ready', source: 'tool-result', files: [{ path: operation.path, patch: operation.patch, kind: 'modified', outcome: 'applied' }] },
-      })), new Map());
-    expect(await readReviewPatch(options, recorded, 'old.txt', 3)).toMatchObject({
-      patch: '', truncated: false, recordedOperations: operations.map(({ toolUseId, patch }) => ({ toolUseId, patch })),
+    expect(scope).toMatchObject({ lifecycle: 'settled', scopeKind: 'turn' });
+    expect(scope.files).toEqual([expect.objectContaining({ path: 'old.txt', comparable: true, restorable: false })]);
+    expect(await readReviewPatch(options, scope, 'old.txt', 3)).toMatchObject({
+      patch: '', truncated: false, recordedOperations: [expect.objectContaining({ toolUseId: 'edit-0' })],
     });
-    expect(snapshots.readTreeBytes).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' }, 'old.txt', 'before');
-    await expect(readReviewPatch(options, recorded, 'latest.txt', 3)).rejects.toThrow('Review file is no longer available');
+    await expect(readReviewPatch(options, scope, 'latest.txt', 3)).rejects.toThrow('Review file is no longer available');
     await expect(readReviewContents(options, scope, 'old.txt')).rejects.toThrow('saved baseline for this turn is unavailable');
   });
 
@@ -332,9 +327,10 @@ describe('ReviewCoordinator reload recovery', () => {
       expect.objectContaining({
         type: 'review.state',
         state: expect.objectContaining({
-          lifecycle: 'unavailable',
+          lifecycle: 'reviewing',
           baseline: 'missing-turn-1',
           files: [
+            expect.objectContaining({ path: 'old.txt', restorable: false }),
             expect.objectContaining({
               path: 'latest.txt',
               restorable: false,
@@ -372,7 +368,6 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.openWritingTurn('session-1', 'turn-1', [
       { path: 'old.txt', additions: null, deletions: null },
     ]);
-    const writingState = publish.mock.calls.at(-1)?.[0]?.state;
     snapshotState = 'before';
     coordinator.refreshWritingTurn('session-1', 'turn-1', [
       { path: 'old.txt', additions: 1, deletions: 0 },
@@ -383,8 +378,7 @@ describe('ReviewCoordinator reload recovery', () => {
       expect.objectContaining({
         type: 'review.state',
         state: expect.objectContaining({
-          reviewScopeId: writingState.reviewScopeId,
-          baseline: writingState.baseline,
+          baseline: 'before-tree',
           lifecycle: 'writing',
           files: [
             expect.objectContaining({ path: 'old.txt' }),
@@ -393,6 +387,7 @@ describe('ReviewCoordinator reload recovery', () => {
         }),
       }),
     );
+    const writingState = publish.mock.calls.at(-1)?.[0]?.state;
     coordinator.handle({
       type: 'review.selectFile',
       sessionId: 'session-1',
@@ -423,7 +418,7 @@ describe('ReviewCoordinator reload recovery', () => {
       expect.objectContaining({
         type: 'review.state',
         state: expect.objectContaining({
-          files: [expect.objectContaining({ path: 'latest.txt' })],
+          files: [expect.objectContaining({ path: 'old.txt' }), expect.objectContaining({ path: 'latest.txt' })],
         }),
       }),
     );
@@ -458,6 +453,7 @@ describe('ReviewCoordinator reload recovery', () => {
       readCanonicalTurnFiles: () => [
         { path: 'canonical.txt', additions: 2, deletions: 1 },
       ],
+      readTurnOperations: () => editsFor('canonical.txt'),
       readWorkspaceFiles: async () => ({
         baseline: 'head-baseline',
         files,
@@ -542,6 +538,7 @@ describe('ReviewCoordinator reload recovery', () => {
       readCanonicalTurnFiles: () => [
         { path: 'canonical.txt', additions: 2, deletions: 1 },
       ],
+      readTurnOperations: () => editsFor('canonical.txt'),
       readWorkspaceFiles: async () => ({
         baseline: 'head-baseline',
         files,
@@ -574,7 +571,7 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.dispose();
   });
 
-  it('uses bounded legacy snapshot rows only without a canonical settlement', async () => {
+  it('does not attribute legacy snapshot rows without SDK evidence', async () => {
     const persistence: ChangeStatsPersistence = {
       get: <T>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
@@ -633,7 +630,7 @@ describe('ReviewCoordinator reload recovery', () => {
       expect.objectContaining({
         type: 'review.state',
         state: expect.objectContaining({
-          files: [expect.objectContaining({ path: 'legacy.txt' })],
+          files: [],
         }),
       }),
     );

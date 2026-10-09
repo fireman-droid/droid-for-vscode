@@ -34,7 +34,7 @@ const changes: SessionTranscriptItem = {
 };
 const confirmed: OperationDiff = {
   status: 'ready', source: 'tool-result', callId: 'edit-call', sourceSessionId: sessionId,
-  files: [{ path, kind: 'modified', outcome: 'applied', patch: aiPatch }],
+  files: [{ path, kind: 'modified', outcome: 'applied', reversible: true, patch: aiPatch }],
 };
 
 function tool(operationDiff?: OperationDiff, overrides: Partial<ToolTranscriptItem> = {}): ToolTranscriptItem {
@@ -133,20 +133,18 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   updateWorkspace(current.store, 'writing');
   expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Changes in 1 file' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
-  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
-  fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
-  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, toolUseId: 'edit-call', path });
+  fireEvent.click(screen.getByRole('button', { name: 'Open Review' }));
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
   await expectNoWorkspaceDiff(current.port);
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 3, status: 'stopping' });
-  expect(screen.getByRole('button', { name: `Hide changes to ${path}` })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Open Review' })).toBeTruthy();
   expect(screen.queryByRole('region', { name: 'Changes in 1 file' })).toBeNull();
   updateWorkspace(current.store, 'settled');
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 5, status: 'completed' });
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
-  expect(within(card).getByText('Edited 1 file')).toBeTruthy();
+  expect(within(card).getByText('1 File Changed')).toBeTruthy();
   expect(screen.queryByRole('button', { name: `Hide changes to ${path}` })).toBeNull();
-  expect(screen.getByRole('button', { name: `Show changes to ${path}` })).toBeDefined();
+  expect(screen.getByRole('button', { name: `Review changes to ${path}` })).toBeDefined();
   expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
   const prose = screen.getByText(answer.kind === 'assistant' ? answer.text : '');
   expect(prose.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -184,10 +182,11 @@ it('reports a confirmed write without inventing text when no result patch was re
     { path, kind: 'added', outcome: 'applied', patch: '' },
   ] }), answer, changes]);
   render(<Scene {...current} />);
-  fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
-  expect(screen.getByText('No complete text Diff was recorded for this result.')).toBeTruthy();
-  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Open Review' })).toBeTruthy();
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 2, status: 'completed' });
+  fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path });
+  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
   expect(within(card).queryByLabelText(/^Recorded operation lines:/)).toBeNull();
   fireEvent.click(within(card).getByRole('button', { name: 'Review changes in 1 file' }));
@@ -228,7 +227,7 @@ it('keeps changes to the same file in separate turn cards and routes each review
   render(<Scene {...current} />);
   const cards = screen.getAllByRole('region', { name: 'Changes in 1 file' });
   expect(cards).toHaveLength(2);
-  cards.forEach((card) => expect(within(card).getAllByLabelText('Recorded operation lines: 1 added, 1 removed')).toHaveLength(2));
+  cards.forEach((card) => expect(within(card).getAllByLabelText('Recorded operation lines: 1 added, 1 removed')).toHaveLength(1));
   fireEvent.click(within(cards[0]!).getByRole('button', { name: `Review changes to ${path}` }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path });
   fireEvent.click(within(cards[1]!).getByRole('button', { name: `Review changes to ${path}` }));
@@ -236,7 +235,7 @@ it('keeps changes to the same file in separate turn cards and routes each review
 });
 
 it('reveals files beyond the first three without changing the turn review or undo scope', () => {
-  const files = Array.from({ length: 5 }, (_, index) => ({ path: `src/file-${index + 1}.ts`, kind: 'modified' as const, outcome: 'applied' as const, patch: aiPatch }));
+  const files = Array.from({ length: 5 }, (_, index) => ({ path: `src/file-${index + 1}.ts`, kind: 'modified' as const, outcome: 'applied' as const, reversible: true, patch: aiPatch }));
   const current = fixture([user, tool({ status: 'ready', source: 'tool-result', callId: 'many-files', files }), answer], true);
   render(<Scene {...current} />);
   const card = screen.getByRole('region', { name: 'Changes in 5 files' });

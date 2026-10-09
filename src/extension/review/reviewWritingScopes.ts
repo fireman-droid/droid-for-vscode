@@ -1,16 +1,9 @@
-import type { ReviewOpenMessage } from '../../shared/protocol/reviewProtocol';
 import type { CommittedFileStat } from '../changes/changeStats';
-import {
-  createActiveScope,
-  type ActiveScope,
-  type PersistedScope,
-} from './reviewCoordinatorSupport';
-import type { TurnSnapshotStore } from '../changes/turnSnapshots';
+import type { ActiveScope } from './reviewCoordinatorSupport';
 
 export interface ReviewWritingScopeHost {
-  readonly snapshots: TurnSnapshotStore;
-  readonly persisted: ReadonlyMap<string, PersistedScope>;
   getActive(): ActiveScope | null;
+  loadWriting(sessionId: string, turnId: string, measured: readonly CommittedFileStat[]): ActiveScope;
   setActive(scope: ActiveScope): void;
   publish(scope: ActiveScope): void;
   loadSettled(sessionId: string, turnId: string): Promise<ActiveScope>;
@@ -19,29 +12,13 @@ export interface ReviewWritingScopeHost {
   enqueue(task: () => Promise<void>): Promise<void>;
 }
 
-const turnMessage = (sessionId: string, turnId: string): ReviewOpenMessage => ({
-  type: 'review.open',
-  sessionId,
-  scopeKind: 'turn',
-  turnId,
-});
-
 export function openWritingTurn(
   host: ReviewWritingScopeHost,
   sessionId: string,
   turnId: string,
   files: readonly CommittedFileStat[],
 ): void {
-  const record = host.snapshots.read(sessionId, turnId);
-  const scope = createActiveScope(
-    turnMessage(sessionId, turnId),
-    record?.before ?? `writing-${turnId}`,
-    'Before turn',
-    files,
-    host.persisted,
-    record?.before !== undefined,
-  );
-  scope.lifecycle = 'writing';
+  const scope = host.loadWriting(sessionId, turnId, files);
   scope.reviewed.clear();
   host.setActive(scope);
   host.publish(scope);
@@ -59,22 +36,14 @@ export function refreshWritingTurn(
     if (!isWritingTurn(active, sessionId, turnId)) return;
     const currentPath =
       active.currentIndex === null ? undefined : active.files[active.currentIndex]?.path;
-    const hasBefore = host.snapshots.read(sessionId, turnId)?.before !== undefined;
-    const refreshed = createActiveScope(
-      turnMessage(sessionId, turnId),
-      active.baseline,
-      active.baselineLabel,
-      files,
-      host.persisted,
-      hasBefore || active.files.every(({ comparable }) => comparable),
-    );
-    refreshed.lifecycle = 'writing';
-    refreshed.reviewed = active.reviewed;
+    const refreshed = host.loadWriting(sessionId, turnId, files);
+    const sameBaseline = refreshed.baseline === active.baseline;
+    if (sameBaseline) refreshed.reviewed = active.reviewed;
     preserveCurrentPath(refreshed, currentPath);
     const previous = new Map(active.files.map((file) => [file.path, file.version]));
     const added = new Set<string>();
     for (const file of refreshed.files) {
-      const version = previous.get(file.path);
+      const version = sameBaseline ? previous.get(file.path) : undefined;
       if (version === undefined) added.add(file.path);
       else file.version = version;
     }
