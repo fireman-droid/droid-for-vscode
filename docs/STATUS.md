@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-09。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
+更新：2026-10-10。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,22 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 编辑重发的文件恢复入口精简（2026-10-10）
+
+- 编辑栏合并为一个 `Restore files (N)` 入口；勾选状态用对勾表示，恢复开关与文件清单
+  放在同一个 320px 弹层中，移除独立 `View details`。入口、关闭按钮与文件链接无 hover 背景。
+- 清单按恢复旧版本、删除新文件和不可恢复分组，操作说明每组显示一次；说明压缩为一句，
+  保留当前消息之后的改动范围及后续手动修改的影响。保留工作区外文件提示、不可恢复原因、
+  省略清单计数和恢复已经请求后的禁用状态；打开文件仍只查看当前内容。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，包含 typecheck、
+  lint:budgets、公共 UI 与生产构建；`node src/integration/verifyVsix.mjs dist/droidvisx.vsix`
+  校验 167 个包条目通过。已安装至 Microsoft VS Code 及此前指定的 Cursor，两边各
+  7 个主要安装文件与 VSIX 哈希一致，需 Reload Window 加载。
+- 首次直接使用终端提供的 pnpm 时，其依赖目录重建因无 TTY 中止；改用项目声明的
+  pnpm 10.2.0 后完成构建，未改依赖和 lockfile。npm 配置与编辑器 url.parse 弃用提示
+  未阻断交付。本次未获新的测试授权，未新增、修改或运行测试及浏览器验收；既有
+  QuestionCard 用例依赖旧入口与文案，尚未更新，真实交互与视觉待编辑器验收。
 
 ## Agent Turn 文件归属与快照修复（2026-10-09）
 
@@ -335,7 +351,8 @@
 ## 编辑重发的文件恢复入口（2026-10-07）
 
 - Restore 从编辑框与 Plan 之间的独立卡片移入编辑框底部，与重发按钮相邻。
-  默认不勾选；勾选后按钮显示 `Restore & resend`，文件清单通过 `View details` 打开共享 Popover。
+  默认不勾选；启用后重发提示为 `Restore & resend`。入口已在 2026-10-10 合并为
+  `Restore files (N)`，恢复开关与文件清单一起放入共享 Popover，见本文顶部记录。
 - 按实际截图进一步收紧：恢复选项并入原有附件／模型工具栏，删除独立操作行、分隔线和
   8px 上方留白；详情与发送按钮从 28px 收紧为 24px。仅空间不足时模型设置和发送一起换行。
 - 保留 SDK 原生恢复范围、删除新建文件、无法恢复条目及手动修改影响说明；查看详情和文件
