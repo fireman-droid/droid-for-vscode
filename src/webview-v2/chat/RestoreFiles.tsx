@@ -1,66 +1,66 @@
 import type { RewindFileInfo } from './editing/editTypes';
-import { useId } from 'react';
-import { Check, ChevronDown, ExternalLink, RotateCcw, X } from 'lucide-react';
-import { Checkbox } from '../ui/selection';
+import { useState } from 'react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '../ui/overlays';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { rewindDetailSummary } from '../../shared/protocol/rewindDetails';
 import { useContent } from '../content/context';
 
-export function RestoreFiles({ impact, checked, onChange, disabled = false, restored = false, openDisabled = false }: {
+const actionLabels = { restore: 'Restore', delete: 'Delete', unavailable: 'Unavailable' } as const;
+const itemClass = 'h-6 min-w-0 px-1.5 py-0 text-[11.5px] leading-none';
+
+export function RestoreFiles({ impact, onResend, disabled = false, resumeOnly = false, restored = false, openDisabled = false }: {
   readonly impact: RewindFileInfo;
-  readonly checked: boolean;
-  readonly onChange: (checked: boolean) => void;
+  readonly onResend: (restoreFiles: boolean) => void;
   readonly disabled?: boolean;
+  readonly resumeOnly?: boolean;
   readonly restored?: boolean;
   readonly openDisabled?: boolean;
 }) {
   const { actions } = useContent();
-  const id = useId();
+  const [showFiles, setShowFiles] = useState(false);
   const count = impact.restorableCount + impact.createdCount;
   const { details, unavailableCount, omittedAffected, omittedUnavailable } = rewindDetailSummary(impact);
-  const groups = [
-    { action: 'restore', label: 'Restore previous versions', count: impact.restorableCount },
-    { action: 'delete', label: 'Delete new files', count: impact.createdCount },
-    { action: 'unavailable', label: 'Unavailable · unchanged', count: unavailableCount },
-  ] as const;
-  const label = restored ? 'Restore requested' : count > 0 ? 'Restore files' : 'Restore unavailable';
-  if (count === 0 && unavailableCount === 0) return null;
-  return <Popover><div data-transcript-selection-exclude="" className="min-w-0 select-none text-[11.5px]" role="group" aria-label="File restoration">
-    <PopoverTrigger asChild><Button variant="plain" size="none"
-      aria-label={`${label} (${count || unavailableCount})${count > 0 && !restored ? `, ${checked ? 'on' : 'off'}` : ''}`}
-      className="inline-flex h-6 max-w-full items-center gap-1 bg-transparent text-[11.5px] text-muted-foreground hover:text-foreground">
-      {checked && count > 0 ? <Check className="size-3 shrink-0" aria-hidden="true" /> : <RotateCcw className="size-3 shrink-0" aria-hidden="true" />}
-      <span className="truncate">{label} ({count || unavailableCount})</span><ChevronDown className="size-3 shrink-0" aria-hidden="true" />
-    </Button></PopoverTrigger>
-    <PopoverContent side="top" align="start" className="w-80 p-2.5 text-[11.5px]" data-editor-popup-owner={impact.messageId} data-transcript-selection-exclude="" aria-labelledby={id}>
-      <div className="flex items-center justify-between gap-2">
-        {count > 0 ? <label className="flex min-w-0 items-center gap-1.5 has-[:enabled]:cursor-pointer">
-          <Checkbox checked={checked} disabled={disabled || restored} onCheckedChange={(value) => onChange(value === true)} />
-          <span id={id} className="font-medium">{label} ({count})</span>
-        </label> : <span id={id} className="font-medium">{label}</span>}
-        <PopoverClose asChild><Button variant="plain" size="icon-sm" className="inline-flex items-center justify-center bg-transparent text-muted-foreground hover:text-foreground" aria-label="Close file restoration details"><X className="size-3.5" aria-hidden="true" /></Button></PopoverClose>
-      </div>
-      {count > 0 ? <p className="mt-1 text-muted-foreground">{restored ? 'Already requested; reconnecting will not restore again.' : 'On resend, undo file changes from this message onward, including later manual edits.'}</p> : null}
-      <div className="mt-2 space-y-2 border-t border-[var(--panel-edge)] pt-2">
-        {groups.filter((group) => group.count > 0).map((group) => <section key={group.action} aria-label={group.label}>
-          <p className="mb-1 text-[10.5px] text-muted-foreground">{group.label} ({group.count})</p>
-          <ul className="space-y-1">
-            {details.filter((file) => file.action === group.action).map((file, index) => <li key={`${file.label}:${index}`} className="min-w-0">
-              {file.location === 'workspace' && actions?.openPath ? <Button textSelectable variant="link" size="none"
-                disabled={openDisabled} aria-label={`Open current file ${file.label}`} title={`Open current file: ${file.label}`}
-                className="max-w-full min-w-0 justify-start gap-1 bg-transparent text-left text-[11px] leading-4"
-                onClick={() => actions.openPath?.({ path: file.label })}>
-                <span className="min-w-0 truncate">{file.label}</span><ExternalLink className="size-3! shrink-0" aria-hidden="true" />
-              </Button> : <span className="block truncate" title={file.label}>{file.label}</span>}
-              {file.location !== 'workspace' ? <span className="block text-[10.5px] text-muted-foreground">{file.location === 'outside-workspace' ? 'Outside workspace' : 'Workspace location unavailable'}</span> : null}
-              {file.reason ? <span className="block break-words text-[10.5px] text-muted-foreground">{file.reason}</span> : null}
-            </li>)}
-          </ul>
-        </section>)}
-        {omittedAffected > 0 ? <p className="text-muted-foreground">Applies to all {count} files; {omittedAffected} more not listed.</p> : null}
-        {omittedUnavailable > 0 ? <p className="text-muted-foreground">{omittedUnavailable} more unavailable {omittedUnavailable === 1 ? 'file' : 'files'} not listed.</p> : null}
-      </div>
-    </PopoverContent>
-  </div></Popover>;
+  const total = count + unavailableCount;
+  const mixed = [impact.restorableCount, impact.createdCount, unavailableCount].filter((value) => value > 0).length > 1;
+  const summary = mixed ? `${total} files` : impact.createdCount > 0 ? `Delete ${total} new ${total === 1 ? 'file' : 'files'}`
+    : impact.restorableCount > 0 ? `Restore ${total} ${total === 1 ? 'file' : 'files'}` : `${total} unavailable ${total === 1 ? 'file' : 'files'}`;
+  const restoreHint = restored ? 'Already requested; reconnecting will not restore again.'
+    : resumeOnly ? 'The conversation has already been rewound; reconnect to resend.'
+      : 'Undo file changes from this message onward, including later manual edits, then resend.';
+  if (total === 0) return null;
+  return <DropdownMenu modal={false} onOpenChange={(open) => { if (open) setShowFiles(false); }}>
+    <DropdownMenuTrigger asChild><Button variant="plain" size="none" className="v2-user-edit-send v2-user-edit-options"
+      aria-label="Resend options" title="Resend options" data-transcript-selection-exclude=""><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+    <DropdownMenuContent side="top" align="end" loop className="grid w-60 grid-cols-[1fr_auto] p-1 [--hover-surface:transparent]"
+      data-editor-popup-owner={impact.messageId} data-transcript-selection-exclude="" aria-label={showFiles ? 'Files affected by restore' : 'Resend options'}>
+      {!showFiles && <DropdownMenuItem className={`${itemClass} col-span-2`} disabled={disabled} onSelect={() => onResend(false)}>
+        {resumeOnly ? 'Reconnect & resend' : 'Resend'}
+      </DropdownMenuItem>}
+      {!showFiles && <DropdownMenuItem className={itemClass} disabled={disabled || resumeOnly || count === 0}
+        title={restoreHint} aria-label={`Restore & resend. ${restoreHint}`} onSelect={() => onResend(true)}>
+        {restored ? 'Restore requested' : count > 0 ? 'Restore & resend' : 'Restore unavailable'}
+      </DropdownMenuItem>}
+      {/* Keep this item mounted so keyboard focus survives both directions of the view switch. */}
+      <DropdownMenuItem className={`${itemClass} ${showFiles ? 'col-span-2 gap-1.5' : 'min-w-6 justify-center text-muted-foreground'}`}
+        aria-label={showFiles ? 'Back to resend options' : `View ${total} file details`} title={showFiles ? 'Back to resend options' : 'View files affected by restore'}
+        onSelect={(event) => { event.preventDefault(); setShowFiles(!showFiles); }}>
+        {showFiles ? <><ArrowLeft className="size-3 shrink-0" aria-hidden="true" /><span className="truncate">{summary}</span></> : total}
+      </DropdownMenuItem>
+      {showFiles && <div className="col-span-2 max-h-[72px] overflow-y-auto overscroll-contain" role="group" aria-label="File list">
+        {details.map((file, index) => {
+          const location = file.location === 'workspace' ? '' : file.location === 'outside-workspace' ? 'Outside workspace' : 'Workspace location unavailable';
+          const description = [file.label, actionLabels[file.action], location, file.reason].filter(Boolean).join(' · ');
+          const content = <><span className="min-w-0 truncate">{file.label.split(/[\\/]/u).at(-1)}</span>
+            {mixed || location ? <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{[mixed ? actionLabels[file.action] : '', location ? file.location === 'outside-workspace' ? 'Outside' : 'Unknown' : ''].filter(Boolean).join(' · ')}</span> : null}</>;
+          return file.location === 'workspace' && actions?.openPath ? <DropdownMenuItem key={`${file.label}:${index}`}
+            className={itemClass} disabled={openDisabled} title={`Open current file: ${description}`} aria-label={`Open current file: ${description}`}
+            onSelect={(event) => { event.preventDefault(); actions.openPath?.({ path: file.label }); }}>{content}</DropdownMenuItem>
+            : <div key={`${file.label}:${index}`} className={`${itemClass} flex items-center gap-1.5`} title={description} aria-label={description}>{content}</div>;
+        })}
+        {omittedAffected > 0 ? <p className={`${itemClass} flex items-center text-muted-foreground`} title={`Restoration applies to all ${count} affected files.`}>{omittedAffected} more affected files not listed</p> : null}
+        {omittedUnavailable > 0 ? <p className={`${itemClass} flex items-center text-muted-foreground`}>{omittedUnavailable} more unavailable files not listed</p> : null}
+      </div>}
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }

@@ -140,11 +140,13 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           <div className="v2-user-edit-footer">
             {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label="Attach files to edited message" title="Attach files"
               disabled={editDisabled} onClick={onAttach}>+</Button> : null}
-            {restoreFiles}
             <div className={cn('v2-user-edit-controls', Boolean(editSettings) && 'v2-user-edit-controls-with-settings')}>
               {editSettings}
-              <Tooltip content={resendLabel}><Button variant="plain" size="none" className="v2-user-edit-send" aria-label={resendLabel}
-                disabled={!canResend || !draft.text.trim()} onClick={submit}><RotateCcw aria-hidden="true" /></Button></Tooltip>
+              <div className="v2-user-edit-resend">
+                <Tooltip content={resendLabel}><Button variant="plain" size="none" className="v2-user-edit-send" aria-label={resendLabel}
+                  disabled={!canResend || !draft.text.trim()} onClick={submit}><RotateCcw aria-hidden="true" /></Button></Tooltip>
+                {restoreFiles}
+              </div>
             </div>
           </div>
         </div>

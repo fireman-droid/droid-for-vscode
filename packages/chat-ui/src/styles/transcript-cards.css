@@ -316,6 +316,7 @@
   .v2-user-edit-attach:hover:not(:disabled) { color: var(--ink); background: var(--control-surface-hover); }
   .v2-user-edit-attach:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-user-edit-attach:disabled { opacity: .45; }
+  .v2-user-edit-resend { display: inline-flex; flex: none; align-items: center; margin-left: auto; }
   .v2-user-edit-send {
     display: inline-flex;
     width: 24px;
@@ -323,16 +324,15 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
     padding: 0;
-    border: 1px solid var(--panel-edge);
+    border: 0;
     border-radius: 6px;
-    background: var(--control-surface-hover);
-    color: var(--ink);
-    transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+    background: transparent;
+    color: var(--muted-ink);
+    transition: color var(--motion-fast) var(--motion-ease);
   }
-  .v2-user-edit-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
-  .v2-user-edit-send:active:not(:disabled) { border-color: var(--control-border-focus); }
+  .v2-user-edit-send:hover:not(:disabled), .v2-user-edit-send:active:not(:disabled) { color: var(--ink); }
+  .v2-user-edit-options { width: 18px; }
   .v2-user-edit-send svg { width: 14px; height: 14px; }
   .v2-user-edit-send:disabled { opacity: 1; color: color-mix(in srgb, var(--ink) 56%, var(--field-surface)); }
   .v2-sent-attachments { display: flex; flex-wrap: wrap; gap: 6px; }
