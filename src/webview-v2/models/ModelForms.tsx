@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 
 const protocolHints: Record<CustomModelProvider, string> = {
   'generic-chat-completion-api': '大多数第三方 OpenAI 兼容服务使用此项。',
-  openai: '适用于 Responses API。仅支持 Chat Completions 的接口请选择 OpenAI Chat Completions。',
+  openai: '适用于 Responses API。',
   anthropic: '用于支持 Anthropic Messages API 的服务。',
 };
 

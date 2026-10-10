@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 模型接口选项使用 Droid 原名（2026-10-10）
+
+- 模型设置的接口类型选项直接显示 `anthropic`、`openai`、`generic-chat-completion-api`，
+  接口切换和当前接口摘要同步使用同一名称；移除指向旧选项名的冗余说明。
+  保存的 provider 值、默认选择和 SDK 调用保持原状。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，含 typecheck、
+  lint:budgets 和生产构建；`node src/integration/verifyVsix.mjs dist/droidvisx.vsix` 校验
+  167 个条目及入口通过。已安装到 Microsoft VS Code 和此前指定的 Cursor，两边各 7 个
+  主要文件与 VSIX 哈希一致，需 Reload Window。npm 配置与 `url.parse()` 提示未阻断交付；
+  本次为选项文案调整，未新增、修改或运行测试及浏览器验收。
+
 ## 模型来源统一在模型管理页设置（2026-10-10）
 
 - “官方 / BYOK / 全部”仅在模型管理页的“聊天模型选择范围”中设置，沿用透明背景的
