@@ -9,6 +9,17 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 模型来源提示精简（2026-10-10）
+
+- 移除模型选择器中“当前选择……位于此筛选范围外”及其附带的“显示全部”链接，
+  主聊天／Spec、会话设置和共享模型选择器统一不再展示这段提示。
+  来源页签、筛选、当前模型值、空结果与错误反馈保持不变。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，包含 typecheck、
+  lint:budgets 与生产构建；`node src/integration/verifyVsix.mjs dist/droidvisx.vsix` 校验
+  167 个条目及入口通过。已安装到 Microsoft VS Code 和此前指定的 Cursor，两边各
+  7 个主要文件与 VSIX 哈希一致，需 Reload Window。仅有未阻断交付的 npm 配置及
+  `url.parse()` 弃用提示。本次为文案删除，未新增或运行测试、浏览器及编辑器 UI 验收。
+
 ## Agent Turn 行尾差异展示（2026-10-10）
 
 - 运行中与结束后的本轮增删统计、Inline Diff 和 Agent Turn Review 统一忽略 LF / CRLF

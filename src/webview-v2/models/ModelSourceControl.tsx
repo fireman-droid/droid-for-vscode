@@ -51,17 +51,6 @@ export function ModelSourceControl({ models, className = '', compact = false }: 
   </div>;
 }
 
-export function ModelSourceNotice({ model }: {
-  readonly model?: { readonly id: string; readonly displayName: string; readonly isCustom?: boolean };
-}) {
-  const { mode, setMode } = useModelSource();
-  if (!model || matchesModelSource(model, mode)) return null;
-  return <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" role="status">
-    <span className="min-w-0 break-words">当前选择：{model.displayName}，位于此筛选范围外。</span>
-    <Button variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs" onClick={() => setMode('mixed')}>显示全部</Button>
-  </div>;
-}
-
 export function ModelSourceEmpty() {
   const { mode, setMode } = useModelSource();
   return <div role="status" className="space-y-1 px-3 py-2 text-xs text-muted-foreground">

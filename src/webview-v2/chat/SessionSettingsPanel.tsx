@@ -5,7 +5,7 @@ import type { SessionSettingSelection } from './composer/useOptimisticSetting';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
-import { ModelSourceControl, ModelSourceEmpty, ModelSourceNotice, useModelSource } from '../models/ModelSourceControl';
+import { ModelSourceControl, ModelSourceEmpty, useModelSource } from '../models/ModelSourceControl';
 
 export { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
 import { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
@@ -60,7 +60,6 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
         disabled={disabled || catalog.status !== 'ready'}
         onChange={(value) => onUpdate(spec ? { field: 'specModeModelId', value } : { field: 'modelId', value })}
       />
-      <ModelSourceNotice model={selected} />
       <SettingChoice
         label={spec ? 'Spec reasoning' : 'Reasoning'}
         value={spec ? confirmed.specModeReasoningEffort ?? '' : confirmed.reasoningEffort}

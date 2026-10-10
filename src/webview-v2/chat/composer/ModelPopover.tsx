@@ -12,7 +12,7 @@ import {
   type SessionSettingsState,
 } from '../../../shared/protocol/settings';
 import { CustomModelsContext } from '../../models/customModelsFlow';
-import { ModelSourceControl, ModelSourceEmpty, ModelSourceNotice, useModelSource } from '../../models/ModelSourceControl';
+import { ModelSourceControl, ModelSourceEmpty, useModelSource } from '../../models/ModelSourceControl';
 import { matchesModelSource } from '../../../shared/protocol/modelSourceProtocol';
 import type { SessionSettingSelection } from './useOptimisticSetting';
 import { ChevronDownIcon, SettingsStatus, Stat, formatReasoningLabel } from './shared';
@@ -156,7 +156,6 @@ export function ModelPopover({
             ) : null}
             <div className="space-y-1 px-2.5">
               <ModelSourceControl models={modelCatalog.items} compact />
-              <ModelSourceNotice model={selected} />
             </div>
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
               Search models
