@@ -9,6 +9,22 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 聊天密度与模型菜单（2026-10-10）
+
+- 已按确认的预览收紧聊天标题栏、历史菜单、输入框、附件缩略图、文件变更卡片及
+  回复之间的间距，正文保持 13px。历史菜单宽 260px、列表最高 240px、普通行 24px。
+- 主聊天、编辑重发和 BTW 的模型菜单统一宽 220px、模型行 28px，列表最高 176px。
+  来源与能力说明移入提示，保留不可用标记、选中勾选与推理强度；Spec 和添加模型
+  合并一排。去掉模型菜单、历史列表控件及文件变更行的 hover 背景。
+- 保留来源过滤、搜索、Spec 继承、模型管理跳转及原禁用／错误状态；未改 SDK、Host
+  或设置提交协议。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，包含 typecheck、
+  lint:budgets、公共 UI 独立构建及生产构建；`node src/integration/verifyVsix.mjs dist/droidvisx.vsix`
+  校验 167 个包条目及扩展入口通过。已用各自产品 CLI 安装到 Microsoft VS Code 和 Cursor，
+  两边各 7 个主要安装文件与 VSIX 哈希一致，需 Reload Window 加载。npm 配置和编辑器
+  `url.parse()` 弃用提示未阻断构建或安装。
+- 本次未新增测试授权，未新增、修改或运行测试及浏览器验收；真实视觉和交互待编辑器验收。
+
 ## 编辑重发菜单与紧凑文件明细（2026-10-10）
 
 - 按用户确认的按钮菜单原型，将恢复操作并入重发箭头旁的小下拉，移除独立恢复入口与复选框。

@@ -109,7 +109,7 @@ export function ComposerView({
       }
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     }}
-    onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[14px] leading-[20px] focus-visible:ring-0" />;
+    onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px] focus-visible:ring-0" />;
   const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={stopLabel} title={stopLabel} onClick={onStop}><Square className="size-3 fill-current" /></Button>
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>

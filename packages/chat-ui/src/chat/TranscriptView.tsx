@@ -258,7 +258,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
                 style={{ '--markdown-row-height': `${row.size}px`, marginTop: index === 0 ? 0 : Math.max(0, row.start - virtualItems[index - 1]!.end) } as CSSProperties}>
                 {turns[row.index].messageIds.map((id) => {
                   const message = byId.get(id)!;
-                  return <div key={id} className={message.replyEnd ? 'pb-6' : 'pb-2'}>
+                  return <div key={id} className={message.replyEnd ? 'pb-5' : 'pb-2'}>
                     <TranscriptMessageContent id={id} renderMessage={renderMessage} placeholder={pinned?.id === id && pinEntered} placeholderHeight={pinnedHeight} />
                   </div>;
                 })}

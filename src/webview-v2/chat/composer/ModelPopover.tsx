@@ -154,8 +154,8 @@ export function ModelPopover({
                 </Button>
               </div>
             ) : null}
-            <div className="space-y-2 px-2 pt-2">
-              <ModelSourceControl models={modelCatalog.items} />
+            <div className="space-y-1 px-2.5">
+              <ModelSourceControl models={modelCatalog.items} compact />
               <ModelSourceNotice model={selected} />
             </div>
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
@@ -165,7 +165,7 @@ export function ModelPopover({
               <Search aria-hidden="true" />
               <Input
                 id={`${id}-search`}
-                className="dvx-model-search h-9 rounded-none border-0 bg-transparent p-0 text-[13px] focus-visible:border-transparent"
+                className="dvx-model-search h-8 rounded-none border-0 bg-transparent p-0 text-xs focus-visible:border-transparent"
                 type="search"
                 autoFocus
                 value={query}
@@ -233,18 +233,20 @@ export function ModelPopover({
               {filtered.map((model) => {
                 const isSelected = model.id === rowMatchId;
                 const modelLabel = model.displayName;
+                const modelDetails = `${modelLabel} (${model.id}) · ${model.isCustom ? 'BYOK' : '官方'} · ${model.supportsImages ? 'Images' : 'Text only'}${model.supportsImageGeneration ? ' · Image generation' : ''}${model.disabledReason ? ` · ${model.disabledReason}` : ''}`;
                 return (
                   <div
                     key={model.id}
                     className="dvx-model-row"
                     role="listitem"
                     aria-current={isSelected ? 'true' : undefined}
+                    title={modelDetails}
                   >
                     <Button variant="plain" size="none"
                       type="button"
                       className="dvx-model-choice"
                       aria-label={`${model.displayName}, ${model.id}`}
-                      title={model.id}
+                      aria-description={modelDetails}
                       disabled={disabled || model.disabled}
                       onClick={() => {
                         if (isSelected) {
@@ -268,11 +270,8 @@ export function ModelPopover({
                             : formatReasoningLabel(scopedReasoning)}
                         </span>
                       ) : null}
-                      <span className="basis-full text-[11px] leading-4 text-muted-foreground">
-                        {model.isCustom ? 'BYOK' : '官方'} · {model.supportsImages ? 'Images' : 'Text only'}
-                        {model.supportsImageGeneration ? ' · Image generation' : ''}
-                      </span>
-                      {model.disabled ? <span className="basis-full break-words text-[11px] leading-4">{model.disabledReason}</span> : null}
+                      {model.disabled ? <span className="dvx-model-source">Unavailable</span>
+                        : model.isCustom && sourceMode === 'mixed' && !isSelected ? <span className="dvx-model-source">BYOK</span> : null}
                     </Button>
                     {isSelected ? (
                       <>
@@ -296,15 +295,22 @@ export function ModelPopover({
               {filtered.length === 0 ? <ModelSourceEmpty /> : null}
             </div>
           </div>
-          {settings !== undefined && !isSpecView ? (
+        </>
+      ) : (
+        <ModelCatalogStatus modelCatalog={modelCatalog} current={confirmed ?? null}
+          disabled={refreshDisabled} onRefresh={onRefresh} />
+      )}
+      <div className="dvx-model-footer">
+        {modelCatalog.status === 'ready' && settings !== undefined && !isSpecView ? (
             <Button variant="plain" size="none"
               type="button"
               className="dvx-model-spec-row"
               aria-label="Spec drafting"
+              title={`Spec drafting · ${specModelOverrideId === null ? 'Same as session' : getModelName(specModelOverrideId, modelCatalog)}`}
               disabled={disabled}
               onClick={() => goToView('spec')}
             >
-              <span className="dvx-model-spec-row-label">Spec drafting</span>
+              <span className="dvx-model-spec-row-label">Spec</span>
               <span className="dvx-model-spec-row-right">
                 <span className="dvx-model-spec-row-value">
                   {specModelOverrideId === null
@@ -315,12 +321,9 @@ export function ModelPopover({
               </span>
             </Button>
           ) : null}
-        </>
-      ) : (
-        <ModelCatalogStatus modelCatalog={modelCatalog} current={confirmed ?? null}
-          disabled={refreshDisabled} onRefresh={onRefresh} />
-      )}
-      <AddModelEntry onOpen={onManageModels} onOpenModels={onOpenModels} />
+        <AddModelEntry onOpen={onManageModels} onOpenModels={onOpenModels}
+          compact={modelCatalog.status === 'ready' && settings !== undefined && !isSpecView} />
+      </div>
       {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
       {disabled && settings?.status === 'ready' ? (
         <p className="dvx-popover-message" role="status">
@@ -340,9 +343,11 @@ export function ModelPopover({
 export function AddModelEntry({
   onOpen,
   onOpenModels,
+  compact = false,
 }: {
   readonly onOpen: () => void;
   readonly onOpenModels?: () => void;
+  readonly compact?: boolean;
 }): React.JSX.Element | null {
   const flow = useContext(CustomModelsContext);
   const openManager = onOpenModels ?? flow?.onOpenManager;
@@ -352,13 +357,15 @@ export function AddModelEntry({
   return (
     <Button variant="plain" size="none"
       type="button"
-      className="dvx-model-add-row"
+      className={`dvx-model-add-row${compact ? ' dvx-model-add-icon' : ''}`}
+      aria-label="Add models"
+      title="Add models"
       onClick={() => {
         onOpen();
         openManager();
       }}
     >
-      <Plus aria-hidden="true" /><span>Add models</span>
+      <Plus aria-hidden="true" />{compact ? null : <span>Add models</span>}
     </Button>
   );
 }

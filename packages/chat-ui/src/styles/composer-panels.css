@@ -23,8 +23,8 @@
   .v2-composer-panel button { @apply outline-none; }
   .v2-composer-panel button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-composer-panel button:disabled { @apply cursor-default; }
-  .v2-composer-panel button:hover:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']) { background: var(--control-surface-hover); }
-  .v2-composer-panel button:active:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']) { background: var(--control-surface-active); }
+  .v2-composer-panel button:hover:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']):not(.dvx-model-popover button) { background: var(--control-surface-hover); }
+  .v2-composer-panel button:active:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']):not(.dvx-model-popover button) { background: var(--control-surface-active); }
   .v2-composer-panel .dvx-popover-message { @apply m-[5px] break-words text-xs text-muted-foreground; }
   .v2-composer-panel .dvx-error-text { @apply text-destructive; }
   .v2-composer-panel .dvx-settings-divider { @apply mx-0.5 my-[5px] h-px; background: var(--panel-edge); }
@@ -33,7 +33,7 @@
     @apply grid min-w-0 shrink-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 border-b border-[var(--panel-edge)] bg-popover px-2 text-muted-foreground;
     transition: border-color var(--motion-fast) var(--motion-ease);
   }
-  .v2-composer-panel .dvx-model-search-shell { @apply mx-1.5 mt-1.5; }
+  .v2-composer-panel .dvx-model-search-shell { @apply px-2.5; }
   .v2-composer-panel .dvx-settings-search-shell:focus-within,
   .v2-composer-panel .dvx-model-search-shell:focus-within { border-color: var(--control-border-focus); }
   .v2-composer-panel .dvx-settings-search-shell .dvx-search-icon,
@@ -81,14 +81,11 @@
     @apply absolute left-[3px] top-px h-2 w-[4.5px] rotate-[42deg] border-b-[1.6px] border-r-[1.6px] border-foreground;
   }
   .v2-composer-panel .dvx-model-panel { @apply flex min-h-0 flex-col; }
-  .v2-composer-panel .dvx-model-list { @apply grid max-h-[280px] min-h-0 gap-px overflow-y-auto overscroll-contain p-1.5; }
-  .v2-composer-panel .dvx-model-row { @apply flex min-h-8 min-w-0 items-center gap-1 rounded pr-1; transition: background-color var(--motion-fast) var(--motion-ease); }
-  .v2-composer-panel .dvx-model-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
-  .v2-composer-panel .dvx-model-row[aria-current='true'] { background: var(--control-surface-active); }
-  .v2-composer-panel .dvx-model-row > .dvx-model-choice:hover:not(:disabled) { background: transparent; }
-  .v2-composer-panel .dvx-model-choice { @apply flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0 py-1.5 pl-2 pr-1 text-left; }
-  .v2-composer-panel .dvx-model-row:not([aria-current='true']) .dvx-model-choice { @apply flex-1; }
-  .v2-composer-panel .dvx-model-name { @apply min-w-0 break-words text-[13px] font-normal leading-[19px]; overflow-wrap: anywhere; }
+  .v2-composer-panel .dvx-model-list { @apply grid max-h-[176px] min-h-0 overflow-y-auto overscroll-contain px-1 py-1; }
+  .v2-composer-panel .dvx-model-row { @apply flex h-7 min-w-0 items-center gap-0.5 pr-1; }
+  .v2-composer-panel .dvx-model-choice { @apply flex h-7 min-w-0 flex-1 items-center gap-1 pl-1.5 pr-0.5 text-left; }
+  .v2-composer-panel .dvx-model-name { @apply min-w-0 truncate text-xs font-normal leading-5; }
+  .v2-composer-panel .dvx-model-source { @apply ml-auto shrink-0 text-[10px] text-muted-foreground; }
   .v2-composer-panel .dvx-model-effort-suffix { @apply shrink-0 whitespace-nowrap text-[11px] text-muted-foreground; }
   .v2-composer-panel .dvx-model-edit { @apply ml-auto grid size-6 shrink-0 place-items-center rounded text-muted-foreground; }
   .v2-composer-panel .dvx-model-row:hover .dvx-model-edit,
@@ -97,18 +94,25 @@
   .v2-composer-panel .dvx-model-check { @apply size-3.5 shrink-0 text-muted-foreground; }
   .v2-composer-panel .dvx-model-check { @apply ml-auto mr-1; }
   .v2-composer-panel .dvx-model-row .dvx-model-check { @apply ml-0; }
-  .v2-composer-panel .dvx-model-spec-row { @apply flex min-h-[30px] w-full items-center justify-between gap-2 border-t border-[var(--panel-edge)] px-2.5 py-1.5 text-left text-xs; }
+  .v2-composer-panel .dvx-model-footer { @apply flex min-w-0 items-center gap-1 border-t border-[var(--panel-edge)] px-1; }
+  .v2-composer-panel .dvx-model-footer:empty { display: none; }
+  .v2-composer-panel .dvx-model-spec-row { @apply flex h-8 min-w-0 flex-1 items-center gap-2 px-1.5 text-left text-[11px]; }
   .v2-composer-panel .dvx-model-spec-row-label { @apply shrink-0 whitespace-nowrap; }
   .v2-composer-panel .dvx-model-spec-row-right { @apply flex min-w-0 items-center gap-1 overflow-hidden; }
   .v2-composer-panel .dvx-model-spec-row-value { @apply truncate text-[11px] text-muted-foreground; }
   .v2-composer-panel .dvx-model-spec-row .dvx-chevron-down { @apply -rotate-90; }
-  .v2-composer-panel .dvx-model-add-row { @apply flex min-h-9 w-full items-center gap-2 border-t border-[var(--panel-edge)] px-3 py-1.5 text-left text-[13px] text-muted-foreground; }
+  .v2-composer-panel .dvx-model-add-row { @apply flex h-8 w-full items-center gap-2 px-1.5 text-left text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-model-add-icon { @apply size-7 shrink-0 justify-center p-0; }
   .v2-composer-panel .dvx-model-add-row svg { @apply size-3.5; }
   .v2-composer-panel label.dvx-option-row { @apply cursor-pointer; transition: background-color var(--motion-fast) var(--motion-ease); }
   .v2-composer-panel label.dvx-option-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
   .v2-composer-panel label.dvx-option-row:has([data-state='checked']) { background: var(--control-surface-active); }
   .v2-composer-panel label.dvx-option-row:has(button:focus-visible) { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-composer-panel label.dvx-option-row > button:focus-visible { outline: none; }
+  .v2-composer-panel .dvx-model-popover button:is(:hover, :active):not(:disabled),
+  .v2-composer-panel .dvx-model-popover label.dvx-option-row:is(:hover, :has([data-state='checked'])) { background: transparent; }
+  .v2-composer-panel .dvx-model-popover .dvx-panel-head { @apply min-h-8 px-2 py-1; }
+  .v2-composer-panel .dvx-model-popover .dvx-panel-title { @apply text-xs font-normal; }
   .v2-composer-panel label.dvx-option-row:has(button:disabled) { @apply cursor-default opacity-50; }
   .v2-composer-panel .dvx-reasoning-flyout { @apply min-h-0 overflow-auto p-1; }
   .v2-composer-panel .dvx-reasoning-heading { @apply px-1.5 py-1 text-[11px] font-medium text-muted-foreground; }

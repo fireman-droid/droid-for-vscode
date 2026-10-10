@@ -50,19 +50,19 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
   };
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild><Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="Sessions"><History className="size-4" /></Button></PopoverTrigger>
-      <PopoverContent align="end" aria-label="Session history" className="w-72 space-y-2 p-1.5">
+      <PopoverTrigger asChild><Button variant="outline" size="icon" className="size-6 rounded-full bg-input-background text-muted-foreground hover:bg-input-background active:bg-input-background" aria-label="Sessions"><History className="size-3.5" /></Button></PopoverTrigger>
+      <PopoverContent align="end" aria-label="Session history" className="w-[260px] space-y-1.5 p-1.5 [&_button]:hover:bg-transparent [&_button]:active:bg-transparent">
         <div className="flex items-center gap-1">
-          <Input ref={searchInput} type="search" aria-label="Search sessions" placeholder={actions.handleSearchContent ? 'Search chats · Enter searches content' : 'Search chats'}
+          <Input ref={searchInput} className="h-6 text-xs" type="search" aria-label="Search sessions" placeholder={actions.handleSearchContent ? 'Search chats · Enter searches content' : 'Search chats'}
             maxLength={maxSearchLength} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); searchContent(); }
           }} />
         </div>
         {state.sessions.message ? <p role={state.sessions.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">{state.sessions.message}</p> : null}
         {pending || state.sessions.status === 'loading' ? <p role="status" className="text-xs text-muted-foreground">{pending ? `Waiting for ${assistantName}…` : 'Loading sessions…'}</p> : null}
-        <div className="max-h-80 space-y-3 overflow-y-auto">
+        <div className="max-h-60 space-y-1.5 overflow-y-auto">
             {groups.map((group) => <section key={group.key} aria-label={group.label ?? undefined}>
-              <h3 className="px-1 py-1 text-[11px] text-muted-foreground">{group.label}</h3>
+              <h3 className="px-1 py-0.5 text-[11px] text-muted-foreground">{group.label}</h3>
               {group.items.map((entry) => <SessionRow key={entry.id} entry={entry} maxTitleLength={maxTitleLength} disabled={controlsDisabled} actions={actions} runOnce={runOnce} onSelect={() => select(entry.id)} />)}
             </section>)}
             {groups.length === 0 && state.sessions.status !== 'loading' ? <p className="p-2 text-xs text-muted-foreground">{search.trim() ? 'No sessions match your search.' : state.sessions.status === 'ready' ? `No ${assistantName} sessions found.` : 'Session history has not loaded yet.'}</p> : null}
@@ -112,7 +112,7 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
     if (title.trim() && title.trim() !== entry.title) actions.handleRenameSession?.(entry.id, title.trim());
     else setTitle(entry.title);
   };
-  return <div className="v2-session-row group relative flex min-h-7 min-w-0 items-center rounded [&_svg]:size-3" data-current={entry.active || undefined}>
+  return <div className="v2-session-row group relative flex min-h-6 min-w-0 items-center rounded [&_svg]:size-3" data-current={entry.active || undefined}>
     {renaming ? <form className="flex w-full gap-1 p-1" onSubmit={(event) => {
       event.preventDefault();
       submitRename();
@@ -122,13 +122,13 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
         if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault();
       }} />
     </form> : <>
-      <Button variant="ghost" className="h-7 min-w-0 flex-1 justify-start pl-1 pr-8 hover:bg-transparent aria-[current=true]:opacity-100" aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
+      <Button variant="ghost" className={`h-6 min-w-0 flex-1 justify-start pl-1 pr-8 text-xs hover:bg-transparent aria-[current=true]:opacity-100 ${entry.active ? 'group-hover:pr-20 group-focus-within:pr-20' : 'group-hover:pr-14 group-focus-within:pr-14'}`} aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
         {entry.running ? <><LoaderCircle className="size-3 motion-safe:animate-spin" /><span className="sr-only">Turn still running. </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
         <span className="truncate">{entry.title}</span>
         {entry.worktree ? <span title={entry.worktree.path} className="truncate text-[11px] text-muted-foreground">worktree{entry.worktree.branch ? ` · ${entry.worktree.branch}` : ''}</span> : null}
         {entry.badge ? <span className="text-[11px] text-muted-foreground">{entry.badge}</span> : null}
       </Button>
-      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded group-hover:bg-[var(--control-surface-hover)] group-focus-within:bg-[var(--control-surface-hover)] [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
+      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
       {entry.active ? <>
         {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={`Rename ${entry.title}`} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
         {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={`Fork ${entry.title}`} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}

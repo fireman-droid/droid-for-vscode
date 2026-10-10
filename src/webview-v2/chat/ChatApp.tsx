@@ -192,7 +192,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         </div>
         {capabilities.navigateSessions ? <div className="flex shrink-0 items-center gap-1">
           {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
-            <Button variant="outline" size="icon" className="size-7 rounded-full bg-input-background text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-4" /></Button>
+            <Button variant="outline" size="icon" className="size-6 rounded-full bg-input-background text-muted-foreground hover:bg-input-background active:bg-input-background" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-3.5" /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
         </div> : null}
       </>}

@@ -1,7 +1,7 @@
 @layer utilities {
   .v2-composer-changes { container: composer-changes / inline-size; min-width: 0; padding-block: 5px; }
-  .v2-composer-changes-header { display: flex; align-items: center; min-height: 28px; gap: 8px; padding-inline: 6px; }
-  .v2-composer-changes-toggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; text-align: left; font-size: 13px; min-height: 28px; padding: 2px 5px; }
+  .v2-composer-changes-header { display: flex; align-items: center; min-height: 24px; gap: 8px; padding-inline: 6px; }
+  .v2-composer-changes-toggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; text-align: left; font-size: 12px; min-height: 24px; padding: 2px 5px; }
   .v2-composer-changes-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: rotate 180ms var(--motion-ease); }
   .v2-composer-agents { padding-block: 0; }
   .v2-composer-agents :is(.v2-composer-changes-header, .v2-composer-changes-toggle) { min-height: 22px; }
@@ -17,12 +17,12 @@
   .v2-composer-changes-stop { color: var(--muted-ink); padding: 2px 4px; font-size: 11px; }
   .v2-composer-changes-review { flex-shrink: 0; }
   .v2-composer-changes-list { list-style: none; margin: 0; max-height: min(128px, 20vh); overflow-y: auto; padding: 0 6px; }
-  .v2-composer-changes-file { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; min-height: 28px; padding: 4px 5px; border-radius: 5px; text-align: left; color: var(--secondary-ink); font-size: 13px; line-height: 20px; }
+  .v2-composer-changes-file { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; min-height: 22px; padding: 2px 5px; border-radius: 5px; text-align: left; color: var(--secondary-ink); font-size: 12px; line-height: 18px; }
   .v2-composer-changes-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .v2-composer-changes-folder { margin-left: 7px; color: var(--muted-ink); font-size: 11px; }
   .v2-composer-changes-file .dvx-change-stats { flex-shrink: 0; margin-left: auto; }
   .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-file, .v2-composer-changes-stop) { transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
-  .v2-composer-changes-file:hover:not(:disabled) { background: var(--hover-surface); }
+  .v2-composer-changes-file:hover:not(:disabled) { color: var(--ink); }
   .v2-composer-changes-toggle:hover, .v2-composer-changes-stop:hover { color: var(--ink); }
   .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-file, .v2-composer-changes-stop, .v2-composer-changes-review):focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; border-radius: 4px; }
   .v2-composer-changes-file:disabled { opacity: .55; }

@@ -78,11 +78,11 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
       {!editorOwner && kind !== 'model' ? <PopoverAnchor virtualRef={composer} /> : null}
       <PopoverTrigger asChild><Button variant="ghost" size="sm"
         aria-label={label} title={label} disabled={disabled || ((kind === 'mode' || kind === 'model') && confirmed === null)}
-        className={`h-[26px] min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground ${className}`}>
+        className={`h-6 min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
       <PopoverContent side="top" align={kind === 'model' ? 'end' : 'start'} sideOffset={8}
-        className={`v2-composer-panel overflow-y-auto rounded-xl p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[160px]' : kind === 'model' ? 'w-[240px]' : 'w-[var(--radix-popover-trigger-width)]'}`}
+        className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[160px]' : kind === 'model' ? 'w-[220px]' : 'w-[var(--radix-popover-trigger-width)]'}`}
         data-editor-popup-owner={editorOwner}>
         {kind === 'settings' ? <SettingsPopover id={`${id}-settings`} view={view} settings={state.settings} skills={state.skills} mcp={state.mcp} plugins={state.plugins} showModeControl={false}
           disabled={settingsDisabled} attachDisabled={disabled || state.interactions.length > 0} onViewChange={setView} onUpdate={pickSetting}
@@ -103,7 +103,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
     </Popover>;
   };
   return <ThemeContext.Provider value={theme}><div ref={frame} className={editorOwner ? 'flex min-w-0 flex-1 items-center gap-1' : 'v2-composer-input-row'}>
-    {!editorOwner ? button('settings', 'Session controls', <Plus />, 'v2-composer-add w-[26px] shrink-0 p-0') : null}
+    {!editorOwner ? button('settings', 'Session controls', <Plus />, 'v2-composer-add w-6 shrink-0 p-0') : null}
     {input}
     {button('mode', `Mode: ${modeLabel}`, <><span>{modeLabel}</span><ChevronDown className="dvx-select-icon size-3" aria-hidden="true" /></>, editorOwner ? 'ml-auto shrink-0' : 'v2-composer-mode shrink-0')}
     {!editorOwner ? button('context', getContextLabel(state.context),

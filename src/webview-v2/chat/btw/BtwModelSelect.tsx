@@ -32,12 +32,12 @@ export function BtwModelSelect({ catalog, value, disabled, onChange, reasoning, 
     <PopoverTrigger asChild>
       <Button variant="ghost" size="sm" disabled={pickerDisabled}
         aria-label="Side conversation model" title={label}
-        className="ml-auto h-[26px] w-auto min-w-0 max-w-[180px] flex-initial gap-1 px-1.5 text-xs font-normal text-muted-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground">
+        className="ml-auto h-6 w-auto min-w-0 max-w-[180px] flex-initial gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground">
         <span className="truncate">{label}</span><ChevronDown className="dvx-select-icon size-3 shrink-0" aria-hidden="true" />
       </Button>
     </PopoverTrigger>
     <PopoverContent side="top" align="end" sideOffset={8}
-      className="v2-composer-panel max-h-[min(520px,var(--radix-popover-content-available-height))] w-[240px] overflow-y-auto rounded-xl p-0">
+      className="v2-composer-panel max-h-[min(520px,var(--radix-popover-content-available-height))] w-[220px] overflow-y-auto rounded-lg p-0">
       {catalog !== undefined ? <ModelPopover id={`${id}-model`} modelCatalog={catalog} disabled={disabled}
         selection={{ modelId: value, reasoningEffort: effort }}
         onUpdate={(update) => {

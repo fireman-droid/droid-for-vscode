@@ -16,7 +16,7 @@ export function ActivityGroupView({ messageId, groupId, presentation, children }
   const summary = [action, target].filter(Boolean).join(' ');
   const id = useId();
   return <Collapsible open={disclosure.expanded} className="v2-activity-group">
-    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure flex min-h-6 w-full min-w-0 select-none items-center gap-1.5 py-0.5 text-left text-[13px] leading-[18px] text-muted-foreground hover:text-foreground">
+    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure flex min-h-6 w-full min-w-0 select-none items-center gap-1.5 py-0.5 text-left text-xs leading-[18px] text-muted-foreground hover:text-foreground">
       <ChevronRight className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${disclosure.expanded ? 'rotate-90' : ''}`} />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <span className="shrink-0">Activity</span>

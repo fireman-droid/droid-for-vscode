@@ -38,8 +38,7 @@
   }
   .v2-chat-disclosure:hover:not(:disabled) { color: var(--ink); }
   .v2-question-option { background: color-mix(in srgb, var(--surface) 50%, transparent); }
-  .v2-chat-choice:hover:has(button:enabled),
-  .v2-session-row:hover:has(button:enabled) { background: var(--control-surface-hover); }
+  .v2-chat-choice:hover:has(button:enabled) { background: var(--control-surface-hover); }
   .v2-chat-choice:has([data-state='checked']),
   .v2-session-row[data-current='true'] { background: var(--control-surface-active); }
   .v2-chat-choice:has(button:enabled) { cursor: pointer; }
@@ -234,8 +233,8 @@
     width: 100%;
     flex-flow: row wrap;
     align-items: stretch;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     border: 1px solid var(--panel-edge);
     border-radius: 8px;
     background: var(--field-surface);
@@ -341,8 +340,8 @@
   .v2-attachment-file,
   .v2-attachment-image {
     display: flex;
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -360,7 +359,7 @@
   .v2-attachment-file:active:not(:disabled),
   .v2-attachment-image:active:not(:disabled) { border-color: var(--control-border-focus); background: var(--control-surface-active); }
   .v2-attachment-file > svg { width: 16px; height: 16px; flex: none; }
-  .v2-attachment-badge { max-width: 42px; overflow: hidden; color: var(--secondary-ink); font-size: 9px; font-weight: 650; line-height: 1; letter-spacing: .03em; white-space: nowrap; text-overflow: ellipsis; }
+  .v2-attachment-badge { max-width: 30px; overflow: hidden; color: var(--secondary-ink); font-size: 9px; font-weight: 650; line-height: 1; letter-spacing: .03em; white-space: nowrap; text-overflow: ellipsis; }
   .v2-attachment-image { overflow: hidden; padding: 0; }
   .v2-attachment-image img { width: 100%; height: 100%; object-fit: cover; }
   .v2-attachment-thumb[data-unrestorable='true'] > button:first-child { border-style: dashed; opacity: .65; }

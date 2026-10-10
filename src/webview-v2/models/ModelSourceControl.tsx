@@ -30,19 +30,20 @@ export function ModelSourceProvider({ children, postMessage }: {
 
 export const useModelSource = () => useContext(ModelSourceContext);
 
-export function ModelSourceControl({ models, className = '' }: {
+export function ModelSourceControl({ models, className = '', compact = false }: {
   readonly models?: readonly { readonly id: string; readonly isCustom?: boolean }[];
   readonly className?: string;
+  readonly compact?: boolean;
 }) {
   const { mode, setMode, error } = useModelSource();
   return <div className={`min-w-0 space-y-1.5 ${className}`}>
-    <ToggleGroup type="single" value={mode} aria-label="模型来源" className="flex w-full gap-1 rounded-md border border-border bg-muted/40 p-1"
+    <ToggleGroup type="single" value={mode} aria-label="模型来源" className={compact ? 'flex gap-4' : 'flex w-full gap-1 rounded-md border border-border bg-muted/40 p-1'}
       onValueChange={(value) => { if (isModelSourceMode(value)) setMode(value); }}>
       {(['official', 'byok', 'mixed'] as const).map((value) => {
         const count = models?.filter((model) => matchesModelSource(model, value)).length;
         return <ToggleGroupItem key={value} value={value} aria-label={`${LABELS[value]}模型${count === undefined ? '' : `，${count} 个`}`}
-          className="h-7 min-w-0 flex-1 gap-1 px-2 text-xs">
-          {LABELS[value]}{count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
+          className={compact ? 'h-7 min-w-0 rounded-none bg-transparent px-0 text-[11px] hover:bg-transparent active:bg-transparent data-[state=on]:bg-transparent data-[state=on]:underline underline-offset-8' : 'h-7 min-w-0 flex-1 gap-1 px-2 text-xs'}>
+          {compact && value === 'mixed' ? '全部' : LABELS[value]}{compact || count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
         </ToggleGroupItem>;
       })}
     </ToggleGroup>
