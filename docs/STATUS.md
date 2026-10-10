@@ -9,6 +9,27 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Agent Turn 行尾差异展示（2026-10-10）
+
+- 运行中与结束后的本轮增删统计、Inline Diff 和 Agent Turn Review 统一忽略 LF / CRLF
+  差异；保留缩进、正文和文件末尾换行变化，快照采集、原始正文、SDK 记录与恢复规则不变。
+  Git 范围和 Recorded Edits 继续使用各自的比较口径。
+- 重开／刷新历史 Agent Turn 从保存的快照重新计算数字；文件名单继续受成功 SDK 操作
+  限制，不从快照增加路径。统计读取失败时显示未知和错误提示，不冒用旧数字或伪造零变化。
+- 用户授权的定向回归覆盖 LF / CRLF 单独变化、混合代码修改、运行中到结算、历史重开、
+  3 行与完整上下文、快照原文字节保留，以及旧统计替换且不引入无关文件。
+  首轮 30 项中有 1 项旧模拟快照缺少统计方法；补齐夹具并验证旧缓存覆盖后，该文件 12 项通过，
+  其余 18 项在首轮通过。
+- 复用原故障会话的 5 次 SDK Edit 返回与保存的 Git 快照运行生产读取／比较代码：
+  `index.vue` 为 +17 / −9，另一文件 +18 / −14，总计 +35 / −23；3 行和全文模式一致，
+  原会话 SHA256 及两文件前后快照正文保持不变。未调用模型或操作原会话。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，包含 typecheck、
+  lint:budgets、公共 UI 独立构建及生产构建；初次类型检查发现新增用例调用可选方法的
+  标注问题，修正后重跑通过。`node src/integration/verifyVsix.mjs dist/droidvisx.vsix`
+  校验 167 个条目及扩展入口通过，已安装到 Microsoft VS Code 和此前指定的 Cursor，
+  两边各 7 个主要文件与 VSIX 哈希一致，需 Reload Window 加载。
+- npm 配置和编辑器 `url.parse()` 弃用提示未阻断交付；未运行浏览器或真实编辑器 UI 验收。
+
 ## 聊天密度与模型菜单（2026-10-10）
 
 - 已按确认的预览收紧聊天标题栏、历史菜单、输入框、附件缩略图、文件变更卡片及

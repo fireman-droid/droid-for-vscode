@@ -4,6 +4,24 @@ import { createActiveScope, withSnapshotSession, type ActiveScope, type Persiste
 import { confirmedTurnFiles } from './reviewTurnFiles';
 import { flattenOperations, loadOperationReviewScope } from './reviewOperationScope';
 
+/** Recompute historical display counts; persisted totals may count CRLF as edits. */
+export async function refreshTurnReviewStats(
+  options: Pick<ReviewCoordinatorOptions, 'snapshots' | 'diagnostics'>, scope: ActiveScope,
+): Promise<ActiveScope> {
+  if (scope.lifecycle === 'writing' || scope.recordedOperations || !scope.files.length) return scope;
+  const sessionId = scope.snapshotSessionId ?? scope.sessionId;
+  try {
+    const stats = await options.snapshots.diff({ sessionId, turnId: scope.turnId! });
+    scope.files = scope.files.map(file => ({ ...file, ...(stats.get(file.path) ?? { additions: 0, deletions: 0 }) }));
+  } catch (error) {
+    scope.files = scope.files.map(file => ({ ...file, additions: null, deletions: null }));
+    scope.message = 'Saved turn change counts could not be read. Refresh Review to retry.';
+    options.diagnostics?.record({ level: 'warn', name: 'host.review.turn_stats_unavailable',
+      attributes: { sessionId, turnId: scope.turnId!, reason: error instanceof Error ? error.message : String(error) } });
+  }
+  return scope;
+}
+
 export function loadTurnReviewScope(
   options: Pick<ReviewCoordinatorOptions, 'snapshots' | 'resolveCanonicalTurnSessionId' |
     'isTurnWriting' | 'readCanonicalTurnFiles' | 'readTurnOperations' | 'diagnostics'>,

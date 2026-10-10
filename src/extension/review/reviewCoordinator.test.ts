@@ -425,13 +425,17 @@ describe('ReviewCoordinator reload recovery', () => {
     coordinator.dispose();
   });
 
-  it('uses canonical turn rows and saved file bytes for Review without granting turn Undo', async () => {
+  it('recounts saved turns without reusing stale totals or adding unrelated snapshot files', async () => {
     const persistence: ChangeStatsPersistence = {
       get: <T>() => undefined as T | undefined,
       update: vi.fn(() => Promise.resolve()),
     };
     const publish = vi.fn();
-    const readTreeBytes = vi.fn(async (_scope: unknown, _path: string, phase: string) => Buffer.from(phase === 'before' ? 'before\n' : 'after\n'));
+    const readTreeBytes = vi.fn(async (_scope: unknown, _path: string, phase: string) => Buffer.from(phase === 'before' ? 'before\n' : 'after\nextra\n'));
+    const diff = vi.fn(async () => new Map([
+      ['canonical.txt', { additions: 2, deletions: 1 }],
+      ['legacy.txt', { additions: 99, deletions: 99 }],
+    ]));
     const coordinator = new ReviewCoordinator({
       getWorkspaceRoot: () => 'Z:\\missing-review-workspace',
       snapshots: {
@@ -443,6 +447,7 @@ describe('ReviewCoordinator reload recovery', () => {
           files: [{ path: 'legacy.txt', additions: 99, deletions: 99 }],
         }),
         readTreeBytes,
+        diff,
       } as unknown as TurnSnapshotStore,
       fileDiff: {
         openDiff: vi.fn<FileDiffOpener['openDiff']>(async () => 'opened-diff'),
@@ -451,7 +456,7 @@ describe('ReviewCoordinator reload recovery', () => {
       storageDir: 'Z:\\missing-review-storage',
       publish,
       readCanonicalTurnFiles: () => [
-        { path: 'canonical.txt', additions: 2, deletions: 1 },
+        { path: 'canonical.txt', additions: 229, deletions: 221 },
       ],
       readTurnOperations: () => editsFor('canonical.txt'),
       readWorkspaceFiles: async () => ({
@@ -469,6 +474,7 @@ describe('ReviewCoordinator reload recovery', () => {
     });
     await coordinator.replay('session-1');
 
+    expect(diff).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' });
     expect(publish).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'review.state',

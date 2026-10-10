@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createTurnSnapshotStore, MAX_SNAPSHOT_OBJECT_BYTES, type TurnSnapshotStore } from './turnSnapshots';
-import type { ChangeStatsPersistence } from './changeStats';
+import { createGitChangeStatsReader, type ChangeStatsPersistence } from './changeStats';
 import { readInlineDiff } from './inlineDiff';
 import { readReviewPatch } from '../review/reviewContent';
-import { loadTurnReviewScope } from '../review/reviewTurnScope';
+import { loadTurnReviewScope, refreshTurnReviewStats } from '../review/reviewTurnScope';
 import type { RecordedOperation } from '../review/reviewOperationScope';
 
 vi.mock('vscode', () => ({}));
@@ -17,6 +17,62 @@ const execute = promisify(execFile);
 const stores: TurnSnapshotStore[] = [];
 const directories: string[] = [];
 const scope = { sessionId: 'session', turnId: 'turn' };
+
+it('keeps turn counts and patches consistent across CRLF changes, settlement and history reload', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dvx-turn-eol-'));
+  directories.push(directory);
+  const root = join(directory, 'workspace');
+  const storage = join(directory, 'store');
+  await mkdir(root);
+  await execute('git', ['init', '--quiet', root], { windowsHide: true });
+  const before = 'first\nold\nlast\n';
+  const after = 'first\r\nnew\r\nlast\r\n';
+  await writeFile(join(root, 'app.ts'), before);
+  await writeFile(join(root, 'eol.ts'), before);
+  await execute('git', ['-C', root, 'add', '.'], { windowsHide: true });
+  const persistence = memory();
+  const store = createTurnSnapshotStore(() => root, storage, persistence);
+  stores.push(store);
+  await store.capture(scope, 'before');
+  const live = createGitChangeStatsReader(() => root, {}, undefined, store);
+  await live.captureTurnBaseline!(scope, ['app.ts', 'eol.ts']);
+  await writeFile(join(root, 'app.ts'), after);
+  await writeFile(join(root, 'eol.ts'), before.replaceAll('\n', '\r\n'));
+  const liveStats = await live.read(['app.ts', 'eol.ts'], scope);
+  expect(liveStats.get('app.ts')).toMatchObject({ additions: 1, deletions: 1 });
+  expect(liveStats.get('eol.ts')).toMatchObject({ additions: 0, deletions: 0 });
+  await store.capture(scope, 'after');
+  expect((await store.diff(scope)).get('app.ts')).toEqual({ additions: 1, deletions: 1 });
+  expect(await store.readTreeBytes(scope, 'app.ts', 'before')).toEqual(Buffer.from(before));
+  expect(await store.readTreeBytes(scope, 'app.ts', 'after')).toEqual(Buffer.from(after));
+  const reloaded = createTurnSnapshotStore(() => root, storage, persistence);
+  stores.push(reloaded);
+  await writeFile(join(root, 'app.ts'), 'later unrelated edit\n');
+  const paths = ['app.ts', 'eol.ts'];
+  const options = { snapshots: reloaded, getWorkspaceRoot: () => root,
+    readCanonicalTurnFiles: () => paths.map(path => ({ path, additions: 3, deletions: 3 })),
+    readTurnOperations: (): RecordedOperation[] => paths.map((path, sequence) => ({
+      sequence, sessionId: scope.sessionId, toolUseId: `edit-${sequence}`, toolName: 'Edit',
+      operationDiff: { status: 'ready', source: 'tool-result', files: [{ path,
+        kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-old\n+new' }] },
+    })),
+  };
+  const review = await refreshTurnReviewStats(options,
+    loadTurnReviewScope(options, new Map(), null, scope.sessionId, scope.turnId));
+  expect(review.files).toEqual([
+    expect.objectContaining({ path: 'app.ts', additions: 1, deletions: 1 }),
+    expect.objectContaining({ path: 'eol.ts', additions: 0, deletions: 0 }),
+  ]);
+  for (const context of [3, 'all'] as const) {
+    const result = await readReviewPatch(options, review, 'app.ts', context);
+    expect(result.patch).toContain('-old\n+new\r');
+    expect(result.patch).not.toContain('-first');
+    expect(result.patch).not.toContain('later unrelated edit');
+    expect(await readReviewPatch(options, review, 'eol.ts', context)).toMatchObject({ patch: '', truncated: false });
+  }
+  expect(await reloaded.readTreeBytes(scope, 'app.ts', 'before')).toEqual(Buffer.from(before));
+  expect(await reloaded.readTreeBytes(scope, 'app.ts', 'after')).toEqual(Buffer.from(after));
+}, 30_000);
 function memory(): ChangeStatsPersistence {
   const data = new Map<string, unknown>();
   return { get: <T>(key: string) => data.get(key) as T | undefined, update: async (key, value) => { data.set(key, value); } };

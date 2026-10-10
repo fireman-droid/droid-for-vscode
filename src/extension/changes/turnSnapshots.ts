@@ -670,6 +670,7 @@ export function createTurnSnapshotStore(
         [
           'diff',
           '--numstat',
+          '--ignore-cr-at-eol',
           '--no-renames',
           '--relative',
           '-z',

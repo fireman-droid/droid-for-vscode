@@ -54,6 +54,26 @@ describe('turn inline diff contents', () => {
     expect(result.patch).toContain('+new\n\\ No newline at end of file');
   });
 
+  it.each([
+    ['same\n', 'same\r\n', ''],
+    ['same\r\n', 'same\n', ''],
+  ])('ignores only line-ending format changes (%j → %j)', async (before, after, patch) => {
+    const { store } = snapshots(Buffer.from(before), Buffer.from(after));
+    expect(await readInlineDiff(store, scope, directory, 'app.ts', 'settled'))
+      .toMatchObject({ status: 'ready', patch, truncated: false });
+  });
+
+  it('still shows indentation and missing-final-newline changes with CRLF normalization', async () => {
+    const { store } = snapshots(Buffer.from('same\n  indented\nlast\n'), Buffer.from('same\r\n indented\r\nlast'));
+    const result = await readInlineDiff(store, scope, directory, 'app.ts', 'settled');
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.patch).not.toContain('-same');
+    expect(result.patch).toContain('-  indented');
+    expect(result.patch).toContain('+ indented');
+    expect(result.patch).toContain('\\ No newline at end of file');
+  });
+
   it('reports missing snapshots instead of substituting HEAD or an empty baseline', async () => {
     for (const [before, after] of [[undefined, Buffer.from('a')], [Buffer.from('a'), undefined]]) {
       const { store } = snapshots(before, after);

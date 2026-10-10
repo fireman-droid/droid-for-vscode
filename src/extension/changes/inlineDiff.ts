@@ -30,7 +30,7 @@ export async function readInlineDiff(
       beforeTree: record?.before ?? null, afterTree: phase === 'settled' ? record?.after ?? null : null,
       ...(contents.status === 'ready' ? describeDiffBytes(contents.before, contents.after) : {}) } });
   if (contents.status !== 'ready') return contents;
-  const patch = await diffBytes(contents.before, contents.after);
+  const patch = await diffBytes(contents.before, contents.after, 3, true);
   return { status: 'ready', phase, ...boundPatch(patch) };
 }
 
@@ -100,7 +100,7 @@ export function isText(bytes: Buffer | null): boolean {
 }
 
 /** Git provides the same line matching as native review without a new diff dependency. */
-export async function diffBytes(before: Buffer, after: Buffer, context = 3): Promise<string> {
+export async function diffBytes(before: Buffer, after: Buffer, context = 3, ignoreCrAtEol = false): Promise<string> {
   if (before.equals(after)) return '';
   const directory = await mkdtemp(join(tmpdir(), 'droidvisx-inline-diff-'));
   try {
@@ -111,6 +111,7 @@ export async function diffBytes(before: Buffer, after: Buffer, context = 3): Pro
     const output = await new Promise<string>((resolve, reject) => {
       execFile('git', [
         '-c', 'core.autocrlf=false', 'diff', '--no-index', '--no-color',
+        ...(ignoreCrAtEol ? ['--ignore-cr-at-eol'] : []),
         '--no-ext-diff', '--no-textconv', `--unified=${context}`, '--', 'before', 'after',
       ], {
         cwd: directory, encoding: 'utf8', windowsHide: true,
@@ -121,6 +122,8 @@ export async function diffBytes(before: Buffer, after: Buffer, context = 3): Pro
         else resolve(stdout);
       });
     });
+    // A turn can change only LF/CRLF while retaining its exact saved bytes.
+    if (output.length === 0) return '';
     const hunkStart = output.search(/^@@ /m);
     if (hunkStart < 0) throw new Error('Git returned no text diff for changed bytes.');
     return output.slice(hunkStart);

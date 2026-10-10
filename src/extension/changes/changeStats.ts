@@ -550,6 +550,7 @@ async function readBaselineStat(
         'diff',
         '--no-index',
         '--numstat',
+        '--ignore-cr-at-eol',
         '--no-renames',
         '--',
         '-',

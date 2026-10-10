@@ -211,7 +211,7 @@ export async function readReviewPatch(source: ReviewContentSource, scope: Active
   const lines = context === 'all'
     ? Math.max(contents.before.toString('utf8').split('\n').length, contents.after.toString('utf8').split('\n').length)
     : context;
-  const full = await diffBytes(contents.before, contents.after, lines);
+  const full = await diffBytes(contents.before, contents.after, lines, scope.scopeKind === 'turn');
   return { ...boundedPatch(version, full), syntaxSource: sourceText(contents) };
 }
 function sourceText(contents: { before: Buffer; after: Buffer }): ReviewSyntaxSource {

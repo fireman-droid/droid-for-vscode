@@ -12,7 +12,7 @@ import type {
   ReviewWebviewMessage,
 } from '../../shared/protocol/reviewProtocol';
 import type { CommittedFileStat } from '../changes/changeStats';
-import { loadTurnReviewScope } from './reviewTurnScope';
+import { loadTurnReviewScope, refreshTurnReviewStats } from './reviewTurnScope';
 import { readNativeReviewDiff, readReviewContents, reviewFileVersion } from './reviewContent';
 import {
   refreshScopeVersions,
@@ -385,7 +385,8 @@ export class ReviewCoordinator implements vscode.Disposable {
     );
   }
   private async loadTurnScope(sessionId: string, turnId: string): Promise<ActiveScope> {
-    return loadTurnReviewScope(this.options, this.persisted, this.active, sessionId, turnId);
+    return refreshTurnReviewStats(this.options,
+      loadTurnReviewScope(this.options, this.persisted, this.active, sessionId, turnId));
   }
   private async reloadActive(): Promise<void> {
     const active = this.active;
