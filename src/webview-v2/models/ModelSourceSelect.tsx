@@ -4,7 +4,7 @@ import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
 import { Button } from '../ui/button';
 import { RadioGroup, RadioGroupItem } from '../ui/controls';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
-import { ModelSourceControl, ModelSourceEmpty, useModelSource } from './ModelSourceControl';
+import { ModelSourceEmpty, useModelSource } from './ModelSourceControl';
 
 interface ModelOption {
   readonly id: string;
@@ -41,7 +41,6 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
       </Button>
     </PopoverTrigger>
     <PopoverContent aria-label={label} side={side} align={align} className="flex max-h-[min(360px,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-[min(240px,calc(100vw-16px))] max-w-[calc(100vw-16px)] flex-col gap-2 p-2">
-      <ModelSourceControl models={models} />
       {visible.length === 0 ? <ModelSourceEmpty /> : (
         <RadioGroup aria-label={`${label} options`} value={value ?? ''} className="min-h-0 overflow-y-auto"
           onValueChange={(next) => { if (next !== value) onChange(next); setOpen(false); }}>

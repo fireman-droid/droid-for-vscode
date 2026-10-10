@@ -104,9 +104,8 @@ function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
         <div className="models-main-content">
           <section aria-label="聊天模型选择范围" className="mb-5 space-y-2 rounded-md border border-border p-3">
             <h2 className="text-sm font-medium">聊天模型选择范围</h2>
-            <ModelSourceControl className="max-w-sm" />
-            <p className="models-help">官方显示 Droid 内置模型，BYOK 显示自定义模型，混合显示全部。同步到聊天、Spec、侧聊和 Mission 的模型选择。</p>
-            <p className="models-help">下方管理 BYOK 接口与配置；切换显示范围不会改变已选模型。</p>
+            <ModelSourceControl className="max-w-sm" compact />
+            <p className="models-help">同步到所有模型选择器，不改变已选模型。</p>
           </section>
           {!panelOpen ? <ModelsFeedback page={page} /> : null}
           {snapshot === null ? busy ? <DroidLoading label="正在读取模型配置…" detail="等待本地 Droid 返回。" />

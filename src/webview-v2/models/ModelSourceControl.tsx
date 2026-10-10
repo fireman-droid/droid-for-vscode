@@ -2,9 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { MODEL_SOURCE_VERSION, isModelSourceMode, matchesModelSource, parseModelSourceState,
   type ModelSourceMode, type ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
-import { Button } from '../ui/button';
 
-const LABELS: Record<ModelSourceMode, string> = { official: '官方', byok: 'BYOK', mixed: '混合' };
+const LABELS: Record<ModelSourceMode, string> = { official: '官方', byok: 'BYOK', mixed: '全部' };
 const ModelSourceContext = createContext({ mode: 'mixed' as ModelSourceMode,
   error: undefined as string | undefined, setMode: (_mode: ModelSourceMode) => {} });
 
@@ -43,7 +42,7 @@ export function ModelSourceControl({ models, className = '', compact = false }: 
         const count = models?.filter((model) => matchesModelSource(model, value)).length;
         return <ToggleGroupItem key={value} value={value} aria-label={`${LABELS[value]}模型${count === undefined ? '' : `，${count} 个`}`}
           className={compact ? 'h-7 min-w-0 rounded-none bg-transparent px-0 text-[11px] hover:bg-transparent active:bg-transparent data-[state=on]:bg-transparent data-[state=on]:underline underline-offset-8' : 'h-7 min-w-0 flex-1 gap-1 px-2 text-xs'}>
-          {compact && value === 'mixed' ? '全部' : LABELS[value]}{compact || count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
+          {LABELS[value]}{compact || count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
         </ToggleGroupItem>;
       })}
     </ToggleGroup>
@@ -52,9 +51,8 @@ export function ModelSourceControl({ models, className = '', compact = false }: 
 }
 
 export function ModelSourceEmpty() {
-  const { mode, setMode } = useModelSource();
+  const { mode } = useModelSource();
   return <div role="status" className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
     <p>{mode === 'mixed' ? '没有匹配的模型。' : `此范围内没有匹配的${LABELS[mode]}模型。`}</p>
-    {mode !== 'mixed' ? <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setMode('mixed')}>显示全部来源</Button> : null}
   </div>;
 }

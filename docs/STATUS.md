@@ -9,6 +9,19 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 模型来源统一在模型管理页设置（2026-10-10）
+
+- “官方 / BYOK / 全部”仅在模型管理页的“聊天模型选择范围”中设置，沿用透明背景的
+  紧凑控件。主聊天／编辑重发／Spec、侧聊、会话设置和 Mission 模型菜单移除重复入口，
+  空列表也不再提供修改全局来源的快捷按钮。
+- 各模型选择器继续读取同一全局偏好并本地过滤，保留搜索、已选模型、推理强度和模型管理
+  跳转；不改 SDK 模型切换、设置保存协议或后台耗时处理，不声称已解决直接切模型的延迟。
+- `npm exec --yes --package=pnpm@10.2.0 -- pnpm run package:vsix` 通过，包含 typecheck、
+  lint:budgets、公共 UI 独立构建和生产构建；`node src/integration/verifyVsix.mjs dist/droidvisx.vsix`
+  校验 167 个条目及入口通过。已安装到 Microsoft VS Code 和此前指定的 Cursor，两边各
+  7 个主要文件与 VSIX 哈希一致，需 Reload Window。npm 配置与 `url.parse()` 弃用提示
+  未阻断交付；本次未新增、修改或运行测试与浏览器验收，真实视觉与交互待编辑器验收。
+
 ## 模型来源提示精简（2026-10-10）
 
 - 移除模型选择器中“当前选择……位于此筛选范围外”及其附带的“显示全部”链接，

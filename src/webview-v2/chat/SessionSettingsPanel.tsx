@@ -5,7 +5,7 @@ import type { SessionSettingSelection } from './composer/useOptimisticSetting';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
-import { ModelSourceControl, ModelSourceEmpty, useModelSource } from '../models/ModelSourceControl';
+import { ModelSourceEmpty, useModelSource } from '../models/ModelSourceControl';
 
 export { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
 import { SettingChoice } from '@droidvisx/chat-ui/chat/SettingChoice';
@@ -50,7 +50,6 @@ export function SessionSettingsPanel({ settings, catalog, disabled, onUpdate, on
           }} />
         <SettingChoice label="Autonomy" value={confirmed.autonomyLevel} options={choices(SESSION_AUTONOMY_LEVELS)} disabled={disabled} onChange={(value) => onUpdate({ field: 'autonomyLevel', value })} />
       </> : <h3 className="text-xs font-medium">Spec drafting</h3>}
-      <ModelSourceControl models={catalog.items} />
       <Input type="search" aria-label="Search models" placeholder="Search models" value={query} onChange={(event) => setQuery(event.target.value)} />
       <SettingChoice
         label={spec ? 'Spec model' : 'Model'}
