@@ -60,8 +60,8 @@
   .models-model-name { overflow-wrap: anywhere; color: var(--strong-ink); font-size: 14px; font-weight: 500; line-height: 1.5; }
   .models-model-id { display: block; margin-top: 4px; overflow-wrap: anywhere; color: var(--muted-ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
   .models-row-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
-  .models-use-button { min-width: 88px; }
-  .models-state { display: inline-flex; min-width: 88px; height: 32px; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .models-use-button { min-width: 48px; }
+  .models-state { display: inline-flex; height: 24px; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--ink); }
   .models-state > svg { width: 13px; height: 13px; }
   @media (hover: hover) { .models-model-row:hover { background: var(--control-surface-hover); } }
   .models-empty { display: flex; min-height: 280px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 30px 16px; border-radius: 8px; background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface)); text-align: center; }

@@ -40,13 +40,13 @@ export function ModelList({ models, snapshot, disabled, onAction, onEdit, onRena
           </p> : null}
         </div>
         <div className="models-row-actions">
-          {!enabled ? <Button variant="outline" size="sm" className="models-use-button h-8 bg-transparent" disabled={disabled || !connection} onClick={setEnabled}>恢复模型</Button>
+          {!enabled ? <Button variant="outline" size="sm" className="models-use-button bg-transparent" disabled={disabled || !connection} onClick={setEnabled}>恢复模型</Button>
             : current ? <span className="models-state"><Check aria-hidden />当前使用</span>
-            : <Button variant="outline" size="sm" className="models-use-button h-8 bg-transparent" disabled={disabled || !loaded || !snapshot.canApply}
+            : <Button variant="outline" size="sm" className="models-use-button bg-transparent" disabled={disabled || !loaded || !snapshot.canApply} aria-label="使用此模型"
                 aria-describedby={!snapshot.canApply && snapshot.applyMessage ? 'models-apply-status' : undefined}
-                title={unavailable ?? undefined} onClick={() => act('useModel')}>使用此模型</Button>}
+                title={unavailable ?? undefined} onClick={() => act('useModel')}>使用</Button>}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" className="size-8" disabled={disabled} aria-label={`${model.displayName || model.model} 的更多操作`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={disabled} aria-label={`${model.displayName || model.model} 的更多操作`}><MoreHorizontal /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="management-menu min-w-36">
               <DropdownMenuItem disabled={!enabled || !loaded} onSelect={() => act('verifyModel')}><Play className="size-3.5" />验证模型…</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onRename(model)}><Pencil className="size-3.5" />修改别名</DropdownMenuItem>
