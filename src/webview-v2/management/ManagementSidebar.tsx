@@ -1,4 +1,4 @@
-import { ArrowLeft, Boxes, MessageSquare, PanelLeft, Settings2, TextCursorInput, Workflow } from 'lucide-react';
+import { Boxes, MessageSquare, PanelLeft, Settings2, TextCursorInput, Workflow } from 'lucide-react';
 import { MANAGEMENT_PAGES, type ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { Tooltip } from '../ui/overlays';
@@ -6,14 +6,12 @@ import { Tooltip } from '../ui/overlays';
 const names = { general: '常规', models: '模型', completion: '智能补全', sessions: '会话', missions: 'Missions' };
 const icons = { general: Settings2, models: Boxes, completion: TextCursorInput, sessions: MessageSquare, missions: Workflow };
 
-export function ManagementSidebar({ page, collapsed, busy, version, onToggle, onNavigate, onBack }: {
+export function ManagementSidebar({ page, collapsed, version, onToggle, onNavigate }: {
   readonly page: ManagementPage;
   readonly collapsed: boolean;
-  readonly busy: boolean;
   readonly version: string | undefined;
   readonly onToggle: () => void;
   readonly onNavigate: (page: ManagementPage) => void;
-  readonly onBack: () => void;
 }) {
   return <aside className="management-sidebar">
     <Tooltip content={collapsed ? '展开侧栏' : '收起侧栏'}>
@@ -30,8 +28,6 @@ export function ManagementSidebar({ page, collapsed, busy, version, onToggle, on
       })}
     </nav>
     <div className="management-sidebar-footer">
-      <Tooltip content="返回聊天"><Button variant="plain" size="none" className="management-back"
-        aria-label="返回聊天" disabled={busy} onClick={onBack}><ArrowLeft /><span className="management-nav-label">返回聊天</span></Button></Tooltip>
       <small className="management-version">Droid {version ?? ''}</small>
     </div>
   </aside>;

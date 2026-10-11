@@ -25,10 +25,9 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
   useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(timer); }, [copied]);
   const s = state.settings;
   return <div className="management-page" data-sidebar-collapsed={sidebarCollapsed}>
-    <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} busy={state.busy} version={s?.version}
+    <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} version={s?.version}
       onToggle={() => setSidebarCollapsed(value => !value)}
-      onNavigate={page => { state.setPage(page); state.setNotice(null); }}
-      onBack={() => void state.run({ kind: 'chat.focus' })} />
+      onNavigate={page => { state.setPage(page); state.setNotice(null); }} />
     <main className="management-main">
     <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、连接与版本</p></div>
       <Button variant="plain" size="icon-sm" aria-label="刷新信息" title="刷新信息" disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}><RefreshCw className={state.busy ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>

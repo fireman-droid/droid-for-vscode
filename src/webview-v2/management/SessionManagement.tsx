@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ArchiveRestore, ChevronLeft, ChevronRight, Download, Folder, LoaderCircle, MoreHorizontal, RefreshCw, Search, Star } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, Eye, Folder, MessageSquare, MoreHorizontal, Pencil, RefreshCw, Search, Star } from 'lucide-react';
 import type { ManagedSession, ManagementAction } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,9 +7,18 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/selection';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, Tooltip } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ManagementChoice } from './ManagementFields';
+import { SessionPagination } from './SessionPagination';
 import type { ManagementState } from './useManagement';
 
-const PAGE_SIZE = 10;
+const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+function updatedLabel(value: string): string {
+  const date = new Date(value);
+  const minutes = Math.round((date.getTime() - Date.now()) / 60_000);
+  if (Math.abs(minutes) < 60) return minutes === 0 ? '刚刚' : relativeTime.format(minutes, 'minute');
+  if (Math.abs(minutes) < 1440) return relativeTime.format(Math.round(minutes / 60), 'hour');
+  if (Math.abs(minutes) < 10080) return relativeTime.format(Math.round(minutes / 1440), 'day');
+  return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
+}
 
 export function SessionManagement({ state, active }: { state: ManagementState; active: boolean }) {
   const [scope, setScope] = useState<'folder' | 'all'>('folder');
@@ -19,6 +28,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   const [rows, setRows] = useState<readonly ManagedSession[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,9 +39,8 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
     && (filter === 'archived' ? row.archived : !row.archived && (filter !== 'favorites' || row.favorite))
     && `${row.title} ${row.cwd}`.toLowerCase().includes(query.toLowerCase()));
   const visible = matching(rows);
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(visible.length / PAGE_SIZE) - 1));
-  const pageRows = visible.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
-  const hasNext = visible.length > (currentPage + 1) * PAGE_SIZE || cursor !== null;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
+  const pageRows = visible.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const load = async (next?: number, targetPage = 0) => {
     const revision = ++generation.current;
     let collected = next === undefined ? [] : rows;
@@ -47,8 +56,8 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
         nextCursor = result.nextCursor ?? null;
         setRows(collected); setCursor(nextCursor); setLoaded(true);
         // One matching row beyond the page establishes whether Next is available.
-      } while (nextCursor !== null && matching(collected).length <= (targetPage + 1) * PAGE_SIZE);
-      setPage(Math.min(targetPage, Math.max(0, Math.ceil(matching(collected).length / PAGE_SIZE) - 1)));
+      } while (nextCursor !== null && matching(collected).length <= (targetPage + 1) * pageSize);
+      setPage(Math.min(targetPage, Math.max(0, Math.ceil(matching(collected).length / pageSize) - 1)));
     } finally { if (generation.current === revision) setLoading(false); }
   };
   const changeFilter = (change: () => void) => {
@@ -59,12 +68,12 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   useEffect(() => {
     if (!active || !state.settings?.sessionManagementAvailable || state.busy || loading || error) return;
     if (!loaded) void load();
-    else if (cursor !== null && visible.length <= (currentPage + 1) * PAGE_SIZE) void load(cursor, currentPage);
-  }, [active, state.settings, state.busy, loaded, loading, error, cursor, currentPage, visible.length, scope, kind, filter, query]);
+    else if (cursor !== null && visible.length <= (currentPage + 1) * pageSize) void load(cursor, currentPage);
+  }, [active, state.settings, state.busy, loaded, loading, error, cursor, currentPage, pageSize, visible.length, scope, kind, filter, query]);
   const updateRow = (id: string, update: Partial<ManagedSession>) => {
     const updated = rows.map(row => row.id === id ? { ...row, ...update } : row);
     setRows(updated);
-    setPage(previous => Math.min(previous, Math.max(0, Math.ceil(matching(updated).length / PAGE_SIZE) - 1)));
+    setPage(previous => Math.min(previous, Math.max(0, Math.ceil(matching(updated).length / pageSize) - 1)));
   };
   const act = (action: ManagementAction, update?: Partial<ManagedSession>) => {
     void state.run(action).then(result => {
@@ -82,20 +91,20 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
     {!state.settings?.sessionManagementAvailable ? <p className="management-empty">会话管理需要 daemon 运行模式。</p> : <>
       {error && <p role="alert" className="management-caption text-destructive">{error}</p>}
       <div className="management-session-table" aria-busy={loading}>
-        <div className="management-session-head"><span>标题</span><span>修改</span><span>消息数</span><span /></div>
+        <div className="management-session-head"><span>标题</span><span>消息数</span><span>更新时间</span><span /></div>
         {pageRows.map(row => <div className="management-session-row" key={row.id}>
           <Button variant="plain" size="none" className="management-session-title" onClick={() => act({ kind: 'session.view', id: row.id })} disabled={disabled}>
             <span><span className="management-session-name">{row.title}</span>{row.favorite && <Star aria-label="已收藏" />}</span>
-            {(scope === 'all' || row.kind === 'exec' || row.active) && <small>{scope === 'all' ? row.cwd : row.kind === 'exec' ? 'Exec' : '当前聊天'}</small>}
+            <small title={row.cwd}>{row.cwd.split(/[\\/]/).filter(Boolean).at(-1) || row.cwd}{row.kind === 'exec' ? ' · Exec' : row.active ? ' · 当前聊天' : ''}</small>
           </Button>
-          <time title={row.modifiedTime}>{new Date(row.modifiedTime).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' })}</time><span className="management-count">{row.messageCount}</span>
+          <span className="management-count">{row.messageCount}</span><time dateTime={row.modifiedTime} title={new Date(row.modifiedTime).toLocaleString()}>{updatedLabel(row.modifiedTime)}</time>
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" aria-label={`${row.title}的操作`} disabled={disabled}><MoreHorizontal /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="management-menu">
-              <DropdownMenuItem onSelect={() => act({ kind: 'session.view', id: row.id })}>查看记录</DropdownMenuItem>
-              {row.currentFolder && row.kind === 'chat' ? <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}>继续对话</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => act({ kind: 'session.view', id: row.id })}><Eye />查看记录</DropdownMenuItem>
+              {row.currentFolder && row.kind === 'chat' ? <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}><MessageSquare />继续对话</DropdownMenuItem>
                 : !row.currentFolder && <DropdownMenuItem onSelect={() => act({ kind: 'session.folder', id: row.id })}><Folder />打开所属文件夹</DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => act({ kind: 'session.export', id: row.id })}><Download />导出 Markdown</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setRenaming(row); setTitle(row.title); }}>重命名</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setRenaming(row); setTitle(row.title); }}><Pencil />重命名</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => act({ kind: 'session.favorite', id: row.id, value: !row.favorite }, { favorite: !row.favorite })}><Star />{row.favorite ? '取消收藏' : '收藏'}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={row.active} onSelect={() => act({ kind: 'session.archive', id: row.id, value: !row.archived }, { archived: !row.archived })}>
@@ -106,14 +115,12 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
         </div>)}
       </div>
       {!loading && visible.length === 0 && !error && <p className="management-empty">没有匹配的会话</p>}
-      {(loading || visible.length > 0 || cursor !== null) && <nav className="management-pagination" aria-label="会话分页">
-        <Button variant="plain" size="icon-sm" aria-label="上一页" title="上一页" disabled={disabled || currentPage === 0} onClick={() => setPage(currentPage - 1)}><ChevronLeft /></Button>
-        <span aria-label={`第 ${currentPage + 1} 页`} aria-live="polite">{currentPage + 1}{loaded && cursor === null && ` / ${Math.max(1, Math.ceil(visible.length / PAGE_SIZE))}`}</span>
-        <Button variant="plain" size="icon-sm" aria-label={loading ? '正在读取会话' : '下一页'} title="下一页" disabled={disabled || !hasNext} onClick={() => {
-          if (cursor !== null && visible.length <= (currentPage + 2) * PAGE_SIZE) void load(cursor, currentPage + 1);
-          else setPage(currentPage + 1);
-        }}>{loading ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <ChevronRight />}</Button>
-      </nav>}
+      {(loading || visible.length > 0 || cursor !== null) && <SessionPagination page={currentPage} pageSize={pageSize} count={visible.length}
+        complete={loaded && cursor === null} loading={loading} disabled={disabled} onPageSize={size => changeFilter(() => setPageSize(size))}
+        onPage={target => {
+          if (cursor !== null && visible.length <= (target + 1) * pageSize) void load(cursor, target);
+          else setPage(target);
+        }} />}
     </>}
     <Dialog open={renaming !== null} onOpenChange={open => { if (!open && !state.busy) setRenaming(null); }}><DialogContent className="management-dialog" closeDisabled={state.busy}>
       <DialogTitle>重命名会话</DialogTitle><DialogDescription className="management-caption">{renaming?.cwd}</DialogDescription>

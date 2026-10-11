@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MoreHorizontal, Plus, RefreshCw, Search, Settings2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, RefreshCw, Search, Settings2, Trash2 } from 'lucide-react';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelsTransport } from './useModels';
 import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
@@ -71,8 +71,8 @@ function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
               <div className="management-actions"><Button variant="plain" size="sm" disabled={disabled} onClick={() => addModels(c)} aria-label={`向${c.name}添加模型`}><Plus />添加模型</Button>
                 <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={disabled} aria-label={`${c.name}的渠道设置`}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent className="management-menu" align="end">
                   <DropdownMenuItem onSelect={() => { page.setSelectedId(c.id); manager.setNotice(null); page.setConnectionForm({ connection: c }); }}><Settings2 />渠道设置</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias({ kind: 'provider', host: new URL(c.baseUrl).host, name: c.providerName || new URL(c.baseUrl).host }); }}>服务商别名</DropdownMenuItem>
-                  <DropdownMenuItem disabled={models.length > 0} onSelect={() => void run({ kind: 'deleteConnection', connectionId: c.id })}>移除空渠道</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias({ kind: 'provider', host: new URL(c.baseUrl).host, name: c.providerName || new URL(c.baseUrl).host }); }}><Pencil />服务商别名</DropdownMenuItem>
+                  <DropdownMenuItem disabled={models.length > 0} onSelect={() => void run({ kind: 'deleteConnection', connectionId: c.id })}><Trash2 />移除空渠道</DropdownMenuItem>
                 </DropdownMenuContent></DropdownMenu>
               </div>
             </header>

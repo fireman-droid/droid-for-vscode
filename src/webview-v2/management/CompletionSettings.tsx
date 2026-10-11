@@ -28,7 +28,7 @@ export function CompletionSettings({ state, settings }: { state: ManagementState
     }}>
       <div className="management-group">
         <ManagementRow label="启用智能补全" detail="启用后，将编辑上下文发送到下方服务。">{toggle('enabled', '启用智能补全')}</ManagementRow>
-        <ManagementRow label="协议"><ManagementChoice label="补全协议" value={draft.protocol} disabled={state.busy} onChange={v => update('protocol', v as CompletionPreferences['protocol'])}
+        <ManagementRow label="协议"><ManagementChoice label="补全协议" className="management-choice-wide" value={draft.protocol} disabled={state.busy} onChange={v => update('protocol', v as CompletionPreferences['protocol'])}
           options={[[ 'fim', 'FIM · 代码续写' ], ['mercury-edit', 'Next Edit · 编辑预测'], ['ollama', 'Ollama FIM'], ['siliconflow-fim', 'SiliconFlow FIM']]} /></ManagementRow>
         <ManagementRow label="模型 ID"><Input aria-label="补全模型 ID" value={draft.model} disabled={state.busy} required maxLength={256} onChange={e => update('model', e.target.value)} /></ManagementRow>
         <ManagementRow label="API 地址"><Input type="url" aria-label="补全 API 地址" value={draft.endpoint} disabled={state.busy} required maxLength={2048} onChange={e => update('endpoint', e.target.value)} /></ManagementRow>
