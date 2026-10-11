@@ -87,11 +87,11 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   return <section aria-label="会话管理">
     <header className="management-heading"><h1>会话</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label="刷新会话" disabled={disabled} onClick={() => void load()}><RefreshCw /></Button>}</header>
     <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
-      <TabsList aria-label="会话页面"><TabsTrigger value="history">历史记录</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
+      <TabsList animatedIndicator aria-label="会话页面"><TabsTrigger value="history">历史记录</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
       <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
-      <TabsList aria-label="会话范围"><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
+      <TabsList animatedIndicator aria-label="会话范围"><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
     </Tabs><div className="management-actions"><ManagementChoice label="会话类型" value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', '聊天与 Exec' ], ['chat', '聊天'], ['exec', 'Exec']]} />
       <ManagementChoice label="收藏与归档" value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', '未归档' ], ['favorites', '收藏'], ['archived', '已归档']]} /></div></div>
     <div className="management-search management-session-search"><Search /><Input aria-label="筛选会话" placeholder="搜索标题或文件夹" value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>

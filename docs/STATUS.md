@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理页页签动效（2026-10-11）
+
+- 共享 Radix TabsList 增加按需启用的活动指示线，管理页的历史／默认设置、文件夹范围、Mission 页面和子任务复杂度页签接入；下划线以 180ms 连续移动并调整宽度，不再让各项底边直接跳变。首次显示直接落位，尺寸变化重新对齐，减少动态效果时禁用过渡；选择与键盘焦点仍由 Radix 管理。
+- `package:vsix` 通过，包含 typecheck、lint:budgets、公共 UI 声明与生产构建；168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载。已全局安装到 Microsoft VS Code 与 Cursor，两边各 5 个主要产物与 VSIX SHA-256 一致，需 Reload Window。未新增、修改或运行测试、浏览器自动化或截图 probe，动画视觉由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 管理页页签与菜单线条（2026-10-11）
 
 - 移除管理页页签容器贯穿整组的底边，保留当前页签的短下划线；移除管理页下拉选项和菜单高亮时额外添加的文字下划线，保留共享 Radix 组件的勾选、焦点与键盘行为。

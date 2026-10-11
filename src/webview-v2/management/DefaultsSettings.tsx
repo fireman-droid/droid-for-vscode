@@ -53,7 +53,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
     <h2 className="management-section-title">子任务模型</h2><div className="management-group">
       {f.choice('subagentAutonomyLevel', '子任务自主等级', [...levels, 'inherit'].map(value => ({ value, label: levelNames[value] ?? value })), true)}
       <Tabs value={tier} onValueChange={setTier} className="management-default-tier">
-        <TabsList aria-label="子任务复杂度"><TabsTrigger value="light">轻量</TabsTrigger><TabsTrigger value="medium">中等</TabsTrigger><TabsTrigger value="heavy">复杂</TabsTrigger></TabsList>
+        <TabsList animatedIndicator aria-label="子任务复杂度"><TabsTrigger value="light">轻量</TabsTrigger><TabsTrigger value="medium">中等</TabsTrigger><TabsTrigger value="heavy">复杂</TabsTrigger></TabsList>
         {(['light', 'medium', 'heavy'] as const).map(t => <TabsContent key={t} value={t}>
           {f.modelPair(`subagentModelSettings.${t}Model`, `subagentModelSettings.${t}ReasoningEffort`)}
         </TabsContent>)}

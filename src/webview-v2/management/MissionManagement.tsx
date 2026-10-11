@@ -33,7 +33,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
     <Button variant="outline" size="sm" disabled={state.busy} onClick={() => void state.run({ kind: 'missions.new' })}><Plus />新建任务</Button>
   </div>}</header>
     <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
-      <TabsList aria-label="Missions 页面"><TabsTrigger value="history">任务列表</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
+      <TabsList animatedIndicator aria-label="Missions 页面"><TabsTrigger value="history">任务列表</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="missions" active={active && section === 'defaults'} /></TabsContent>
       <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><ManagementChoice label="Mission 状态" value={filter} onChange={v => setFilter(v as MissionControlCatalogFilter)} options={[[ 'all', '全部任务' ], ['running', '进行中'], ['paused', '已暂停'], ['completed', '已完成']]} /></div>

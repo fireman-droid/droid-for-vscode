@@ -3,6 +3,7 @@ import { Check, ChevronDown } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { cn } from './cn';
 import { usePortalContainer } from './overlays';
+import { TabsIndicator } from './tabs-indicator';
 
 export function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
@@ -62,8 +63,10 @@ export function SelectItem({ children, className, ...props }: ComponentProps<typ
 }
 
 export const Tabs = TabsPrimitive.Root;
-export function TabsList({ className, ...props }: ComponentProps<typeof TabsPrimitive.List>) {
-  return <TabsPrimitive.List className={cn('flex min-w-0 select-none gap-1 border-b border-border', className)} {...props} />;
+export function TabsList({ className, children, animatedIndicator = false, ...props }: ComponentProps<typeof TabsPrimitive.List> & { readonly animatedIndicator?: boolean }) {
+  return <TabsPrimitive.List className={cn('dvx-tabs-list flex min-w-0 select-none gap-1 border-b border-border', className)} data-animated-indicator={animatedIndicator || undefined} {...props}>
+    {children}{animatedIndicator && <TabsIndicator />}
+  </TabsPrimitive.List>;
 }
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
   return <TabsPrimitive.Trigger className={cn('dvx-control dvx-tab border-b-2 border-transparent px-2 py-1.5 text-xs text-muted-foreground disabled:pointer-events-none disabled:opacity-45 data-[state=active]:border-primary data-[state=active]:text-foreground', className)} {...props} />;
