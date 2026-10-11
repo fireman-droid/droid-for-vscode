@@ -55,7 +55,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   // Stream text has its own subscriber; controls observe arrivals and domain state.
   useStore(store, useShallow(selectChatShell));
   const state = store.getState().state;
-  const agentNavigation = useAgentChatNavigation(state.sessionId);
+  const agentNavigation = useAgentChatNavigation(state.sessionId, port);
   const childChat = role === 'child';
   const capabilities = getChatSurfaceCapabilities(role);
   const getSequence = useCallback(() => store.getState().state.sequence, [store]);

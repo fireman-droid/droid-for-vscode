@@ -2,24 +2,47 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronRight, Users } from 'lucide-react';
 import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
 import { subscribeHostMessages } from '../host/hostMessageSource';
+import { getWebviewPageId, WEBVIEW_BUILD_ID } from '../bridge/vscode';
 import type { ChatPort } from '../host/chatIntent';
 import { Button } from '../ui/button';
 import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
 import type { ReactNode } from 'react';
 import { presentNavigationAgent } from './subagents/agentPresentation';
 
-export function useAgentChatNavigation(sessionId: string | null): AgentChatNavigationMessage | null {
+export function useAgentChatNavigation(sessionId: string | null, port: ChatPort): AgentChatNavigationMessage | null {
   const [navigation, setNavigation] = useState<AgentChatNavigationMessage | null>(null);
   const snapshotSequence = useRef(-1);
+  const activeSession = useRef(sessionId);
+  activeSession.current = sessionId;
+  const reported = useRef(new Map<string, string>());
+  const report = (source: string, scope: Record<string, string | number | null>) => {
+    const value = JSON.stringify(scope);
+    if (reported.current.get(source) === value) return;
+    reported.current.set(source, value);
+    port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({
+      source, pageId: getWebviewPageId(port), build: WEBVIEW_BUILD_ID, ...scope,
+    }) });
+  };
   useEffect(() => subscribeHostMessages((message) => {
-    if (message.type === 'agent.chat.navigation') setNavigation(message);
+    if (message.type === 'agent.chat.navigation') {
+      report('agents.navigation.received', { sessionId: activeSession.current,
+        parentSessionId: message.parentSessionId, currentKey: message.currentKey, agents: message.agents.length });
+      setNavigation(message);
+    }
     else if (message.type === 'host.snapshot' && message.sequence > snapshotSequence.current) {
       snapshotSequence.current = message.sequence;
       setNavigation((current) => current?.currentKey != null ||
         current?.parentSessionId === message.sessionId ? current : null);
     }
-  }), []);
-  return navigation?.currentKey != null || navigation?.parentSessionId === sessionId ? navigation : null;
+  }), [port]);
+  const visible = navigation?.currentKey != null || navigation?.parentSessionId === sessionId ? navigation : null;
+  useEffect(() => {
+    // Correlate received navigation with the committed session projection, without task contents.
+    report('agents.navigation.projected', { sessionId, parentSessionId: navigation?.parentSessionId ?? null,
+      currentKey: navigation?.currentKey ?? null, agents: navigation?.agents.length ?? 0,
+      visibleAgents: visible?.agents.length ?? 0 });
+  }, [port, sessionId, navigation, visible]);
+  return visible;
 }
 
 export function AgentSection({ count, running, children }: {

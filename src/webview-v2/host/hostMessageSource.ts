@@ -15,6 +15,7 @@ const listeners = new Set<{ readonly receive: Listener; readonly reject?: (messa
 const TRANSCRIPT_MESSAGE_TYPES = new Set([
   'host.snapshot', 'host.connection', 'turn.state', 'turn.error', 'assistant.delta',
   'thinking.delta', 'thinking.complete', 'tool.activity', 'interaction.request', 'interaction.closed',
+  'agent.chat.navigation',
 ]);
 
 function receive(event: MessageEvent<unknown>): void {
