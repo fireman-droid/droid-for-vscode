@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Boxes, Check, Copy, MessageSquare, Settings2, TextCursorInput, Workflow } from 'lucide-react';
+import { ArrowLeft, Boxes, Check, Copy, MessageSquare, RefreshCw, Settings2, TextCursorInput, Workflow } from 'lucide-react';
 import { MANAGEMENT_PAGES, type ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { applyTheme } from '../shell/theme';
@@ -29,7 +29,9 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
     <Button variant="plain" size="sm" className="management-back" disabled={state.busy} onClick={() => void state.run({ kind: 'chat.focus' })}><ArrowLeft />返回聊天</Button>
     <small className="management-version">Droid {s?.version ?? ''}</small>
   </aside><main className="management-main">
-    <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、连接与版本</p></div></header>
+    <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、连接与版本</p></div>
+      <Button variant="plain" size="icon-sm" aria-label="刷新信息" title="刷新信息" disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}><RefreshCw className={state.busy ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>
+    </header>
       {s ? <>
         <div className="management-group"><ManagementRow label="主题"><ManagementChoice label="主题" value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', '跟随编辑器' ], ['light', '浅色'], ['dark', '深色']]} /></ManagementRow></div>
         <h2 className="management-section-title">连接</h2><div className="management-group"><ManagementRow label="Droid 会话">{statusLabels[s.connection] ?? s.connection}</ManagementRow><ManagementRow label="IDE">{statusLabels[s.ide] ?? s.ide}</ManagementRow></div>
@@ -37,7 +39,6 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
           <Button variant="plain" size="icon-sm" aria-label="复制版本信息" onClick={() => { void copyText(`Droid ${s.version}\n${typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}`).then(() => setCopied(true), () => state.setNotice({ ok: false, message: '复制失败，可手动复制版本信息。' })); }}>{copied ? <Check /> : <Copy />}</Button>
         </ManagementRow></div>
       </> : <p role="status" className="management-empty">{state.busy ? '正在读取设置…' : '设置尚未读取'}</p>}
-      <Button variant="plain" size="sm" className="management-advanced" disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}>刷新信息</Button>
     </div>
     {visited.has('models') && <div hidden={state.page !== 'models'}><ModelsApp transport={transport} /></div>}
     {visited.has('completion') && s && <div hidden={state.page !== 'completion'}><CompletionSettings state={state} settings={s} /></div>}
