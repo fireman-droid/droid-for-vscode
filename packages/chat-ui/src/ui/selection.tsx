@@ -3,7 +3,7 @@ import { Check, ChevronDown } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { cn } from './cn';
 import { usePortalContainer } from './overlays';
-import { TabsIndicator } from './tabs-indicator';
+import { SelectionIndicator } from './selection-indicator';
 
 export function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
@@ -65,7 +65,7 @@ export function SelectItem({ children, className, ...props }: ComponentProps<typ
 export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, children, animatedIndicator = false, ...props }: ComponentProps<typeof TabsPrimitive.List> & { readonly animatedIndicator?: boolean }) {
   return <TabsPrimitive.List className={cn('dvx-tabs-list flex min-w-0 select-none gap-1 border-b border-border', className)} data-animated-indicator={animatedIndicator || undefined} {...props}>
-    {children}{animatedIndicator && <TabsIndicator />}
+    {children}{animatedIndicator && <SelectionIndicator activeSelector='[role="tab"][data-state="active"]' />}
   </TabsPrimitive.List>;
 }
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {

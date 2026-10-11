@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef } from 'react';
 
-/** Follows the active Radix trigger without taking over selection or focus. */
-export function TabsIndicator() {
+/** Follows the selected control without taking over selection or focus. */
+export function SelectionIndicator({ activeSelector, variant = 'underline' }: {
+  readonly activeSelector: string;
+  readonly variant?: 'underline' | 'surface';
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const indicator = ref.current;
@@ -10,7 +13,7 @@ export function TabsIndicator() {
     let positioned = false;
     let frame = 0;
     const measure = () => {
-      const active = list.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+      const active = list.querySelector<HTMLElement>(activeSelector);
       if (!active || !active.offsetWidth) {
         indicator.hidden = true;
         positioned = false;
@@ -23,16 +26,18 @@ export function TabsIndicator() {
         frame = requestAnimationFrame(() => indicator.style.removeProperty('transition'));
       }
       indicator.style.width = `${active.offsetWidth}px`;
-      indicator.style.transform = `translateX(${active.offsetLeft}px)`;
+      indicator.style.height = `${variant === 'surface' ? active.offsetHeight : 2}px`;
+      const top = active.offsetTop + (variant === 'surface' ? 0 : active.offsetHeight - 2);
+      indicator.style.transform = `translate(${active.offsetLeft}px, ${top}px)`;
       positioned = true;
     };
     const selection = new MutationObserver(measure);
-    selection.observe(list, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
+    selection.observe(list, { subtree: true, attributes: true, attributeFilter: ['data-state', 'aria-current'] });
     const resize = new ResizeObserver(measure);
     resize.observe(list);
-    list.querySelectorAll('[role="tab"]').forEach(tab => resize.observe(tab));
+    Array.from(list.children).filter(child => child !== indicator).forEach(child => resize.observe(child));
     measure();
     return () => { selection.disconnect(); resize.disconnect(); cancelAnimationFrame(frame); };
-  }, []);
-  return <span ref={ref} className="dvx-tabs-indicator" aria-hidden="true" />;
+  }, [activeSelector, variant]);
+  return <span ref={ref} className="dvx-selection-indicator" data-variant={variant} aria-hidden="true" />;
 }

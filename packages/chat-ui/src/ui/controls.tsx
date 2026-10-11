@@ -2,6 +2,7 @@ import { RadioGroup as RadioPrimitive, Slider as SliderPrimitive, Switch as Swit
 import type { ComponentProps } from 'react';
 import { cn } from './cn';
 import { buttonVariants } from './button';
+import { SelectionIndicator } from './selection-indicator';
 
 export function RadioGroup({ className, ...props }: ComponentProps<typeof RadioPrimitive.Root>) {
   return <RadioPrimitive.Root className={cn('grid select-none gap-1', className)} {...props} />;
@@ -13,7 +14,11 @@ export function RadioGroupItem({ className, children, ...props }: ComponentProps
   </RadioPrimitive.Item>;
 }
 
-export const ToggleGroup = TogglePrimitive.Root;
+export function ToggleGroup({ children, animatedIndicator = false, ...props }: ComponentProps<typeof TogglePrimitive.Root> & { readonly animatedIndicator?: boolean }) {
+  return <TogglePrimitive.Root data-animated-indicator={animatedIndicator || undefined} {...props}>
+    {children}{animatedIndicator && <SelectionIndicator activeSelector='[data-state="on"]' />}
+  </TogglePrimitive.Root>;
+}
 export function ToggleGroupItem({ className, ...props }: ComponentProps<typeof TogglePrimitive.Item>) {
   return <TogglePrimitive.Item className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'data-[state=on]:bg-[var(--control-surface-active)] data-[state=on]:text-foreground', className)} {...props} />;
 }

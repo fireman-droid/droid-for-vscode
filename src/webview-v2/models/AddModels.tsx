@@ -77,7 +77,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
         <Button variant="ghost" size="sm" aria-label="返回选择服务商和接口" disabled={busy} onClick={() => onStepChange('source')}><Settings2 />更换</Button>
       </div>}
       <Tabs value={mode} onValueChange={setMode} className="models-add-tabs">
-        <TabsList>
+        <TabsList animatedIndicator>
           <TabsTrigger value="discover" disabled={busy}>从列表选择</TabsTrigger>
           <TabsTrigger value="manual" disabled={busy}>手动填写 ID</TabsTrigger>
         </TabsList>

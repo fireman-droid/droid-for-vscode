@@ -73,11 +73,12 @@
 }
 
 @layer utilities {
-  .dvx-tabs-list[data-animated-indicator] { position: relative; }
+  [data-animated-indicator] { position: relative; }
   .dvx-tabs-list[data-animated-indicator] .dvx-tab { border-bottom-color: transparent; }
-  .dvx-tabs-indicator { position: absolute; bottom: 0; left: 0; height: 2px; pointer-events: none; background: var(--focus); transition: transform 180ms var(--motion-ease), width 180ms var(--motion-ease); }
-  .dvx-tabs-indicator[hidden] { display: none; }
+  .dvx-selection-indicator { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--selection-indicator-color, var(--focus)); transition: transform 220ms var(--motion-ease), width 220ms var(--motion-ease), height 220ms var(--motion-ease); }
+  .dvx-selection-indicator[data-variant='surface'] { border-radius: var(--selection-indicator-radius, var(--control-radius)); }
+  .dvx-selection-indicator[hidden] { display: none; }
   @media (prefers-reduced-motion: reduce) {
-    .dvx-tabs-indicator { transition: none; }
+    .dvx-selection-indicator { transition: none; }
   }
 }
