@@ -121,6 +121,12 @@ export interface QueueStateMessage {
   readonly sessionId: string;
   readonly items: readonly QueuedMessageSummary[];
   readonly paused: QueuePausedReason | null;
+  /** A rejected add/edit retains its submitted text for draft recovery. */
+  readonly rejected?: {
+    readonly queueId: string;
+    readonly text: string;
+    readonly reason: string;
+  };
 }
 
 function isId(value: unknown): value is string {
@@ -323,7 +329,7 @@ export function parseQueueStateMessage(value: unknown): QueueStateMessage | null
   if (
     !isRecord(value) ||
     value.type !== 'queue.state' ||
-    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'items', 'paused']) ||
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'items', 'paused'], ['rejected']) ||
     typeof value.sequence !== 'number' ||
     !Number.isFinite(value.sequence) ||
     !isId(value.sessionId)
@@ -337,11 +343,18 @@ export function parseQueueStateMessage(value: unknown): QueueStateMessage | null
   if (state === null) {
     return null;
   }
+  const rejected = value.rejected;
+  if (rejected !== undefined && (
+    !isRecord(rejected) || !hasExactKeys(rejected, ['queueId', 'text', 'reason']) ||
+    !isId(rejected.queueId) || !isQueueText(rejected.text) ||
+    typeof rejected.reason !== 'string' || rejected.reason.length === 0 || rejected.reason.length > 512
+  )) return null;
   return {
     type: 'queue.state',
     sequence: value.sequence,
     sessionId: value.sessionId,
     items: state.items,
     paused: state.paused,
+    ...(rejected === undefined ? {} : { rejected: rejected as NonNullable<QueueStateMessage['rejected']> }),
   };
 }

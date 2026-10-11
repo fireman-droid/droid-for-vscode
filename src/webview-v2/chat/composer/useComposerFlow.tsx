@@ -47,6 +47,7 @@ export function useComposerFlow(
   const pending = useRef(false);
   const draftRevision = useRef(0);
   const pendingSend = useRef<{ sessionId: string; turnId: string; text: string; revision: number } | null>(null);
+  const lastQueueRejection = useRef(-1);
   const lastRewindResult = useRef(-1);
   const previousDraft = useRef<string | null>(null);
   const currentSession = useRef(state.sessionId);
@@ -67,6 +68,21 @@ export function useComposerFlow(
     [vscode],
   );
   useEffect(() => subscribeHostMessages((message) => {
+    if (message.type === 'queue.state' && message.rejected !== undefined &&
+      message.sessionId === currentSession.current && message.sequence > lastQueueRejection.current) {
+      lastQueueRejection.current = message.sequence;
+      const original = previousDraft.current ?? draftValue.current;
+      const recovered = original.length === 0 ? message.rejected.text : `${original}\n\n${message.rejected.text}`;
+      if (previousDraft.current !== null) {
+        // Keep an active queue edit intact; restore the rejected text to
+        // the ordinary draft that returns when editing ends.
+        previousDraft.current = recovered;
+        persistDraft(vscode, recovered);
+      } else {
+        writeDraft(recovered, true);
+      }
+      setCommandNotice(`${message.rejected.reason} The unsent text was restored to your draft.`);
+    }
     const sent = pendingSend.current;
     if (sent === null) return;
     if ((message.type === 'host.snapshot' || message.type === 'host.connection') && message.sessionId !== sent.sessionId) {
@@ -81,7 +97,7 @@ export function useComposerFlow(
       currentSession.current === sent.sessionId && draftRevision.current === sent.revision) {
       writeDraft(sent.text, true);
     }
-  }), [writeDraft]);
+  }), [writeDraft, vscode]);
   const finishQueueEdit = useCallback(() => {
     dispatch({ type: 'queue.editEnd' });
     if (previousDraft.current === null) return;

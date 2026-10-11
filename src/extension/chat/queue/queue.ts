@@ -1,5 +1,5 @@
 import type { QueuePort } from './queuePort';
-import type { SessionQueueState } from '../../../shared/protocol/queueProtocol';
+import type { QueueStateMessage, SessionQueueState } from '../../../shared/protocol/queueProtocol';
 import {
   clearPrompts,
   dropDispatchedPrompt,
@@ -21,8 +21,8 @@ export const QUEUE_DISPATCH_BLOCKED_MESSAGE =
  * Queued-messages intake (queued-messages-design.md §4.2). The
  * webview enqueues optimistically, so every request — accepted or
  * not — is answered with an authoritative `queue.state` echo that
- * confirms or rewinds the optimistic card. Rejections are silent
- * beyond a debug log; the composer already prevents them locally.
+ * confirms or rewinds the optimistic card. A rejected add/edit also
+ * returns its text: the composer may have cleared it before intake.
  */
 export function handleQueueAdd(
   ctl: QueuePort,
@@ -34,6 +34,10 @@ export function handleQueueAdd(
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) {
+      ctl.effects.emitAttachments();
+      emitQueueState(ctl, { queueId, text, reason: 'The message was not queued because the session disconnected.' });
+    }
     return;
   }
   // The composer staging area rides along with the queued prompt;
@@ -52,7 +56,7 @@ export function handleQueueAdd(
     // Re-sync the chips too: the optimistic add already moved the
     // staged attachments into the webview's queued card.
     ctl.effects.emitAttachments();
-    emitQueueState(ctl);
+    emitQueueState(ctl, { queueId, text, reason: 'The message could not be added to the queue.' });
     return;
   }
   if (ctl.attachmentState.pendingAttachments.length > 0) {
@@ -86,6 +90,9 @@ export function handleQueueUpdate(
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) {
+      emitQueueState(ctl, { queueId, text, reason: 'The queued message could not be updated because the session disconnected.' });
+    }
     return;
   }
   const result = updatePromptText(ctl.queueState.queuedPrompts, queueId, text);
@@ -99,7 +106,9 @@ export function handleQueueUpdate(
     });
   }
   ctl.queueState.queuedPrompts = result.state;
-  emitQueueState(ctl);
+  emitQueueState(ctl, result.updated ? undefined : {
+    queueId, text, reason: 'The message is no longer queued, so this edit was not applied.',
+  });
 }
 
 export function handleQueueRemove(
@@ -111,6 +120,7 @@ export function handleQueueRemove(
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) emitQueueState(ctl);
     return;
   }
   const result = removePrompt(ctl.queueState.queuedPrompts, queueId);
@@ -133,6 +143,7 @@ export function handleQueueResume(ctl: QueuePort, sessionId: string): void {
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) emitQueueState(ctl);
     return;
   }
   ctl.queueState.queuedPrompts = resumeQueue(ctl.queueState.queuedPrompts);
@@ -156,6 +167,7 @@ export function handleQueuePromote(
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) emitQueueState(ctl);
     return;
   }
   const result = promotePrompt(ctl.queueState.queuedPrompts, queueId);
@@ -202,6 +214,7 @@ export function handleQueueClear(ctl: QueuePort, sessionId: string): void {
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
   ) {
+    if (sessionId === ctl.sessionState.sessionId) emitQueueState(ctl);
     return;
   }
   if (ctl.queueState.queuedPrompts.items.length > 0) {
@@ -356,7 +369,7 @@ export function projectQueueState(ctl: QueuePort): SessionQueueState {
   };
 }
 
-export function emitQueueState(ctl: QueuePort): void {
+export function emitQueueState(ctl: QueuePort, rejected?: QueueStateMessage['rejected']): void {
   if (ctl.sessionState.sessionId === null) {
     return;
   }
@@ -366,6 +379,7 @@ export function emitQueueState(ctl: QueuePort): void {
     sessionId: ctl.sessionState.sessionId,
     items,
     paused,
+    ...(rejected === undefined ? {} : { rejected }),
   });
   // Every queue mutation funnels through here, so the recovery
   // checkpoint always mirrors the live queue: a reload restores the
