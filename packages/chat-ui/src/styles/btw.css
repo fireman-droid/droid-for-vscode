@@ -173,19 +173,22 @@
   .v2-btw-compose-actions { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
   .v2-btw-compose-hint { min-width: 0; flex: 1; color: var(--muted-ink); font-size: 10px; line-height: 1.4; }
   .v2-btw-send {
-    display: grid;
+    display: inline-flex;
     width: 26px;
     height: 26px;
     flex: none;
-    place-items: center;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
     padding: 0;
+    line-height: 1;
     border-radius: 50%;
     border: 1px solid var(--panel-edge);
     background: var(--control-surface-hover);
     color: var(--ink);
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
-  .v2-btw-send > svg { width: 14px; height: 14px; }
+  .v2-btw-send > svg { display: block; width: 14px; height: 14px; flex: none; }
   .v2-btw-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
   .v2-btw-send:active:not(:disabled) { border-color: var(--control-border-focus); }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }

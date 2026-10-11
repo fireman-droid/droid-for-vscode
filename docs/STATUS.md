@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 图标按钮内容居中（2026-10-11）
+
+- 共享 Button 的 icon／icon-sm 尺寸统一提供水平、垂直居中、零内边距／间距及块级 SVG，plain 图标按钮也使用相同布局；未显式指定尺寸的 plain SVG 使用 14px，保留发送箭头、停止方块等显式尺寸。
+- 主聊天发送／停止按钮复用共享图标布局，BTW 对应按钮同步使用 flex 居中；保留既有按钮外框、颜色、点击及禁用行为，覆盖同类刷新、更多、删除、复制、分页和工具栏图标按钮。
+- 首次打包进程中断后重新完成 `package:vsix`，类型检查、文件预算、公共 UI 声明与生产构建通过；168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，两边各 8 个主要文件与 VSIX SHA-256 一致。未新增、修改或运行测试、浏览器自动化或截图 probe，实际居中效果待 Reload Window 后由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 界面状态与导航文字防误选（2026-10-11）
 
 - 主聊天共享顶栏禁止拖选文字，覆盖 Droid 标识及 Online／Connecting／Offline；补齐管理侧栏、页标题、分页、连接状态、Mission 状态标签、会话查看器生命周期、审阅状态栏、模型选择计数与 Skills 位置标签。共享加载提示同步禁止拖选。

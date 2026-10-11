@@ -13,6 +13,7 @@ export function isTextSelectionClick(event: { readonly detail: number; readonly 
 }
 
 const layout = 'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--control-radius)] text-[13px] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0';
+const iconLayout = 'inline-flex shrink-0 items-center justify-center gap-0 p-0 leading-none [&>svg]:block [&>svg]:shrink-0';
 export const buttonVariants = cva(
   'dvx-control select-none disabled:pointer-events-none disabled:opacity-45',
   {
@@ -29,11 +30,12 @@ export const buttonVariants = cva(
       size: {
         default: 'h-7 px-2.5',
         sm: 'h-6 px-2 text-xs',
-        icon: 'size-7',
-        'icon-sm': 'size-6',
+        icon: `size-7 ${iconLayout}`,
+        'icon-sm': `size-6 ${iconLayout}`,
         none: '',
       },
     },
+    compoundVariants: [{ variant: 'plain', size: ['icon', 'icon-sm'], class: "[&>svg:not([class*='size-'])]:size-3.5" }],
     defaultVariants: { variant: 'default', size: 'default' },
   },
 );

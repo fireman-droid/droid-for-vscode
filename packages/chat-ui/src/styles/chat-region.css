@@ -104,11 +104,9 @@
     .v2-composer-input-row .v2-composer-model { flex: 1 1 0; }
   }
   .v2-composer-send {
-    display: grid;
     width: 24px;
     height: 24px;
     flex-shrink: 0;
-    place-items: center;
     border-radius: 50%;
     background: var(--ink);
     color: var(--surface);
