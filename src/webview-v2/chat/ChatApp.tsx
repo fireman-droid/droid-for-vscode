@@ -241,7 +241,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     {capabilities.openMission && host.missionWorkspaceRoute !== null ? <MissionWorkspace key={state.conversationId} route={host.missionWorkspaceRoute} setup={host.missionSetup} mission={state.missionSnapshot} result={state.missionControlResult} vscode={port}
       inputNeeded={state.mission?.role === 'orchestrator' && state.interactions.length > 0} onShowChat={() => host.setMissionChat(true)} onCatalog={() => missionControl({ type: 'mission.panel.open', target: 'catalog' })} onClose={() => missionControl({ type: 'mission.dismissSetup' })} /> : null}
     {host.missionWorkspaceRoute === null && btw.open && state.btwAvailable && state.sessionId !== null ? <SideChatSheet key={state.sessionId} state={state.btw} draft={btw.draft} quote={btw.quote} quotes={btw.quotes} notice={btw.notice} width={btw.width}
-      modelCatalog={state.modelCatalog} images={btw.images} selectedModel={btw.selectedModel}
+      modelCatalog={state.modelCatalog} connectionStatus={state.connection.status} images={btw.images} selectedModel={btw.selectedModel}
       reasoning={{ value: btw.selectedReasoningEffort, onChange: btw.setReasoningEffort }}
       onOpenModels={() => { void port.postMessage({ type: 'models.open' }); }}
       onModelChange={btw.setChosenModel} sending={btw.sending}

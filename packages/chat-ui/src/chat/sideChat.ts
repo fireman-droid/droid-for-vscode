@@ -38,6 +38,7 @@ export interface SideChatProps {
   readonly onStop: () => void;
   readonly attachments?: ReactNode;
   readonly composerActions?: ReactNode;
+  readonly composerStatus?: ReactNode;
   readonly hasAttachments?: boolean;
   readonly sendDisabled?: boolean;
   readonly onPaste?: ClipboardEventHandler<HTMLTextAreaElement>;

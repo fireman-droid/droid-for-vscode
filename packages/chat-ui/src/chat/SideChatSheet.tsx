@@ -12,7 +12,7 @@ import { UserMessageBubble } from './UserMessageView';
 import { SideReply } from './SideReply';
 
 export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
-  attachments, composerActions, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
+  attachments, composerActions, composerStatus, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -138,13 +138,16 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
       </div> : null}
       {state.message ? <p role="alert" className="v2-btw-error">{state.message}</p> : null}
       {state.pendingImages?.length ? renderImages?.(state.pendingImages) : null}
-      <div data-composer-surface="" className="v2-btw-composer" onDrop={onDrop} onDragOver={onDragOver}>
+      <div data-composer-surface="" data-has-status={Boolean(composerStatus) || undefined} className="v2-btw-composer" onDrop={onDrop} onDragOver={onDragOver}>
+        {composerStatus ? <div className="v2-btw-composer-status">{composerStatus}</div> : null}
+        <div className="v2-btw-compose-content">
         {attachments}
         <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
           aria-label="By the Way question" placeholder={state.entries.length ? 'Ask a follow-up…' : 'Ask a side question…'} onChange={(event) => onDraftChange(event.target.value)}
           onPaste={onPaste}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
+        </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
         {composerActions && composeHint ? <div className="v2-btw-compose-hint">{composeHint}</div> : null}
         <div className="v2-btw-compose-actions">

@@ -140,6 +140,7 @@
   }
   .v2-btw-queued p > span { margin-right: 6px; font-weight: 500; }
   .v2-btw-composer {
+    position: relative;
     margin-top: 6px;
     padding: 10px;
     border: 1px solid var(--panel-edge);
@@ -149,6 +150,8 @@
   }
   .v2-btw-composer:hover { border-color: var(--control-border-hover); }
   .v2-btw-composer:focus-within { border-color: var(--control-border-focus); }
+  .v2-btw-composer-status { position: absolute; top: 10px; right: 10px; }
+  .v2-btw-composer[data-has-status] .v2-btw-compose-content { padding-right: 26px; }
   .v2-btw-input {
     display: block;
     width: 100%;
