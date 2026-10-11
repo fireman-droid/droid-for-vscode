@@ -9,7 +9,7 @@
   .management-nav-label { min-width: 0; max-width: 116px; overflow: hidden; opacity: 1; transform: translateX(0); transition: max-width 200ms var(--motion-ease), opacity 140ms ease, transform 200ms var(--motion-ease); }
   .management-page .management-nav[aria-current='page'], .management-page .management-nav[aria-current='page']:hover:not(:disabled) { background: light-dark(color-mix(in srgb, var(--ink) 7%, var(--surface)), color-mix(in srgb, var(--surface) 78%, black)) !important; color: var(--ink); }
   .management-sidebar-footer { margin-top: auto; padding-top: 20px; }
-  .management-version { display: block; margin: 16px 8px 0; overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--muted-ink); transition: opacity 140ms ease, visibility 140ms; }
+  .management-version { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 16px 8px 0; overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--muted-ink); transition: opacity 140ms ease, visibility 140ms; }
   .management-page[data-sidebar-collapsed='true'] .management-nav-label { max-width: 0; opacity: 0; transform: translateX(-4px); }
   .management-page[data-sidebar-collapsed='true'] .management-version { opacity: 0; visibility: hidden; }
   .management-page[data-sidebar-collapsed='true'] .management-nav { gap: 0; }

@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理侧栏版本标识（2026-10-11）
+
+- 侧栏底部的 Droid 版本文字与图标整体水平居中，复用主聊天的共享 PinwheelIcon，使用 14px 图标和 6px 间距；保留既有收起隐藏和淡出行为。
+- `package:vsix` 通过，包含 typecheck、lint:budgets 和公共 UI／生产构建；168 个 VSIX 条目及静态引用校验通过，未运行扩展入口加载。已全局安装到 Microsoft VS Code 与 Cursor，两边各 5 个主要产物与 VSIX SHA-256 一致，需 Reload Window。未新增、修改或运行测试、浏览器自动化或截图 probe，视觉由用户验收。npm 配置和安装 CLI 弃用提示未阻断交付。
+
 ## 模型操作按钮（2026-10-11）
 
 - 模型列表的“使用此模型”缩为“使用”，保留完整无障碍名称及原模型切换逻辑；按钮从 32px 高、88px 最小宽缩为 24px 高、48px 最小宽，更多菜单和“当前使用”状态同步对齐。

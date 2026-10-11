@@ -1,3 +1,4 @@
+import { PinwheelIcon } from '@droidvisx/chat-ui/ui/pinwheel-icon';
 import { Boxes, MessageSquare, PanelLeft, Settings2, TextCursorInput, Workflow } from 'lucide-react';
 import { MANAGEMENT_PAGES, type ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
@@ -28,7 +29,7 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
       })}
     </nav>
     <div className="management-sidebar-footer">
-      <small className="management-version">Droid {version ?? ''}</small>
+      <small className="management-version"><PinwheelIcon className="size-3.5 shrink-0" /><span>Droid {version ?? ''}</span></small>
     </div>
   </aside>;
 }
