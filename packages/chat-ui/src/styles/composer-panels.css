@@ -157,7 +157,7 @@
   .v2-composer-panel .dvx-skill-row { @apply flex items-center gap-2.5 border-b border-[var(--panel-edge)] px-0.5 py-[7px] last:border-b-0; }
   .v2-composer-panel .dvx-skill-copy { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
   .v2-composer-panel .dvx-skill-name { @apply flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium; overflow-wrap: anywhere; }
-  .v2-composer-panel .dvx-skill-location { @apply rounded-full border border-[var(--panel-edge)] px-1.5 py-px text-[10px] font-normal text-muted-foreground; }
+  .v2-composer-panel .dvx-skill-location { @apply select-none rounded-full border border-[var(--panel-edge)] px-1.5 py-px text-[10px] font-normal text-muted-foreground; }
   .v2-composer-panel .dvx-skill-description { @apply line-clamp-2 text-[11px] leading-[1.35] text-muted-foreground; }
   .v2-composer-panel .dvx-skill-switch { @apply shrink-0; }
   .v2-composer-panel .dvx-mcp-status { @apply size-[7px] shrink-0 rounded-full bg-muted-foreground; }

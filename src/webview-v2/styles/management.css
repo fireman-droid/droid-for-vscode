@@ -2,6 +2,7 @@
   :where(.management-page, .management-dialog) .dvx-control:where(:not([role='checkbox'], [role='radio'], [role='switch'])) { display: inline-flex; align-items: center; gap: 6px; background: transparent !important; color: var(--ink); font-size: 12px; }
   .management-page { --management-edge: color-mix(in srgb, var(--ink) 10%, var(--surface)); --management-sidebar-width: 160px; display: grid; grid-template-columns: var(--management-sidebar-width) minmax(0, 1fr); transition: grid-template-columns 200ms var(--motion-ease); height: 100%; min-height: 0; overflow: hidden; color: var(--ink); background: var(--surface); font-size: 13px; }
   .management-page[data-sidebar-collapsed='true'] { --management-sidebar-width: 48px; }
+  .management-sidebar, .management-heading, .management-pagination, .management-mission-status { user-select: none; }
   .management-sidebar { display: flex; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; flex-direction: column; gap: 18px; padding: 40px 8px 20px; }
   .management-page .management-sidebar-toggle { align-self: flex-start; width: 32px; height: 28px; padding: 0; justify-content: center; color: var(--muted-ink); }
   .management-sidebar nav { display: flex; flex-direction: column; gap: 2px; isolation: isolate; --selection-indicator-radius: 10px; --selection-indicator-color: light-dark(color-mix(in srgb, var(--ink) 7%, var(--surface)), color-mix(in srgb, var(--surface) 78%, black)); }

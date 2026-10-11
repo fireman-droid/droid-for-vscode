@@ -19,6 +19,7 @@
 }
 
 .v2-mission-pill {
+  user-select: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;

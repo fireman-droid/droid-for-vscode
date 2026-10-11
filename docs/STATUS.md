@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 界面状态与导航文字防误选（2026-10-11）
+
+- 主聊天共享顶栏禁止拖选文字，覆盖 Droid 标识及 Online／Connecting／Offline；补齐管理侧栏、页标题、分页、连接状态、Mission 状态标签、会话查看器生命周期、审阅状态栏、模型选择计数与 Skills 位置标签。共享加载提示同步禁止拖选。
+- 按钮、菜单、页签、Tooltip 和 BTW 顶栏已有禁止选中的规则，继续复用；修改限定于界面状态与导航，保留既有正文选择、代码／Diff、错误详情和输入框的复制编辑行为，不改变焦点、键盘操作或状态播报。
+- `package:vsix` 通过，包含类型检查、文件预算、公共 UI 声明与生产构建；168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，两边各 8 个主要文件与 VSIX SHA-256 一致。未新增、修改或运行测试、浏览器自动化或截图 probe，实际拖选行为待 Reload Window 后由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## BTW 模型加载状态收紧（2026-10-11）
 
 - 模型加载状态移到 BTW 输入框右上角，使用 14px 旋转图标，取消底部整行 Loading 文案；为引用和输入预留图标空间，支持键盘聚焦说明及减少动态效果。

@@ -112,7 +112,7 @@ export function ModelDiscovery({ page, onDone, onManual }: {
       </div> : null}
     </div>
     <div className="models-form-actions models-selection-actions">
-      <div className="models-selection-summary" role="status" aria-live="polite"><strong>已选 {selected.length} 个</strong>
+      <div className="models-selection-summary select-none" role="status" aria-live="polite"><strong>已选 {selected.length} 个</strong>
         <span className={conflicts ? 'text-destructive' : 'models-help'}>{conflicts ? `${conflicts} 个别名需要调整` : hiddenChosen ? `${hiddenChosen} 个在当前筛选之外` : `一次最多添加 ${MAX_MODEL_CATALOG_ITEMS} 个`}</span>
       </div>
       <Button variant="ghost" disabled={busy} onClick={onDone}>取消</Button>

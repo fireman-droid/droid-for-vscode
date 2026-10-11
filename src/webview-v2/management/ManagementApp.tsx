@@ -34,7 +34,7 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
     </header>
       {s ? <>
         <div className="management-group"><ManagementRow label="主题"><ManagementChoice label="主题" value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', '跟随编辑器' ], ['light', '浅色'], ['dark', '深色']]} /></ManagementRow></div>
-        <h2 className="management-section-title">连接</h2><div className="management-group"><ManagementRow label="Droid 会话">{statusLabels[s.connection] ?? s.connection}</ManagementRow><ManagementRow label="IDE">{statusLabels[s.ide] ?? s.ide}</ManagementRow></div>
+        <h2 className="management-section-title">连接</h2><div className="management-group"><ManagementRow label="Droid 会话"><span className="select-none">{statusLabels[s.connection] ?? s.connection}</span></ManagementRow><ManagementRow label="IDE"><span className="select-none">{statusLabels[s.ide] ?? s.ide}</span></ManagementRow></div>
         <h2 className="management-section-title">版本</h2><div className="management-group"><ManagementRow label={`Droid ${s.version}`} detail={typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}>
           <Button variant="plain" size="icon-sm" aria-label="复制版本信息" onClick={() => { void copyText(`Droid ${s.version}\n${typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}`).then(() => setCopied(true), () => state.setNotice({ ok: false, message: '复制失败，可手动复制版本信息。' })); }}>{copied ? <Check /> : <Copy />}</Button>
         </ManagementRow></div>

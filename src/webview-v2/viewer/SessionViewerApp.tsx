@@ -15,7 +15,7 @@ export function SessionViewerApp({ vscode }: { readonly vscode: { postMessage(me
     <header className="border-b border-border/80">
       <div className={`v2-chat-rail flex items-center justify-between gap-3 ${snapshot?.target.mode === 'subagent-readonly' ? 'min-h-8 py-1' : 'min-h-10 py-2'}`}>
         <h1 title={snapshot?.target.title} className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5">{snapshot?.target.title ?? 'Session activity'}</h1>
-        <p role="status" className={`shrink-0 text-[11px] ${snapshot?.lifecycle === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{snapshot === null ? 'Loading' : snapshot.stopping ? 'Stopping…' : snapshot.lifecycle.charAt(0).toUpperCase() + snapshot.lifecycle.slice(1)}</p>
+        <p role="status" className={`shrink-0 select-none text-[11px] ${snapshot?.lifecycle === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{snapshot === null ? 'Loading' : snapshot.stopping ? 'Stopping…' : snapshot.lifecycle.charAt(0).toUpperCase() + snapshot.lifecycle.slice(1)}</p>
         {canStop ? <Button size="sm" variant="ghost" className="shrink-0 hover:bg-destructive/5 hover:text-destructive active:bg-destructive/10" disabled={snapshot?.stopping === true} onClick={stop}>Stop</Button> : null}
       </div>
     </header>

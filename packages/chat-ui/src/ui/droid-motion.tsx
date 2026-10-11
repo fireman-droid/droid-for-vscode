@@ -25,7 +25,7 @@ export function DroidLoading({ label, detail, className }: {
   readonly detail?: string;
   readonly className?: string;
 }) {
-  return <div role="status" className={cn('droid-loading', className)}>
+  return <div role="status" className={cn('droid-loading select-none', className)}>
     <DroidActivity phase="loading" large />
     <div className="droid-loading-copy">
       <p className="droid-loading-label">{label}</p>
