@@ -6,7 +6,7 @@
     min-width: 0;
     min-height: 0;
     flex-shrink: 0;
-    grid-template-rows: 44px minmax(0, 1fr) auto;
+    grid-template-rows: 36px minmax(0, 1fr) auto;
     border-left: 1px solid var(--panel-edge);
     background: var(--surface);
   }

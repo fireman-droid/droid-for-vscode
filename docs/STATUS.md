@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## BTW 顶栏高度对齐（2026-10-11）
+
+- BTW 侧聊顶栏由 44px 收紧为 36px，与主聊天 ChatLayout 的首行高度一致；保留标题、副标题、运行状态和关闭按钮，使左右底部分隔线对齐。
+- `package:vsix` 通过，包含类型检查、文件预算、公共 UI 声明及生产构建；168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要文件与 VSIX SHA-256 一致。未新增、修改或运行测试、浏览器自动化或截图，需 Reload Window 后由用户验收；npm 配置及 CLI 弃用提示未阻断交付。
+
 ## Skills 列表取消悬浮说明（2026-10-11）
 
 - 输入区设置弹层中的 Skills 说明移除原生 title，鼠标停留不再弹出重复的说明卡片；保留原有名称、位置、列表说明、启停开关和刷新行为。
