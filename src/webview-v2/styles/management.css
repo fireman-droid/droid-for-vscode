@@ -56,15 +56,18 @@
   .management-scope { display: flex; align-items: start; gap: 16px; justify-content: space-between; color: var(--muted-ink); font-size: 11px; margin-bottom: 10px; }
   .management-scope > span { display: flex; align-items: start; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
   .management-scope svg { width: 13px; height: 13px; margin-top: 2px; flex-shrink: 0; }
-  .management-scope small { white-space: nowrap; }
   .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 48px 26px; align-items: center; gap: 8px; border-bottom: 1px solid var(--panel-edge); }
   .management-session-head { padding: 8px 0; color: var(--muted-ink); font-size: 11px; }
-  .management-session-row { min-height: 60px; padding: 9px 0; }
+  .management-session-row { min-height: 44px; padding: 9px 0; }
   .management-session-row time, .management-count { color: var(--muted-ink); font-size: 11px; font-variant-numeric: tabular-nums; }
   .management-page .management-session-title { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
-  .management-session-title > span { display: flex; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
+  .management-session-title > span { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+  .management-session-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .management-session-title svg { width: 12px; height: 12px; flex-shrink: 0; }
   .management-session-title small { font-size: 11px; color: var(--muted-ink); overflow-wrap: anywhere; }
+  .management-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 12px; color: var(--muted-ink); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .management-pagination > span { min-width: 28px; text-align: center; }
+  .management-pagination .dvx-control { justify-content: center; }
   .management-mission { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--panel-edge); }
   .management-mission small { color: var(--muted-ink); font-size: 11px; }
   .management-mission h2 { margin-top: 4px; }
