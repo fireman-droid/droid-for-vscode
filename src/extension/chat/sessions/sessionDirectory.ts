@@ -87,8 +87,6 @@ export function handleSessionNew(ctl: SessionDirectoryPort): void {
     }
     return;
   }
-  ctl.selectSessionWorkspace(workspace.cwd);
-  bindCatalogViewToWorkspace(ctl, workspace.cwd);
   ctl.effects.startReplacement({ kind: 'new', cwd: workspace.cwd });
 }
 

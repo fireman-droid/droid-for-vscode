@@ -10,7 +10,6 @@ export interface SessionDirectoryPort
     HostOperations,
     | 'getWorkspaceContext'
     | 'getEditorWorkspaceContext'
-    | 'selectSessionWorkspace'
     | 'worktreeSessions'
     | 'emitSessionDiagnostic'
     | 'isCurrentSessionOperation'

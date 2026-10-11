@@ -47,7 +47,6 @@ export function createManagementServices(options: {
       if (controller.sessionState.disposed || controller.sessionState.runtimeGeneration !== generation ||
           editor.cwd !== currentEditor.cwd || editor.trusted !== currentEditor.trusted) throw new Error('当前聊天或窗口已改变，请重试。');
       if (!controller.effects.canReplaceSession()) throw new Error('当前聊天正在处理操作，暂时不能切换。');
-      controller.selectSessionWorkspace(row.cwd);
       controller.effects.startReplacement({ kind: 'resume', cwd: row.cwd, sessionId: row.id });
       await vscode.commands.executeCommand('droidvisx.focusView');
     },

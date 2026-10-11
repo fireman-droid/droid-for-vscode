@@ -10,7 +10,7 @@ import { resolveStartupTarget } from './startupTarget';
 import { createSessionSwitchTimings } from './sessionSwitchTimings';
 import { prepareHistory, createInitializedRuntime, activateRuntime } from './runtimeActivation';
 import { closeRuntime } from './sessionCleanup';
-import { isCurrentRuntimeGeneration, isTargetWorkspaceCurrent } from './sessionGuards';
+import { isCurrentRuntimeGeneration, isSameWorkspaceContext, isTargetWorkspaceCurrent } from './sessionGuards';
 import { emitWorkspaceUnavailable, ensureActiveRuntimeWorkspaceCurrent, reportWorkspaceChanged, waitForWorkspaceTransition } from './workspaceLifecycle';
 import type { RuntimeLifecyclePort, RuntimeReplacementOptions } from './runtimeLifecyclePort';
 
@@ -159,6 +159,11 @@ export async function replaceRuntime(
   options: RuntimeReplacementOptions = {},
 ): Promise<void> {
   if (ctl.childSession) target = { kind: 'resume', ...ctl.childSession, child: true };
+  const sourceWorkspace = ctl.getWorkspaceContext();
+  const editorWorkspace = ctl.getEditorWorkspaceContext();
+  const isSourceWorkspaceCurrent = () => sourceWorkspace.trusted &&
+    isSameWorkspaceContext(sourceWorkspace, ctl.getWorkspaceContext()) &&
+    isSameWorkspaceContext(editorWorkspace, ctl.getEditorWorkspaceContext());
   const phases = createSessionSwitchTimings(target.kind);
   // Captured before any state reset: a live daemon-backed turn
   // survives the switch. Disposal then detaches instead of
@@ -196,7 +201,7 @@ export async function replaceRuntime(
   if (!isCurrentRuntimeGeneration(ctl, generation)) {
     return;
   }
-  if (!isTargetWorkspaceCurrent(ctl, target.cwd)) {
+  if (!isSourceWorkspaceCurrent()) {
     reportWorkspaceChanged(ctl, generation);
     return;
   }
@@ -208,7 +213,7 @@ export async function replaceRuntime(
     } catch {
       if (
         isCurrentRuntimeGeneration(ctl, generation) &&
-        isTargetWorkspaceCurrent(ctl, target.cwd)
+        isSourceWorkspaceCurrent()
       ) {
         ctl.sessionState.connection = {
           status: 'unavailable',
@@ -236,11 +241,27 @@ export async function replaceRuntime(
       ctl.effects.setSessionRunning(detachedSessionId, true);
       ctl.effects.ensureBackgroundRunningPoll();
     }
-    if (!isTargetWorkspaceCurrent(ctl, target.cwd)) {
+    if (!isSourceWorkspaceCurrent()) {
       reportWorkspaceChanged(ctl, generation);
       return;
     }
   }
+
+  // Keep the old directory, identity and history together until saving and
+  // closing succeed. A failed attempt can then reconnect the old session.
+  if (sourceWorkspace.cwd !== target.cwd) {
+    const sessionId = target.kind === 'resume' ? target.sessionId : null;
+    ctl.selectSessionWorkspace(target.cwd);
+    ctl.sessionState.activeRuntimeCwd = null;
+    ctl.sessionState.historyWorkspace = sessionId === null ? null : { sessionId, cwd: target.cwd };
+    ctl.effects.showSessionHistory({
+      sessionId,
+      conversationId: sessionId === null ? null : targetConversationId ?? sessionId,
+    }, createHostTranscriptState('unavailable'));
+    ctl.missionState.mission = null;
+    ctl.metadata.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
+  }
+  if (target.kind === 'new') ctl.effects.bindCatalogViewToWorkspace(target.cwd);
 
   // New child IDs can precede their persisted history. Attach to the original
   // worker first; existing root history remains independent of its handshake.
