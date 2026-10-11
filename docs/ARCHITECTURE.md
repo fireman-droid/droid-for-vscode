@@ -530,6 +530,12 @@ conversationId，Fork／编辑重发建立新 conversation；恢复不再次提�
 应用边界，Webview 只负责显示与交互。系统提示使用独立请求／确认消息和 Host 用户配置
 存储，工厂仅给新建目标注入 `systemPrompt`，恢复／分叉不注入。
 
+模型连接凭据保留在 SecretStorage，按协议和完整规范化接口地址绑定，不依赖可改名／
+改地址的连接 ID。编辑旧连接的地址或密钥时，先把旧 ID 槽复制到原接口槽，再删除旧槽；
+随后只向目标接口槽写新密钥，最后保存连接元数据。元数据保存失败时，内存值和重载后的
+磁盘值可能不同，两者均只能读取各自接口的密钥；不通过回滚密钥猜测元数据是否已落盘。
+未编辑的旧连接仍可读取旧 ID 槽，接口内新密钥已保存但元数据失败时明确反馈部分成功。
+
 daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
 该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
 查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。

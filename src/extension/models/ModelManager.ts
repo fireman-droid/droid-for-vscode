@@ -18,7 +18,7 @@ import {
   ModelDiscoveryError,
   type CustomModelDiscoveryGateway,
 } from '../chat/models/modelDiscovery';
-import type { ProviderRegistry } from '../chat/models/providerRegistry';
+import { ProviderConnectionSaveError, type ProviderRegistry } from '../chat/models/providerRegistry';
 import { MODEL_DISABLED_MESSAGE, ModelAvailabilityError, type DisabledModelsStore } from './DisabledModelsStore';
 import {
   connectionKey,
@@ -409,6 +409,7 @@ export class ModelManager {
 }
 
 export function modelManagerFailure(error: unknown): string {
+  if (error instanceof ProviderConnectionSaveError) return error.message.slice(0, 2048);
   if (error instanceof ModelAvailabilityError) return error.message.slice(0, 2048);
   if (error instanceof ModelManagerError) return error.message.slice(0, 2048);
   if (error instanceof ModelDiscoveryError) {

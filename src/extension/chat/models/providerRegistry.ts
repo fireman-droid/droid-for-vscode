@@ -33,6 +33,8 @@ interface ProviderSecrets {
   delete(key: string): Thenable<void>;
 }
 
+export class ProviderConnectionSaveError extends Error {}
+
 /**
  * Host-owned connection metadata. Credentials are deliberately kept in
  * SecretStorage and are only read at the final daemon or HTTP hand-off.
@@ -128,10 +130,21 @@ export class ProviderRegistry {
       throw new Error('duplicate-provider-connection');
     }
     const next = [...this.list().filter((item) => item.id !== provider.id), provider];
-    if (input.apiKey !== undefined) {
-      await this.secrets.store(secretKey(provider.id), input.apiKey);
+    if (existing !== null && (input.apiKey !== undefined || existing.protocol !== provider.protocol || existing.rootUrl !== provider.rootUrl)) {
+      await this.moveKeyToEndpoint(existing);
     }
-    await this.store.update(STORAGE_KEY, next);
+    if (input.apiKey !== undefined) {
+      await this.secrets.store(endpointSecretKey(provider.protocol, provider.rootUrl), input.apiKey);
+    }
+    try {
+      await this.store.update(STORAGE_KEY, next);
+    } catch (cause) {
+      // Memento may already expose the new value even when persistence fails.
+      // Endpoint-bound keys work with either metadata version, including after reload.
+      throw new ProviderConnectionSaveError(input.apiKey === undefined
+        ? 'Connection settings could not be saved. Refresh and retry.'
+        : 'The API key was saved for the target endpoint, but connection settings could not be saved. Refresh and retry saving the connection.', { cause });
+    }
     return provider;
   }
 
@@ -165,11 +178,22 @@ export class ProviderRegistry {
     if (!isProviderKey(value)) throw new Error('invalid-provider-key');
     const normalized = normalizeProviderRoot(rootUrl);
     const provider = this.list().find((item) => item.protocol === protocol && item.rootUrl === normalized);
-    await this.secrets.store(provider ? secretKey(provider.id) : endpointSecretKey(protocol, normalized), value);
+    if (provider !== undefined) await this.moveKeyToEndpoint(provider);
+    await this.secrets.store(endpointSecretKey(protocol, normalized), value);
   }
 
   async hasApiKey(id: string): Promise<boolean> {
     return (await this.apiKey(id)) !== undefined;
+  }
+
+  private async moveKeyToEndpoint(provider: ProviderConnection): Promise<void> {
+    const key = secretKey(provider.id);
+    const value = await this.secrets.get(key);
+    if (value === undefined) return;
+    // Copy before removing the old ID slot. Either an interrupted migration or
+    // a failed metadata write still resolves the key for the original endpoint.
+    await this.secrets.store(endpointSecretKey(provider.protocol, provider.rootUrl), value);
+    await this.secrets.delete(key);
   }
 }
 
