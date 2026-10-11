@@ -53,7 +53,7 @@ export function SelectContent({ children, className, ...props }: ComponentProps<
 export function SelectItem({ children, className, ...props }: ComponentProps<typeof SelectPrimitive.Item>) {
   return (
     <SelectPrimitive.Item
-      className={cn('dvx-menu-item relative flex min-w-0 cursor-default select-none items-center gap-2 rounded py-1 pl-1 pr-5 text-left text-[13px] whitespace-normal [overflow-wrap:anywhere] [&>span]:min-w-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)}
+      className={cn('dvx-menu-item relative flex min-w-0 select-none items-center gap-2 rounded py-1 pl-1 pr-5 text-left text-[13px] whitespace-normal [overflow-wrap:anywhere] [&>span]:min-w-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)}
       {...props}
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

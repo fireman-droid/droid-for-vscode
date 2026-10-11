@@ -42,6 +42,7 @@
   .management-row-control > input[data-slot='input'] { width: 100%; }
   .management-row-control input[type='number'] { max-width: 92px; }
   .management-check { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .management-check:has(button:enabled) { cursor: pointer; }
   .management-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; }
   :where(.management-page, .management-dialog) .dvx-control:where(:not([role='checkbox'], [role='radio'], [role='switch'])):hover:not(:disabled) { color: var(--strong-ink); }
   .management-page .management-nav:is(:hover, :focus-visible):not([aria-current='page']) { background: var(--control-surface-hover) !important; color: var(--strong-ink); }

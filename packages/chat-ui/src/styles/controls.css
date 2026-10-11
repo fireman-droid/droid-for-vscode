@@ -21,7 +21,8 @@
     outline: 1px solid var(--focus);
     outline-offset: 0;
   }
-  .dvx-control:is(:disabled, [data-disabled], [aria-disabled='true']) { cursor: default; }
+  :is(button.dvx-control, a.dvx-control[href], .dvx-menu-item):not(:disabled, [data-disabled], [aria-disabled='true']) { cursor: pointer; }
+  :is(.dvx-control, .dvx-menu-item):is(:disabled, [data-disabled], [aria-disabled='true']) { cursor: default; }
   .dvx-field, .dvx-choice { border-color: var(--field-edge); }
   .dvx-field:focus, .dvx-field[data-state='open'] { border-color: var(--control-border-focus); }
   .dvx-field:focus-visible {
