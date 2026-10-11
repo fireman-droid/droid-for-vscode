@@ -9,6 +9,13 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理页参考样式（2026-10-11）
+
+- 按用户提供的展开／收起侧栏参考，移除管理侧栏分隔线、选中栏目竖线及当前模型竖线。导航选中项改用圆角底色，支持顶部按钮收为图标列；窄窗口直接使用图标列，名称保留公共 Tooltip 和无障碍标签。
+- 设置分组使用淡边框圆角、横向分隔及右对齐控件；模型列表移除装饰缩进，当前模型保留右侧勾选。复用现有主题和 Radix 控件，不增加 hover 背景，不改变设置、会话、渠道／模型及 Mission 的数据调用。
+- `pnpm --config.verify-deps-before-run=false --config.manage-package-manager-versions=false run package:vsix` 通过，包含类型检查、文件预算、公共 UI 与生产构建；168 个 VSIX 条目及静态引用校验通过，运行时入口加载跳过。已安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要产物与 VSIX 哈希一致。npm 配置及安装的 `url.parse()` 弃用提示未阻断交付。
+- 用户要求真实验收：已通过 Cursor CLI 启动当前项目的新窗口，使用当前用户正式安装的扩展；当前工具无法操作原生编辑器，管理页需用户点击入口或运行 `Droid: Open Management` 后验收。已有窗口需 Reload Window。4173 真实浏览器服务未运行，未将 4178 模拟页面作为验收；未新增、修改或运行测试及截图 probe。
+
 ## Agents 残留定位（2026-10-11）
 
 - 截图对应的 13:11 会话切换日志中，Host 导航计数已从 2 清为 0，空会话正文也已提交；当时没有前端 Agent 导航接收／显示记录，尚未确认残留根因，不标记为已修复。

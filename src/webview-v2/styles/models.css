@@ -54,7 +54,6 @@
   .models-model-row { position: relative; display: flex; min-height: 76px; align-items: center; gap: 12px; padding: 14px 12px; border-radius: 6px; }
   .models-model-row + .models-model-row::after { content: ''; position: absolute; inset: -2px 12px auto; height: 1px; background: var(--panel-edge); }
   .models-model-row[data-current='true'] { background: color-mix(in srgb, var(--ink) 4%, var(--surface)); }
-  .models-model-row[data-current='true']::before { content: ''; position: absolute; inset: 18px auto 18px 0; width: 2px; border-radius: 2px; background: var(--focus); }
   .models-model-row:focus-within { background: var(--control-surface-hover); }
   .models-model-symbol { display: grid; width: 34px; height: 34px; flex-shrink: 0; place-items: center; border: 1px solid var(--panel-edge); border-radius: 7px; color: var(--muted-ink); }
   .models-model-symbol > svg { width: 16px; height: 16px; }

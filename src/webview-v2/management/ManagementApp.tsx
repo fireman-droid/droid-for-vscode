@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Boxes, Check, Copy, MessageSquare, RefreshCw, Settings2, TextCursorInput, Workflow } from 'lucide-react';
-import { MANAGEMENT_PAGES, type ManagementPage } from '../../shared/protocol/managementPageProtocol';
+import { Check, Copy, RefreshCw } from 'lucide-react';
+import type { ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { applyTheme } from '../shell/theme';
 import { copyText } from '../bridge/clipboard';
@@ -10,25 +10,26 @@ import { ManagementChoice, ManagementRow } from './ManagementFields';
 import { CompletionSettings } from './CompletionSettings';
 import { SessionManagement } from './SessionManagement';
 import { MissionManagement } from './MissionManagement';
+import { ManagementSidebar } from './ManagementSidebar';
 
 declare const __DVX_BUILD_ID__: string;
-const names = { general: '常规', models: '模型', completion: '智能补全', sessions: '会话', missions: 'Missions' };
-const icons = { general: Settings2, models: Boxes, completion: TextCursorInput, sessions: MessageSquare, missions: Workflow };
 const statusLabels: Record<string, string> = { connected: '已连接', connecting: '连接中', idle: '空闲', disconnected: '已断开', unavailable: '不可用', error: '连接失败', reconnecting: '重连中', preparing: '准备中', 'reconnect-required': '需要重连' };
 
 export function ManagementApp({ transport }: { transport: ManagementTransport }) {
   const state = useManagement(transport);
   const [visited, setVisited] = useState<ReadonlySet<ManagementPage>>(new Set(['general']));
   const [copied, setCopied] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   useEffect(() => { setVisited(prev => new Set(prev).add(state.page)); }, [state.page]);
   useEffect(() => { if (state.settings) applyTheme(state.settings.theme, state.settings.resolvedTheme); }, [state.settings?.theme, state.settings?.resolvedTheme]);
   useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(timer); }, [copied]);
   const s = state.settings;
-  return <div className="management-page"><aside className="management-sidebar"><div className="management-brand">Droid <span>管理</span></div>
-    <nav aria-label="管理页面">{MANAGEMENT_PAGES.map(key => { const Icon = icons[key]; return <Button variant="plain" size="none" key={key} className="management-nav" aria-current={state.page === key ? 'page' : undefined} onClick={() => { state.setPage(key); state.setNotice(null); }}><Icon />{names[key]}</Button>; })}</nav>
-    <Button variant="plain" size="sm" className="management-back" disabled={state.busy} onClick={() => void state.run({ kind: 'chat.focus' })}><ArrowLeft />返回聊天</Button>
-    <small className="management-version">Droid {s?.version ?? ''}</small>
-  </aside><main className="management-main">
+  return <div className="management-page" data-sidebar-collapsed={sidebarCollapsed}>
+    <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} busy={state.busy} version={s?.version}
+      onToggle={() => setSidebarCollapsed(value => !value)}
+      onNavigate={page => { state.setPage(page); state.setNotice(null); }}
+      onBack={() => void state.run({ kind: 'chat.focus' })} />
+    <main className="management-main">
     <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、连接与版本</p></div>
       <Button variant="plain" size="icon-sm" aria-label="刷新信息" title="刷新信息" disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}><RefreshCw className={state.busy ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>
     </header>
