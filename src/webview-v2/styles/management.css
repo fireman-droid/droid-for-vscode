@@ -52,8 +52,8 @@
   .management-page input { height: 30px; font-size: 12px; }
   .management-page [role='tablist'] { width: fit-content; gap: 14px; padding: 0; border-bottom: 0; background: transparent; }
   .management-page [role='tab'] { padding-inline: 0; border-radius: 0; }
-  .management-page [role='tab'][data-state='active'] { border-bottom-color: var(--focus); background: transparent; }
-  .management-page [data-animated-indicator] [role='tab'][data-state='active'] { border-bottom-color: transparent; }
+  .management-page [role='tab'][aria-selected='true'] { border-bottom-color: var(--focus); background: transparent; }
+  .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
   .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
   .management-menu[data-slot='select-content'] { width: var(--radix-select-trigger-width); min-width: 0; max-width: calc(100vw - 16px); border-radius: 8px; }
   .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }

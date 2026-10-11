@@ -65,10 +65,11 @@ export function SelectItem({ children, className, ...props }: ComponentProps<typ
 export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, children, animatedIndicator = false, ...props }: ComponentProps<typeof TabsPrimitive.List> & { readonly animatedIndicator?: boolean }) {
   return <TabsPrimitive.List className={cn('dvx-tabs-list flex min-w-0 select-none gap-1 border-b border-border', className)} data-animated-indicator={animatedIndicator || undefined} {...props}>
-    {children}{animatedIndicator && <SelectionIndicator activeSelector='[role="tab"][data-state="active"]' />}
+    {children}{animatedIndicator && <SelectionIndicator activeSelector='[role="tab"][aria-selected="true"]' />}
   </TabsPrimitive.List>;
 }
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {
-  return <TabsPrimitive.Trigger className={cn('dvx-control dvx-tab border-b-2 border-transparent px-2 py-1.5 text-xs text-muted-foreground disabled:pointer-events-none disabled:opacity-45 data-[state=active]:border-primary data-[state=active]:text-foreground', className)} {...props} />;
+  // Tooltip's asChild trigger also owns data-state; aria-selected belongs to Tabs.
+  return <TabsPrimitive.Trigger className={cn('dvx-control dvx-tab border-b-2 border-transparent px-2 py-1.5 text-xs text-muted-foreground disabled:pointer-events-none disabled:opacity-45 aria-selected:border-primary aria-selected:text-foreground', className)} {...props} />;
 }
 export const TabsContent = TabsPrimitive.Content;

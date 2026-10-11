@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 会话范围选中指示修复（2026-10-11）
+
+- “当前文件夹”的路径 Tooltip 与 Tabs Trigger 复用 `data-state`，覆盖了页签的 active 状态，导致动画指示线无法找到选中项。共享页签的选中样式与指示线改用 Tabs 自身的 `aria-selected`，指示器同步观察该属性变化；管理页选中样式同步调整，保留路径提示与 220ms 滑动动画。
+- `package:vsix` 通过，包含类型检查、文件预算、公共 UI 声明及生产构建；168 个 VSIX 条目与静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要文件与 VSIX SHA-256 一致，需 Reload Window。未新增、修改或运行测试及浏览器验收，视觉由用户确认；npm 配置及 CLI 弃用提示未阻断交付。
+
 ## 管理页会话标题切换主聊天（2026-10-11）
 
 - 聊天标题改用现有 `session.resume`，在当前工作区恢复所选聊天并聚焦主聊天；点击当前聊天只聚焦，不重复重建会话。独立记录查看保留在菜单，Exec 标题仍打开执行记录。

@@ -32,7 +32,7 @@ export function SelectionIndicator({ activeSelector, variant = 'underline' }: {
       positioned = true;
     };
     const selection = new MutationObserver(measure);
-    selection.observe(list, { subtree: true, attributes: true, attributeFilter: ['data-state', 'aria-current'] });
+    selection.observe(list, { subtree: true, attributes: true, attributeFilter: ['data-state', 'aria-current', 'aria-selected'] });
     const resize = new ResizeObserver(measure);
     resize.observe(list);
     Array.from(list.children).filter(child => child !== indicator).forEach(child => resize.observe(child));
