@@ -4,7 +4,22 @@
 @import './styles/management.css';
 @import './styles/mission.css';
 @import './styles/viewer.css';
+@import './styles/factory-theme.css';
 @source './**/*.{ts,tsx}';
+
+/* Crossfade the rendered theme together, including portalled menus. */
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: ease-in-out;
+}
+::view-transition { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: 0s; }
+}
 
 @layer base {
   :root {

@@ -69,6 +69,22 @@
 - 减少动画偏好下直接展示最终内容；循环效果支持暂停，离屏时停播，组件卸载时清理
   observer、动画与帧回调。移动端保持相同内容和链接，不依赖悬停才能访问。
 
+## 手动深浅主题配色
+
+- Droid 手动 Light／Dark 使用 Factory 应用的 `Factory` 预设颜色：浅色页面 `#ffffff`、
+  正文 `#181818`；深色页面 `#121212`、正文 `#ffffff`；强调色 `#ff5a00`，按钮悬停
+  `#d94d00`、按下 `#b34000`。中性色按该预设默认 contrast 50 的 Oklab 混色比例生成。
+- 取色依据为 2026-10-05 官方公开应用资源
+  [`index-DGIgPM2g.js`](https://app.factory.ai/assets/index-DGIgPM2g.js) 的 `Factory` 预设与
+  中性色映射，以及 [`index-GNwmKNPm.css`](https://app.factory.ai/assets/index-GNwmKNPm.css)
+  的强调色状态。深色页面、边框与用户提供截图相符，浅色来自同一预设定义。
+- 配色放在 Droid 适配层 `src/webview-v2/styles/factory-theme.css`，保留公共 UI 默认主题；
+  Auto 继续跟随编辑器。主／侧输入框和 Review 使用同组语义颜色，不改变组件布局、
+  字体、尺寸、圆角与交互；正文辅助说明使用源主题 secondary 色保持可读性。
+- 焦点使用中性强边框色，与橙色发送按钮分离；手动主题的主／侧输入框边框以 200ms
+  渐变。切换 Light／Dark／Auto 时共享主题入口以 260ms 淡入淡出整个画面，包含弹层；
+  首帧不播放动画，快速切换以最后一次选择为准。系统减少动画偏好下直接应用主题。
+
 ## 子代理任务卡片
 
 - 普通 Task 使用共享 `AgentTask` 展示层：紧凑状态图标、单行任务标题和代理类型，

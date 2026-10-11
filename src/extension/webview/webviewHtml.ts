@@ -24,8 +24,8 @@ export interface WebviewAssets {
  * CSS variable from the first frame.
  */
 const INITIAL_BACKGROUNDS = {
-  light: '#f8f8f8',
-  dark: '#181818',
+  light: '#ffffff',
+  dark: '#121212',
 } as const;
 
 const AUTO_INITIAL_BACKGROUND =

@@ -1,0 +1,74 @@
+/* Factory appearance preset, sampled from the public app on 2026-10-05.
+   Keep this product palette in the Droid adapter; Auto retains editor colors.
+   Neutral ramps use the reference preset's default contrast (50), in Oklab. */
+@layer base {
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) {
+    --surface: light-dark(#ffffff, #121212);
+    --ink: light-dark(#181818, #ffffff);
+    --strong-ink: var(--ink);
+    --secondary-ink: light-dark(color-mix(in oklab, var(--ink) 72%, var(--surface)), color-mix(in oklab, var(--ink) 70%, var(--surface)));
+    --muted-ink: var(--secondary-ink);
+    --soft-surface: light-dark(color-mix(in oklab, var(--ink) 2.5%, var(--surface)), color-mix(in oklab, var(--ink) 4%, var(--surface)));
+    --overlay-surface: light-dark(var(--surface), color-mix(in oklab, var(--ink) 2.5%, var(--surface)));
+    --field-surface: var(--overlay-surface);
+    --code-surface: light-dark(color-mix(in oklab, var(--ink) 3.5%, var(--surface)), color-mix(in oklab, var(--ink) 6%, var(--surface)));
+    --well-surface: var(--code-surface);
+    --edge: light-dark(color-mix(in oklab, var(--ink) 30%, var(--surface)), color-mix(in oklab, var(--ink) 15%, var(--surface)));
+    --panel-edge: var(--edge);
+    --field-edge: light-dark(color-mix(in oklab, var(--ink) 20%, var(--surface)), color-mix(in oklab, var(--ink) 22%, var(--surface)));
+    --edge-strong: light-dark(color-mix(in oklab, var(--ink) 42%, var(--surface)), color-mix(in oklab, var(--ink) 30%, var(--surface)));
+    --control-border-hover: var(--edge-strong);
+    --control-border-focus: var(--focus);
+    --control-surface-hover: light-dark(color-mix(in oklab, var(--ink) 5%, var(--surface)), color-mix(in oklab, var(--ink) 6%, var(--surface)));
+    --control-surface-active: light-dark(color-mix(in oklab, var(--ink) 10%, var(--surface)), color-mix(in oklab, var(--ink) 13%, var(--surface)));
+    --hover-surface: var(--control-surface-hover);
+    --action: #ff5a00;
+    --action-ink: #000000;
+    --focus: var(--edge-strong);
+  }
+}
+
+@layer utilities {
+  @media (prefers-reduced-motion: no-preference) {
+    :root:is([data-theme-preference='light'], [data-theme-preference='dark']) :is(.v2-chat-composer, .v2-btw-composer) {
+      transition: border-color 200ms ease;
+    }
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) .v2-chat-surface {
+    --chat-code-surface: var(--code-surface);
+    --chat-message-surface: light-dark(#ececec, #212121);
+    --chat-composer-surface: var(--surface);
+    --chat-review-surface: var(--soft-surface);
+    --chat-edge: var(--edge);
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) .v2-btw-composer {
+    background: var(--surface);
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) .review-workbench {
+    --review-canvas: var(--surface);
+    --review-chrome: light-dark(color-mix(in oklab, var(--ink) 1.5%, var(--surface)), color-mix(in oklab, var(--ink) 2.5%, var(--surface)));
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) :is(.v2-composer-send, .v2-btw-send) {
+    background: var(--action);
+    color: var(--action-ink);
+    border-color: transparent;
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) :is(.v2-composer-send, .v2-btw-send):hover:not(:disabled) {
+    background: #d94d00;
+    border-color: transparent;
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) :is(.v2-composer-send, .v2-btw-send):active:not(:disabled) {
+    background: #b34000;
+    border-color: transparent;
+  }
+
+  :root:is([data-theme-preference='light'], [data-theme-preference='dark']) :is(.v2-composer-send, .v2-btw-send):disabled {
+    opacity: .5;
+  }
+}
