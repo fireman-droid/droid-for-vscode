@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理页页签与菜单线条（2026-10-11）
+
+- 移除管理页页签容器贯穿整组的底边，保留当前页签的短下划线；移除管理页下拉选项和菜单高亮时额外添加的文字下划线，保留共享 Radix 组件的勾选、焦点与键盘行为。
+- `package:vsix` 通过，包含 typecheck、lint:budgets 和公共 UI／生产构建；168 个 VSIX 条目与静态引用校验通过，运行时入口加载跳过。已全局安装到 Microsoft VS Code 与 Cursor，各 5 个主要产物与 VSIX SHA-256 一致，需 Reload Window。未新增、修改或运行测试、浏览器自动化或截图 probe，视觉由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 管理侧栏版本标识（2026-10-11）
 
 - 侧栏底部的 Droid 版本文字与图标整体水平居中，复用主聊天的共享 PinwheelIcon，使用 14px 图标和 6px 间距；保留既有收起隐藏和淡出行为。
