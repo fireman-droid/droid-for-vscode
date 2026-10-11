@@ -20,6 +20,7 @@ export function SessionViewerApp({ vscode }: { readonly vscode: { postMessage(me
       </div>
     </header>
     <div>
+      {snapshot?.status === 'ready' && snapshot.refreshError ? <p role="alert" className="v2-chat-rail py-2 text-xs text-destructive">{snapshot.refreshError}</p> : null}
       {snapshot?.stopError ? <p role="alert" className="v2-chat-rail py-2 text-xs text-destructive">Stop failed. The session may still be working.</p> : null}
     </div>
     {snapshot === null || snapshot.status === 'unavailable' ? <section aria-label="Read-only session transcript" className="v2-chat-rail overflow-auto py-6">

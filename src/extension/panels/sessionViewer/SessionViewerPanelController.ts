@@ -302,7 +302,15 @@ export class SessionViewerPanelController implements vscode.Disposable {
                 stopping: entry.stopping,
                 stopError: entry.stopError,
               }
-            : {
+            : entry.lastSnapshot?.status === 'ready'
+              ? {
+                  ...entry.lastSnapshot,
+                  running: entry.running,
+                  stopping: entry.stopping,
+                  stopError: entry.stopError,
+                  refreshError: 'This session transcript could not be refreshed. Showing the last received transcript. Reopen this view to retry.',
+                }
+              : {
                 type: 'sessionViewer.snapshot',
                 protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
                 status: 'unavailable',
@@ -322,12 +330,29 @@ export class SessionViewerPanelController implements vscode.Disposable {
           attributes: { kind: entry.target.kind },
         });
       }
-    } catch {
+    } catch (error) {
       if (this.isCurrent(entry)) {
+        const message = 'The session could not be refreshed. Reopen this view to retry.';
+        const snapshot: SessionViewerSnapshotMessage = entry.lastSnapshot?.status === 'ready'
+          ? { ...entry.lastSnapshot, refreshError: `${message} Showing the last received transcript.` }
+          : {
+              type: 'sessionViewer.snapshot',
+              protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+              status: 'unavailable',
+              target: publicTarget(entry.target),
+              reason: message,
+              running: entry.running,
+              lifecycle: entry.lastSnapshot?.lifecycle ?? 'starting',
+              stopping: entry.stopping,
+              stopError: entry.stopError,
+            };
+        entry.lastSnapshot = snapshot;
+        this.post(entry, snapshot);
         this.diagnostics?.record({
           level: 'warn',
           name: 'host.sessionViewer.refresh',
           attributes: { outcome: 'failed' },
+          detail: error instanceof Error ? error.message : String(error),
         });
       }
     } finally {

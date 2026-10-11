@@ -52,6 +52,8 @@ export type SessionViewerSnapshotMessage =
       readonly target: SessionViewerTarget;
       readonly items: readonly SessionTranscriptItem[];
       readonly truncated: boolean;
+      /** The last readable transcript is retained when a later refresh fails. */
+      readonly refreshError?: string;
       readonly running: boolean;
       readonly lifecycle: SessionViewerLifecycle;
       readonly stopping: boolean;

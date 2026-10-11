@@ -92,8 +92,9 @@ export function parseSessionViewerHostMessage(
       'lifecycle',
       'stopping',
       'stopError',
-    ]) ||
-    typeof value.truncated !== 'boolean'
+    ], ['refreshError']) ||
+    typeof value.truncated !== 'boolean' ||
+    (value.refreshError !== undefined && !isDisplayText(value.refreshError, MAX_SESSION_VIEWER_REASON_LENGTH))
   ) {
     return null;
   }
@@ -108,6 +109,7 @@ export function parseSessionViewerHostMessage(
     target,
     items,
     truncated: value.truncated,
+    ...(value.refreshError === undefined ? {} : { refreshError: value.refreshError as string }),
     running: value.running,
     lifecycle: value.lifecycle,
     stopping: value.stopping,
