@@ -183,19 +183,17 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
         <div className="flex min-w-0 items-center">{!childChat ? <AppInfo /> : null}</div>
-        <div className="chat-header-actions ml-auto flex shrink-0 items-center gap-1">
-          <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
+        <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
             phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
             blocked={transition.blocking && transition.overlay !== null}
             ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
-          {capabilities.navigateSessions ? <>
+        {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
             {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
             <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
             <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="打开 Droid 管理" title="管理" onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
-          </> : null}
-        </div>
+        </div> : null}
       </>}
       footer={<>
         {footerInteraction ? interaction : null}

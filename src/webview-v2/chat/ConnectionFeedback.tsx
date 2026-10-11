@@ -109,7 +109,7 @@ export function SessionRecovery({ state, blocked, ideBlocked = blocked, onReconn
     },
   };
   return <ChatConnectionStatus connection={state.connection} ide={state.ide} sessionId={state.sessionId}
-    blocked={ideBlocked} port={port} recovery={recovery} />;
+    blocked={ideBlocked} port={port} recovery={recovery} working={working} />;
 }
 
 export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connection }: {

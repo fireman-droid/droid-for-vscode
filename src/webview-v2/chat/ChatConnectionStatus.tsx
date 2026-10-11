@@ -5,15 +5,17 @@ import type { ConnectionState } from '../../shared/protocol/shell';
 import type { ChatPort } from '../host/chatIntent';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import { Button } from '../ui/button';
+import { DroidConnectionDot } from '../ui/droid-motion';
 import type { SessionRecoveryStatus } from './ConnectionFeedback';
 
-export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port, recovery }: {
+export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port, recovery, working }: {
   readonly connection: ConnectionState;
   readonly ide: IdeState;
   readonly sessionId: string | null;
   readonly blocked: boolean;
   readonly port: ChatPort;
   readonly recovery: SessionRecoveryStatus;
+  readonly working: boolean;
 }) {
   const reconnect = useIdeReconnect(port, sessionId);
   useEffect(() => {
@@ -32,13 +34,22 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
   } else if (!recovery.active && connection.status === 'connected' && sessionId !== null && ideFailed) {
     retry = { run: reconnect.request, disabled: blocked || !ide.canReconnect };
   }
-  if (retry === null) return null;
   const pending = recovery.pending || recovery.refresh.pending || ideBusy;
-  const label = pending ? 'Reconnecting…' : 'Reconnect';
-  return <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground"
-    aria-label={label} title={label} aria-busy={pending} disabled={retry.disabled} onClick={retry.run}>
-    <RefreshCw aria-hidden="true" className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} />
-  </Button>;
+  const failed = recovery.failed || recovery.active && recovery.timedOut || !recovery.active && ideFailed;
+  const connecting = pending || recovery.waiting || ide.status === 'preparing';
+  const status = pending ? 'connecting' : failed ? 'unavailable' : connecting ? 'connecting' : 'connected';
+  const label = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting' : 'Offline';
+  const actionLabel = pending ? 'Reconnecting…' : 'Reconnect';
+  return <>
+    <span role="status" aria-atomic="true" className="ml-1.5 mr-auto inline-flex h-6 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="grid size-3 shrink-0 place-items-center"><DroidConnectionDot state={status} working={working} /></span>
+      <span className="truncate">{label}</span>
+    </span>
+    {retry ? <Button variant="plain" size="icon-sm" className="chat-header-control mr-1 text-muted-foreground"
+      aria-label={actionLabel} title={actionLabel} aria-busy={pending} disabled={retry.disabled} onClick={retry.run}>
+      <RefreshCw aria-hidden="true" className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} />
+    </Button> : null}
+  </>;
 }
 
 function useIdeReconnect(port: ChatPort, sessionId: string | null) {
