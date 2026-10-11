@@ -110,6 +110,12 @@ export class MissionGateway {
 
   constructor(private readonly options: MissionGatewayOptions) {}
 
+  async readCreationDefaults() {
+    const defaults = await (await this.options.getDroid()).settings.getDefaults();
+    return { missionOrchestratorModel: defaults.missionOrchestratorModel,
+      missionOrchestratorReasoningEffort: defaults.missionOrchestratorReasoningEffort, missionSettings: defaults.missionSettings };
+  }
+
   async listCatalog(): Promise<MissionCatalogResult> {
     const targets = new Map<string, MissionCatalogTarget>();
     const result = await listMissionCatalog({

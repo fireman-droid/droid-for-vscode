@@ -3,12 +3,13 @@ import { Archive, ArchiveRestore, Download, Eye, Folder, MessageSquare, MoreHori
 import type { ManagedSession, ManagementAction } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Tabs, TabsList, TabsTrigger } from '../ui/selection';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, Tooltip } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ManagementChoice } from './ManagementFields';
 import { SessionPagination } from './SessionPagination';
 import type { ManagementState } from './useManagement';
+import { DefaultsSettings } from './DefaultsSettings';
 
 const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
 function updatedLabel(value: string): string {
@@ -21,6 +22,8 @@ function updatedLabel(value: string): string {
 }
 
 export function SessionManagement({ state, active }: { state: ManagementState; active: boolean }) {
+  const [section, setSection] = useState('history');
+  const historyActive = active && section === 'history';
   const [scope, setScope] = useState<'folder' | 'all'>('folder');
   const [kind, setKind] = useState('all');
   const [filter, setFilter] = useState('normal');
@@ -63,13 +66,13 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   const changeFilter = (change: () => void) => {
     ++generation.current; setLoading(false); setError(null); setPage(0); change();
   };
-  useEffect(() => { if (!active) { ++generation.current; setLoading(false); } }, [active]);
+  useEffect(() => { if (!historyActive) { ++generation.current; setLoading(false); } }, [historyActive]);
   useEffect(() => () => { ++generation.current; }, []);
   useEffect(() => {
-    if (!active || !state.settings?.sessionManagementAvailable || state.busy || loading || error) return;
+    if (!historyActive || !state.settings?.sessionManagementAvailable || state.busy || loading || error) return;
     if (!loaded) void load();
     else if (cursor !== null && visible.length <= (currentPage + 1) * pageSize) void load(cursor, currentPage);
-  }, [active, state.settings, state.busy, loaded, loading, error, cursor, currentPage, pageSize, visible.length, scope, kind, filter, query]);
+  }, [historyActive, state.settings, state.busy, loaded, loading, error, cursor, currentPage, pageSize, visible.length, scope, kind, filter, query]);
   const updateRow = (id: string, update: Partial<ManagedSession>) => {
     const updated = rows.map(row => row.id === id ? { ...row, ...update } : row);
     setRows(updated);
@@ -82,7 +85,11 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   };
   const disabled = state.busy || loading;
   return <section aria-label="会话管理">
-    <header className="management-heading"><h1>会话</h1><Button variant="plain" size="icon-sm" aria-label="刷新会话" disabled={disabled} onClick={() => void load()}><RefreshCw /></Button></header>
+    <header className="management-heading"><h1>会话</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label="刷新会话" disabled={disabled} onClick={() => void load()}><RefreshCw /></Button>}</header>
+    <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
+      <TabsList aria-label="会话页面"><TabsTrigger value="history">历史记录</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
+      <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
+      <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
       <TabsList aria-label="会话范围"><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
     </Tabs><div className="management-actions"><ManagementChoice label="会话类型" value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', '聊天与 Exec' ], ['chat', '聊天'], ['exec', 'Exec']]} />
@@ -122,6 +129,8 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
           else setPage(target);
         }} />}
     </>}
+      </TabsContent>
+    </Tabs>
     <Dialog open={renaming !== null} onOpenChange={open => { if (!open && !state.busy) setRenaming(null); }}><DialogContent className="management-dialog" closeDisabled={state.busy}>
       <DialogTitle>重命名会话</DialogTitle><DialogDescription className="management-caption">{renaming?.cwd}</DialogDescription>
       <form onSubmit={e => { e.preventDefault(); if (!renaming || state.busy || !title.trim()) return;

@@ -9,6 +9,14 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 会话与 Mission 默认设置（2026-10-11）
+
+- 会话页增加“历史记录／默认设置”，Missions 增加“任务列表／默认设置”，不增加侧栏栏目。会话默认设置包含模型、推理强度、交互模式、自主等级、Spec 模型／推理／目录、压缩 Token 上限及各模型覆盖、压缩模型与自动压缩、轻／中／复杂子任务模型和自主等级。
+- Mission 默认设置提供编排者、执行者、验证者的模型／推理强度，以及跳过审查、跳过用户测试。新建 Mission 在填入创建表单前读取 SDK 默认值，明确设置的全局默认值覆盖旧的工作区建议；本次创建仍允许单独调整。
+- 管理页通过独立的 defaults.read／defaults.save Bridge 调用既有 Runtime settings.getDefaults／updateDefaults，只提交用户改动的白名单字段；Host 映射 SDK 的 missionSettings 读取字段与 missionModelSettings 写入字段、mission／subagent 策略字段，并检查模型可用性、推理强度和自主等级。保存使用 SDK 响应中的有效默认值回填，不切换当前聊天。失败保留草稿，未保存时可撤销修改。
+- 默认图片模型未接入：当前安装的 SDK 0.9.1 没有公开的对应默认设置写入字段。下拉菜单、开关、输入与页签均复用共享 Radix/shadcn 组件。
+- 验证：`pnpm --config.verify-deps-before-run=false --config.manage-package-manager-versions=false run package:vsix` 通过，包含 typecheck、lint:budgets、公共 UI 和生产构建；168 个 VSIX 条目及静态引用校验通过，未执行扩展入口加载。已全局安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要产物的 SHA-256 与安装包一致，需 Reload Window。未新增、修改或运行测试、浏览器自动化或截图 probe；SDK 实际保存和视觉由用户验收。npm 配置与安装 CLI 的弃用提示未阻断交付。
+
 ## 管理页列表与控件细化（2026-10-11）
 
 - 会话表按标题／消息数／更新时间排列，标题下显示目录简称，完整路径及时间保留提示；增加页码选择、10／20／50 条每页和当前记录范围。继续沿用目录游标补足数据，未读完不显示虚构的总数；标题仍打开记录查看页，菜单“继续对话”才恢复主聊天。

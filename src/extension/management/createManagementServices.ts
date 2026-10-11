@@ -10,6 +10,7 @@ import type { MissionControlPanelController } from '../panels/mission/MissionCon
 import type { SessionViewerPanelController } from '../panels/sessionViewer/SessionViewerPanelController';
 import { exportActiveSessionAsMarkdown } from '../panels/sessionViewer/sessionExporter';
 import { ManagementSettingsService } from './managementSettings';
+import { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { ManagementServices } from './ManagementBinding';
 
 export function createManagementServices(options: {
@@ -20,6 +21,7 @@ export function createManagementServices(options: {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
   const cwd = () => controller.getWorkspaceContext().cwd;
   return {
+    defaults: new ManagementDefaultsService(getDroid, options.daemon, controller.modelAvailability),
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,
       sessionManagementAvailable: options.daemon,

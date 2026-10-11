@@ -471,6 +471,7 @@ export function activate(context: vscode.ExtensionContext): void {
     {
       listCatalog: () => missionGateway.listCatalog(),
       readSetup: missionSetupProjection.read,
+      readDefaults: () => missionGateway.readCreationDefaults(),
       subscribeSetup: missionSetupProjection.subscribe,
       chatController: controller,
       inspectReadiness: (cwd) => missionGateway.inspectReadiness(cwd),

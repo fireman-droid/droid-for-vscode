@@ -4,12 +4,15 @@ import type { MissionControlCatalogFilter, MissionControlCatalogRow } from '../.
 import { formatLifecycle, matchesFilter } from '../mission/catalogPresentation';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
 import { ManagementChoice } from './ManagementFields';
 import type { ManagementState } from './useManagement';
+import { DefaultsSettings } from './DefaultsSettings';
 
 const createdTime = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 
 export function MissionManagement({ state, active }: { state: ManagementState; active: boolean }) {
+  const [section, setSection] = useState('history');
   const [rows, setRows] = useState<readonly MissionControlCatalogRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,12 +26,16 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
       else setError(result.message || '任务目录读取失败');
     });
   };
-  useEffect(() => { if (active && state.settings && !state.busy && !loaded) load(); }, [active, state.settings, state.busy, loaded]);
+  useEffect(() => { if (active && section === 'history' && state.settings && !state.busy && !loaded) load(); }, [active, section, state.settings, state.busy, loaded]);
   const visible = rows.filter(row => matchesFilter(row, filter));
-  return <section aria-label="Mission 管理"><header className="management-heading"><div><h1>Missions</h1><p>任务进度与对应会话</p></div><div className="management-actions">
+  return <section aria-label="Mission 管理"><header className="management-heading"><h1>Missions</h1>{section === 'history' && <div className="management-actions">
     <Button variant="plain" size="icon-sm" aria-label="刷新 Missions" disabled={state.busy} onClick={load}><RefreshCw /></Button>
     <Button variant="outline" size="sm" disabled={state.busy} onClick={() => void state.run({ kind: 'missions.new' })}><Plus />新建任务</Button>
-  </div></header>
+  </div>}</header>
+    <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
+      <TabsList aria-label="Missions 页面"><TabsTrigger value="history">任务列表</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
+      <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="missions" active={active && section === 'defaults'} /></TabsContent>
+      <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><ManagementChoice label="Mission 状态" value={filter} onChange={v => setFilter(v as MissionControlCatalogFilter)} options={[[ 'all', '全部任务' ], ['running', '进行中'], ['paused', '已暂停'], ['completed', '已完成']]} /></div>
     {error && <p role="alert" className="management-caption text-destructive">{error}</p>}
     <div className="management-mission-scroll" role="region" aria-label="任务列表" tabIndex={0}>
@@ -52,5 +59,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
       </table>
     </div>
     {loading ? <p role="status" className="management-empty">正在读取任务…</p> : !error && visible.length === 0 && <p className="management-empty">没有匹配的任务</p>}
+      </TabsContent>
+    </Tabs>
   </section>;
 }

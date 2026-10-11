@@ -1,5 +1,6 @@
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
+import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 
 export const MANAGEMENT_VERSION = 1 as const;
 export const MANAGEMENT_PAGES = ['general', 'models', 'completion', 'sessions', 'missions'] as const;
@@ -47,7 +48,8 @@ export interface ManagedSession {
   readonly active: boolean;
 }
 export type ManagementAction =
-  | { readonly kind: 'ready' | 'settings.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
+  | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
+  | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
   | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean }
   | { readonly kind: 'sessions.list'; readonly scope: 'folder' | 'all'; readonly cursor?: number }
@@ -69,6 +71,7 @@ export interface ManagementResult {
   readonly ok: boolean;
   readonly message?: string;
   readonly settings?: ManagementSettings;
+  readonly defaults?: ManagementDefaults;
   readonly sessions?: readonly ManagedSession[];
   readonly nextCursor?: number | null;
   readonly missions?: readonly MissionControlCatalogRow[];
@@ -92,7 +95,8 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
     || value.version !== MANAGEMENT_VERSION || !text(value.requestId, 128) || !isStrictRecord(value.action)) return undefined;
   const a = value.action;
   let valid = false;
-  if (['ready', 'settings.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
+  if (['ready', 'settings.read', 'defaults.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
+  else if (a.kind === 'defaults.save') valid = hasExactKeys(a, ['kind', 'scope', 'patch']) && isDefaultsPatch(a.patch, a.scope);
   else if (a.kind === 'theme.set') valid = hasExactKeys(a, ['kind', 'theme']) && ['auto', 'light', 'dark'].includes(String(a.theme));
   else if (a.kind === 'completion.save') valid = hasExactKeys(a, ['kind', 'preferences', 'setApiKey']) && isCompletionPreferences(a.preferences) && typeof a.setApiKey === 'boolean';
   else if (a.kind === 'sessions.list') valid = hasExactKeys(a, ['kind', 'scope'], ['cursor']) && (a.scope === 'all' || a.scope === 'folder')
@@ -113,6 +117,7 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   if (value.type === 'management.settings' && settings(value.settings)) return value as unknown as ManagementHostMessage;
   if (value.type !== 'management.result' || !text(value.requestId, 128) || typeof value.ok !== 'boolean') return undefined;
   if (value.settings !== undefined && !settings(value.settings)) return undefined;
+  if (value.defaults !== undefined && !isManagementDefaults(value.defaults)) return undefined;
   if (value.message !== undefined && typeof value.message !== 'string') return undefined;
   if (value.nextCursor !== undefined && value.nextCursor !== null && (typeof value.nextCursor !== 'number' || !Number.isFinite(value.nextCursor))) return undefined;
   if (value.sessions !== undefined && (!Array.isArray(value.sessions) || !value.sessions.every(s => isStrictRecord(s)

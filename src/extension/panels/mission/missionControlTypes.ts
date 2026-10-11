@@ -16,12 +16,14 @@ import type {
   MissionReadinessResult,
 } from '../../chat/mission/MissionGateway';
 import type { ChatController } from '../../chat/ChatController';
+import type { MissionCreationDefaults } from './missionCreationDefaults';
 
 export type MissionControlRoute = 'catalog' | 'new-mission' | 'detail';
 
 export interface MissionControlCatalogSource {
   listCatalog(): Promise<MissionCatalogResult>;
   readSetup?(): MissionControlSetupAuthority;
+  readDefaults?(): Promise<MissionCreationDefaults>;
   subscribeSetup?(listener: () => void): vscode.Disposable;
   readonly chatController?: ChatController;
   inspectReadiness?(cwd: string): Promise<MissionReadinessResult>;

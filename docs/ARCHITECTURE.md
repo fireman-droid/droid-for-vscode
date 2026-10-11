@@ -6,6 +6,12 @@
 最后查阅各功能的实现细节。源码链接指向仓库中的对应入口；设计目标与验证状态分别查看
 [DESIGN](DESIGN.md) 和 [STATUS](STATUS.md)，不将它们混作运行结果。
 
+## 管理页默认设置
+
+`managementDefaultsProtocol` 定义会话／Mission 默认设置的字段白名单、模型目录和策略锁定投影；Webview 表单只发送本页差量。`ManagementDefaultsService` 将扁平 Bridge 字段映射到 SDK 的写入结构，并从既有 `DaemonApi.settings` 读取／保存；公开 UI 包不依赖 SDK 或 Bridge。
+
+保存前重新检查策略、模型可用性、模型支持的推理强度和可用自主等级，成功后采用 SDK 返回的默认设置回填。Mission 创建入口通过 `MissionGateway.readCreationDefaults` 读取默认值，由 `missionCreationDefaults` 填入创建草稿，保留单次创建选择；读取失败阻止打开错误默认值的创建表单并反馈错误。当前聊天不参与默认值保存。
+
 ## 阅读地图
 
 | 你在追踪什么 | 先读这一节 | 要回答的问题 |

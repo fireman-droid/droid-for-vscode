@@ -7,9 +7,11 @@ import type { ManagementSessionCatalog } from '../../runtime/catalog/ManagementS
 import type { ManagedSession } from '../../shared/protocol/managementPageProtocol';
 import type { MissionCatalogResult } from '../chat/mission/MissionGateway';
 import type { ManagementSettingsService } from './managementSettings';
+import type { ManagementDefaultsService } from './ManagementDefaultsService';
 
 export interface ManagementServices {
   readonly settings: ManagementSettingsService;
+  readonly defaults: ManagementDefaultsService;
   readonly sessions: ManagementSessionCatalog;
   readonly sessionsAvailable: boolean;
   readonly viewSession: (row: ManagedSession) => void;
@@ -65,6 +67,8 @@ export class ManagementBinding implements vscode.Disposable {
     const s = this.services;
     switch (action.kind) {
       case 'ready': case 'settings.read': return { settings: await s.settings.read() };
+      case 'defaults.read': return { defaults: await s.defaults.read() };
+      case 'defaults.save': return { defaults: await s.defaults.save(action.patch), message: '默认设置已保存，当前聊天保持不变。' };
       case 'theme.set':
         await vscode.workspace.getConfiguration('droidvisx').update('theme', action.theme, vscode.ConfigurationTarget.Global);
         return { settings: await s.settings.read() };

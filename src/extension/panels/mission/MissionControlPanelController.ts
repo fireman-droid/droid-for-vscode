@@ -1,3 +1,4 @@
+import { createSetupDraft, type MissionCreationDefaults } from './missionCreationDefaults';
 import * as vscode from 'vscode';
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
@@ -70,6 +71,8 @@ export class MissionControlPanelController implements vscode.Disposable {
   private nextCatalogRevision = 1;
   private setupRevision = 0;
   private setupDraft: MissionControlSetupDraft | null = null;
+  private creationDefaults: MissionCreationDefaults | undefined;
+  private defaultsRequest = 0;
   private setupPhase: MissionControlSetupPhase = 'draft';
   private readiness: MissionControlSetupSnapshotMessage['readiness'] = null;
   private pendingMissionStart: MissionStartMessage | null = null;
@@ -132,6 +135,22 @@ export class MissionControlPanelController implements vscode.Disposable {
   }
 
   openNewMission(task?: string): void {
+    const request = ++this.defaultsRequest;
+    const cwd = this.source.readWorkspaceCwd?.();
+    const routeRevision = this.routeRevision;
+    void (async () => {
+      const defaults = await this.source.readDefaults?.();
+      if (this.disposed || request !== this.defaultsRequest || cwd !== this.source.readWorkspaceCwd?.() || routeRevision !== this.routeRevision) return;
+      this.creationDefaults = defaults;
+      this.setupDraft = createSetupDraft(this.readSetupAuthority().capabilities, task ?? this.setupDraft?.task ?? '', defaults);
+      this.setupRevision += 1;
+      this.showNewMission(task);
+    })().catch(error => {
+      if (!this.disposed && request === this.defaultsRequest) void vscode.window.showErrorMessage(`无法读取 Mission 默认设置：${error instanceof Error ? error.message : '请重试'}`);
+    });
+  }
+
+  private showNewMission(task?: string): void {
     if (this.disposed) {
       return;
     }
@@ -485,7 +504,7 @@ export class MissionControlPanelController implements vscode.Disposable {
   private prepareSetupDraft(task?: string): void {
     const capabilities = this.readSetupAuthority().capabilities;
     if (this.setupDraft === null) {
-      this.setupDraft = createSetupDraft(capabilities, task ?? '');
+      this.setupDraft = createSetupDraft(capabilities, task ?? '', this.creationDefaults);
       this.setupRevision += 1;
       this.resetSetupOperation();
       return;
@@ -508,9 +527,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     }
     this.setupDraft = {
       ...this.setupDraft,
-      orchestrator: capabilities.currentChat,
-      worker: capabilities.preferences.worker,
-      validator: capabilities.preferences.validator,
+      ...createSetupDraft(capabilities, this.setupDraft.task, this.creationDefaults),
     };
     this.setupRevision += 1;
   }
@@ -841,28 +858,4 @@ export class MissionControlPanelController implements vscode.Disposable {
     this.setupPhase = 'draft';
     this.readiness = null;
   }
-}
-
-function createSetupDraft(
-  capabilities: MissionSetupCapabilities | null,
-  task: string,
-): MissionControlSetupDraft {
-  if (capabilities === null) {
-    return {
-      task,
-      orchestrator: null,
-      worker: null,
-      validator: null,
-      scrutinyEnabled: true,
-      userTestingEnabled: true,
-    };
-  }
-  return {
-    task,
-    orchestrator: capabilities.currentChat,
-    worker: capabilities.preferences.worker,
-    validator: capabilities.preferences.validator,
-    scrutinyEnabled: capabilities.preferences.scrutinyEnabled,
-    userTestingEnabled: capabilities.preferences.userTestingEnabled,
-  };
 }
