@@ -84,6 +84,7 @@ export class ModelManager {
       const rows = await this.deps.gateway.list();
       signal.throwIfAborted();
       const connections = await projectConnections(this.deps.registry, rows);
+      signal.throwIfAborted();
       if (action.kind === 'renameProvider') {
         if (!connections.some((connection) => new URL(connection.baseUrl).host === action.providerHost)) {
           throw new ModelManagerError('服务商配置已变化，请刷新后重试。');
