@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理页悬停可读性（2026-10-11）
+
+- 管理页文字悬停不再使用边框用途的 focus 色，改用 strong-ink，避免部分深色主题下文字变暗；侧栏未选中项和下拉菜单提供轻微底色反馈，文字与底色平滑过渡。
+- `package:vsix` 通过，包含 typecheck、lint:budgets 和公共 UI／生产构建；168 个 VSIX 条目及静态引用校验通过，未运行扩展入口加载。已全局安装到 Microsoft VS Code 与 Cursor，两边各 5 个主要产物与 VSIX SHA-256 一致，需 Reload Window。未新增、修改或运行测试、浏览器自动化或截图 probe，视觉由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 管理页页签动效（2026-10-11）
 
 - 共享 Radix TabsList 增加按需启用的活动指示线，管理页的历史／默认设置、文件夹范围、Mission 页面和子任务复杂度页签接入；下划线以 180ms 连续移动并调整宽度，不再让各项底边直接跳变。首次显示直接落位，尺寸变化重新对齐，减少动态效果时禁用过渡；选择与键盘焦点仍由 Radix 管理。
