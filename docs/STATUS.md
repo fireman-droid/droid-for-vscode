@@ -9,6 +9,14 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 管理页路径与 Mission 预览（2026-10-11）
+
+- 会话目录的当前路径不再单占一行，完整路径收进“当前文件夹”页签的公共 Radix Tooltip，支持悬停／键盘焦点查看。
+- 用户标注的 4178 页面为隔离布局预览，其临时服务只处理设置和会话列表，`missions.list` 原先落入禁止写入的统一错误分支，导致任务区空白。已补充带“示例”前缀的运行／暂停／完成任务数据并重启该预览服务；示例仅位于临时预览文件，不写入真实 Mission 或安装包。
+- 正式版源码已核对 `MissionManagement → ManagementBinding → MissionGateway → DaemonMissionCatalog → sessions.listPage`，存在 Mission 目录与元数据请求及结果展示，未发现预览页这处漏接；未调用真实 SDK 或进行运行时验收，不据此声称真实目录已验证。
+- 类型检查、文件预算、公共 UI 与生产构建通过；168 个 VSIX 条目及静态引用校验通过。已安装到 Microsoft VS Code 和 Cursor，各 5 个主要产物与 VSIX 哈希一致，需 Reload Window。
+- 沿用用户的类型检查／构建范围，未新增或运行测试、浏览器自动化、截图验收及运行时入口加载。npm 配置与安装的 `url.parse()` 弃用提示未阻断交付。
+
 ## 聊天顶部恢复入口（2026-10-11）
 
 - 移除顶部 Online／Restoring 等状态文字及 Connection 明细弹层；正常连接和短暂初始化保持安静，连接异常或恢复超时只在右侧显示一个重连图标。恢复中旋转并限制重复请求，成功后收起。

@@ -53,9 +53,6 @@
   .management-models .models-model-id, .management-models .models-help { font-size: 11px; }
   .management-models .models-row-actions { gap: 6px; }
   .management-models .models-state { font-size: 11px; }
-  .management-scope { display: flex; align-items: start; gap: 16px; justify-content: space-between; color: var(--muted-ink); font-size: 11px; margin-bottom: 10px; }
-  .management-scope > span { display: flex; align-items: start; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
-  .management-scope svg { width: 13px; height: 13px; margin-top: 2px; flex-shrink: 0; }
   .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 48px 26px; align-items: center; gap: 8px; border-bottom: 1px solid var(--panel-edge); }
   .management-session-head { padding: 8px 0; color: var(--muted-ink); font-size: 11px; }
   .management-session-row { min-height: 44px; padding: 9px 0; }

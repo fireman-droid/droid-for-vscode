@@ -4,7 +4,7 @@ import type { ManagedSession, ManagementAction } from '../../shared/protocol/man
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Tabs, TabsList, TabsTrigger } from '../ui/selection';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/overlays';
+import { Dialog, DialogContent, DialogDescription, DialogTitle, Tooltip } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ManagementChoice } from './ManagementFields';
 import type { ManagementState } from './useManagement';
@@ -75,11 +75,10 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   return <section aria-label="会话管理">
     <header className="management-heading"><h1>会话</h1><Button variant="plain" size="icon-sm" aria-label="刷新会话" disabled={disabled} onClick={() => void load()}><RefreshCw /></Button></header>
     <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
-      <TabsList aria-label="会话范围"><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
+      <TabsList aria-label="会话范围"><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
     </Tabs><div className="management-actions"><ManagementChoice label="会话类型" value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', '聊天与 Exec' ], ['chat', '聊天'], ['exec', 'Exec']]} />
       <ManagementChoice label="收藏与归档" value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', '未归档' ], ['favorites', '收藏'], ['archived', '已归档']]} /></div></div>
     <div className="management-search management-session-search"><Search /><Input aria-label="筛选会话" placeholder="搜索标题或文件夹" value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>
-    {scope === 'folder' && <div className="management-scope"><span><Folder />{state.settings?.cwd || '未打开文件夹'}</span></div>}
     {!state.settings?.sessionManagementAvailable ? <p className="management-empty">会话管理需要 daemon 运行模式。</p> : <>
       {error && <p role="alert" className="management-caption text-destructive">{error}</p>}
       <div className="management-session-table" aria-busy={loading}>
