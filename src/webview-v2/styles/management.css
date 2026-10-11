@@ -91,6 +91,8 @@
   .management-dialog .models-form-actions { margin: 6px 0 0; padding: 12px 0 0; border: 0; }
   .management-dialog .models-key-note { padding: 0; background: transparent; border: 0; }
   .management-dialog .models-discover-empty { padding: 14px 0; gap: 10px; }
+  .chat-header-actions > [data-slot='button']:not(.v2-mission-chat-toggle) { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 24px; height: 24px; padding: 0; line-height: 1; }
+  .chat-header-actions > [data-slot='button']:not(.v2-mission-chat-toggle) > svg { display: block; width: 14px; height: 14px; flex-shrink: 0; }
   .chat-header-control, .chat-header-control:hover, .chat-header-control:active, .chat-header-control[data-state='open'] { background: transparent !important; border-color: transparent; box-shadow: none; }
   .chat-header-actions > button, .chat-header-actions > button:hover, .chat-header-actions > button[data-state='open'] { background: transparent !important; border-color: transparent; box-shadow: none; }
   @media (prefers-reduced-motion: reduce) {

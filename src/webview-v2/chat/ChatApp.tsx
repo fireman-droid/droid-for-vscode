@@ -182,20 +182,20 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={capabilities.openMission && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       header={<>
-        <div className="flex min-w-0 items-center gap-1.5">{!childChat ? <AppInfo /> : null}
+        <div className="flex min-w-0 items-center">{!childChat ? <AppInfo /> : null}</div>
+        <div className="chat-header-actions ml-auto flex shrink-0 items-center gap-1">
           <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
             phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
             blocked={transition.blocking && transition.overlay !== null}
-            missionLabel={state.mission ? `${state.mission.role === 'worker' ? 'Mission worker' : 'Mission'}${state.mission.state ? ` · ${state.mission.state}` : ''}` : undefined}
             ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
-        </div>
-        {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
-          {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
-            <Button variant="plain" size="icon" className="chat-header-control size-6 text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus className="size-3.5" /></Button>
+          {capabilities.navigateSessions ? <>
+            {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
+            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
-            <Button variant="plain" size="icon" className="chat-header-control size-6 text-muted-foreground" aria-label="打开 Droid 管理" title="管理" onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 className="size-3.5" /></Button>
-        </div> : null}
+            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="打开 Droid 管理" title="管理" onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
+          </> : null}
+        </div>
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
