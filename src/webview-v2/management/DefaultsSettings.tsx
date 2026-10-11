@@ -42,12 +42,8 @@ function SessionDefaults(props: DefaultsFieldsProps) {
     </div>
     <h2 className="management-section-title">Spec 模式</h2><div className="management-group">
       {f.modelPair('specModeModelId', 'specModeReasoningEffort', 'Spec 模型', 'Spec 推理强度', true)}
-      {f.row('specSaveDir', '计划保存目录', <div className="management-default-directory">
-        {props.snapshot.specDirectories.length > 0 && <DefaultsSelect label="计划目录预设" wide value={props.snapshot.specDirectories.some(d => d.value === f.text('specSaveDir')) ? f.text('specSaveDir') : undefined}
-          placeholder="选择目录" options={props.snapshot.specDirectories} disabled={f.disabled('specSaveDir')} onChange={value => props.update({ specSaveDir: value })} />}
-        <Input aria-label="计划保存目录" placeholder="Droid 默认" value={f.text('specSaveDir') ?? ''} maxLength={2048} disabled={f.disabled('specSaveDir')}
-          onChange={e => props.update({ specSaveDir: e.target.value.trim() || null })} />
-      </div>)}
+      {f.row('specSaveDir', '计划保存目录', <SpecDirectoryField value={f.text('specSaveDir')} options={props.snapshot.specDirectories}
+        disabled={f.disabled('specSaveDir')} onChange={value => props.update({ specSaveDir: value })} />)}
     </div>
     <CompactionDefaults {...props} />
     <h2 className="management-section-title">子任务模型</h2><div className="management-group">
@@ -60,6 +56,30 @@ function SessionDefaults(props: DefaultsFieldsProps) {
       </Tabs>
     </div>
   </>;
+}
+
+function SpecDirectoryField({ value, options, disabled, onChange }: {
+  value?: string; options: DefaultsFieldsProps['snapshot']['specDirectories']; disabled: boolean; onChange: (value: string | null) => void;
+}) {
+  // Keep custom mode while editing (including an empty path), but let reset values select their preset again.
+  const [customDraft, setCustomDraft] = useState<{ value?: string } | null>(null);
+  const custom = Boolean(value && !options.some(option => option.value === value)) || (customDraft !== null && customDraft.value === value);
+  const defaultOption = '__droid_default__';
+  const customOption = '__droid_custom__';
+  return <div className="management-default-directory">
+    <DefaultsSelect label="计划保存目录" value={custom ? customOption : value || defaultOption} disabled={disabled}
+      options={[{ value: defaultOption, label: 'Droid 默认' }, ...options, { value: customOption, label: '自定义' }]}
+      onChange={next => {
+        if (next === customOption) setCustomDraft({ value });
+        else { setCustomDraft(null); onChange(next === defaultOption ? null : next); }
+      }} />
+    {custom && <Input aria-label="自定义计划保存目录" placeholder="输入目录路径" value={value ?? ''} maxLength={2048} disabled={disabled}
+      onChange={event => {
+        const next = event.target.value.trim() || undefined;
+        setCustomDraft({ value: next });
+        onChange(next ?? null);
+      }} />}
+  </div>;
 }
 
 function MissionDefaults(props: DefaultsFieldsProps) {

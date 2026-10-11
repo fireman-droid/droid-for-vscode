@@ -29,8 +29,8 @@
   .management-default-toggle { display: flex; align-items: center; gap: 8px; }
   .management-default-toggle small { margin: 0; }
   .management-default-tier { padding-top: 14px; }
-  .management-default-directory { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: 280px; max-width: 100%; }
-  .management-default-directory input { width: 100%; }
+  .management-default-directory { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+  .management-default-directory input { width: 220px; max-width: 100%; }
   .management-default-override { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
   .management-default-override input[type='number'] { width: 92px; }
   .management-row-control:has(> .management-default-override-add) { width: min(420px, 65%); }
