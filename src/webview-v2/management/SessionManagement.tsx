@@ -91,7 +91,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
       <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
-      <TabsList animatedIndicator aria-label="会话范围"><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
+      <TabsList animatedIndicator className="management-session-scope" aria-label="会话范围" aria-busy={loading}><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
     </Tabs><div className="management-actions"><ManagementChoice label="会话类型" value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', '聊天与 Exec' ], ['chat', '聊天'], ['exec', 'Exec']]} />
       <ManagementChoice label="收藏与归档" value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', '未归档' ], ['favorites', '收藏'], ['archived', '已归档']]} /></div></div>
     <div className="management-search management-session-search"><Search /><Input aria-label="筛选会话" placeholder="搜索标题或文件夹" value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>

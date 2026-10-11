@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 会话范围加载闪烁修复（2026-10-11）
+
+- 范围切换读取列表时，两个页签原先因临时禁用同时降低到 45% 透明度，随后恢复，造成文字闪烁。仅对会话范围页签保持禁用期间的文字透明度，保留原有操作锁、选中指示线滑动和列表加载提示；范围页签同步标记 `aria-busy`。
+- `package:vsix` 通过，包含类型检查、文件预算与生产构建；168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要文件与 VSIX SHA-256 一致。未新增、修改或运行测试及浏览器验收，需 Reload Window 后由用户确认视觉；npm 配置及 CLI 弃用提示未阻断交付。
+
 ## 会话范围选中指示修复（2026-10-11）
 
 - “当前文件夹”的路径 Tooltip 与 Tabs Trigger 复用 `data-state`，覆盖了页签的 active 状态，导致动画指示线无法找到选中项。共享页签的选中样式与指示线改用 Tabs 自身的 `aria-selected`，指示器同步观察该属性变化；管理页选中样式同步调整，保留路径提示与 220ms 滑动动画。

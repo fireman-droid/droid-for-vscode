@@ -54,6 +54,8 @@
   .management-page [role='tab'] { padding-inline: 0; border-radius: 0; }
   .management-page [role='tab'][aria-selected='true'] { border-bottom-color: var(--focus); background: transparent; }
   .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
+  /* List reads temporarily lock scope changes without pulsing both labels. */
+  .management-page .management-session-scope [role='tab']:disabled { opacity: 1; }
   .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
   .management-menu[data-slot='select-content'] { width: var(--radix-select-trigger-width); min-width: 0; max-width: calc(100vw - 16px); border-radius: 8px; }
   .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }
