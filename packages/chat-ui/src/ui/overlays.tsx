@@ -1,5 +1,5 @@
 import { Dialog as DialogPrimitive, HoverCard as HoverCardPrimitive, Popover as PopoverPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
-import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from './cn';
 import { Button } from './button';
@@ -115,10 +115,12 @@ export function DialogContent({
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
-export function Tooltip({ children, content }: { readonly children: ReactNode; readonly content: string }) {
+export function Tooltip({ children, content, disabled = false }: { readonly children: ReactNode; readonly content: string; readonly disabled?: boolean }) {
   const container = usePortalContainer();
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return (
-    <TooltipPrimitive.Root>
+    <TooltipPrimitive.Root open={open && !disabled} onOpenChange={value => setOpen(value && !disabled)}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal container={container}>
         <TooltipPrimitive.Content

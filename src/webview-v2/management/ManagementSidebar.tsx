@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { PinwheelIcon } from '@droidvisx/chat-ui/ui/pinwheel-icon';
 import { SelectionIndicator } from '@droidvisx/chat-ui/ui/selection-indicator';
 import { Boxes, MessageSquare, PanelLeft, Settings2, TextCursorInput, Workflow } from 'lucide-react';
@@ -15,6 +16,13 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
   readonly onToggle: () => void;
   readonly onNavigate: (page: ManagementPage) => void;
 }) {
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 640px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)');
+    const update = () => setNarrow(media.matches);
+    update(); media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   return <aside className="management-sidebar">
     <Tooltip content={collapsed ? '展开侧栏' : '收起侧栏'}>
       <Button variant="plain" size="icon-sm" className="management-sidebar-toggle"
@@ -24,7 +32,7 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
     <nav id="management-navigation" aria-label="管理页面" data-animated-indicator>
       {MANAGEMENT_PAGES.map(key => {
         const Icon = icons[key];
-        return <Tooltip key={key} content={names[key]}><Button variant="plain" size="none"
+        return <Tooltip key={key} content={names[key]} disabled={!collapsed && !narrow}><Button variant="plain" size="none"
           className="management-nav" aria-label={names[key]} aria-current={page === key ? 'page' : undefined}
           onClick={() => onNavigate(key)}><Icon /><span className="management-nav-label">{names[key]}</span></Button></Tooltip>;
       })}
