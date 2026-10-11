@@ -118,11 +118,23 @@ export function handleMissionStart(
         ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
       ctl.effects.loadSessionMetadata(result.runtime.runtime,
         ctl.sessionState.runtimeGeneration, result.sessionId, ownerCwd);
+      const activeGeneration = ctl.sessionState.runtimeGeneration;
+      const missionIsCurrent = () => !ctl.sessionState.disposed && ctl.isCurrentSessionOperation(
+        result.runtime.runtime, activeGeneration, result.sessionId, ownerCwd,
+      );
       ctl.recoveryStore.selectConversation(conversationId);
-      await ctl.recoveryStore.flush();
-      if (ctl.sessionState.disposed || ctl.sessionState.sessionId !== result.sessionId) {
+      try {
+        await ctl.recoveryStore.flush();
+      } catch {
+        if (missionIsCurrent()) {
+          emitRejected(ctl, message.requestId, 'unavailable');
+          ctl.effects.markRecoveryCheckpointUnavailable(
+            'Mission was created, but its recovery checkpoint could not be saved. Reconnect this session before continuing. The task was not sent.',
+          );
+        }
         return;
       }
+      if (!missionIsCurrent()) return;
 
       ctl.emitSnapshot();
       if (ctl.missionState.missionRuntime) ctl.emit(ctl.missionState.missionRuntime.snapshot());

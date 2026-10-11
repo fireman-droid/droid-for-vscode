@@ -35,5 +35,5 @@ export interface ControllerPort
     MissionSessionState,
     'mission' | 'missionRuntime' | 'missionStartInProgress' | 'stopMissionSubscription' | 'refreshMission'
   >;
-  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata' | 'commitSessionBinding'>;
+  readonly effects: Pick<ChatEffects, 'closeRuntime' | 'handleSend' | 'loadSessionMetadata' | 'commitSessionBinding' | 'markRecoveryCheckpointUnavailable'>;
 }
