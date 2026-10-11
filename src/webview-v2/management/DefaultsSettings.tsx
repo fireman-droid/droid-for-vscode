@@ -43,7 +43,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
     <h2 className="management-section-title">Spec 模式</h2><div className="management-group">
       {f.modelPair('specModeModelId', 'specModeReasoningEffort', 'Spec 模型', 'Spec 推理强度', true)}
       {f.row('specSaveDir', '计划保存目录', <div className="management-default-directory">
-        {props.snapshot.specDirectories.length > 0 && <DefaultsSelect label="计划目录预设" value={props.snapshot.specDirectories.some(d => d.value === f.text('specSaveDir')) ? f.text('specSaveDir') : undefined}
+        {props.snapshot.specDirectories.length > 0 && <DefaultsSelect label="计划目录预设" wide value={props.snapshot.specDirectories.some(d => d.value === f.text('specSaveDir')) ? f.text('specSaveDir') : undefined}
           placeholder="选择目录" options={props.snapshot.specDirectories} disabled={f.disabled('specSaveDir')} onChange={value => props.update({ specSaveDir: value })} />}
         <Input aria-label="计划保存目录" placeholder="Droid 默认" value={f.text('specSaveDir') ?? ''} maxLength={2048} disabled={f.disabled('specSaveDir')}
           onChange={e => props.update({ specSaveDir: e.target.value.trim() || null })} />

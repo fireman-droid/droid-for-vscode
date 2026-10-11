@@ -24,7 +24,8 @@
   .management-page-tabs > [role='tabpanel'][hidden] { display: none; }
   .management-page-tabs > [role='tablist'] { margin-bottom: 20px; }
   .management-defaults-intro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; color: var(--muted-ink); font-size: 12px; }
-  .management-page .management-default-choice[role='combobox'] { width: 220px; }
+  .management-page .management-default-choice[role='combobox'] { width: auto; min-width: 110px; }
+  .management-page .management-default-choice-wide[role='combobox'] { width: 220px; min-width: 0; }
   .management-default-toggle { display: flex; align-items: center; gap: 8px; }
   .management-default-toggle small { margin: 0; }
   .management-default-tier { padding-top: 14px; }
@@ -32,6 +33,10 @@
   .management-default-directory input { width: 100%; }
   .management-default-override { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
   .management-default-override input[type='number'] { width: 92px; }
+  .management-row-control:has(> .management-default-override-add) { width: min(420px, 65%); }
+  .management-default-override-add { display: grid; grid-template-columns: minmax(0, 1fr) 92px auto; width: 100%; }
+  .management-page .management-default-override-add [role='combobox'] { width: 100%; min-width: 0; }
+  .management-default-override-add > button:last-child { height: 30px; }
   .management-section-title { margin: 40px 0 14px; color: var(--muted-ink); font-size: 13px; font-weight: 400; }
   .management-group { padding: 0 16px; border: 1px solid var(--management-edge); border-radius: 16px; }
   .management-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 58px; padding: 14px 0; }
@@ -155,6 +160,7 @@
     .management-row { gap: 12px; flex-wrap: wrap; }
     .management-row-control { max-width: 100%; }
     .management-row-control:has(> input[data-slot='input']) { width: 100%; }
+    .management-row-control:has(> .management-default-override-add) { width: 100%; }
     .management-session-head, .management-session-row { grid-template-columns: minmax(0, 1fr) 48px 72px 24px; gap: 8px; }
     .management-dialog { padding: 16px; top: 4%; max-height: 92dvh; }
   }

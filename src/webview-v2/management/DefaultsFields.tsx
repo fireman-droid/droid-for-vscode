@@ -13,12 +13,12 @@ export interface DefaultsFieldsProps {
   update: (changes: DefaultValues) => void;
 }
 interface Option { value: string; label: string; disabled?: boolean }
-export function DefaultsSelect({ label, value, options, disabled, onChange, placeholder = 'Droid 默认' }: {
-  label: string; value?: string; options: readonly Option[]; disabled?: boolean; onChange: (value: string) => void; placeholder?: string;
+export function DefaultsSelect({ label, value, options, disabled, onChange, placeholder = 'Droid 默认', wide = false }: {
+  label: string; value?: string; options: readonly Option[]; disabled?: boolean; onChange: (value: string) => void; placeholder?: string; wide?: boolean;
 }) {
   const items = value && !options.some(o => o.value === value) ? [{ value, label: value, disabled: true }, ...options] : options;
   return <Select value={value ?? ''} disabled={disabled} onValueChange={onChange}>
-    <SelectTrigger aria-label={label} className="management-default-choice"><SelectValue placeholder={placeholder} /></SelectTrigger>
+    <SelectTrigger aria-label={label} className={`management-default-choice${wide ? ' management-default-choice-wide' : ''}`}><SelectValue placeholder={placeholder} /></SelectTrigger>
     <SelectContent className="management-menu" align="end">{items.map(o => <SelectItem key={o.value} value={o.value} disabled={o.disabled}>{o.label}</SelectItem>)}</SelectContent>
   </Select>;
 }
@@ -29,7 +29,7 @@ export function useDefaultsFields(props: DefaultsFieldsProps) {
   const row = (key: DefaultField, label: string, control: ReactNode, detail?: string) =>
     <ManagementRow key={key} label={label} detail={snapshot.locked[key] || detail}>{control}</ManagementRow>;
   const choice = (key: DefaultField, label: string, options: readonly Option[], nullable = false) => row(key, label,
-    <DefaultsSelect label={label} value={text(key) ?? (nullable ? DEFAULT : undefined)} disabled={disabled(key) || options.length === 0}
+    <DefaultsSelect label={label} wide={key === 'compactionModel'} value={text(key) ?? (nullable ? DEFAULT : undefined)} disabled={disabled(key) || options.length === 0}
       options={nullable ? [{ value: DEFAULT, label: 'Droid 默认' }, ...options] : options}
       onChange={value => update({ [key]: value === DEFAULT ? null : value })} />);
   const toggle = (key: DefaultField, label: string, detail?: string) => row(key, label,
@@ -45,7 +45,7 @@ export function useDefaultsFields(props: DefaultsFieldsProps) {
     const model = snapshot.models.find(m => m.id === text(modelKey));
     const options = nullable ? [{ value: DEFAULT, label: 'Droid 默认' }, ...modelOptions] : modelOptions;
     return <>
-      {row(modelKey, modelLabel, <DefaultsSelect label={modelLabel} value={text(modelKey) ?? (nullable ? DEFAULT : undefined)}
+      {row(modelKey, modelLabel, <DefaultsSelect label={modelLabel} wide value={text(modelKey) ?? (nullable ? DEFAULT : undefined)}
         options={options} disabled={disabled(modelKey) || !modelOptions.length} onChange={id => {
           const next = snapshot.models.find(m => m.id === id);
           const changes: Partial<Record<DefaultField, DefaultValue>> = { [modelKey]: id === DEFAULT ? null : id };
