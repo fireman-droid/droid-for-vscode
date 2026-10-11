@@ -34,9 +34,14 @@ const IMAGE_MEDIA_TYPES: Record<string, RuntimeImageMediaType> = {
  */
 export function createVscodeAttachmentSources(
   diffSelections?: DiffSelectionRegistry,
+  getRoot: () => string | undefined = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
 ): AttachmentSources & {
   dispose(): void;
 } {
+  const rootUri = () => {
+    const cwd = getRoot();
+    return cwd === undefined ? undefined : vscode.Uri.file(cwd);
+  };
   let lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
   const subscription = vscode.window.onDidChangeActiveTextEditor((editor) => {
     if (editor !== undefined) {
@@ -125,7 +130,7 @@ export function createVscodeAttachmentSources(
               : `${displayNameFromPath(diff.path)} · ${diff.label}`,
           relativePath:
             diff === undefined
-              ? workspaceRelativePath(editor.document)
+              ? workspaceRelativePath(editor.document, getRoot())
               : `${diff.path} [${diff.label}; ${diff.side}; scope ${diff.reviewScopeId}]`,
           startLine,
           endLine,
@@ -136,7 +141,7 @@ export function createVscodeAttachmentSources(
     },
 
     async searchWorkspaceFiles(query, maxResults): Promise<readonly string[]> {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const root = rootUri();
       if (root === undefined) {
         return [];
       }
@@ -148,7 +153,7 @@ export function createVscodeAttachmentSources(
       let uris: readonly vscode.Uri[];
       try {
         uris = await vscode.workspace.findFiles(
-          `**/*${literal}*`,
+          new vscode.RelativePattern(root, `**/*${literal}*`),
           '{**/node_modules/**,**/.git/**,**/dist/**,**/out/**}',
           maxResults * 2,
         );
@@ -169,7 +174,7 @@ export function createVscodeAttachmentSources(
     },
 
     listOpenEditorFiles(maxResults): readonly string[] {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const root = rootUri();
       if (root === undefined) {
         return [];
       }
@@ -192,7 +197,7 @@ export function createVscodeAttachmentSources(
     },
 
     async readWorkspaceFile(relativePath): Promise<AttachmentPickOutcome> {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const root = rootUri();
       if (root === undefined) {
         return { status: 'failed' };
       }
@@ -217,7 +222,7 @@ export function createVscodeAttachmentSources(
     },
 
     readProblems(): Promise<AttachmentCaptureOutcome> {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const root = rootUri();
       if (root === undefined) {
         return Promise.resolve({ status: 'empty' });
       }
@@ -262,7 +267,7 @@ export function createVscodeAttachmentSources(
     },
 
     async readGitChanges(): Promise<AttachmentCaptureOutcome> {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const root = rootUri();
       if (root === undefined) {
         return { status: 'empty' };
       }
@@ -390,9 +395,10 @@ function displayName(document: vscode.TextDocument): string {
  * documents outside the workspace keep their full path so the
  * excerpt stays locatable.
  */
-function workspaceRelativePath(document: vscode.TextDocument): string {
+function workspaceRelativePath(document: vscode.TextDocument, root: string | undefined): string {
   if (document.isUntitled) {
     return displayName(document);
   }
-  return vscode.workspace.asRelativePath(document.uri, false).replaceAll('\\', '/');
+  return (root === undefined ? document.fileName
+    : toWorkspaceRelativePath(root, document.fileName) ?? document.fileName).replaceAll('\\', '/');
 }

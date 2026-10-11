@@ -82,7 +82,7 @@ export type TurnFlowPort = TurnRuntimeEventPort & TurnCompletionPort & TurnIdent
     'recordRecentCommand' | 'echoUserImageAttachments' | 'startLiveChanges' | 'capturePreToolBaseline' | 'reconcileDaemonTurn'>;
 };
 
-export interface TurnRetryPort extends Pick<HostOperations, 'getWorkspaceContext' | 'emitSnapshot' | 'recoveryStore' | 'childSession'> {
+export interface TurnRetryPort extends Pick<HostOperations, 'getWorkspaceContext' | 'emitSnapshot' | 'recoveryStore' | 'childSession' | 'sessionCatalog'> {
   readonly sessionState: Readonly<Pick<SessionLifecycleState, 'sessionId' | 'disposed'>> &
     Pick<SessionLifecycleState, 'sessionOperationInProgress' | 'connection'>;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'catalogCwd' | 'refreshInProgress'>> &

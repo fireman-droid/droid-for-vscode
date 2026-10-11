@@ -12,5 +12,8 @@ export async function resolveStartupTarget(
     ctl.effects.hasCatalogSession(sessionId, cwd) ||
     await ctl.sessionCatalog.canResumeSession?.(cwd, sessionId) === true
   );
-  return resumable ? { kind: 'resume', cwd, sessionId } : { kind: 'new', cwd };
+  if (resumable) return { kind: 'resume', cwd, sessionId };
+  const selectedCwd = sessionId === null ? null : await ctl.sessionCatalog.resolveSessionCwd?.(sessionId);
+  return selectedCwd && sessionId !== null
+    ? { kind: 'resume', cwd: selectedCwd, sessionId } : { kind: 'new', cwd };
 }

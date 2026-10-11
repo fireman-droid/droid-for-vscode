@@ -32,6 +32,8 @@ export interface SessionCatalog {
   listSessions(cwd: string): Promise<SessionCatalogResult>;
   /** Verify one persisted selection outside the recent list against its recorded workspace. */
   canResumeSession?(cwd: string, sessionId: string): Promise<boolean>;
+  /** Resolve a resumable root chat's owning directory without moving the session. */
+  resolveSessionCwd?(sessionId: string): Promise<string | null>;
   /**
    * Marks or unmarks one session as favorite. Optional because the
    * write path is a CLI private-file contract, not a session RPC.

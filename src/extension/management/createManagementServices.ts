@@ -3,7 +3,6 @@ import type { DaemonApi } from '../../runtime/daemon/api';
 import type { SessionHistoryLoader } from '../../runtime/history/SessionHistory';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { ManagementSessionCatalog } from '../../runtime/catalog/ManagementSessionCatalog';
-import { belongsToWorkspace } from '../../runtime/daemon/DaemonSessionCatalog';
 import type { ChatController } from '../chat/ChatController';
 import type { MissionGateway } from '../chat/mission/MissionGateway';
 import type { MissionControlPanelController } from '../panels/mission/MissionControlPanelController';
@@ -19,7 +18,7 @@ export function createManagementServices(options: {
   mission: MissionControlPanelController; gateway: MissionGateway; diagnostics: RuntimeDiagnosticSink;
 }): ManagementServices {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
-  const cwd = () => controller.getWorkspaceContext().cwd;
+  const cwd = () => controller.getEditorWorkspaceContext().cwd;
   return {
     defaults: new ManagementDefaultsService(getDroid, options.daemon, controller.modelAvailability),
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
@@ -34,17 +33,22 @@ export function createManagementServices(options: {
       loadHistory: request => history.loadHistory(request), listSessions: directory => controller.sessionCatalog.listSessions(directory), diagnostics,
     }),
     resumeSession: async row => {
-      const current = cwd();
+      const editor = controller.getEditorWorkspaceContext();
+      const generation = controller.sessionState.runtimeGeneration;
       if (row.kind !== 'chat') throw new Error('Exec 记录不能切换到主聊天，请选择“查看记录”。');
       if (row.archived) throw new Error('此会话已归档，请先在菜单中选择“恢复会话”，再继续对话。');
-      if (!current || !belongsToWorkspace(current, row.cwd, undefined)) throw new Error('此会话属于其他文件夹。请在菜单中选择“打开所属文件夹”，再在对应窗口继续对话。');
-      if (controller.sessionState.sessionId === row.id) {
+      if (!editor.trusted) throw new Error('请先信任当前窗口，再继续对话。');
+      if (controller.sessionState.sessionId === row.id && controller.sessionState.connection.status === 'connected') {
         await vscode.commands.executeCommand('droidvisx.focusView');
         return;
       }
-      if (!await controller.sessionCatalog.canResumeSession?.(current, row.id)) throw new Error('会话已改变或不属于当前文件夹，请刷新。');
+      if (!await controller.sessionCatalog.canResumeSession?.(row.cwd, row.id)) throw new Error('会话或所属文件夹已改变，请刷新后重试。');
+      const currentEditor = controller.getEditorWorkspaceContext();
+      if (controller.sessionState.disposed || controller.sessionState.runtimeGeneration !== generation ||
+          editor.cwd !== currentEditor.cwd || editor.trusted !== currentEditor.trusted) throw new Error('当前聊天或窗口已改变，请重试。');
       if (!controller.effects.canReplaceSession()) throw new Error('当前聊天正在处理操作，暂时不能切换。');
-      controller.effects.startReplacement({ kind: 'resume', cwd: current, sessionId: row.id });
+      controller.selectSessionWorkspace(row.cwd);
+      controller.effects.startReplacement({ kind: 'resume', cwd: row.cwd, sessionId: row.id });
       await vscode.commands.executeCommand('droidvisx.focusView');
     },
     refreshSessions: () => controller.handleMessage({ type: 'sessions.refresh' }),

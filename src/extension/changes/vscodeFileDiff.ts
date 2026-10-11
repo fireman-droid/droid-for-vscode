@@ -31,6 +31,7 @@ export function createVscodeFileDiffOpener(
   diagnostics: RuntimeDiagnosticSink,
   selectionRegistry?: DiffSelectionRegistry,
   baselineScheme = TURN_BASELINE_SCHEME,
+  getRoot: () => string | undefined = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
 ): FileDiffOpener {
   const baselineDocuments = new Map<string, BaselineDocument>();
   const baselineIds = new Map<string, string>();
@@ -92,7 +93,8 @@ export function createVscodeFileDiffOpener(
   });
   return {
     async openDiff(relativePath, scope, options): Promise<FileDiffOutcome> {
-      const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const cwd = getRoot();
+      const root = cwd === undefined ? undefined : vscode.Uri.file(cwd);
       if (root === undefined) {
         return 'failed';
       }

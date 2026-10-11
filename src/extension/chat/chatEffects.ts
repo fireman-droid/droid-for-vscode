@@ -63,6 +63,7 @@ import { isCurrentRuntime, isTargetWorkspaceCurrent } from './sessions/sessionGu
 import {
   activeSessionSummary,
   beginCatalogLoad,
+  startCatalogRefresh,
   bindCatalogViewToWorkspace,
   clearCatalog,
   discardCatalogRequest,
@@ -150,6 +151,7 @@ export interface ChatEffects {
   readLatestConversationChanges: () => ReturnType<typeof readLatestConversationChanges>;
   clearCatalog: BoundEffect<typeof clearCatalog>;
   beginCatalogLoad: BoundEffect<typeof beginCatalogLoad>;
+  startCatalogRefresh: BoundEffect<typeof startCatalogRefresh>;
   loadCatalog: BoundEffect<typeof loadCatalog>;
   isCurrentCatalogRequest: BoundEffect<typeof isCurrentCatalogRequest>;
   discardCatalogRequest: BoundEffect<typeof discardCatalogRequest>;
@@ -262,6 +264,7 @@ export function createChatEffects(controller: ChatController): ChatEffects {
     readLatestConversationChanges: () => readLatestConversationChanges(controller),
     clearCatalog: (...args) => clearCatalog(controller, ...args),
     beginCatalogLoad: (...args) => beginCatalogLoad(controller, ...args),
+    startCatalogRefresh: (...args) => startCatalogRefresh(controller, ...args),
     loadCatalog: (...args) => loadCatalog(controller, ...args),
     isCurrentCatalogRequest: (...args) => isCurrentCatalogRequest(controller, ...args),
     discardCatalogRequest: (...args) => discardCatalogRequest(controller, ...args),

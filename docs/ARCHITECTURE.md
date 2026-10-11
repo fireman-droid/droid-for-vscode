@@ -208,6 +208,11 @@ flowchart TD
 
 - `chat/sessions/` 管理启动、目录、切换和 Runtime 生命周期；`startupTarget.ts`
   处理已选目标不在最近目录中的情况，不因“最近 50 条没有”就断言会话不存在。
+- `SessionWorkspaceContext` 分开保存编辑器窗口目录与所选聊天目录。管理页恢复只接受
+  已加载目录中的 ID，并按记录目录重新校验；`getWorkspaceContext()` 随聊天绑定，
+  供发送、重试、侧聊、历史和文件适配使用，`getEditorWorkspaceContext()` 用于管理页
+  当前文件夹筛选及新建聊天。窗口目录或信任变化使绑定失效。重载从持久化会话 ID
+  解析原目录，无需更改 Droid 的会话归属或增加 Webview 传入路径的权限。
 - `chat/recovery/activationTranscript.ts` 装配历史与 Conversation 关联，
   `runtime/history/` 从 Droid 读取并投影；`recovery.ts` 处理已运行轮次的后续对账和检查点。
 - Runtime 和权威历史都就绪后才能接管并开放发送；加载期间工作区或代次变化，

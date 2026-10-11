@@ -45,10 +45,12 @@ const NON_TEXT_EXTENSIONS = new Set([
   '.pptx',
 ]);
 
-export function createVscodePathOpener(): PathOpener {
+export function createVscodePathOpener(
+  getRoot: () => string | undefined = () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+): PathOpener {
   return {
     async openPath(path, line, column): Promise<OpenPathOutcome> {
-      const absolute = resolveAbsolute(path);
+      const absolute = resolveAbsolute(path, getRoot());
       if (absolute === null) {
         return 'failed';
       }
@@ -93,15 +95,14 @@ export function createVscodePathOpener(): PathOpener {
   };
 }
 
-function resolveAbsolute(path: string): string | null {
+function resolveAbsolute(path: string, root: string | undefined): string | null {
   if (isAbsolute(path)) {
     return path;
   }
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri;
   if (root === undefined) {
     return null;
   }
-  return join(root.fsPath, path);
+  return join(root, path);
 }
 
 function cursorRange(line: number, column?: number): vscode.Range {

@@ -89,6 +89,7 @@ import { ensureActiveRuntimeWorkspaceCurrent, handleWorkspaceContextChanged } fr
 import { isCurrentRuntime, isTargetWorkspaceCurrent } from './sessions/sessionGuards';
 import { SessionDirectoryState } from './sessions/SessionDirectoryState';
 import { SessionLifecycleState } from './sessions/SessionLifecycleState';
+import { SessionWorkspaceContext } from './sessions/SessionWorkspaceContext';
 import { clearZombieSubagentWatch } from './subagents/subagentWatch';
 import { SubagentWatchState } from './subagents/SubagentWatchState';
 import { projectTranscript } from './turns/turnRuntimeEvents';
@@ -163,6 +164,8 @@ export class ChatController {
   readonly btwSideChat: BtwSideChat | null;
   readonly createRuntime: DroidRuntimeFactory;
   readonly getWorkspaceContext: WorkspaceContextProvider;
+  readonly getEditorWorkspaceContext: WorkspaceContextProvider;
+  private readonly sessionWorkspace: SessionWorkspaceContext;
   readonly sessionCatalog: SessionCatalog;
   readonly recoveryStore: SessionRecoveryStore;
   readonly sessionHistory: SessionHistoryLoader;
@@ -189,7 +192,9 @@ export class ChatController {
 
   constructor(dependencies: ChatControllerDependencies) {
     this.createRuntime = dependencies.createRuntime;
-    this.getWorkspaceContext = dependencies.getWorkspaceContext;
+    this.getEditorWorkspaceContext = dependencies.getWorkspaceContext;
+    this.sessionWorkspace = new SessionWorkspaceContext(dependencies.getWorkspaceContext);
+    this.getWorkspaceContext = this.sessionWorkspace.read;
     this.sessionCatalog = dependencies.sessionCatalog ?? createEmptySessionCatalog();
     this.recoveryStore = dependencies.recoveryStore ?? createTransientRecoveryStore();
     this.sessionHistory = dependencies.sessionHistory ?? createUnavailableSessionHistoryLoader();
@@ -316,6 +321,10 @@ export class ChatController {
   }
   handleWorkspaceContextChanged(): void {
     handleWorkspaceContextChanged(this);
+  }
+  selectSessionWorkspace(cwd: string): void {
+    this.sessionWorkspace.select(cwd);
+    this.sessionState.workspaceContext = { ...this.getWorkspaceContext() };
   }
   /** Stages an already captured selection when a connected chat can accept attachments. */
   stageCapturedEditorSelection(outcome: AttachmentCaptureOutcome): boolean {

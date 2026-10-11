@@ -1,6 +1,6 @@
 import type { DroidRuntime, RuntimeSessionTarget } from '../../../runtime/DroidRuntime';
 import type { RuntimeAvailability } from '../../../runtime/runtimeEvents';
-import type { HostTranscriptState } from '../../recovery/hostTranscriptState';
+import { createHostTranscriptState, type HostTranscriptState } from '../../recovery/hostTranscriptState';
 import { recordCreatedWorktreeSession } from '../../workspace/worktreeSessions';
 import { isSafeBridgeId, type CurrentTurn } from '../internals';
 import { createRestoredTurn } from '../turns/turnLifecycle';
@@ -41,11 +41,12 @@ export async function prepareHistory(
     return transcript;
   } catch {
     if (isCurrentRuntimeGeneration(ctl, generation) && isTargetWorkspaceCurrent(ctl, target.cwd)) {
-      if (ctl.sessionState.sessionId === null && target.kind === 'resume') {
-        ctl.effects.bindSessionIdentity({
+      if (target.kind === 'resume' && ctl.sessionState.sessionId !== target.sessionId) {
+        ctl.sessionState.historyWorkspace = { sessionId: target.sessionId, cwd: target.cwd };
+        ctl.effects.showSessionHistory({
           sessionId: target.sessionId,
           conversationId: ctl.recoveryStore.resolveConversationId(target.sessionId) ?? target.sessionId,
-        });
+        }, createHostTranscriptState('unavailable'));
       }
       ctl.sessionState.connection = {
         status: 'unavailable',

@@ -38,11 +38,12 @@ export function createReviewFoundation(
   changeStats: ChangeStatsReader,
   diagnostics: RuntimeDiagnosticSink,
   baselineScheme?: string,
+  getRoot?: () => string | undefined,
 ) {
   const selections = new DiffSelectionRegistry();
   return {
-    attachmentSources: createVscodeAttachmentSources(selections),
-    fileDiff: createVscodeFileDiffOpener(changeStats, diagnostics, selections, baselineScheme),
+    attachmentSources: createVscodeAttachmentSources(selections, getRoot),
+    fileDiff: createVscodeFileDiffOpener(changeStats, diagnostics, selections, baselineScheme, getRoot),
     gitWorkflow: createVscodeGitWorkflow(),
   };
 }

@@ -40,6 +40,8 @@ export interface HostOperations {
   readonly metadata: SessionMetadataState;
   readonly recoveryStore: SessionRecoveryStore;
   readonly getWorkspaceContext: WorkspaceContextProvider;
+  readonly getEditorWorkspaceContext: WorkspaceContextProvider;
+  selectSessionWorkspace(cwd: string): void;
   recordHost(event: RuntimeDiagnosticEvent): void;
   readonly sessionHistory: SessionHistoryLoader;
   emitSessionDiagnostic(code: string, message: string, turnId?: string | null): void;

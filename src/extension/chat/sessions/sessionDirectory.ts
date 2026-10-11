@@ -80,13 +80,14 @@ const FORK_ADOPTION_FAILED_MESSAGE =
   'The fork was created, but the chat could not switch to it. Retry to reconnect to the original session, or refresh History to open the fork.';
 
 export function handleSessionNew(ctl: SessionDirectoryPort): void {
-  const workspace = ctl.getWorkspaceContext();
+  const workspace = ctl.getEditorWorkspaceContext();
   if (!ctl.effects.canReplaceSession() || !isUsableWorkspace(workspace)) {
     if (!isUsableWorkspace(workspace)) {
       ctl.effects.emitWorkspaceUnavailable(workspace);
     }
     return;
   }
+  ctl.selectSessionWorkspace(workspace.cwd);
   bindCatalogViewToWorkspace(ctl, workspace.cwd);
   ctl.effects.startReplacement({ kind: 'new', cwd: workspace.cwd });
 }

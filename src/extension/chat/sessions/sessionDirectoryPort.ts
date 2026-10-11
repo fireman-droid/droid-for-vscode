@@ -9,6 +9,8 @@ export interface SessionDirectoryPort
   extends Pick<
     HostOperations,
     | 'getWorkspaceContext'
+    | 'getEditorWorkspaceContext'
+    | 'selectSessionWorkspace'
     | 'worktreeSessions'
     | 'emitSessionDiagnostic'
     | 'isCurrentSessionOperation'

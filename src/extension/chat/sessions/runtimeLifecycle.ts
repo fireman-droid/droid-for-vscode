@@ -69,8 +69,19 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
       ctl.effects.discardCatalogRequest(catalogRequest);
       continue;
     }
+    if (target.cwd !== workspace.cwd) {
+      ctl.selectSessionWorkspace(target.cwd);
+      const selectedRequest = ctl.effects.beginCatalogLoad(target.cwd);
+      const selectedCatalog = await ctl.effects.loadCatalog(target.cwd);
+      if (!ctl.effects.isCurrentCatalogRequest(selectedRequest, target.cwd)) {
+        ctl.effects.discardCatalogRequest(selectedRequest);
+        continue;
+      }
+      ctl.catalogState.sessions = selectedCatalog;
+      ctl.effects.seedBackgroundRunning(target.cwd);
+    }
     await activateInitialRuntime(ctl, target, target.kind === 'resume' ? target.sessionId : null);
-    if (isTargetWorkspaceCurrent(ctl, workspace.cwd)) {
+    if (isTargetWorkspaceCurrent(ctl, target.cwd)) {
       return;
     }
   }
@@ -293,6 +304,7 @@ export async function replaceRuntime(
   );
   if (activated) {
     ctl.effects.markSessionSwitchReady(phases);
+    if (ctl.catalogState.catalogCwd !== target.cwd) ctl.effects.startCatalogRefresh(target.cwd);
   }
 }
 

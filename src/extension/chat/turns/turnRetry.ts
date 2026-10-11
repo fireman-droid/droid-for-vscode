@@ -27,7 +27,8 @@ export function handleRetry(ctl: TurnRetryPort, sessionId: string | null): void 
   if (
     ctl.catalogState.sessions.status === 'idle' ||
     ctl.catalogState.sessions.status === 'error' ||
-    ctl.catalogState.catalogCwd !== workspace.cwd
+    ctl.catalogState.catalogCwd !== workspace.cwd ||
+    (sessionId !== null && !ctl.effects.hasCatalogSession(sessionId, workspace.cwd))
   ) {
     ctl.sessionState.sessionOperationInProgress = true;
     void retryAfterWorkspaceBecomesAvailable(ctl, workspace.cwd, retryOptions).finally(() => {
@@ -86,8 +87,11 @@ export async function retryAfterWorkspaceBecomesAvailable(
   }
   ctl.effects.seedBackgroundRunning(cwd);
   const selectedSessionId = ctl.sessionState.sessionId ?? ctl.recoveryStore.getSelectedSessionId();
+  const resumable = selectedSessionId !== null && (ctl.effects.hasCatalogSession(selectedSessionId, cwd) ||
+    await ctl.sessionCatalog.canResumeSession?.(cwd, selectedSessionId) === true);
+  if (!ctl.effects.isCurrentCatalogRequest(catalogRequest, cwd)) return;
   await ctl.effects.replaceRuntime(
-    selectedSessionId !== null && ctl.effects.hasCatalogSession(selectedSessionId, cwd)
+    selectedSessionId !== null && resumable
       ? {
           kind: 'resume',
           cwd,

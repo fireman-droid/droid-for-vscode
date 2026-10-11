@@ -101,7 +101,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
         <div className="management-session-head"><span>标题</span><span>消息数</span><span>更新时间</span><span /></div>
         {pageRows.map(row => <div className="management-session-row" key={row.id}>
           <Button variant="plain" size="none" className="management-session-title"
-            title={row.kind === 'exec' ? '查看执行记录' : row.archived ? '恢复归档后可继续对话' : !row.currentFolder ? '需先打开所属文件夹' : '在主聊天中打开'}
+            title={row.kind === 'exec' ? '查看执行记录' : row.archived ? '恢复归档后可继续对话' : '在主聊天中打开'}
             onClick={() => act({ kind: row.kind === 'chat' ? 'session.resume' : 'session.view', id: row.id })} disabled={disabled}>
             <span><span className="management-session-name">{row.title}</span>{row.favorite && <Star aria-label="已收藏" />}</span>
             <small title={row.cwd}>{row.cwd.split(/[\\/]/).filter(Boolean).at(-1) || row.cwd}{row.kind === 'exec' ? ' · Exec' : row.active ? ' · 当前聊天' : ''}</small>
@@ -110,8 +110,8 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" aria-label={`${row.title}的操作`} disabled={disabled}><MoreHorizontal /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="management-menu">
               <DropdownMenuItem onSelect={() => act({ kind: 'session.view', id: row.id })}><Eye />查看记录</DropdownMenuItem>
-              {row.currentFolder && row.kind === 'chat' ? <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}><MessageSquare />继续对话</DropdownMenuItem>
-                : !row.currentFolder && <DropdownMenuItem onSelect={() => act({ kind: 'session.folder', id: row.id })}><Folder />打开所属文件夹</DropdownMenuItem>}
+              {row.kind === 'chat' && <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}><MessageSquare />继续对话</DropdownMenuItem>}
+              {!row.currentFolder && <DropdownMenuItem onSelect={() => act({ kind: 'session.folder', id: row.id })}><Folder />打开所属文件夹</DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => act({ kind: 'session.export', id: row.id })}><Download />导出 Markdown</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => { setRenaming(row); setTitle(row.title); }}><Pencil />重命名</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => act({ kind: 'session.favorite', id: row.id, value: !row.favorite }, { favorite: !row.favorite })}><Star />{row.favorite ? '取消收藏' : '收藏'}</DropdownMenuItem>

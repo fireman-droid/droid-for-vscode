@@ -75,12 +75,12 @@ export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
 /** Coordinates startup/replacement; feature internals are reachable only through named effects. */
 export interface RuntimeLifecyclePort extends RuntimeActivationPort,
   Pick<HostOperations, 'sessionCatalog' | 'emit' | 'reviewCoordinator' | 'planDocuments' |
-    'diagnostics' | 'handleWorkspaceContextChanged' | 'childSession'> {
+    'diagnostics' | 'handleWorkspaceContextChanged' | 'childSession' | 'selectSessionWorkspace'> {
   readonly metadata: Pick<HostOperations['metadata'], 'settingsUpdate' | 'tokenUsage'>;
   readonly sessionState: RuntimeActivationPort['sessionState'] & Pick<SessionLifecycleState,
     'runtimeGeneration' | 'initialization' | 'workspaceTransition' | 'sessionOperationInProgress'>;
   readonly catalogState: RuntimeActivationPort['catalogState'] &
-    Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>>;
+    Readonly<Pick<SessionDirectoryState, 'refreshInProgress' | 'catalogCwd'>>;
   readonly turnState: RuntimeActivationPort['turnState'] & Pick<TurnState, 'turnGeneration'>;
   readonly missionState: Pick<MissionSessionState, 'mission'> &
     Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
@@ -88,7 +88,7 @@ export interface RuntimeLifecyclePort extends RuntimeActivationPort,
     'clearTurn' | 'clearCatalog' | 'bindCatalogViewToWorkspace' | 'beginCatalogLoad' | 'loadCatalog' | 'isCurrentCatalogRequest' |
     'discardCatalogRequest' | 'seedBackgroundRunning' | 'hasCatalogSession' |
     'flushRecoveryCheckpoint' | 'setSessionRunning' | 'ensureBackgroundRunningPoll' |
-    'markSessionSwitchReady' | 'resumeRecoveredIdeReconnect' | 'resetSessionMetadata'>;
+    'markSessionSwitchReady' | 'resumeRecoveredIdeReconnect' | 'resetSessionMetadata' | 'startCatalogRefresh'>;
 }
 
 /** Owns folder/trust transition ordering; startup is injected to avoid a module cycle. */

@@ -230,7 +230,7 @@ export function activate(context: vscode.ExtensionContext): void {
     createTerminal: (name, pty) => vscode.window.createTerminal({ name, pty }),
   });
   let controller: ChatController;
-  const activeRoot = () => controller?.sessionState.activeRuntimeCwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const activeRoot = () => controller?.getWorkspaceContext().cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const turnSnapshots = createTurnSnapshotStore(
     activeRoot,
     vscode.Uri.joinPath(context.storageUri ?? context.globalStorageUri, 'turn-objects').fsPath,
@@ -260,6 +260,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const { attachmentSources, fileDiff, gitWorkflow } = createReviewFoundation(
     changeStats,
     diagnostics,
+    undefined,
+    activeRoot,
   );
   const sessionViewer = new SessionViewerPanelController(
     context.extensionUri,
@@ -424,7 +426,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recentCommands: new RecentCommandsStore(persistence),
     diagnostics,
     daemonSessions: daemonSidecar.provider,
-    pathOpener: createVscodePathOpener(),
+    pathOpener: createVscodePathOpener(activeRoot),
     gitWorkflow,
     // Worktree sessions ride the daemon's native create channel; in
     // process mode (including a fallback from the daemon default) the
@@ -666,7 +668,7 @@ export function activate(context: vscode.ExtensionContext): void {
         getActiveSessionId: () =>
           recoveryStore.getSelectedSessionId() ??
           readPersistedSelectedSessionId(persistence.get(SESSION_RECOVERY_STORAGE_KEY)),
-        getWorkspaceCwd: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+        getWorkspaceCwd: () => controller.getWorkspaceContext().cwd,
         loadHistory: (request) => historyLoader.loadHistory(request),
         listSessions: (cwd) => sessionCatalog.listSessions(cwd),
         diagnostics,

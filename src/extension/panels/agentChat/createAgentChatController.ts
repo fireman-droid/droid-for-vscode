@@ -13,6 +13,7 @@ import { PlanDocumentController } from '../../interactions/planDocumentControlle
 import { SessionRecoveryStore, type SessionRecoveryPersistence } from '../../recovery/SessionRecoveryStore';
 import { createReviewFeature, createReviewFoundation } from '../../review/createReviewFeature';
 import { ReviewPanelController } from '../review/ReviewPanelController';
+import { createVscodePathOpener } from '../../workspace/vscodePathOpener';
 import type { SessionViewerPanelController } from '../sessionViewer/SessionViewerPanelController';
 
 export function createAgentChatController(options: {
@@ -45,7 +46,7 @@ export function createAgentChatController(options: {
     { recordDiagnostic: (event) => diagnostics.record(event) });
   const changeStats = createGitChangeStatsReader(root, {}, childPersistence, snapshots, watchWorkspaceChanges);
   const { attachmentSources, fileDiff, gitWorkflow } = createReviewFoundation(
-    changeStats, diagnostics, `droidvisx-child-baseline-${scope}`);
+    changeStats, diagnostics, `droidvisx-child-baseline-${scope}`, root);
   let controller: ChatController;
   const planDocuments = new PlanDocumentController((state) => controller.emit(state));
   const review = createReviewFeature({
@@ -68,7 +69,7 @@ export function createAgentChatController(options: {
     recentCommands: new RecentCommandsStore(childPersistence),
     diagnostics,
     daemonSessions: parent.daemonSessions,
-    pathOpener: parent.pathOpener,
+    pathOpener: createVscodePathOpener(root),
     gitWorkflow,
     daemonPlugins: parent.daemonPlugins,
     turnSnapshots: snapshots,
