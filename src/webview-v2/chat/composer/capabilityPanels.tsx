@@ -157,7 +157,7 @@ function SkillRow({
           ) : null}
         </span>
         {skill.description !== null ? (
-          <span className="dvx-skill-description" title={skill.description}>
+          <span className="dvx-skill-description">
             {skill.description}
           </span>
         ) : null}
