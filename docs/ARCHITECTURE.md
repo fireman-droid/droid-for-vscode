@@ -413,6 +413,10 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 
 - BTW 由 Host `BtwSideChat` 管理隐藏分支。图片/模型随每条问题一起排队，只更改
   分支模型；等待条目先于 fork，Stop/失败负责结算，不能在取消后补发原问题。
+  Process 与 daemon 的中断 RPC 拒绝必须传给 Host：保留仍在运行的回答，恢复 Stop 重试
+  并显示失败。daemon 的 AbortSignal 只取消发送前准备；已提交的流由 session.interrupt
+  确认停止后结算，不能先 abort 接收流再把中断失败当成完成。迟到失败只能影响同一
+  generation、fork 和回答条目。
   引用仍编码成完整普通文本；公共 QuoteChips 只接文本和删除回调。
 - 未发送草稿由页面 `useBtwPanel` 持有，`SideChatSheet` 卸载不销毁同会话的输入。
   关闭不发送 dismiss/stop；会话身份与能力可用性分开，短暂无可用能力不切换草稿 owner。

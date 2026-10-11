@@ -44,7 +44,7 @@ export interface DaemonBtwStreamEvent {
 
 /** Attached fork surface consumed by the sidecar. */
 export interface DaemonBtwFork {
-  /** Streams one turn; ends after the terminal result event. */
+  /** Signal cancels preparation; a submitted turn is stopped through interrupt(). */
   stream(text: string, options?: BtwPromptOptions & { signal?: AbortSignal }): AsyncIterable<DaemonBtwStreamEvent>;
   /** Interrupts the streaming turn (side-pane Stop). */
   interrupt(): Promise<void>;
@@ -133,7 +133,10 @@ async function createConnectedDroidBtwClient(
             specModeModelId: null, specModeReasoningEffort: null,
           });
           options.signal?.throwIfAborted();
-          yield* session.stream(text, { includePartialMessages: true, images: options.images, abortSignal: options.signal });
+          // Keep the submitted stream alive when interrupt fails. The session
+          // owns admission cancellation and only ends an active stream after
+          // interrupt succeeds, so the Host can report failure and retry Stop.
+          yield* session.stream(text, { includePartialMessages: true, images: options.images });
         },
         interrupt: () => session.interrupt(),
         close: () => session.close(),
@@ -225,7 +228,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     this.abortAsk?.abort();
     // The interrupted turn still terminates its own stream (result
     // event), which settles the in-flight ask.
-    await this.fork.interrupt().catch(() => undefined);
+    await this.fork.interrupt();
   }
 
   async dispose(): Promise<void> {

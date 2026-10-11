@@ -261,9 +261,9 @@ class BtwForkSidecar implements BtwSidecar {
     this.abortAsk?.abort();
     // The interrupted turn still ends through the notification
     // stream (agent_turn_completed), which terminates the ask loop.
-    await this.client
-      .interruptSession?.({})
-      .catch(() => undefined);
+    // A rejected interrupt leaves the notification stream active. Let the
+    // owner show the failure and allow another Stop instead of claiming success.
+    await this.client.interruptSession?.({});
   }
 
   async dispose(): Promise<void> {

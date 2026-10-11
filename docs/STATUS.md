@@ -839,8 +839,31 @@
 | R06 | 扩展关闭时前一步清理拒绝，后续 controller／daemon 清理全部跳过。 | `extension.ts` 保持原释放顺序，逐项执行并收集错误，最后统一抛出，避免一个失败阻断剩余清理。 | 需模拟前、中、后各阶段拒绝，确认剩余阶段仍执行且失败不会被伪装成功。 |
 | R07 | Mission 已切换到新会话后 checkpoint 落盘失败，只返回通用启动拒绝，新会话仍显示可用，容易误以为任务已提交。 | `mission/controller.ts` 将该会话标记为恢复不可用，明确告知 Mission 已创建、任务未发送并需重连；落盘完成后也复核完整 runtime／generation／session／工作区身份。 | 需覆盖落盘拒绝、同 ID 换 runtime 和工作区变化，确认不误发任务、不改写后来会话。 |
 | R08 | 连接按 ID 保存密钥，改接口时先覆盖该槽再存元数据；元数据失败或重载后，旧地址可能拿到新地址的密钥。 | `ProviderRegistry` 复用已有的协议／完整接口地址密钥槽；编辑前迁移旧 ID 槽到原接口，新密钥只写目标接口，元数据失败报告部分成功。未编辑的旧连接保持可读。 | 本机 VS Code `extensionHostProcess.js` 的 Memento 实现证实 update 先改内存再异步保存，不能假定拒绝后内存自动回滚。需覆盖持久失败的两种内存状态、重载、旧槽迁移失败、同接口换 key 与删除。现有 ModelManager fixture 的 update 永远成功，未覆盖这些情况。 |
+| R09 | BTW 中断 RPC 拒绝被 Runtime 和 Host 吞掉；Process 路径继续等待且不能再 Stop，daemon 路径则因提前 abort 接收流而可能显示完成，但后台尚未停止。 | 两种 sidecar 都透传中断拒绝；daemon 的取消信号只用于发送前准备，发送后的停止由 session 的 interrupt 管理，失败时保留接收流。Host 对同 generation／fork／回答恢复 Stop 重试并显示失败，保留部分回答；重试或回答自然结束后清除提示。 | SDK 0.9.1 的 `interruptSession` 明确会对 RPC error 抛错；本地 `DaemonTurnStream` 也确认 abort 会先结束读取，中断失败仍保留 busy slot。现有用例未覆盖失败后重试、准备期取消、自然结束和切换会话后的迟到拒绝。 |
+
+### 排查覆盖与剩余工作
+
+以下是已读取的生产入口与直接调用链，不等于每个模块全部通过。继续项保留在 PLAN；
+未发现具体缺陷的路径不为增加防御代码而改写。
+
+| 范围 | 已检查的边界与证据 | 本轮状态 |
+| --- | --- | --- |
+| Runtime | `transportRecovery` 的恢复身份／超时，`sessionStream` 的中断与未知投递结果，`windowDaemonPool` 子会话归属，Process 启动失败的 transport 释放，`FactoryDroidRuntime` 初始化期间释放。 | R09 已改 Process 与 daemon 路径；两者的中断失败／流释放组合仍需分别定向验证。 |
+| Chat Host | `runtimeLifecycle`、`runtimeActivation`、`workspaceLifecycle` 的代际与工作区检查；`turnFlow`／`turnSettlement` 接受、停止、迟到事件；扩展关闭链路。 | R01、R06 已改源码，失败注入待许可。 |
+| 历史／恢复／队列 | `DaemonSessionHistoryLoader` 多源历史，`SessionRecoveryStore` 串行落盘与失败上报，Host 入队／调度、Composer 乐观清空与 reducer 权威覆盖。 | R05 已改源码；在途请求未投递与持久化失败的组合仍待验证。 |
+| 子代理／BTW | 子会话就绪后再读历史，旧 generation 忽略；BTW 准备、排队、丢弃与 fork 释放；Viewer 的初次／后续失败。 | R01、R02、R04、R09 已改源码；停止失败路径尚未通过行为验证。 |
+| Mission | `MissionGateway` 的失败结果、面板请求身份与 catalog 截止时间，`controller` 启动时 runtime／工作区身份检查，`useMissionControl` 请求与 revision。 | R07 已改源码；启动后的落盘失败及迟到结果待定向验证，未宣称 Mission 验收通过。 |
+| Review／撤销／Git | Git 无 HEAD／比较基线、watcher 迟到结果，文件撤销路径／软硬链接／内容校验、事务日志与互斥、提交预览的 HEAD／Index／文件指纹，UI 提交范围。 | 静态检查；未在用户仓库执行破坏性验证，旧 Diff 快速滚动改动仍有独立验收缺口。 |
+| 模型／配置 | Models 面板取消和原生确认，Manager 各写分支、局部成功反馈，ProviderRegistry 元数据与 SecretStorage，Runtime 配置网关错误分类。 | R03、R08 已改源码；跨存储故障注入及旧配置兼容待许可，未读取或迁移用户真实凭据。 |
+| 补全／Next Edit | `CompletionRequests` 共享请求和读者取消，Provider 文档版本／光标／上下文复核，Next Edit 接受前版本与原文验证、释放及后续触发。 | 静态检查，未发模型请求；现有行为回归待许可。 |
+| Bridge／五个 Webview | Host 解码、快照与流式批处理、消息接收回执／快照重放、挂载错误边界；Chat Composer、Models 操作、Mission 命令、Viewer 刷新与 Review 提交消费者。 | R04、R05 共享契约与消费者已接通；不能用类型检查代替消息顺序回归。 |
+| 附件／权限／终端／管理 | 远程图片逐跳 URL／DNS 限制与大小限制，路径打开结果，权限请求会话／轮次身份与取消，终端 owner／写入确认／释放，历史备注保存后刷新失败反馈。 | 静态检查；本轮未读取凭据、发送终端命令或操作真实权限请求。 |
+| 公共 UI／网站 | Transcript 虚拟列表、选区保留、流式文字水位与订阅释放；网站构建／发布工作流及前轮已有验收记录。 | 公共包独立构建已通过；未重复执行未经本轮授权的浏览器检查。 |
+| 诊断／分发 | LocalDiagnostics 的事件身份、凭据清理与有界投影；导出失败反馈；Release 草稿和手动 Pages 工作流；类型及文件预算门禁。 | R01–R09（含 daemon BTW 修正）的生产构建、类型和预算检查通过；安装校验见下。 |
 
 `pnpm run package:vsix` 的类型检查、文件预算、公共 UI 声明及生产构建已通过；本批剩余代码已包含在 2026-10-11 的最近一次构建中，本次整理提交未再改动这些源码。168 个 VSIX 条目及静态引用校验通过，跳过运行时入口加载；已安装到 Microsoft VS Code 和 Cursor，两边各 5 个主要产物与 VSIX SHA-256 一致。未新增、修改或运行测试、浏览器自动化或真实行为验收；需 Reload Window 后由用户验收。npm 配置与 CLI 弃用提示未阻断交付。
+
+全项目行为排查尚未完成，剩余验证缺口保留在 PLAN；本次提交未更新公开 Release 附件。
 
 ## 开源项目网站
 

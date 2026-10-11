@@ -45,6 +45,7 @@ export type BtwSidecarFactory = (
 const BTW_START_FAILED_MESSAGE =
   'The side chat could not start. Retry, or ask in the main chat.';
 const BTW_ANSWER_FAILED_MESSAGE = 'Droid could not answer this side question.';
+const BTW_STOP_FAILED_MESSAGE = 'Stopping the side answer could not be confirmed. Try Stop again.';
 /**
  * Delta coalescing cadence: the card is a whole-state projection, so
  * per-token emits would resend the growing answer on every delta.
@@ -169,6 +170,9 @@ export class BtwSideChat {
         if (this.generation !== generation) {
           return;
         }
+        if (this.state.message === BTW_STOP_FAILED_MESSAGE) {
+          this.setState({ ...this.state, message: null }, true);
+        }
         this.stopping = false;
         const pending = this.pendingRequest;
         if (pending === null) {
@@ -209,6 +213,7 @@ export class BtwSideChat {
     this.stopping = true;
     this.pendingRequest = null;
     let state = setBtwPendingQuestion(this.state, null);
+    if (state.message === BTW_STOP_FAILED_MESSAGE) state = { ...state, message: null };
     if (sidecar === null) {
       const preparing = state.entries.find((entry) => entry.state === 'streaming');
       if (preparing !== undefined) {
@@ -216,7 +221,14 @@ export class BtwSideChat {
       }
     }
     this.setState(state, true);
-    void sidecar?.interrupt?.().catch(() => undefined);
+    const generation = this.generation;
+    const entryId = state.entries.find((entry) => entry.state === 'streaming')?.id;
+    void sidecar?.interrupt?.().catch(() => {
+      if (this.generation !== generation || this.sidecar !== sidecar ||
+        !this.state.entries.some((entry) => entry.id === entryId && entry.state === 'streaming')) return;
+      this.stopping = false;
+      this.setState({ ...this.state, message: BTW_STOP_FAILED_MESSAGE }, true);
+    });
   }
 
   /** Explicit discard request; merely hiding the panel does not call this. */
