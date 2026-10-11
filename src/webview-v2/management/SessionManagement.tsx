@@ -100,7 +100,9 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       <div className="management-session-table" aria-busy={loading}>
         <div className="management-session-head"><span>标题</span><span>消息数</span><span>更新时间</span><span /></div>
         {pageRows.map(row => <div className="management-session-row" key={row.id}>
-          <Button variant="plain" size="none" className="management-session-title" onClick={() => act({ kind: 'session.view', id: row.id })} disabled={disabled}>
+          <Button variant="plain" size="none" className="management-session-title"
+            title={row.kind === 'exec' ? '查看执行记录' : row.archived ? '恢复归档后可继续对话' : !row.currentFolder ? '需先打开所属文件夹' : '在主聊天中打开'}
+            onClick={() => act({ kind: row.kind === 'chat' ? 'session.resume' : 'session.view', id: row.id })} disabled={disabled}>
             <span><span className="management-session-name">{row.title}</span>{row.favorite && <Star aria-label="已收藏" />}</span>
             <small title={row.cwd}>{row.cwd.split(/[\\/]/).filter(Boolean).at(-1) || row.cwd}{row.kind === 'exec' ? ' · Exec' : row.active ? ' · 当前聊天' : ''}</small>
           </Button>

@@ -35,8 +35,13 @@ export function createManagementServices(options: {
     }),
     resumeSession: async row => {
       const current = cwd();
-      if (row.kind !== 'chat' || row.archived) throw new Error('此记录只能查看；已归档会话需先恢复。');
-      if (!current || !belongsToWorkspace(current, row.cwd, undefined)) throw new Error('请先打开这条会话所属的文件夹。');
+      if (row.kind !== 'chat') throw new Error('Exec 记录不能切换到主聊天，请选择“查看记录”。');
+      if (row.archived) throw new Error('此会话已归档，请先在菜单中选择“恢复会话”，再继续对话。');
+      if (!current || !belongsToWorkspace(current, row.cwd, undefined)) throw new Error('此会话属于其他文件夹。请在菜单中选择“打开所属文件夹”，再在对应窗口继续对话。');
+      if (controller.sessionState.sessionId === row.id) {
+        await vscode.commands.executeCommand('droidvisx.focusView');
+        return;
+      }
       if (!await controller.sessionCatalog.canResumeSession?.(current, row.id)) throw new Error('会话已改变或不属于当前文件夹，请刷新。');
       if (!controller.effects.canReplaceSession()) throw new Error('当前聊天正在处理操作，暂时不能切换。');
       controller.effects.startReplacement({ kind: 'resume', cwd: current, sessionId: row.id });
