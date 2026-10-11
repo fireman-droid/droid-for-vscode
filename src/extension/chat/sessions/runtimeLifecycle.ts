@@ -236,7 +236,8 @@ export async function replaceRuntime(
   const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
     target.kind === 'resume' && target.child
-      ? initializing.then(result => result === null ? null : prepareHistory(ctl, target, generation, phases))
+      ? initializing.then(result => result === null ? null : result.status === 'failed'
+        ? createHostTranscriptState('unavailable') : prepareHistory(ctl, target, generation, phases))
       : prepareHistory(ctl, target, generation, phases),
     initializing,
   ]);
@@ -307,7 +308,8 @@ export async function activateInitialRuntime(
   const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
     target.kind === 'resume' && target.child
-      ? initializing.then(result => result === null ? null : prepareHistory(ctl, target, generation, phases))
+      ? initializing.then(result => result === null ? null : result.status === 'failed'
+        ? createHostTranscriptState('unavailable') : prepareHistory(ctl, target, generation, phases))
       : prepareHistory(ctl, target, generation, phases),
     initializing,
   ]);
