@@ -243,6 +243,9 @@ export class BtwSideChat {
     }
     const sidecar = this.sidecar;
     this.sidecar = null;
+    // A new conversation must not wait for the discarded fork's preparation.
+    // Its generation check still disposes the old fork if it finishes later.
+    this.sidecarPreparation = null;
     this.boundSessionId = null;
     this.state = EMPTY_SESSION_BTW_STATE;
     this.asking = false;
@@ -295,7 +298,7 @@ export class BtwSideChat {
         return null;
       }
       if (this.generation !== generation) {
-        void sidecar.dispose();
+        void sidecar.dispose().catch(() => undefined);
         return null;
       }
       this.sidecar = sidecar;
