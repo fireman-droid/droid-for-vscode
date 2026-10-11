@@ -17,7 +17,7 @@
 - 会话管理使用 SDK daemon 分页目录，区分当前／全部文件夹与聊天／Exec、收藏／归档；每页最多读取 100 条，显式加载更多。隐藏子代理、编辑辅助与 Mission 记录，保留记录自身目录用于查看及 Markdown 导出。当前文件夹的普通会话可继续；其他文件夹在新窗口打开，Exec 不作为普通聊天恢复。SDK 此目录没有创建时间和文件字节大小，因此表格展示修改时间与消息数，不伪造字段。
 - 补全配置读取并保存已有独立补全服务设置，包括协议、模型、地址、密钥、触发与上下文；保留原设置作用域。Mission 目录与进入任务复用现有 gateway 和主聊天 Mission 工作区。
 - `pnpm --config.verify-deps-before-run=false --config.manage-package-manager-versions=false run package:vsix` 通过，包含 typecheck、lint:budgets、公共 UI 声明与生产构建；168 个 VSIX 条目及静态依赖校验通过。普通 pnpm 调用因自动依赖校验要求交互而中止，使用上述参数保留现有依赖完成构建，未重新安装依赖。
-- 已安装到 Microsoft VS Code 当前用户扩展目录；5 个主要产物与 VSIX 哈希一致，安装后清单仅多出编辑器的 `__metadata`，需 Reload Window。本次用户明确选择只做类型检查和构建，未新增、修改或运行功能测试、浏览器自动化或截图验收，VSIX 校验跳过运行时入口加载。真实视觉与行为待用户在编辑器验收。npm 配置提示和安装时的 `url.parse()` 弃用提示未阻断交付。
+- 已安装到 Microsoft VS Code 和 Cursor 当前用户扩展目录；两边各 5 个主要产物与 VSIX 哈希一致，安装后清单仅多出编辑器的 `__metadata`，需 Reload Window。本次用户明确选择只做类型检查和构建，未新增、修改或运行功能测试、浏览器自动化或截图验收，VSIX 校验跳过运行时入口加载。真实视觉与行为待用户在编辑器验收。npm 配置提示和安装时的 `url.parse()` 弃用提示未阻断交付。
 
 ## 模型接口选项使用 Droid 原名（2026-10-10）
 
