@@ -701,8 +701,16 @@ export async function deactivate(): Promise<void> {
   activeController = undefined;
   activeBrowserDevBridge = undefined;
   disposeDaemonSidecar = undefined;
-  browserDevBridge?.dispose();
-  await browserDevBridge?.stop();
-  await controller?.dispose();
-  await disposeSidecar?.();
+  const failures: unknown[] = [];
+  // Preserve shutdown order, but a failed cleanup must not strand the
+  // remaining listeners, controllers or daemon attachment.
+  for (const cleanup of [
+    () => browserDevBridge?.dispose(),
+    () => browserDevBridge?.stop(),
+    () => controller?.dispose(),
+    () => disposeSidecar?.(),
+  ]) {
+    try { await cleanup(); } catch (error) { failures.push(error); }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, 'Droid shutdown did not complete cleanly.');
 }
