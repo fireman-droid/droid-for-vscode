@@ -19,6 +19,7 @@ export function createDaemonResources(
     }));
   const sessions: Omit<DaemonApi['sessions'], 'create' | 'resume'> = {
     listPage,
+    rename: (id, title) => call(() => controller.renameSession(id, title)),
     list: async (options) => {
       const result = await listPage(options);
       return result.sessions.map(

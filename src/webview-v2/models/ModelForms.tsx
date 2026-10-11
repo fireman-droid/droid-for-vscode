@@ -74,7 +74,7 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
         <label htmlFor={`${formId}-protocol`}>接口类型</label>
         <Select value={protocol} disabled={busy} onValueChange={(value) => setProtocol(value as CustomModelProvider)}>
           <SelectTrigger id={`${formId}-protocol`} className="w-full" aria-describedby={`${formId}-protocol-hint`}><SelectValue /></SelectTrigger>
-          <SelectContent>{CUSTOM_MODEL_PROVIDERS.map((value) => <SelectItem key={value} value={value}>{PROTOCOLS[value].name}</SelectItem>)}</SelectContent>
+          <SelectContent className="management-menu">{CUSTOM_MODEL_PROVIDERS.map((value) => <SelectItem key={value} value={value}>{PROTOCOLS[value].name}</SelectItem>)}</SelectContent>
         </Select>
         <p id={`${formId}-protocol-hint`} className="models-field-hint">{protocolHints[protocol]}</p>
       </div>

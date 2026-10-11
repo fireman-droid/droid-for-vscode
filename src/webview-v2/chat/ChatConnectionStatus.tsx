@@ -71,8 +71,8 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
     <div className="flex min-w-0 items-center">
       <span className="sr-only" role={error ? 'alert' : 'status'} aria-atomic="true">{label}. {summary}</span>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`${label}. Connection details`} aria-busy={loading}
-          className={`h-7 min-w-0 shrink px-1.5 ${error ? 'text-destructive' : 'text-muted-foreground'}`}>
+        <Button variant="plain" size="none" aria-label={`${label}. Connection details`} aria-busy={loading}
+          className={`chat-header-control inline-flex h-6 min-w-0 shrink items-center gap-1.5 px-1 text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}>
           <span className="grid size-3 shrink-0 place-items-center">{loading && !error
             ? <LoaderCircle aria-hidden="true" className="size-3 animate-spin motion-reduce:animate-none" />
             : <DroidConnectionDot state={error ? 'unavailable' : dotState} working={working} />}</span>

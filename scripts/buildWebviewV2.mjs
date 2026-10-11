@@ -52,6 +52,7 @@ await rm(path.join(output, 'styles.generated.css'));
 for (const [entryPoint, filename] of [
   ['src/webview-v2/chat/main.tsx', 'webview'],
   ['src/webview-v2/models/main.tsx', 'models'],
+  ['src/webview-v2/management/main.tsx', 'management'],
   ['src/webview-v2/mission/main.tsx', 'mission-control'],
   ['src/webview-v2/viewer/main.tsx', 'session-viewer'],
   ['src/webview-v2/review/main.tsx', 'review'],

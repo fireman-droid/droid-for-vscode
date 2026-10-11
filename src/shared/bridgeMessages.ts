@@ -1,4 +1,5 @@
 import type { ModelsOpenMessage } from './protocol/modelManagerProtocol';
+import type { ManagementPageOpenMessage } from './protocol/managementPageProtocol';
 import type { RewindResultMessage } from './protocol/rewindResult';
 import type { SystemPromptRequest, SystemPromptResponse } from './protocol/systemPromptProtocol';
 import type { IdeState, HostIdeMessage, IdeReconnectMessage, IdeRefreshMessage } from './protocol/ideProtocol';
@@ -221,6 +222,7 @@ export type WebviewToHostMessage =
   | IdeRefreshMessage
   | ReviewPanelOpen
   | ModelsOpenMessage
+  | ManagementPageOpenMessage
   | ManagementOpenMessage
   | WebviewReadyMessage
   | WebviewStateAppliedMessage

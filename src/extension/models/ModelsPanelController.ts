@@ -10,11 +10,14 @@ import { handleWebviewClipboard } from '../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../webview/webviewTheme';
 import { createModelSourcePreference } from '../webview/modelSourcePreference';
 import { ModelManager, ModelManagerError, modelManagerFailure } from './ModelManager';
+import { ManagementBinding, type ManagementServices } from '../management/ManagementBinding';
+import type { ManagementPage } from '../../shared/protocol/managementPageProtocol';
 
 interface PanelEntry {
   readonly panel: vscode.WebviewPanel;
   readonly subscriptions: vscode.Disposable[];
   operation: AbortController | null;
+  management?: ManagementBinding;
 }
 
 export class ModelsPanelController implements vscode.Disposable {
@@ -23,24 +26,30 @@ export class ModelsPanelController implements vscode.Disposable {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly manager: ModelManager,
+    private readonly management?: ManagementServices,
   ) {}
 
-  open(): void {
+  open(page: ManagementPage = 'models'): void {
     if (this.disposed) return;
     if (this.entry !== null) {
+      this.entry.management?.navigate(page);
       this.entry.panel.reveal();
       return;
     }
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const panel = vscode.window.createWebviewPanel(
       'droidvisx.models',
-      'Models',
+      this.management ? 'Droid · 管理' : 'Models',
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] },
     );
     const modelSourcePreference = createModelSourcePreference(panel.webview);
     const entry: PanelEntry = { panel, subscriptions: [modelSourcePreference], operation: null };
     this.entry = entry;
+    if (this.management) {
+      entry.management = new ManagementBinding(panel.webview, this.management, page);
+      entry.subscriptions.push(entry.management);
+    }
     const theme = (): void =>
       this.post(entry, {
         type: 'models.theme',
@@ -76,7 +85,7 @@ export class ModelsPanelController implements vscode.Disposable {
     panel.webview.html = getWebviewHtml(
       panel.webview,
       {
-        script: vscode.Uri.joinPath(dist, 'models.js'),
+        script: vscode.Uri.joinPath(dist, this.management ? 'management.js' : 'models.js'),
         style: vscode.Uri.joinPath(dist, 'webview.css'),
       },
       undefined,

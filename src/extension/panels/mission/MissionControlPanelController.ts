@@ -117,6 +117,20 @@ export class MissionControlPanelController implements vscode.Disposable {
     this.postWorkspaceRoute('catalog');
   }
 
+  openCatalogEntry(catalogId: string): boolean {
+    if (this.disposed || this.setupPhase === 'starting') return false;
+    this.workspaceState.remember(this.source.readActiveSession?.());
+    const sessionId = this.source.openCatalogMission?.(catalogId) ?? null;
+    if (sessionId === null) return false;
+    this.panelEntry?.panel.dispose();
+    this.resetSetupOperation();
+    this.workspaceState.activate(sessionId);
+    this.navigate('detail', catalogId);
+    this.postWorkspaceRoute('detail', catalogId, 'overview');
+    this.source.focusChat?.();
+    return true;
+  }
+
   openNewMission(task?: string): void {
     if (this.disposed) {
       return;

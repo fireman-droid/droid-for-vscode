@@ -46,8 +46,8 @@ export function ModelList({ models, snapshot, disabled, onAction, onEdit, onRena
                 aria-describedby={!snapshot.canApply && snapshot.applyMessage ? 'models-apply-status' : undefined}
                 title={unavailable ?? undefined} onClick={() => act('useModel')}>使用此模型</Button>}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="size-8 data-[state=open]:bg-[var(--control-surface-hover)] data-[state=open]:text-foreground" disabled={disabled} aria-label={`${model.displayName || model.model} 的更多操作`}><MoreHorizontal /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-36">
+            <DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" className="size-8" disabled={disabled} aria-label={`${model.displayName || model.model} 的更多操作`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="management-menu min-w-36">
               <DropdownMenuItem disabled={!enabled || !loaded} onSelect={() => act('verifyModel')}><Play className="size-3.5" />验证模型…</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onRename(model)}><Pencil className="size-3.5" />修改别名</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onEdit(model)}><Settings2 className="size-3.5" />编辑配置</DropdownMenuItem>

@@ -58,6 +58,7 @@ export interface DaemonApi {
     | 'fork'
     | 'killWorker'
   > & {
+    rename?: ConnectedDroid['sessions']['rename'];
     listPage(
       options?: Parameters<ConnectedDroid['sessions']['list']>[0],
     ): ReturnType<DaemonSessionController['listAvailableSessions']>;

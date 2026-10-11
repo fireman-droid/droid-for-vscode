@@ -1,5 +1,5 @@
-import { useContext, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { RadioGroup, RadioGroupItem } from '../../ui/controls';
@@ -11,7 +11,6 @@ import {
   type SessionReasoningEffort,
   type SessionSettingsState,
 } from '../../../shared/protocol/settings';
-import { CustomModelsContext } from '../../models/customModelsFlow';
 import { ModelSourceEmpty, useModelSource } from '../../models/ModelSourceControl';
 import { matchesModelSource } from '../../../shared/protocol/modelSourceProtocol';
 import type { SessionSettingSelection } from './useOptimisticSetting';
@@ -48,7 +47,7 @@ type ModelPopoverProps = {
 
 export function ModelPopover({
   id, settings, selection, modelCatalog, disabled, refreshDisabled = disabled,
-  onRefresh, onUpdate, onManageModels, onOpenModels,
+  onRefresh, onUpdate,
 }: ModelPopoverProps): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
@@ -296,7 +295,7 @@ export function ModelPopover({
         <ModelCatalogStatus modelCatalog={modelCatalog} current={confirmed ?? null}
           disabled={refreshDisabled} onRefresh={onRefresh} />
       )}
-      <div className="dvx-model-footer">
+      {modelCatalog.status === 'ready' && settings !== undefined && !isSpecView && <div className="dvx-model-footer">
         {modelCatalog.status === 'ready' && settings !== undefined && !isSpecView ? (
             <Button variant="plain" size="none"
               type="button"
@@ -317,9 +316,7 @@ export function ModelPopover({
               </span>
             </Button>
           ) : null}
-        <AddModelEntry onOpen={onManageModels} onOpenModels={onOpenModels}
-          compact={modelCatalog.status === 'ready' && settings !== undefined && !isSpecView} />
-      </div>
+      </div>}
       {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
       {disabled && settings?.status === 'ready' ? (
         <p className="dvx-popover-message" role="status">
@@ -327,42 +324,6 @@ export function ModelPopover({
         </p>
       ) : null}
     </div>
-  );
-}
-
-/**
- * Fixed foot row of the ModelPopover: closes the popover (onOpen)
- * and opens the full-page model manager through the flow context
- * (spec §6 拍板 — a page, not an in-popover panel). The mounted page
- * performs the on-entry refresh, so this click never races it.
- */
-export function AddModelEntry({
-  onOpen,
-  onOpenModels,
-  compact = false,
-}: {
-  readonly onOpen: () => void;
-  readonly onOpenModels?: () => void;
-  readonly compact?: boolean;
-}): React.JSX.Element | null {
-  const flow = useContext(CustomModelsContext);
-  const openManager = onOpenModels ?? flow?.onOpenManager;
-  if (openManager === undefined) {
-    return null;
-  }
-  return (
-    <Button variant="plain" size="none"
-      type="button"
-      className={`dvx-model-add-row${compact ? ' dvx-model-add-icon' : ''}`}
-      aria-label="Add models"
-      title="Add models"
-      onClick={() => {
-        onOpen();
-        openManager();
-      }}
-    >
-      <Plus aria-hidden="true" />{compact ? null : <span>Add models</span>}
-    </Button>
   );
 }
 

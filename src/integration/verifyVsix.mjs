@@ -29,6 +29,7 @@ const expectedEntries = [
   'extension/dist/webview/syntax.js',
   'extension/dist/webview/mission-control.js',
   'extension/dist/webview/models.js',
+  'extension/dist/webview/management.js',
   'extension/dist/webview/session-viewer.js',
   'extension/dist/webview/review.js',
   'extension/dist/webview/webview.css',

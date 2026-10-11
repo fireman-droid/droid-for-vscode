@@ -84,6 +84,7 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       list: (...args) => sessionResources.list(...args),
       listPage: (...args) => sessionResources.listPage(...args),
       search: (...args) => sessionResources.search(...args),
+      rename: (...args) => sessionResources.rename!(...args),
       archive: (...args) => sessionResources.archive(...args),
       unarchive: (...args) => sessionResources.unarchive(...args),
       getMessages: (...args) => sessionResources.getMessages(...args),

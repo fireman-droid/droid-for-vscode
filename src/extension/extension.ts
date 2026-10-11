@@ -57,6 +57,8 @@ import { DisabledModelsStore } from './models/DisabledModelsStore';
 import { ModelManager } from './models/ModelManager';
 import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
+import { createManagementServices } from './management/createManagementServices';
+import { isManagementPage } from '../shared/protocol/managementPageProtocol';
 import { applyModelToChat, readModelApplyState } from './models/modelChatApply';
 import { MissionGateway } from './chat/mission/MissionGateway';
 import { withMissionPlanningSettings } from './chat/mission/withMissionPlanningSettings';
@@ -519,6 +521,8 @@ export function activate(context: vscode.ExtensionContext): void {
       readApplyState: () => readModelApplyState(controller),
       apply: (runtimeId, signal) => applyModelToChat(controller, runtimeId, signal),
     }),
+    createManagementServices({ context, controller, getDroid: getDaemonDroid, daemon: runtimeMode === 'daemon',
+      history: historyLoader, viewer: sessionViewer, mission: missionControl, gateway: missionGateway, diagnostics }),
   );
   const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon', modelAvailability);
   const browserDevBridge = new BrowserDevBridge(
@@ -626,6 +630,7 @@ export function activate(context: vscode.ExtensionContext): void {
       missionControl.open();
     }),
     vscode.commands.registerCommand('droidvisx.openModels', () => modelsPanel.open()),
+    vscode.commands.registerCommand('droidvisx.openManagement', (page: unknown) => modelsPanel.open(isManagementPage(page) ? page : 'general')),
     vscode.commands.registerCommand(openLogsCommand, () => {
       diagnostics.record({
         level: 'info',

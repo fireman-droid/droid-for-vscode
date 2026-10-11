@@ -103,6 +103,10 @@ export function routeWebviewMessage(
     options.openModels?.();
     return;
   }
+  if (message.type === 'management.open') {
+    void vscode.commands.executeCommand('droidvisx.openManagement', message.page);
+    return;
+  }
   if (message.type === 'capabilities.manage') {
     void vscode.commands.executeCommand('droidvisx.manageCapabilities', message.section);
     return;

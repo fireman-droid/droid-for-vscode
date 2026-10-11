@@ -2,6 +2,7 @@ import { type WebviewToHostMessage } from './bridgeMessages';
 import { parseSystemPromptRequest } from './protocol/systemPromptProtocol';
 import { parseIdeRequest } from './protocol/ideProtocol';
 import { parseManagementOpen } from './protocol/managementProtocol';
+import { parseManagementPageOpen } from './protocol/managementPageProtocol';
 import { parseFileReadDiffMessage, parseFileOpenTurnDiffMessage } from './protocol/inlineDiffProtocol';
 import {
   parseBtwAskMessage,
@@ -120,6 +121,7 @@ const parseSubagentMessage: WebviewMessageParser = (value) =>
   parseSubagentWebviewMessage(value) ?? undefined;
 
 const WEBVIEW_MESSAGE_PARSERS = {
+  'management.open': parseManagementPageOpen,
   'systemPrompt.read': parseSystemPromptRequest,
   'systemPrompt.save': parseSystemPromptRequest,
   'ide.reconnect': parseIdeRequest,

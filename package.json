@@ -48,6 +48,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "droidvisx.openManagement",
+        "title": "Droid: Open Management"
+      },
+      {
         "command": "droidvisx.manageCapabilities",
         "title": "Droid: Manage Droid Capabilities"
       },

@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-10。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
+更新：2026-10-11。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,16 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 统一管理页与主聊天入口（2026-10-11）
+
+- 新增 `Droid: Open Management`，独立编辑器面板包含常规、模型、智能补全、会话、Missions；没有扩展栏目。主聊天保持原 Webview 与运行时，管理页导航不发送会话切换请求。
+- 主聊天顶部保留轻量连接状态与新建／历史，新增管理入口；版本和构建信息移到常规页，移除大型 About 弹层及模型选择器里的 Add models。保留 Spec、推理强度与已有连接恢复行为。
+- 模型页顶部创建渠道，渠道内添加模型直接发现该渠道的模型，支持搜索、批量导入和手动 ID；复用原 ModelManager、连接配置、验证与删除确认。协议仍为 `openai`、`anthropic`、`generic-chat-completion-api`，密钥通过编辑器安全输入框填写。
+- 会话管理使用 SDK daemon 分页目录，区分当前／全部文件夹与聊天／Exec、收藏／归档；每页最多读取 100 条，显式加载更多。隐藏子代理、编辑辅助与 Mission 记录，保留记录自身目录用于查看及 Markdown 导出。当前文件夹的普通会话可继续；其他文件夹在新窗口打开，Exec 不作为普通聊天恢复。SDK 此目录没有创建时间和文件字节大小，因此表格展示修改时间与消息数，不伪造字段。
+- 补全配置读取并保存已有独立补全服务设置，包括协议、模型、地址、密钥、触发与上下文；保留原设置作用域。Mission 目录与进入任务复用现有 gateway 和主聊天 Mission 工作区。
+- `pnpm --config.verify-deps-before-run=false --config.manage-package-manager-versions=false run package:vsix` 通过，包含 typecheck、lint:budgets、公共 UI 声明与生产构建；168 个 VSIX 条目及静态依赖校验通过。普通 pnpm 调用因自动依赖校验要求交互而中止，使用上述参数保留现有依赖完成构建，未重新安装依赖。
+- 已安装到 Microsoft VS Code 当前用户扩展目录；5 个主要产物与 VSIX 哈希一致，安装后清单仅多出编辑器的 `__metadata`，需 Reload Window。本次用户明确选择只做类型检查和构建，未新增、修改或运行功能测试、浏览器自动化或截图验收，VSIX 校验跳过运行时入口加载。真实视觉与行为待用户在编辑器验收。npm 配置提示和安装时的 `url.parse()` 弃用提示未阻断交付。
 
 ## 模型接口选项使用 Droid 原名（2026-10-10）
 
