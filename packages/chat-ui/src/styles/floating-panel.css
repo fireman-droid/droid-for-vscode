@@ -1,9 +1,10 @@
 @layer components {
   .dvx-floating-panel { position: fixed; z-index: 40; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 6px; background: var(--code-surface); color: var(--ink); box-shadow: 0 6px 22px #0002; outline: none; }
-  .dvx-floating-panel-header { display: flex; align-items: center; flex: 0 0 28px; gap: 2px; padding: 0 3px 0 8px; border-bottom: 1px solid var(--panel-edge); color: var(--muted-ink); }
-  .dvx-floating-panel-move { display: flex; align-items: center; flex: 1; min-width: 0; gap: 6px; height: 26px; font: 11px/1.4 var(--font-sans); text-align: left; cursor: grab; touch-action: none; }
+  .dvx-floating-panel-header { display: flex; align-items: center; flex: 0 0 24px; gap: 2px; padding: 0 4px 0 10px; color: var(--muted-ink); }
+  .dvx-floating-panel-header button, .dvx-floating-panel-resize { border: 0; background: transparent; box-shadow: none; padding: 0; color: inherit; }
+  .dvx-floating-panel-header button:hover { color: var(--ink); }
+  .dvx-floating-panel-move { display: flex; align-items: center; justify-content: flex-start; flex: 1; min-width: 0; height: 22px; cursor: grab; touch-action: none; }
   .dvx-floating-panel-move:active { cursor: grabbing; }
-  .dvx-floating-panel-move span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dvx-floating-panel-move svg { width: 14px; height: 14px; flex-shrink: 0; }
   .dvx-floating-panel-body { flex: 1; min-height: 0; overflow: hidden; }
   .dvx-floating-panel-resize { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; color: var(--muted-ink); }

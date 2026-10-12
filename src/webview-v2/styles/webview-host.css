@@ -33,6 +33,16 @@ html[data-theme] blockquote {
   border: revert-layer;
 }
 
+/* Keep the movable question controls free of editor-provided button chrome. */
+html[data-theme] [data-slot='floating-panel'] [data-slot='button'] {
+  border: revert-layer;
+  background: revert-layer;
+  color: revert-layer;
+  padding: revert-layer;
+  font: revert-layer;
+  box-shadow: revert-layer;
+}
+
 /* Editor themes also style bare code elements. A diff owns the complete row
    background, so inline-code fills must not cover its added/removed colors. */
 html[data-theme] .review-diff :is(.review-diff-code, .review-unified-row) > code {

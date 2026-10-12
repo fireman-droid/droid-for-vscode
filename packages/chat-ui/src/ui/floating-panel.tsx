@@ -1,5 +1,5 @@
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { GripHorizontal, MoveDiagonal2, MoreHorizontal, RotateCcw, X } from 'lucide-react';
+import { GripHorizontal, MoveDiagonal2, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
@@ -76,16 +76,16 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
         <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
         <div className="dvx-floating-panel-header">
           <Button variant="plain" size="none" className="dvx-floating-panel-move" aria-label="Move question panel"
-            title="Drag to move · Arrow keys to adjust" {...handle('move')}><GripHorizontal /><span>{title}</span></Button>
+            title="Drag to move · Arrow keys to adjust" {...handle('move')}><GripHorizontal /></Button>
           <DropdownMenu modal={false}><DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="Panel position and size"><MoreHorizontal /></Button>
           </DropdownMenuTrigger><DropdownMenuContent>
+            <DropdownMenuItem onSelect={() => setFrame(initial())}>Return to selection</DropdownMenuItem>
             {([['Move left', -40, 0], ['Move right', 40, 0], ['Move up', 0, -40], ['Move down', 0, 40]] as const).map(([label, x, y]) =>
               <DropdownMenuItem key={label} onSelect={() => change('move', frame, x, y)}>{label}</DropdownMenuItem>)}
             <DropdownMenuItem onSelect={() => change('resize', frame, 60, 40)}>Larger</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => change('resize', frame, -60, -40)}>Smaller</DropdownMenuItem>
           </DropdownMenuContent></DropdownMenu>
-          <Button variant="ghost" size="icon-sm" aria-label="Return to selection" title="Return to selection" onClick={() => setFrame(initial())}><RotateCcw /></Button>
           <Button variant="ghost" size="icon-sm" aria-label="Close question" onClick={onClose}><X /></Button>
         </div>
         <div className="dvx-floating-panel-body">{children}</div>

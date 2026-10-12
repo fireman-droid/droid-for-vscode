@@ -4,7 +4,7 @@
   .review-inline-question { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: var(--code-surface); }
   .review-question-history { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; overscroll-behavior: contain; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); }
   .review-question-exchange + .review-question-exchange { margin-top: 12px; }
-  .review-question-exchange .review-question-prompt { white-space: pre-wrap; margin-bottom: 8px; padding: 5px 8px; border-left: 2px solid var(--link-ink); border-radius: 3px; color: var(--link-ink); background: color-mix(in srgb, var(--link-ink) 8%, var(--code-surface)); font-style: normal; }
+  .review-question-exchange .review-question-prompt { white-space: pre-wrap; margin-bottom: 8px; padding: 0; border: 0; border-radius: 0; color: var(--link-ink); background: transparent; font-style: normal; }
   .review-question-history .markdown-prose, .review-question-history [class*='text-[13px]'] { font-size: 12px; line-height: 1.55; }
   .review-question-history .markdown-prose > :first-child { margin-top: 0; }
   .review-question-history .markdown-prose > :last-child { margin-bottom: 0; }
