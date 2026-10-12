@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/overlays';
 import type { InlineDiffLine } from './inlineDiffLines';
 import type { DiffRow } from './DiffView';
@@ -30,9 +30,7 @@ interface DiffQuestionContextValue {
 export const DiffQuestionContext = createContext<DiffQuestionContextValue | null>(null);
 export const DiffQuestionContentContext = createContext<ReactNode>(null);
 
-function QuestionSlot() { return <div className="review-question-slot">{useContext(DiffQuestionContentContext)}</div>; }
-
-function SelectionQuestion({ anchor, onDismiss }: { anchor: DiffQuestionAnchor; onDismiss(): void }) {
+function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestionAnchor; active: boolean; onDismiss(): void }) {
   const content = useContext(DiffQuestionContentContext);
   const reference = useMemo(() => ({ current: {
     getBoundingClientRect: () => anchor.range.getBoundingClientRect(),
@@ -40,9 +38,11 @@ function SelectionQuestion({ anchor, onDismiss }: { anchor: DiffQuestionAnchor; 
   } }), [anchor]);
   return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
     <PopoverAnchor virtualRef={reference} />
-    <PopoverContent className="review-question-menu rounded-[5px] p-0" data-diff-question-control=""
-      side="bottom" align="end" sideOffset={4} hideWhenDetached
-      aria-label="Selected code actions" onOpenAutoFocus={event => event.preventDefault()}
+    <PopoverContent className={`review-question-menu rounded-[5px] p-0${active ? ' review-question-panel w-[500px] overflow-hidden border-0' : ''}`} data-diff-question-control=""
+      side={active ? 'top' : 'bottom'} align={active ? 'start' : 'end'} sideOffset={4} hideWhenDetached
+      aria-label={active ? 'Ask about selected code' : 'Selected code actions'}
+      onInteractOutside={event => { if (active) event.preventDefault(); }}
+      onOpenAutoFocus={event => event.preventDefault()}
       onCloseAutoFocus={event => event.preventDefault()}>{content}</PopoverContent>
   </Popover>;
 }
@@ -136,15 +136,7 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
       diff.ownerDocument.removeEventListener('selectionchange', clearCollapsed);
     };
   }, [root, enabled, select, clearSelection, key, source, path, rows, lines]);
-  useLayoutEffect(() => {
-    const diff = root.current;
-    if (!diff || !question) return;
-    const update = () => diff.style.setProperty('--diff-question-viewport', `${diff.clientWidth}px`);
-    const observer = new ResizeObserver(update);
-    observer.observe(diff); update();
-    return () => observer.disconnect();
-  }, [root, !!question]);
   return current ? { row: current.row, startRow: current.startRow, side: current.selection.side,
-    content: question?.active ? <div className="review-question-row" data-side={current.selection.side}><QuestionSlot /></div> : null,
-    floating: question?.active ? null : <SelectionQuestion anchor={current} onDismiss={() => clearSelection?.(key)} /> } : null;
+    floating: <SelectionQuestion anchor={current} active={question?.active === true}
+      onDismiss={() => question?.active ? close?.() : clearSelection?.(key)} /> } : null;
 }

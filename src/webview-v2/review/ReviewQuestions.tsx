@@ -53,7 +53,7 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
   useEffect(() => {
     const dismiss = () => clearSelection();
     const outside = (event: Event) => {
-      if (event.target instanceof Element && !event.target.closest('.review-question-row, [data-diff-question-control]')) dismiss();
+      if (event.target instanceof Element && !event.target.closest('[data-diff-question-control]')) dismiss();
     };
     window.addEventListener('blur', dismiss);
     document.addEventListener('pointerdown', outside);

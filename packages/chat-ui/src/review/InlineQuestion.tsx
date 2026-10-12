@@ -4,7 +4,6 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { Message, MessageContent } from '../ai-elements/message';
 import { Markdown } from '../content/Markdown';
-import { KeepComposerPosition } from './KeepComposerPosition';
 
 function QuestionInput({ inputRef, ...props }: ComponentProps<typeof Textarea> & {
   inputRef: RefObject<HTMLTextAreaElement | null>;
@@ -39,18 +38,17 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
   onFocused(): void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
-  const composer = useRef<HTMLDivElement>(null);
   const history = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
-    if (focusRequested && input.current) { input.current.focus(); onFocused(); }
+    if (focusRequested && input.current) { input.current.focus({ preventScroll: true }); onFocused(); }
   }, [focusRequested, onFocused]);
   useEffect(() => {
     const node = history.current;
     if (node && follow.current) node.scrollTop = node.scrollHeight;
   }, [entries]);
   const send = () => { if (!disabled && !busy && draft.trim()) onSend(); };
-  return <KeepComposerPosition anchor={composer}><section className="review-inline-question" aria-label="Ask about selected code">
+  return <section className="review-inline-question" aria-label="Ask about selected code">
     {entries.length > 0 ? <div ref={history} className="review-question-history" onScroll={event => {
       const node = event.currentTarget; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
     }}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
@@ -58,7 +56,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       {entry.answer ? <Message from="assistant"><MessageContent><Markdown text={entry.answer} streaming={entry.state === 'streaming'} /></MessageContent></Message> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div> : null}
-    <div ref={composer} className="review-question-composer">
+    <div className="review-question-composer">
       <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label="Question about selected code"
         placeholder={entries.length ? 'Add a follow-up…' : 'Ask a quick question…'} value={draft} maxLength={maxLength}
         onChange={event => onDraft(event.target.value)} onKeyDown={event => {
@@ -74,5 +72,5 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
           aria-label={busy ? 'Stop answer' : 'Send question'} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
       </div>
     </div>
-  </section></KeepComposerPosition>;
+  </section>;
 }

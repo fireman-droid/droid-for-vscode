@@ -82,8 +82,8 @@ export function useDeferredDiff(root: RefObject<HTMLElement | null>, enabled: bo
   }, []);
 }
 
-export function DeferredDiffChunk({ count, changes, defer, observe, children }: {
-  count: number; changes: readonly number[]; defer: boolean; observe: ObserveChunk; children: () => ReactNode;
+export function DeferredDiffChunk({ count, changes, defer, observe, children, pinned = false }: {
+  count: number; changes: readonly number[]; defer: boolean; observe: ObserveChunk; children: () => ReactNode; pinned?: boolean;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const [nearby, setNearby] = useState(!defer);
@@ -109,7 +109,7 @@ export function DeferredDiffChunk({ count, changes, defer, observe, children }: 
     document.addEventListener('selectionchange', release);
     return () => document.removeEventListener('selectionchange', release);
   }, [selected]);
-  const visible = nearby || selected || !defer;
+  const visible = nearby || selected || pinned || !defer;
   return <div ref={element} data-diff-changes={changes.length ? '' : undefined} className="review-diff-chunk"
     style={{ height: `calc(${count} * var(--diff-line-height, 22px))` }}>
     {visible ? children() : null}

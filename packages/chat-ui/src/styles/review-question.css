@@ -1,18 +1,16 @@
 @layer components {
   .review-diff-code[data-question-selected] > code, .review-unified-row[data-question-selected] > code { background: color-mix(in srgb, var(--secondary-ink) 16%, transparent); }
-  .review-question-row { position: sticky; left: 0; width: var(--diff-question-viewport, 100%); padding: 4px 10px 6px 13ch; box-sizing: border-box; }
-  .review-diff[data-layout='split'] .review-question-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 4px 0 6px; }
-  .review-diff[data-layout='split'] .review-question-slot { padding: 0 10px 0 8ch; }
-  .review-diff[data-layout='split'] .review-question-row[data-side='after'] .review-question-slot { grid-column: 2; }
-  .review-question-slot { min-width: 0; font: 12px/1.5 var(--font-sans); color: var(--ink); }
-  .review-inline-question { width: 100%; max-width: 500px; overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 6px; background: var(--code-surface); }
-  .review-question-history { max-height: 260px; overflow: auto; overscroll-behavior: contain; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); }
+  .review-question-menu { font: 12px/1.5 var(--font-sans); color: var(--ink); }
+  .review-inline-question { display: flex; flex-direction: column; width: 100%; max-width: 500px; max-height: min(420px, var(--radix-popover-content-available-height, 420px)); overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 6px; background: var(--code-surface); }
+  .review-question-history { flex: 0 1 auto; min-height: 0; max-height: 260px; overflow: auto; overscroll-behavior: contain; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); }
+  .review-question-panel[data-side='bottom'] .review-inline-question { flex-direction: column-reverse; }
+  .review-question-panel[data-side='bottom'] .review-question-history { border-bottom: 0; border-top: 1px solid var(--panel-edge); }
   .review-question-exchange + .review-question-exchange { margin-top: 12px; }
   .review-question-exchange .review-question-prompt { white-space: pre-wrap; margin-bottom: 4px; color: var(--secondary-ink); font-style: italic; }
   .review-question-history .markdown-prose, .review-question-history [class*='text-[13px]'] { font-size: 12px; line-height: 1.55; }
   .review-question-history .markdown-prose > :first-child { margin-top: 0; }
   .review-question-history .markdown-prose > :last-child { margin-bottom: 0; }
-  .review-question-composer { position: relative; padding: 6px 8px 6px 12px; }
+  .review-question-composer { position: relative; flex: 0 0 auto; padding: 6px 8px 6px 12px; }
   .review-question-composer :is(.review-question-close, .review-question-send) { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; line-height: 1; }
   .review-question-composer .review-question-input { display: block; width: 100%; min-height: 27px; max-height: 120px; padding: 2px 24px 2px 0; resize: none; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; box-shadow: none; }
   .review-question-input::placeholder { color: var(--muted-ink); }

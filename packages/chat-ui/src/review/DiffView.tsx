@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
 import { useDiffSyntax } from '../syntax/diffSyntax';
 import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
@@ -38,7 +38,7 @@ export function splitDiffRows(lines: readonly InlineDiffLine[]): DiffRow[] {
   return rows;
 }
 type DiffBlock<T> = { index: number; header: string } | { index: number; rows: readonly T[]; changes: readonly number[] };
-function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean, insertAfter = -1): DiffBlock<T>[] {
+function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean): DiffBlock<T>[] {
   const blocks: DiffBlock<T>[] = [];
   for (let index = 0; index < rows.length;) {
     const text = header(rows[index]!);
@@ -48,7 +48,6 @@ function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefine
     while (index < rows.length && index - start < 64 && header(rows[index]!) === undefined) {
       if (changed(rows[index]!) && (index === 0 || !changed(rows[index - 1]!))) changes.push(index - start);
       index++;
-      if (index === insertAfter + 1) break;
     }
     blocks.push({ index: start, rows: rows.slice(start, index), changes });
   }
@@ -132,10 +131,9 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
   const selection = useSplitDiffSelection(root, rows, path);
   const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);
-  const questionRow = question?.content ? question.row : -1;
   const blocks = useMemo(() => rows
-    ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add', questionRow)
-    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove', questionRow), [lines, rows, questionRow]);
+    ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
+    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, rows]);
   const columns = useMemo(() => {
     let before = 0, after = 0;
     for (const line of lines) {
@@ -157,13 +155,14 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
-        : <Fragment key={block.index}><DeferredDiffChunk count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
+        : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}
+          pinned={!!question && question.row >= block.index && question.row < block.index + block.rows.length}>
           {() => block.rows.map((row, index) => split
             ? <SplitRow key={index} row={row as DiffRow} index={block.index + index} syntax={syntax} words={words}
               questionSide={question && block.index + index >= question.startRow && block.index + index <= question.row ? question.side : undefined} />
             : <UnifiedRow key={index} line={row as InlineDiffLine} index={block.index + index} syntax={syntax} words={words}
               questionSide={question && block.index + index >= question.startRow && block.index + index <= question.row ? question.side : undefined} />)}
-        </DeferredDiffChunk>{block.index + block.rows.length - 1 === questionRow ? question?.content : null}</Fragment>)}
+        </DeferredDiffChunk>)}
     </div>
     {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}
     {question?.floating}
