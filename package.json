@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid",
   "description": "Run Factory Droid in VS Code and Cursor with BYOK, side chats, diff review, and code completion. Unofficial community extension.",
-  "version": "0.8.3",
+  "version": "0.8.6",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
