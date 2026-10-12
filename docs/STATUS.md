@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 当前本地增量包（2026-10-12）
+
+- 从干净的 main 提交 `ff2dbb7` 构建，包含 Review 问题橙色文字、紧凑 Droid Logo 拖柄、回答平滑显示、文件标题下重复边框修复，以及新的扩展名称和简介；暂停的 Thinking 改动未进入包。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 条 VSIX 静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `4746d0b45c3a1aaf373cf06fec31911872c024e923b83be1d441c14b6d978f94`。npm 配置与安装 CLI 弃用提示未阻断交付。
+- 按用户要求未新增或运行测试／界面自动化，需 Reload Window 后人工验收。本地仍使用 0.8.9 版本号，此增量包尚未另发 GitHub Release 或市场版本；下面的正式 0.8.9 发布记录对应原发布附件。
+
 ## v0.8.9 正式发布（2026-10-12）
 
 - 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍，以及重新打开会话时的遗留记录恢复；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。保留已有发布和标签。
