@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 分栏 Diff 选择与复制隔离（2026-10-12）
+
+- 分栏 Diff 按拖选起始栏限制原生选区，左右栏可分别重新选择，Shift 扩选保留起始栏；复制从该栏原始代码提取，保留首尾局部选择、缩进和空行，排除另一栏、行号、增删符号及对齐占位。
+- 保留现有行对齐、独立横向滚动和延迟渲染；跨延迟块复制使用首尾选区间的源代码行。共享组件覆盖普通文件审阅和 Recorded Edits，统一 Diff 展示不受影响。
+- `typecheck`、`lint:budgets` 和 `package:vsix` 通过；168 个 VSIX 条目与静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 与 Cursor，两边各 8 个主要文件及安装清单（排除安装器追加的 `__metadata`）与 VSIX 一致。未新增、修改或运行测试、浏览器自动化或截图 probe，真实拖选／复制待 Reload Window 后由用户验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 发送前保存不可变文件基线（2026-10-12）
 
 - 新轮次先保存工作区原始字节并持久化，再发送到 Runtime；包含 Git 忽略的项目文件，保留已有未提交内容和 CRLF／二进制字节。使用扩展自己的 index／对象目录，不修改项目 index，不执行 Git clean filter。排除 `.git`、`node_modules`、`.venv`，符号链接只保存链接自身。

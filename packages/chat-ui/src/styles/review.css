@@ -20,6 +20,9 @@
   .review-diff-content { min-width: 100%; }
   .review-diff[data-layout='unified'] .review-diff-content { min-width: max(100%, calc((var(--diff-code-columns) + 13) * 1ch + 16px)); }
   .review-diff[data-layout='split'] .review-diff-content { width: 100%; }
+  .review-diff[data-selection-side='left'] .review-diff-cell[data-side='right'],
+  .review-diff[data-selection-side='right'] .review-diff-cell[data-side='left'],
+  .review-diff[data-selection-side] .review-hunk { user-select: none; }
   .review-workbench .review-diff {
     --diff-code-font-size: 13px;
   }

@@ -4,6 +4,7 @@ import { useDiffSyntax } from '../syntax/diffSyntax';
 import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
+import { useSplitDiffSelection } from './splitDiffSelection';
 export { findDiffChange } from './diffNavigation';
 
 const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
@@ -51,8 +52,8 @@ function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefine
   return blocks;
 }
 type WordDiffRanges = ReturnType<typeof wordDiffRanges>;
-function SplitRow({ row, syntax, words }: { row: DiffRow; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
-  return <div className="review-split-row" data-diff-before={row.left?.before} data-diff-after={row.right?.after}>{(['left', 'right'] as const).map((side) => {
+function SplitRow({ row, index, syntax, words }: { row: DiffRow; index: number; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
+  return <div className="review-split-row" data-diff-row={index} data-diff-before={row.left?.before} data-diff-after={row.right?.after}>{(['left', 'right'] as const).map((side) => {
     const line = row[side];
     return <div key={side} data-side={side} className={`review-diff-cell ${line ? `diff-${line.kind}` : 'diff-empty'}`}>
       <span className="diff-number" aria-hidden>{line && (side === 'left' ? line.before : line.after)}</span>
@@ -123,9 +124,11 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
   const lines = useMemo(() => limit === undefined ? all : all.slice(0, limit), [all, limit]);
   const words = useMemo(() => wordDiffRanges(lines), [lines]);
-  const blocks = useMemo(() => split
-    ? diffBlocks(splitDiffRows(lines), (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
-    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, split]);
+  const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
+  const selection = useSplitDiffSelection(root, rows, path);
+  const blocks = useMemo(() => rows
+    ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
+    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, rows]);
   const columns = useMemo(() => {
     let before = 0, after = 0;
     for (const line of lines) {
@@ -140,6 +143,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const observe = useDeferredDiff(root, defer);
   const syntax = useDiffSyntax(lines, path, source);
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
+    {...selection}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
     role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
     {syntax.error ? <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
@@ -148,7 +152,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
           {() => block.rows.map((row, index) => split
-            ? <SplitRow key={index} row={row as DiffRow} syntax={syntax} words={words} />
+            ? <SplitRow key={index} row={row as DiffRow} index={block.index + index} syntax={syntax} words={words} />
             : <UnifiedRow key={index} line={row as InlineDiffLine} syntax={syntax} words={words} />)}
         </DeferredDiffChunk>)}
     </div>
