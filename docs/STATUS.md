@@ -12,20 +12,21 @@
 ## v0.8.9 正式发布（2026-10-12）
 
 - 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍，以及重新打开会话时的遗留记录恢复；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。保留已有发布和标签。
-- 由版本标签构建统一 VSIX、SHA256SUMS 与来源信息，通过发布校验后公开 GitHub Release，再由已绑定的可信发布工作流上传同一 VSIX 到 Open VSX；构建、发布和安装结果在完成后记录。
-- v0.8.6、v0.8.7 构建通过并保留为草稿；v0.8.8 已公开到 GitHub，CI 完整 VSIX 校验及 VS Code／Cursor 安装完成，可信发布工作流报告 Open VSX 上传成功。公开 API 尚未查询到该版本，不能据此确认市场可下载；本次后续修复使用 v0.8.9 统一交付。
+- [v0.8.9 构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38239478983)完成类型检查、预算检查、生产构建和完整 VSIX 校验；来源为干净的 main 提交 `8ff2da11f715c44b1a1d0ab5dbfa32dedc221395`，包 SHA256 为 `0066408a89b98c7e2391c57b8e6cf7b36d74bb341ff465701cf777fa347f0ade`。已安装到 Microsoft VS Code 与 Cursor，各 10 个文件及清单和发布包一致，需 Reload Window；安装 CLI 的 DEP0169 弃用提示未阻断交付。
+- [GitHub v0.8.9](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.9) 已公开，[Open VSX 自动发布](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38239814207)成功上传同一包。0.8.8 已确认市场可下载，0.8.9 公开接口尚不可见，不能宣称 Cursor 市场更新已就绪；本地安装不受影响。
+- v0.8.6、v0.8.7 构建通过并保留为草稿，v0.8.8 保留为已公开历史版本。
 
 ## 后台结束后的 IDE 错误恢复（2026-10-12）
 
 - 只读日志与后台状态确认：Droid 会话重试后已连接，但原 IDE 通道恢复失败，后台仍报告正在生成。运行中继续保留任务，重连不强制停止或迁移工作进程。
 - 后台确认空闲后的自动恢复同时处理 `reconnect-required`、`error` 和 `disconnected`，修复只接受一种状态而漏掉 IDE 恢复错误的问题；仍按原会话及运行时代次限制一次自动尝试，失败后保留手动重试。
 - 会话已连接而 IDE 断开时显示 `IDE offline`，状态提示展示连接失败或等待任务结束的原因，避免只有 Offline 而无法判断重连为什么受阻。
-- 获准的 4 项模拟回归通过，覆盖后台运行中拒绝重启、结束后恢复错误／断开通道、自动失败后保留手动重试及按钮请求路由。`pnpm run typecheck`、`pnpm run lint:budgets` 通过；未调用模型或改写业务文件。安装与公开发布随统一版本交付后记录。
+- 获准的 4 项模拟回归通过，覆盖后台运行中拒绝重启、结束后恢复错误／断开通道、自动失败后保留手动重试及按钮请求路由。`pnpm run typecheck`、`pnpm run lint:budgets` 通过；未调用模型或改写业务文件，已包含在统一发布包中。
 
 ## 失败重试后遗留的工作区记录（2026-10-12）
 
 - 新消息发送前读取工作区持久记录中的原会话／轮次，避免只看已被失败重试替换的当前轮次。仅同一会话且后台明确空闲时补采原轮次最终快照，完成后再保存新轮次基线；其他会话、运行中、等待用户和未知状态继续保留原记录，不直接删锁或重发旧请求。
-- 获准的临时 Git 工作区回归通过，覆盖窗口退出后原轮次残留、跨会话拒绝接管、三种非空闲状态拒绝采集及空闲后新请求恢复；旧前后版本、下一轮基线和用户暂存区均正确。`typecheck`、`lint:budgets` 通过；未调用模型或改写实际业务文件，随下一统一版本安装。
+- 获准的临时 Git 工作区回归通过，覆盖窗口退出后原轮次残留、跨会话拒绝接管、三种非空闲状态拒绝采集及空闲后新请求恢复；旧前后版本、下一轮基线和用户暂存区均正确。`typecheck`、`lint:budgets` 通过；未调用模型或改写实际业务文件，已包含在统一发布包中。
 - 0.8.8 的实际日志确认重试已补存旧快照并完成新回答；补齐重新打开会话的恢复入口，后台确认空闲时即按持久记录结算，不再要求先发一条消息。旧拒绝提示更新为已恢复、原请求未发送且可重新发送，保留失败状态，不伪造成功；恢复与重试并发时共用一次最终采集。
 - 本轮获准的 6 项控制器模拟与原临时 Git 回归通过，覆盖仅重开会话、三种非空闲状态、采集失败及恢复／重试并发。`typecheck`、`lint:budgets` 通过；未调用模型、未修改业务文件或中断用户正在运行的任务。
 
@@ -67,18 +68,18 @@
 
 - 重写 README 首屏、安装入口与功能介绍，使用现有真实截图和新图标；补充 Cursor／Open VSX 安装及更新方式，保留平台、数据和许可证边界。扩展简介明确 VS Code、Cursor、BYOK、旁问、审阅与补全；审阅指南同步行内问答模型的设置入口。
 - `typecheck`、`lint:budgets`、生产构建和 168 条 VSIX 静态校验通过，跳过运行时入口加载；核对了文档相对链接及包内图标、截图、文档 URL。已安装到 Microsoft VS Code 和 Cursor，两边 10 个文件与清单和安装包一致，需 Reload Window。未运行测试、浏览器自动化或截图验证；暂停的 Thinking 改动未进入安装包。
-- GitHub README 随提交更新；Open VSX 简介与详情页随下一次正式版本发布生效。本次未创建 Release 或上架；市场当前为 0.8.5，源码仍为 0.8.3，下一次发布须使用更高版本。GitHub About 与 Topics 保留现有配置。
+- GitHub README 已随提交更新；Open VSX 简介、详情页及新图标已随 0.8.8 发布。GitHub About 与 Topics 保留现有配置。
 
 ## 扩展列表图标（2026-10-12）
 
 - 扩展清单使用的 `resources/droidvisx.png` 已替换为用户提供的黑底白色原图，逐字节一致；用于插件列表、扩展详情及后续市场安装包。
-- `typecheck`、`lint:budgets`、生产构建与 168 条 VSIX 静态校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，原图、8 个主要文件及清单与安装包一致，需 Reload Window。未运行测试或截图验证；远端市场图标随下一次正式版本发布更新。
+- `typecheck`、`lint:budgets`、生产构建与 168 条 VSIX 静态校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，原图、8 个主要文件及清单与安装包一致，需 Reload Window。未运行测试或截图验证；远端市场图标已随正式版本更新。
 
 ## GitHub Release 自动上架 Open VSX（2026-10-12）
 
 - 新增 `publish-openvsx.yml`，仅在正式 GitHub Release 公开后运行，下载该 Release 的原始 VSIX、SHA256SUMS 与构建信息，核对 main 源码提交、版本、扩展 ID、干净构建与摘要后上架 Open VSX。普通 push、草稿与预发布不触发；不重新构建附件，不覆盖已发布版本。
-- 使用已有 ovsx 1.2.0 的 GitHub OIDC 身份发布，无需长期 Token。命名空间所有者已确认授权，Open VSX 页面已显示 `droidvisx.droidvisx` 绑定 `fireman-droid/droid-for-vscode` 的 `publish-openvsx.yml`，GitHub 工作流状态为 active；具体字段见 DEVELOPMENT。当前市场已有 0.8.5，下一次发布需使用更高版本与包含新工作流的标签。
-- `actionlint` 静态检查通过；本轮 `typecheck`、`lint:budgets` 与图标安装包构建／静态校验通过。未运行测试或触发真实市场发布；端到端上传结果待下一次正式 Release 验证，Cursor 显示更新还取决于其市场同步与审核。
+- 使用已有 ovsx 1.2.0 的 GitHub OIDC 身份发布，无需长期 Token。命名空间所有者已确认授权，Open VSX 页面已显示 `droidvisx.droidvisx` 绑定 `fireman-droid/droid-for-vscode` 的 `publish-openvsx.yml`，GitHub 工作流状态为 active；具体字段见 DEVELOPMENT。
+- `actionlint` 静态检查通过；`typecheck`、`lint:budgets` 与安装包构建／校验通过。0.8.8 和 0.8.9 的正式 Release 均已自动触发并完成上传，0.8.8 已确认可下载；Cursor 显示更新仍取决于市场同步与审核，最新交付状态见本文版本段落。
 
 ## Plan 状态解析（2026-10-12）
 
