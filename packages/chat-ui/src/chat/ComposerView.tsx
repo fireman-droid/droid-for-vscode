@@ -57,6 +57,7 @@ export function ComposerView({
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
+  const surface = useRef<HTMLFormElement>(null);
   const [expanded, setExpanded] = useState(false);
   useLayoutEffect(() => {
     if (value.length === 0) setExpanded(false);
@@ -114,10 +115,10 @@ export function ComposerView({
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>
     <PopoverAnchor asChild>
-      <form data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragOver={onDragOver}
+      <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragOver={onDragOver}
         onSubmit={(event) => { event.preventDefault(); submit(); }}>
         {inputReplacement == null ? <>
-          <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="px-3 pt-2" />
+          <QuoteChips quotes={quotedContext} previewAnchor={surface} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="px-3 pt-2" />
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}

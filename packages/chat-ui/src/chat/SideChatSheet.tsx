@@ -16,6 +16,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const composer = useRef<HTMLDivElement>(null);
   const opener = useRef(document.activeElement);
   const resize = useRef<{ id: number; x: number; width: number } | null>(null);
   const activeEntry = state.entries.find((entry) => entry.state === 'streaming');
@@ -138,11 +139,11 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
       </div> : null}
       {state.message ? <p role="alert" className="v2-btw-error">{state.message}</p> : null}
       {state.pendingImages?.length ? renderImages?.(state.pendingImages) : null}
-      <div data-composer-surface="" data-has-status={Boolean(composerStatus) || undefined} className="v2-btw-composer" onDrop={onDrop} onDragOver={onDragOver}>
+      <div ref={composer} data-composer-surface="" data-has-status={Boolean(composerStatus) || undefined} className="v2-btw-composer" onDrop={onDrop} onDragOver={onDragOver}>
         {composerStatus ? <div className="v2-btw-composer-status">{composerStatus}</div> : null}
         <div className="v2-btw-compose-content">
         {attachments}
-        <QuoteChips quotes={quotedContext} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
+        <QuoteChips quotes={quotedContext} previewAnchor={composer} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
           aria-label="By the Way question" placeholder={state.entries.length ? 'Ask a follow-up…' : 'Ask a side question…'} onChange={(event) => onDraftChange(event.target.value)}
           onPaste={onPaste}

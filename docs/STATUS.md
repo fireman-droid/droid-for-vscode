@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Composer 引用预览对齐（2026-10-12）
+
+- 主聊天、BTW 和编辑重发框的引用预览锚定整个 composer，宽度与输入框外沿一致，默认位于上方 4px；复用 Radix 的尺寸与位置更新，跟随 BTW 拖宽和输入框高度变化。保留长引用滚动、键盘访问、全文选择复制及引用移除。
+- 历史消息、排队消息及只读查看器中的引用预览继续按引用标签定位；本次只调整 composer 内预览的位置与宽度。
+- `typecheck`、`lint:budgets` 和 `package:vsix` 通过；168 个 VSIX 条目与静态引用校验通过，跳过运行时入口加载。最终包已安装到 Microsoft VS Code 与 Cursor，两边各 8 个主要文件及安装清单（排除安装器追加的 `__metadata`）与 VSIX 一致。未新增、修改或运行测试、浏览器自动化或截图 probe，实际对齐效果由用户 Reload Window 后验收；npm 配置与 CLI 弃用提示未阻断交付。
+
 ## 分栏 Diff 选择与复制隔离（2026-10-12）
 
 - 分栏 Diff 按拖选起始栏限制原生选区，左右栏可分别重新选择，Shift 扩选保留起始栏；复制从该栏原始代码提取，保留首尾局部选择、缩进和空行，排除另一栏、行号、增删符号及对齐占位。

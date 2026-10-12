@@ -47,6 +47,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
   const editing = draft?.phase === 'editing' && !placeholder;
   const editable = editAvailable && item.messageId !== undefined && editor.draft?.phase !== 'resending';
   const input = useRef<HTMLTextAreaElement>(null);
+  const composer = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const messageId = item.messageId;
   const remember = (element: HTMLTextAreaElement, focused = document.activeElement === element) => {
@@ -106,9 +107,9 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       onDrop={editing ? onDrop : undefined}
     >
       {editing && draft !== null ? (
-        <div data-composer-surface="" className="v2-user-edit-card">
+        <div ref={composer} data-composer-surface="" className="v2-user-edit-card">
           {stagedAttachments}
-          <QuoteChips quotes={draftQuote?.quotes ?? []} onRemove={(index) => {
+          <QuoteChips quotes={draftQuote?.quotes ?? []} previewAnchor={composer} onRemove={(index) => {
             editor.update(draft.messageId, { text: formatSelectionQuotes(draftQuote?.quotes.filter((_, position) => position !== index) ?? [], draftBody) });
             input.current?.focus({ preventScroll: true });
           }} className="mb-1" />
