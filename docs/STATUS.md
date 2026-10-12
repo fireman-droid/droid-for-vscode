@@ -11,9 +11,9 @@
 
 ## 当前本地增量包（2026-10-12）
 
-- 从干净的 main 提交 `2e91931` 构建，包含外部附件拖入与文本／Markdown 预览，以及此前的 Review 问题橙色文字、紧凑 Droid Logo 拖柄、回答平滑显示、文件标题下重复边框修复、新扩展名称和简介；暂停的 Thinking 改动未进入包。
-- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 个 VSIX 条目和打包依赖的静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `136d361fe4a968e7a3daec8d24e04e30f0399516d18375189ac18ee9e9eac0ad`。npm 配置与安装 CLI 弃用提示未阻断交付。
-- 按用户要求未新增或运行测试／界面自动化，需 Reload Window 后人工验收。本地仍使用 0.8.9 版本号，此增量包尚未另发 GitHub Release 或市场版本；下面的正式 0.8.9 发布记录对应原发布附件。
+- 从干净的 main 提交 `9dd0e43` 构建，新增已绑定会话的后台恢复隔离；包含此前外部附件拖入、文本／Markdown 预览、Review 样式与流式显示、新扩展名称和简介。暂停的 Thinking 改动未进入包。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 个 VSIX 条目和打包依赖的静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `fb497c65516937704bad118800b94fac8f8c72bf5de1d3ea0ec906931abddb64`。npm 配置与安装 CLI 弃用提示未阻断交付。
+- 本次获准的 9 项后台归属模拟回归通过；未调用模型或运行真实 UI 自动化，需 Reload Window 后人工验收。本地仍使用 0.8.9 版本号，此增量包尚未另发 GitHub Release 或市场版本；下面的正式 0.8.9 发布记录对应原发布附件。
 
 ## 已绑定会话的后台恢复隔离（2026-10-12）
 
