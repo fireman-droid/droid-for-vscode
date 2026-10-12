@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid - AI Coding Agent",
   "description": "Factory Droid for VS Code and Cursor: chat, review code, and bring your own models. Unofficial community extension.",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",

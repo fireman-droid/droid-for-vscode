@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-12。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.9`。
+更新：2026-10-12。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.10`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -9,7 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## 当前本地增量包（2026-10-12）
+## v0.8.10 发布准备（2026-10-12）
+
+- 用户已授权正式发布。版本包含已完成的后台归属恢复隔离、附件拖入与文本预览、Review 问答流式显示和样式修正，以及新扩展名称与简介；暂停的 Thinking 改动继续留在本地。
+- 通过现有标签工作流从干净的 main 构建、检查类型与文件预算、校验 VSIX 并创建草稿；核对附件后公开 GitHub Release，自动将同一安装包发布到 Open VSX。构建、公开状态和市场结果待流程完成后记录。
+
+## 上一份本地增量包（2026-10-12）
 
 - 从干净的 main 提交 `9dd0e43` 构建，新增已绑定会话的后台恢复隔离；包含此前外部附件拖入、文本／Markdown 预览、Review 样式与流式显示、新扩展名称和简介。暂停的 Thinking 改动未进入包。
 - `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 个 VSIX 条目和打包依赖的静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `fb497c65516937704bad118800b94fac8f8c72bf5de1d3ea0ec906931abddb64`。npm 配置与安装 CLI 弃用提示未阻断交付。
