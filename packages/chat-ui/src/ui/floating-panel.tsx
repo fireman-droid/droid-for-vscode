@@ -1,10 +1,11 @@
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { GripHorizontal, MoveDiagonal2, MoreHorizontal, X } from 'lucide-react';
+import { MoveDiagonal2, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
 import { usePortalContainer } from './overlays';
 import { cn } from './cn';
+import { PinwheelIcon } from './pinwheel-icon';
 
 interface Frame { left: number; top: number; width: number; height: number }
 interface Anchor { getBoundingClientRect(): DOMRect }
@@ -76,7 +77,7 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
         <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
         <div className="dvx-floating-panel-header">
           <Button variant="plain" size="none" className="dvx-floating-panel-move" aria-label="Move question panel"
-            title="Drag to move · Arrow keys to adjust" {...handle('move')}><GripHorizontal /></Button>
+            title="Drag to move · Arrow keys to adjust" {...handle('move')}><PinwheelIcon /></Button>
           <DropdownMenu modal={false}><DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="Panel position and size"><MoreHorizontal /></Button>
           </DropdownMenuTrigger><DropdownMenuContent>
