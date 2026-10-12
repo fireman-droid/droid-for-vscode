@@ -194,9 +194,9 @@ export class WindowDaemonPool {
     if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
     if (cached && cached.connection.status() === 'connected') return attach ? this.attachIde(cached) : cached;
     const ownerId = await readSessionDaemon(sessionId);
-    const [owner, found] = await Promise.all([
-      ownerId ? readWindowDaemon(ownerId) : null, this.findOpenedOwner(sessionId),
-    ]);
+    const owner = ownerId ? await readWindowDaemon(ownerId) : null;
+    const saved = owner ? await this.findSavedOwner(sessionId, owner) : undefined;
+    const found = saved ?? await this.findOpenedOwner(sessionId);
     // An idle worker can disappear from listOpened while its dedicated daemon
     // and relay survive. Restore that verified owner instead of launching anew.
     const retained = !found && attach && owner?.rootSessionId === sessionId && owner.ideRelay
@@ -235,16 +235,29 @@ export class WindowDaemonPool {
     const cached = this.owners.get(sessionId);
     if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
     if (cached?.connection.status() === 'connected') return cached;
-    const [ownerId, found] = await Promise.all([readSessionDaemon(sessionId), this.findOpenedOwner(sessionId)]);
+    const ownerId = await readSessionDaemon(sessionId);
+    const owner = ownerId ? await readWindowDaemon(ownerId) : null;
+    const saved = owner ? await this.findSavedOwner(sessionId, owner) : undefined;
+    const found = saved ?? await this.findOpenedOwner(sessionId);
     if (found) return found;
     // A previously attached child may be idle/unloaded. Its saved, verified
     // owner remains valid; a newly announced child has no such binding yet.
-    const owner = ownerId ? await readWindowDaemon(ownerId) : null;
     return owner ? this.existing(owner) : null;
   }
 
+  private async findSavedOwner(sessionId: string, record: WindowDaemonRecord): Promise<WindowDaemonEntry | undefined> {
+    // Verify the saved listener before asking it about this session. A failed
+    // identity/connection check must not fall through to replacement allocation.
+    const entry = await this.existing(record);
+    if (!entry) return undefined;
+    const opened = await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
+    // Reattach only to a confirmed existing worker. An unloaded/stale binding
+    // still needs discovery before resume could start a worker elsewhere.
+    return opened.some(session => session.id === sessionId) ? entry : undefined;
+  }
+
   private async findOpenedOwner(sessionId: string): Promise<WindowDaemonEntry | undefined> {
-    // Initial attachment still checks every live daemon for duplicate ownership.
+    // Without a confirmed saved owner, check every live daemon for duplicates.
     // Historical reads use the metadata daemon and never enter this discovery.
     let found: WindowDaemonEntry | undefined;
     for (const { entry, opened } of await this.discoverOpened()) {

@@ -641,6 +641,9 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
 - `windowDaemonPool.ts` 给每个主聊天分配 daemon/IDE relay，`routedDaemon.ts` 按
   实际 session 归属路由；侧聊/原生子任务沿父后台。后台发现批量核验 PID/命令身份，
   共享扫描且有界并发；仅移除确认过期的精确登记，不误杀被复用 PID 或重复启动未知后台。
+  已保存归属的根／子会话先验证原后台，且由其 `listOpened` 确认持有目标后直接恢复；
+  无关后台发现失败不影响这条已确认的恢复路径。无法确认原归属时继续完整发现与重复
+  归属检查；目标后台身份或连接检查失败直接报错，不据此另建后台。
 - `nativeIdeRelay.ts` 只在 loopback 透传官方 MCP，根连接身份固定。完整初始化、
   工具发现和初始编辑器通知后才 connected；端口可达或 child 握手不能代替根握手。
   `recoverableIdeEventStream.ts` 有界续接完整 SSE 帧，不重放 POST，也不伪造心跳。

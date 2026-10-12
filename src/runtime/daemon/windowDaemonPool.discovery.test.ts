@@ -95,6 +95,70 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe('saved daemon owner recovery', () => {
+  it.each(['root', 'child'] as const)('restores a saved %s owner without probing an unrelated unverifiable daemon', async kind => {
+    const original = record(0), unrelated = record(1);
+    fake.records = [original, unrelated];
+    fake.readOwner.mockResolvedValue(original.id);
+    fake.verification.set(unrelated.port, { status: 'unverified', queryFailure: 'processes:timeout' });
+    const sessionId = kind === 'root' ? original.rootSessionId! : 'child';
+    fake.opened.set(original.port, [{ id: sessionId, workingState: 'running' }]);
+    const value = pool();
+    const restored = kind === 'root' ? await value.forSession(sessionId, true) : await value.forChildSession(sessionId);
+    expect(restored.record.id).toBe(original.id);
+    expect(fake.verify).toHaveBeenCalledExactlyOnceWith([original], '127.0.0.1', 'droid', expect.any(Number));
+    expect(fake.listOpened).toHaveBeenCalledExactlyOnceWith(original.port);
+    expect(fake.listRecords).not.toHaveBeenCalled();
+    expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.stop).not.toHaveBeenCalled();
+  });
+
+  it('does not replace or discover around an unverifiable saved owner', async () => {
+    vi.useFakeTimers();
+    const original = record(0); fake.records = [original, record(1)];
+    fake.readOwner.mockResolvedValue(original.id);
+    fake.verification.set(original.port, { status: 'unverified', queryFailure: 'processes:timeout' });
+    const rejected = expect(pool().forSession('root-0', true)).rejects.toThrow('unavailable');
+    await vi.advanceTimersByTimeAsync(1250);
+    await rejected;
+    expect(fake.verify).toHaveBeenCalledTimes(3);
+    expect(fake.listRecords).not.toHaveBeenCalled(); expect(fake.open).not.toHaveBeenCalled();
+    expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.remove).not.toHaveBeenCalled();
+  });
+
+  it('rejects a saved owner whose port belongs to a different listener', async () => {
+    const original = record(0); fake.records = [original]; fake.readOwner.mockResolvedValue(original.id);
+    fake.verification.set(original.port, { status: 'verified', pid: original.pid + 1 });
+    await expect(pool().forSession('root-0', true)).rejects.toThrow('listener process');
+    expect(fake.open).not.toHaveBeenCalled(); expect(fake.spawn).not.toHaveBeenCalled();
+    expect(fake.listRecords).not.toHaveBeenCalled();
+  });
+
+  it('does not create a replacement when the saved owner connection fails', async () => {
+    const original = record(0); fake.records = [original]; fake.readOwner.mockResolvedValue(original.id);
+    fake.open.mockRejectedValueOnce(new Error('Owner connection failed'));
+    await expect(pool().forSession('root-0', true)).rejects.toThrow('Owner connection failed');
+    expect(fake.listRecords).not.toHaveBeenCalled(); expect(fake.spawn).not.toHaveBeenCalled();
+  });
+
+  it('discovers the actual owner when the saved daemon no longer holds the session', async () => {
+    const previous = record(0), actual = record(1); fake.records = [previous, actual];
+    fake.readOwner.mockResolvedValue(previous.id);
+    fake.opened.set(actual.port, [{ id: 'chat', workingState: 'running' }]);
+    expect((await pool().forSession('chat', true)).record.id).toBe(actual.id);
+    expect(fake.listRecords).toHaveBeenCalledOnce();
+    expect(fake.writeOwner).toHaveBeenCalledWith('chat', actual.id);
+    expect(fake.spawn).not.toHaveBeenCalled();
+  });
+
+  it('retains duplicate ownership rejection when the saved daemon cannot confirm the session', async () => {
+    fake.records = [record(0), record(1), record(2)]; fake.readOwner.mockResolvedValue('owner-0');
+    fake.opened.set(41001, [{ id: 'chat', workingState: 'idle' }]);
+    fake.opened.set(41002, [{ id: 'chat', workingState: 'idle' }]);
+    await expect(pool().forSession('chat', true)).rejects.toThrow('multiple daemons');
+    expect(fake.spawn).not.toHaveBeenCalled(); expect(fake.writeOwner).not.toHaveBeenCalled();
+  });
+});
+
 describe('cold daemon owner discovery', () => {
   it('shares one complete 45-daemon scan across concurrent session requests, with at most six probes in flight', async () => {
     fake.records = Array.from({ length: 45 }, (_, index) => record(index));
