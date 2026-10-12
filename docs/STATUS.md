@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Review 回答中的代码名间距（2026-10-12）
+
+- Cursor 宿主样式补偿原先命中 Diff 内所有 `code`，给问答回答里的行内代码追加 16px 右侧空白、移除底色并覆盖字体，造成标点分离与多余换行。现仅匹配分栏／合并 Diff 的直接代码行，Markdown 行内代码保留共享渲染器样式。
+- 与问答悬浮修复一同通过 `typecheck`、`lint:budgets`、生产打包和 168 条 VSIX 静态校验，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边 10 个文件及清单与 VSIX 一致；用户自行验收，未运行测试、浏览器自动化或模型请求，需 Reload Window 查看实际排版。
+
 ## Review 问答悬浮层与输入位置（2026-10-12）
 
 - Ask 入口与完整问答框统一使用锚定选区末端的 Radix Popover；问答历史与 composer 都通过 Portal 悬浮显示，不再拆分 Diff 或插入占位代码行。选区所在代码块在问答期间保持挂载，避免虚拟回收使锚点失效；发送／停止按钮保持 20px。
