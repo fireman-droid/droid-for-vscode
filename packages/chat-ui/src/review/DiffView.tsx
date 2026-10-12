@@ -132,7 +132,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
   const selection = useSplitDiffSelection(root, rows, path);
   const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);
-  const questionRow = question?.row ?? -1;
+  const questionRow = question?.content ? question.row : -1;
   const blocks = useMemo(() => rows
     ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add', questionRow)
     : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove', questionRow), [lines, rows, questionRow]);
@@ -166,5 +166,6 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
         </DeferredDiffChunk>{block.index + block.rows.length - 1 === questionRow ? question?.content : null}</Fragment>)}
     </div>
     {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}
+    {question?.floating}
   </div>;
 });

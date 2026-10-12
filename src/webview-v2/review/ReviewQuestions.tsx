@@ -53,7 +53,7 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
   useEffect(() => {
     const dismiss = () => clearSelection();
     const outside = (event: Event) => {
-      if (event.target instanceof Element && !event.target.closest('.review-question-row')) dismiss();
+      if (event.target instanceof Element && !event.target.closest('.review-question-row, [data-diff-question-control]')) dismiss();
     };
     window.addEventListener('blur', dismiss);
     document.addEventListener('pointerdown', outside);
@@ -87,7 +87,8 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
     actions={<>
       {!models || models.status === 'loading' ? <span className="review-question-progress" role="status" aria-label="Loading models"><LoaderCircle /></span> : null}
       {modelError ? <Button variant="plain" size="icon-sm" aria-label="Refresh models" onClick={refresh}><RotateCw /></Button> : null}
-    </>} /> : <Button variant="ghost" size="sm" className="review-question-start" onPointerDown={event => event.preventDefault()} onClick={open}>Ask a quick question</Button>;
-  const context = useMemo(() => ({ enabled, anchor, select, close, clearSelection }), [enabled, anchor, select, close, clearSelection]);
+    </>} /> : <Button variant="plain" size="none" className="review-question-start" aria-label="Ask about selected code"
+      onPointerDown={event => event.preventDefault()} onClick={open}>Ask</Button>;
+  const context = useMemo(() => ({ enabled, active: questionId !== null, anchor, select, close, clearSelection }), [enabled, questionId, anchor, select, close, clearSelection]);
   return <DiffQuestionContext.Provider value={context}><DiffQuestionContentContext.Provider value={content}>{children}</DiffQuestionContentContext.Provider></DiffQuestionContext.Provider>;
 }

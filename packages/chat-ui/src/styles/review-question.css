@@ -13,9 +13,11 @@
   .review-question-history .markdown-prose > :first-child { margin-top: 0; }
   .review-question-history .markdown-prose > :last-child { margin-bottom: 0; }
   .review-question-composer { position: relative; padding: 6px 8px 6px 12px; }
+  .review-question-composer :is(.review-question-close, .review-question-send) { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; line-height: 1; }
   .review-question-composer .review-question-input { display: block; width: 100%; min-height: 27px; max-height: 120px; padding: 2px 24px 2px 0; resize: none; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; box-shadow: none; }
   .review-question-input::placeholder { color: var(--muted-ink); }
   .review-question-composer .review-question-close { position: absolute; top: 2px; right: 3px; width: 22px; height: 22px; color: var(--muted-ink); }
+  .review-question-close svg { width: 12px; height: 12px; }
   .review-question-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; }
   .review-question-actions .review-question-send { width: 20px; height: 20px; border-radius: 50%; color: var(--code-surface); background: var(--secondary-ink); }
   .review-question-actions .review-question-send svg { width: 12px; height: 12px; }
@@ -26,7 +28,8 @@
   .review-question-progress { display: flex; margin-right: auto; color: var(--muted-ink); }
   .review-question-progress svg { width: 12px; height: 12px; animation: review-question-spin 1s linear infinite; }
   .review-question-error { margin: 4px 0; color: var(--error-ink, var(--ink)); font: 11px/1.5 var(--font-sans); overflow-wrap: anywhere; }
-  .review-question-start { border: 1px solid var(--panel-edge); border-radius: 5px; background: var(--code-surface); color: var(--secondary-ink); }
+  .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 8px; border-radius: 4px; background: var(--code-surface); color: var(--secondary-ink); font: 12px/1 var(--font-sans); }
+  .review-question-start:hover { background: var(--soft-surface); color: var(--ink); }
   @keyframes review-question-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .review-question-progress svg { animation: none; } }
 }

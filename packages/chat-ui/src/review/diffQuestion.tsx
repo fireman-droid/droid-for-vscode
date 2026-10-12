@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useLayoutEffect, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ReactNode, type RefObject } from 'react';
+import { Popover, PopoverAnchor, PopoverContent } from '../ui/overlays';
 import type { InlineDiffLine } from './inlineDiffLines';
 import type { DiffRow } from './DiffView';
 
@@ -15,10 +16,12 @@ export interface DiffQuestionAnchor {
   source: string;
   startRow: number;
   row: number;
+  range: Range;
   selection: DiffQuestionSelection;
 }
 interface DiffQuestionContextValue {
   enabled: boolean;
+  active: boolean;
   anchor: DiffQuestionAnchor | null;
   select(anchor: DiffQuestionAnchor): void;
   close(): void;
@@ -28,6 +31,21 @@ export const DiffQuestionContext = createContext<DiffQuestionContextValue | null
 export const DiffQuestionContentContext = createContext<ReactNode>(null);
 
 function QuestionSlot() { return <div className="review-question-slot">{useContext(DiffQuestionContentContext)}</div>; }
+
+function SelectionQuestion({ anchor, onDismiss }: { anchor: DiffQuestionAnchor; onDismiss(): void }) {
+  const content = useContext(DiffQuestionContentContext);
+  const reference = useMemo(() => ({ current: {
+    getBoundingClientRect: () => anchor.range.getBoundingClientRect(),
+    contextElement: anchor.range.startContainer.parentElement ?? undefined,
+  } }), [anchor]);
+  return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
+    <PopoverAnchor virtualRef={reference} />
+    <PopoverContent className="review-question-menu rounded-[5px] p-0" data-diff-question-control=""
+      side="bottom" align="end" sideOffset={4} hideWhenDetached
+      aria-label="Selected code actions" onOpenAutoFocus={event => event.preventDefault()}
+      onCloseAutoFocus={event => event.preventDefault()}>{content}</PopoverContent>
+  </Popover>;
+}
 
 /** Extract from source rows, never the interleaved before/after DOM text. */
 function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[] | null, lines: readonly InlineDiffLine[]): Omit<DiffQuestionAnchor, 'key' | 'source'> | null {
@@ -46,6 +64,7 @@ function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[]
   const range = selection.getRangeAt(0);
   let first: { row: number; offset: number } | undefined;
   let last: { row: number; offset: number } | undefined;
+  let selectedRange: Range | undefined;
   const selector = rows ? `.review-diff-cell[data-side='${sideKey}'] .review-diff-code > code` : '.review-unified-row > code';
   for (const code of root.querySelectorAll<HTMLElement>(selector)) {
     const row = Number(code.closest<HTMLElement>('[data-diff-row]')!.dataset.diffRow);
@@ -62,6 +81,7 @@ function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[]
     const start = Math.min(prefix.toString().length, line.text.length);
     first ??= { row, offset: start };
     last = { row, offset: Math.min(start + selected.toString().length, line.text.length) };
+    selectedRange = selected;
   }
   if (!first || !last) return null;
   const text: string[] = [];
@@ -77,7 +97,7 @@ function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[]
   }
   const startLine = lineAt(first.row)![side];
   const endLine = lineAt(last.row)![side];
-  return { startRow: first.row, row: last.row, selection: { path, side, startLine: startLine === null || endLine === null ? null : startLine,
+  return { startRow: first.row, row: last.row, range: selectedRange!, selection: { path, side, startLine: startLine === null || endLine === null ? null : startLine,
     endLine: startLine === null || endLine === null ? null : endLine, text: text.join('\n'), context: nearby.join('\n') } };
 }
 
@@ -98,6 +118,7 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
     let frame = 0;
     const capture = (event: Event) => {
       cancelAnimationFrame(frame);
+      if (event.target instanceof Element && event.target.closest('[data-diff-question-control]')) return;
       if (event.target instanceof Node && !diff.contains(event.target)) { clearSelection?.(key); return; }
       frame = requestAnimationFrame(() => {
         if (!diff.ownerDocument.hasFocus()) { clearSelection?.(key); return; }
@@ -124,5 +145,6 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
     return () => observer.disconnect();
   }, [root, !!question]);
   return current ? { row: current.row, startRow: current.startRow, side: current.selection.side,
-    content: <div className="review-question-row" data-side={current.selection.side}><QuestionSlot /></div> } : null;
+    content: question?.active ? <div className="review-question-row" data-side={current.selection.side}><QuestionSlot /></div> : null,
+    floating: question?.active ? null : <SelectionQuestion anchor={current} onDismiss={() => clearSelection?.(key)} /> } : null;
 }
