@@ -6,6 +6,7 @@ import {
 } from '../../../shared/bridgeMessages';
 import { type ImageMediaType } from '../../../shared/protocol/attachments';
 import { getVsCodeApi } from '../../bridge/vscode';
+import { requestAttachmentPreview, type AttachmentPreviewResult } from './attachmentPreview';
 
 type VsCodeApi = ReturnType<typeof getVsCodeApi>;
 
@@ -247,6 +248,11 @@ export function useAttachmentActions(
       ),
     [post, withSession],
   );
+  const handleAttachmentPreview = useCallback(
+    (attachmentId: string, stage: AttachmentStage | undefined, onResult: (result: AttachmentPreviewResult) => void) =>
+      requestAttachmentPreview(vscode, sessionId, attachmentId, stage, onResult),
+    [vscode, sessionId],
+  );
   const handleAttachmentReadImage = useCallback(
     (attachmentId: string, stage?: AttachmentStage): void =>
       withConnectedSession((id) =>
@@ -313,6 +319,7 @@ export function useAttachmentActions(
     handleEditAttachUris,
     handleEditAttachTextFile,
     handleEditAttachmentRemove,
+    handleAttachmentPreview,
     handleAttachmentReadImage,
     handleAttachmentReplaceImage,
   };

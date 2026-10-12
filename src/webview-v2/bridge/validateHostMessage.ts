@@ -1,4 +1,5 @@
 import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { parseAttachmentPreviewResponse } from '../../shared/protocol/attachmentPreviewProtocol';
 import { parseSystemPromptResponse } from '../../shared/protocol/systemPromptProtocol';
 import { parseRewindResult } from '../../shared/protocol/rewindResult';
 import { parseHostIde } from '../../shared/protocol/ideProtocol';
@@ -96,6 +97,7 @@ const HOST_MESSAGE_PARSERS = {
   'session.searchResults': parseSessionSearchMessage,
   'session.attachments': parseSessionAttachmentsMessage,
   'session.attachmentImageData': parseAttachmentImageData,
+  'session.attachmentPreview': parseAttachmentPreviewResponse,
   'session.editAttachments': parseSessionEditAttachmentsMessage,
   'turn.editResendRejected': parseTurnEditResendRejected,
   'workspace.files': parseWorkspaceFiles,

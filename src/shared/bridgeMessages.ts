@@ -1,4 +1,5 @@
 import type { ModelsOpenMessage } from './protocol/modelManagerProtocol';
+import type { AttachmentPreviewRequest, AttachmentPreviewResponse } from './protocol/attachmentPreviewProtocol';
 import type { ManagementPageOpenMessage } from './protocol/managementPageProtocol';
 import type { RewindResultMessage } from './protocol/rewindResult';
 import type { SystemPromptRequest, SystemPromptResponse } from './protocol/systemPromptProtocol';
@@ -276,6 +277,7 @@ export type WebviewToHostMessage =
   | AttachmentAddPdfMessage
   | AttachmentAddRemoteImageMessage
   | AttachmentReadImageMessage
+  | AttachmentPreviewRequest
   | AttachmentAddUrisMessage
   | AttachmentAddTextFileMessage
   | AttachmentRemoveMessage
@@ -392,6 +394,7 @@ export type HostToWebviewMessage =
   | SessionSearchStateMessage
   | SessionAttachmentsStateMessage
   | SessionAttachmentImageDataMessage
+  | AttachmentPreviewResponse
   | SessionEditAttachmentsStateMessage
   | TurnEditResendRejectedMessage
   | WorkspaceFilesMessage

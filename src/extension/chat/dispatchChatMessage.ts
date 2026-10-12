@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { handleAttachmentPreview } from './attachments/attachmentPreview';
 import { handleSystemPrompt } from './capabilities/systemPrompt';
 import { emitIdeState, reconnectControllerIde } from './ideIntegration';
 import {
@@ -366,6 +367,9 @@ export function dispatchChatMessage(
         message.attachmentId,
         message.stage,
       );
+      return;
+    case 'attachment.preview':
+      handleAttachmentPreview(controller, message);
       return;
     case 'attachment.addUris':
       handleAttachmentAddUris(controller, message.sessionId, message.uris, message.stage);

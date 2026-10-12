@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from './bridgeMessages';
+import { parseAttachmentPreviewRequest } from './protocol/attachmentPreviewProtocol';
 import { parseSystemPromptRequest } from './protocol/systemPromptProtocol';
 import { parseIdeRequest } from './protocol/ideProtocol';
 import { parseManagementOpen } from './protocol/managementProtocol';
@@ -173,6 +174,7 @@ const WEBVIEW_MESSAGE_PARSERS = {
   'review.restoreTurn': parseReviewMessage,
   'review.runAgentReview': parseReviewMessage,
   'file.preview': parseFilePreview,
+  'attachment.preview': parseAttachmentPreviewRequest,
   'preview.inlineHtml': parsePreviewInlineHtml,
   'git.requestStatus': parseGitRequestStatus,
   'git.requestBranchDiff': parseGitRequestBranchDiff,

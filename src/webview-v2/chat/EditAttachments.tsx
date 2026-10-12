@@ -9,6 +9,7 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, Popover, PopoverClose, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { StagedImagePreview } from '../content/StagedImagePreview';
 import { MAX_ATTACHMENT_IMAGE_BYTES } from '../../shared/protocol/attachmentImageProtocol';
+import { AttachmentTextPreview } from './attachments/AttachmentTextPreview';
 
 export type AttachmentActions = ReturnType<typeof useAttachmentActions>;
 
@@ -98,11 +99,12 @@ function AttachmentTile({ attachment, image, actions, disabled = false, stage }:
         if (!disabled) actions.handleAttachmentReplaceImage(id, attachment.name, mediaType, data, stage);
       }} /> : null}
     {open && !ready ? <Dialog open onOpenChange={setOpen}>
-      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
-        <DialogTitle className="pr-8 break-words text-sm font-medium">{attachment.name}</DialogTitle>
-        <DialogDescription className="mt-2 text-xs text-muted-foreground">{ATTACHMENT_KIND_LABELS[attachment.kind]} · {formatAttachmentBytes(attachment.sizeBytes)}</DialogDescription>
-        {'truncated' in attachment && attachment.truncated ? <p className="mt-2 text-xs text-muted-foreground">Truncated</p> : null}
+      <DialogContent className="flex flex-col overflow-hidden" onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
+        <DialogTitle className="shrink-0 pr-8 break-words text-sm font-medium">{attachment.name}</DialogTitle>
+        <DialogDescription className="mt-2 shrink-0 text-xs text-muted-foreground">{ATTACHMENT_KIND_LABELS[attachment.kind]} · {formatAttachmentBytes(attachment.sizeBytes)}</DialogDescription>
         {attachment.kind === 'image' ? <p role="status" className="mt-2 text-xs">{missing || image?.status === 'unavailable' ? 'Image preview unavailable' : 'Loading image preview…'}</p> : null}
+        {!missing && attachment.kind === 'pdf' ? <p className="mt-3 text-xs text-muted-foreground">PDF preview is not available in this attachment viewer.</p> : null}
+        {!missing && attachment.kind !== 'image' && attachment.kind !== 'pdf' ? <AttachmentTextPreview name={attachment.name} attachmentId={id} stage={stage} request={actions?.handleAttachmentPreview} /> : null}
         {missing ? <p className="mt-2 text-xs text-destructive">The original attachment is no longer retained. Remove it or attach it again before resending.</p> : null}
       </DialogContent>
     </Dialog> : null}

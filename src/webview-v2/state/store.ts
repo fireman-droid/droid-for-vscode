@@ -38,6 +38,7 @@ function reduceHostMessage(
   switch (event.type) {
     case 'file.diff':
     case 'file.diff.invalidate':
+    case 'session.attachmentPreview':
       // On-demand previews are held only by expanded rows, not persisted transcript state.
       return advance(state, event.sequence);
     case 'host.snapshot':
