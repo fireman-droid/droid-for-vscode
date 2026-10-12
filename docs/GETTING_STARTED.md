@@ -23,6 +23,12 @@ droid --version
 
 ## 2. 下载并安装扩展
 
+**Cursor 市场安装**：在扩展面板搜索 `droidvisx.droidvisx`，核对扩展名 **Droid**、
+发布者 **droidvisx** 后安装。市场详情见 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx)。
+Cursor 的扩展目录使用 Open VSX，新版本显示还受其市场同步与审核影响，见 [Cursor 扩展说明](https://prod.cursor.com/help/customization/extensions)。
+
+**VS Code 或手动安装**：
+
 1. 打开 [GitHub 最新版本](https://github.com/fireman-droid/droid-for-vscode/releases/latest)。
 2. 在 **Assets** 下载 `droid-版本号.vsix`。`Source code` 压缩包是源码，不能直接作为扩展安装。
 3. 打开编辑器的扩展面板，在 `…` 菜单选择 **Install from VSIX…**，选中下载的 VSIX。
@@ -54,6 +60,9 @@ droid --version
 聊天模型和补全服务分别配置。
 
 ## 更新安装包
+
+市场安装可在扩展面板更新，是否自动更新取决于编辑器设置。
+市场版本与 GitHub Release 可能存在时间差，安装前核对版本号。
 
 从同一个 [Releases 页面](https://github.com/fireman-droid/droid-for-vscode/releases/latest)
 下载新版 VSIX，重复安装并 Reload Window。GitHub 下载版需要手动更新。

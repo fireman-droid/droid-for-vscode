@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## GitHub 与扩展市场介绍（2026-10-12）
+
+- 重写 README 首屏、安装入口与功能介绍，使用现有真实截图和新图标；补充 Cursor／Open VSX 安装及更新方式，保留平台、数据和许可证边界。扩展简介明确 VS Code、Cursor、BYOK、旁问、审阅与补全；审阅指南同步行内问答模型的设置入口。
+- `typecheck`、`lint:budgets`、生产构建和 168 条 VSIX 静态校验通过，跳过运行时入口加载；核对了文档相对链接及包内图标、截图、文档 URL。已安装到 Microsoft VS Code 和 Cursor，两边 10 个文件与清单和安装包一致，需 Reload Window。未运行测试、浏览器自动化或截图验证；暂停的 Thinking 改动未进入安装包。
+- GitHub README 随提交更新；Open VSX 简介与详情页随下一次正式版本发布生效。本次未创建 Release 或上架；市场当前为 0.8.5，源码仍为 0.8.3，下一次发布须使用更高版本。GitHub About 与 Topics 保留现有配置。
+
 ## 扩展列表图标（2026-10-12）
 
 - 扩展清单使用的 `resources/droidvisx.png` 已替换为用户提供的黑底白色原图，逐字节一致；用于插件列表、扩展详情及后续市场安装包。
