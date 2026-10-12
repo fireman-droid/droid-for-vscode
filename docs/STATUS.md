@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 扩展列表图标（2026-10-12）
+
+- 扩展清单使用的 `resources/droidvisx.png` 已替换为用户提供的黑底白色原图，逐字节一致；用于插件列表、扩展详情及后续市场安装包。
+- `typecheck`、`lint:budgets`、生产构建与 168 条 VSIX 静态校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code 和 Cursor，原图、8 个主要文件及清单与安装包一致，需 Reload Window。未运行测试或截图验证；远端市场图标随下一次正式版本发布更新。
+
 ## Plan 状态解析（2026-10-12）
 
 - TodoWrite 的裸状态行（`completed`、`in_progress`、`pending`，含序号／项目符号和字符串数组）在 Runtime 入口归一化；主聊天与恢复历史共用该路径，状态不再混进任务标题，完成计数和当前步骤按真实状态显示。
