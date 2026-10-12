@@ -19,7 +19,6 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
-  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
   const { review, target, fileReads, actions } = flow;
   const operation = target?.operation?.status === 'ready' ? target.operation : null;
   const operationFile = operation?.files.find(file => file.path === entry.path);
@@ -86,13 +85,12 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
       </DropdownMenu>
     </header>
     <CollapsibleContent>
-      {recordedEntries ? <div className="review-section-recorded-toolbar" ref={setToolbar} /> : null}
       {read.error && !operation ? <div className="review-notice review-error" role="status">{read.error}{file && !file.error ? ' Showing the previous diff.' : ''}
         <Button variant="ghost" size="sm" onClick={() => flow.retryFile(entry.path)}>Retry</Button></div> : null}
       {!operation && !file ? <p className="review-file-placeholder" role="status">{read.error ? 'Diff unavailable.' : near ? 'Reading Diff…' : 'Diff loads as you scroll.'}</p>
         : !operation && file?.error ? read.error ? null : <p className="review-empty">{file.error}</p>
         : recordedEntries ? <RecordedFileReview entries={recordedEntries} content={recordedContent} path={entry.path}
-          split={split} toolbarTarget={toolbar} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}
+          split={split} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}
           selectedToolUseId={read.toolUseId} onSelectEdit={toolUseId => flow.selectRecordedEdit(toolUseId, entry.path)} />
         : patch && patch !== '@@' ? <DiffView patch={patch} path={entry.path} split={split} source={file?.syntaxSource} />
         : operationFile?.contentRestricted ? null

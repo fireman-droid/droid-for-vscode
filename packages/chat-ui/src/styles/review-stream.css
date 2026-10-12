@@ -25,8 +25,6 @@
   .review-section-heading > button { width: 24px; height: 24px; min-height: 24px; color: var(--muted-ink); }
   .review-section-heading > button svg { width: 13px; height: 13px; }
   .review-section-heading .review-viewed[data-reviewed='true'] { color: var(--diff-add-ink); }
-  .review-section-recorded-toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; padding: 2px 8px; background: var(--review-chrome); }
-  .review-section-recorded-toolbar:empty { display: none; }
   .review-file-placeholder { margin: 0; min-height: 96px; padding: 28px 12px; color: var(--muted-ink); font-size: 11px; }
   .review-workbench .review-files[data-side='right'] { border-right: 0; border-left: 1px solid var(--panel-edge); }
   .review-workbench .review-files-title { min-height: 28px; padding: 4px 10px; text-transform: none; font-size: 12px; letter-spacing: normal; }

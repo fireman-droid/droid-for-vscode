@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DiffView } from '@droidvisx/chat-ui/review/DiffView';
+import { RecordedFileReview } from '../review/RecordedFileReview';
 import { ReviewQuestions } from '../review/ReviewQuestions';
 import { Button } from '../ui/button';
 import { mountWebview } from '../shell/mount';
@@ -59,7 +59,8 @@ function Fixture() {
     </div>
     <main className="review-workbench" style={{ display: 'block', flex: 1, overflow: 'auto' }}>
       <ReviewQuestions port={port} sessionId={sessionId} scopeKey={String(split)} enabled>
-        <DiffView patch={patch} path="src/task.ts" split={split} />
+        <RecordedFileReview path="src/task.ts" split={split} showDiffControls={false}
+          entries={[{ toolUseId: 'fixture-edit', toolName: 'Edit', source: 'tool-result', kind: 'modified', outcome: 'applied', patch }]} />
       </ReviewQuestions>
     </main>
   </div>;

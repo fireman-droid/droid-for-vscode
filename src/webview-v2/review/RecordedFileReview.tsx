@@ -1,5 +1,4 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Columns2, History, Info, Rows3 } from 'lucide-react';
 import type { ReviewRecordedContent, ReviewRecordedEntry } from '../../shared/protocol/reviewPanelProtocol';
 import { hasOperationTextChanges } from '../../shared/protocol/operationDiff';
@@ -49,12 +48,11 @@ function SavedEdit({ entry, index, path, split, fullContext, showHeader = false,
 }
 
 /** Displays saved evidence without treating it as a net workspace diff. */
-export function RecordedFileReview({ entries, content, fullContext = false, path, split, onSplit, onHunk, toolbarTarget, selectedToolUseId, onSelectEdit, readingKey, positions, loading = false, showDiffControls = true, preserveReadingPosition = true }: {
+export function RecordedFileReview({ entries, content, fullContext = false, path, split, onSplit, onHunk, selectedToolUseId, onSelectEdit, readingKey, positions, loading = false, showDiffControls = true, preserveReadingPosition = true }: {
   readonly fullContext?: boolean;
   readonly entries: readonly ReviewRecordedEntry[]; readonly content?: ReviewRecordedContent; readonly path: string;
   readonly split: boolean; readonly onSplit?: (split: boolean) => void; readonly onHunk?: (direction: number) => void;
   readonly showDiffControls?: boolean; readonly preserveReadingPosition?: boolean;
-  readonly toolbarTarget: HTMLElement | null;
   readonly loading?: boolean;
   readonly selectedToolUseId?: string;
   readonly onSelectEdit?: (toolUseId: string | undefined) => void;
@@ -125,13 +123,12 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
     </> : null}
   </>;
   return <div className="review-recorded" ref={root}>
-    {toolbarTarget ? createPortal(toolbar, toolbarTarget) : null}
-    <div className="review-recorded-summary"><Info aria-hidden /><div>
+    <div className="review-recorded-summary"><Info aria-hidden /><div className="review-recorded-description">
       <p>{activeView === 'file' && content ? `Saved file${content.appliedEdits ? ` · ${content.appliedEdits} later edits included` : ''}. May differ from your current workspace.`
         : allEdits ? 'Saved change excerpts in execution order.'
           : selected ? `Edit ${index + 1} · ${operationName(selected.entry)} · ${outcomeLabel(selected.entry)}. ${fullContext && selected.entry.fullPatch !== undefined ? 'Full file comparison from saved versions.' : selected.entry.submittedContent !== undefined ? 'Submitted file version; the previous version is unavailable.' : 'Saved change excerpt.'}` : 'No saved operations.'}</p>
       {activeView === 'file' && content && content.remainingOperations > 0 ? <p className="review-recorded-warning">Partial version · {content.remainingOperations} later operations are not included. Check Edits or History.</p> : null}
-    </div></div>
+    </div><div className="review-recorded-actions">{toolbar}</div></div>
     {activeView === 'file' && content ? <RecordedSource content={content.content} path={path} />
       : allEdits ? <div className="review-recorded-patches">{records.map(({ entry, key }, index) => <SavedEdit key={key} entry={entry} index={index} path={path} split={split} fullContext={false} showHeader />)}</div>
       : selected ? <SavedEdit entry={selected.entry} index={index} path={path} split={split} fullContext={fullContext} loading={loading} />

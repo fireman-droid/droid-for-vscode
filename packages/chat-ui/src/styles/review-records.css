@@ -4,8 +4,11 @@
   .review-edit-picker { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
   .review-edit-picker button { width: 24px; }
   .review-edit-position { color: var(--muted-ink); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .review-recorded-summary { display: flex; align-items: flex-start; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--panel-edge); background: var(--review-record-chrome); }
-  .review-recorded-summary > svg { flex-shrink: 0; width: 12px; height: 12px; margin-top: 3px; color: var(--muted-ink); }
+  .review-recorded-summary { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 8px; border-bottom: 1px solid var(--panel-edge); background: var(--review-record-chrome); }
+  .review-recorded-summary > svg { flex-shrink: 0; width: 12px; height: 12px; color: var(--muted-ink); }
+  .review-recorded-description { flex: 1; min-width: 0; }
+  .review-recorded-actions { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
+  .review-recorded-actions:empty { display: none; }
   .review-recorded-summary p { margin: 0; color: var(--muted-ink); font-size: 11px; line-height: 18px; overflow-wrap: anywhere; }
   .review-recorded-summary p.review-recorded-warning { margin-top: 4px; color: var(--ink); }
   .review-recorded-source, .review-recorded-patch { min-width: 0; background: var(--review-record-surface, var(--code-surface)); }
