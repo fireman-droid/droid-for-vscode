@@ -9,16 +9,13 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## v0.8.10 发布准备（2026-10-12）
+## v0.8.10 正式发布（2026-10-12）
 
-- 用户已授权正式发布。版本包含已完成的后台归属恢复隔离、附件拖入与文本预览、Review 问答流式显示和样式修正，以及新扩展名称与简介；暂停的 Thinking 改动继续留在本地。
-- 通过现有标签工作流从干净的 main 构建、检查类型与文件预算、校验 VSIX 并创建草稿；核对附件后公开 GitHub Release，自动将同一安装包发布到 Open VSX。构建、公开状态和市场结果待流程完成后记录。
-
-## 上一份本地增量包（2026-10-12）
-
-- 从干净的 main 提交 `9dd0e43` 构建，新增已绑定会话的后台恢复隔离；包含此前外部附件拖入、文本／Markdown 预览、Review 样式与流式显示、新扩展名称和简介。暂停的 Thinking 改动未进入包。
-- `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 个 VSIX 条目和打包依赖的静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `fb497c65516937704bad118800b94fac8f8c72bf5de1d3ea0ec906931abddb64`。npm 配置与安装 CLI 弃用提示未阻断交付。
-- 本次获准的 9 项后台归属模拟回归通过；未调用模型或运行真实 UI 自动化，需 Reload Window 后人工验收。本地仍使用 0.8.9 版本号，此增量包尚未另发 GitHub Release 或市场版本；下面的正式 0.8.9 发布记录对应原发布附件。
+- [GitHub v0.8.10](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.10) 已公开。版本包含后台归属恢复隔离、附件拖入与文本预览、Review 问答流式显示和样式修正，以及新扩展名称与简介；暂停的 Thinking 改动未进入版本标签或安装包。
+- [发布构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38249967320) 从干净的 main 提交 `eab11b41e357a29b36564e66de9e482c2c13ba8a` 完成 `pnpm run package:vsix`（含类型检查与预算检查）、`verify:vsix`（168 个条目、打包依赖及扩展入口加载）和发布附件生成。包 SHA256 为 `b96905c12e814b45156e6139911b1cefade9db3e67f86d473029d7c1dc582b18`。
+- [Open VSX 自动发布](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38250253503)成功；[0.8.10](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.10) 已确认可下载，下载包 SHA256 与 GitHub 附件一致，新显示名和简介已生效。发布后版本接口曾暂时返回 404，随后恢复；latest 别名仍曾返回旧版本，Cursor 市场接口最后返回 Service Unavailable，暂未确认其搜索同步结果。
+- 已将正式包安装到 Microsoft VS Code 和 Cursor 当前用户扩展目录，两边清单及各 10 个主要文件与发布包一致；需 Reload Window。CLI 的 DEP0169 弃用提示未阻断安装。
+- 后台归属修复此前获准的 9 项模拟回归已通过；本次发布未新增或扩大测试，也未调用模型或执行真实 UI 自动化。附件交互、流式视觉及真实重连仍由用户在编辑器内验收。
 
 ## 已绑定会话的后台恢复隔离（2026-10-12）
 
@@ -94,7 +91,7 @@
 
 ## GitHub 与扩展市场介绍（2026-10-12）
 
-- 按用户参照精简扩展详情首屏：显示名为 `Droid - AI Coding Agent`，一句话简介说明 Factory Droid、VS Code／Cursor、代码审阅与 BYOK，并注明社区扩展；README 使用左对齐标题、简短用途和安装入口，保留真实截图及文档。扩展 ID、发布者与黑底白色图标保持一致，新文案随当前本地包交付，尚未另发市场版本。
+- 按用户参照精简扩展详情首屏：显示名为 `Droid - AI Coding Agent`，一句话简介说明 Factory Droid、VS Code／Cursor、代码审阅与 BYOK，并注明社区扩展；README 使用左对齐标题、简短用途和安装入口，保留真实截图及文档。扩展 ID、发布者与黑底白色图标保持一致，新名称和文案已随 0.8.10 发布到 Open VSX。
 - 重写 README 首屏、安装入口与功能介绍，使用现有真实截图和新图标；补充 Cursor／Open VSX 安装及更新方式，保留平台、数据和许可证边界。扩展简介明确 VS Code、Cursor、BYOK、旁问、审阅与补全；审阅指南同步行内问答模型的设置入口。
 - `typecheck`、`lint:budgets`、生产构建和 168 条 VSIX 静态校验通过，跳过运行时入口加载；核对了文档相对链接及包内图标、截图、文档 URL。已安装到 Microsoft VS Code 和 Cursor，两边 10 个文件与清单和安装包一致，需 Reload Window。未运行测试、浏览器自动化或截图验证；暂停的 Thinking 改动未进入安装包。
 - GitHub README 已随提交更新；Open VSX 简介、详情页及新图标已随 0.8.8 发布。GitHub About 与 Topics 保留现有配置。
