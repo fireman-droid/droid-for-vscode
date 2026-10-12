@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, LoaderCircle, Square, X } from 'lucide-react';
+import { ArrowUp, LoaderCircle, Square } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { Message, MessageContent } from '../ai-elements/message';
@@ -39,23 +39,37 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const history = useRef<HTMLDivElement>(null);
+  const historyContent = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+  const followedOffset = useRef<number | null>(null);
+  const followBottom = () => {
+    const node = history.current;
+    if (node && follow.current) { node.scrollTop = node.scrollHeight; followedOffset.current = node.scrollTop; }
+  };
   useEffect(() => {
     if (focusRequested && input.current) { input.current.focus({ preventScroll: true }); onFocused(); }
   }, [focusRequested, onFocused]);
+  useEffect(followBottom, [entries]);
   useEffect(() => {
     const node = history.current;
-    if (node && follow.current) node.scrollTop = node.scrollHeight;
-  }, [entries]);
-  const send = () => { if (!disabled && !busy && draft.trim()) onSend(); };
+    const content = historyContent.current;
+    if (!node || !content) return;
+    const observer = new ResizeObserver(followBottom);
+    observer.observe(content); observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  const send = () => { if (!disabled && !busy && draft.trim()) { follow.current = true; onSend(); } };
   return <section className="review-inline-question" aria-label="Ask about selected code">
-    {entries.length > 0 ? <div ref={history} className="review-question-history" onScroll={event => {
-      const node = event.currentTarget; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
-    }}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
-      <Message from="user"><MessageContent className="review-question-prompt">{entry.question}</MessageContent></Message>
+    <div ref={history} className="review-question-history" onScroll={event => {
+      const node = event.currentTarget;
+      if (followedOffset.current !== null && Math.abs(node.scrollTop - followedOffset.current) < 1) return;
+      followedOffset.current = null;
+      follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+    }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
+      <Message from="user"><MessageContent className="review-question-prompt text-[var(--link-ink)]">{entry.question}</MessageContent></Message>
       {entry.answer ? <Message from="assistant"><MessageContent><Markdown text={entry.answer} streaming={entry.state === 'streaming'} /></MessageContent></Message> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
-    </div>)}</div> : null}
+    </div>)}</div></div>
     <div className="review-question-composer">
       <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label="Question about selected code"
         placeholder={entries.length ? 'Add a follow-up…' : 'Ask a quick question…'} value={draft} maxLength={maxLength}
@@ -63,7 +77,6 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
           if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
         }} />
-      <Button variant="plain" size="none" className="review-question-close" aria-label="Close question" onClick={onClose}><X /></Button>
       {message ? <p className="review-question-error" role="alert">{message}</p> : null}
       <div className="review-question-actions">
         {busy ? <span className="review-question-progress" role="status" aria-label="Answering"><LoaderCircle /></span> : null}

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/overlays';
+import { FloatingPanel } from '../ui/floating-panel';
 import type { InlineDiffLine } from './inlineDiffLines';
 import type { DiffRow } from './DiffView';
 
@@ -36,12 +37,13 @@ function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestion
     getBoundingClientRect: () => anchor.range.getBoundingClientRect(),
     contextElement: anchor.range.startContainer.parentElement ?? undefined,
   } }), [anchor]);
+  if (active) return <FloatingPanel anchor={reference.current} title="Code question" onClose={onDismiss}
+    boundary={reference.current.contextElement?.closest('.review-workbench')} className="review-question-menu"
+    data-diff-question-control="">{content}</FloatingPanel>;
   return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
     <PopoverAnchor virtualRef={reference} />
-    <PopoverContent className={`review-question-menu rounded-[5px] p-0${active ? ' review-question-panel w-[500px] overflow-hidden border-0' : ''}`} data-diff-question-control=""
-      side={active ? 'top' : 'bottom'} align={active ? 'start' : 'end'} sideOffset={4} hideWhenDetached
-      aria-label={active ? 'Ask about selected code' : 'Selected code actions'}
-      onInteractOutside={event => { if (active) event.preventDefault(); }}
+    <PopoverContent className="review-question-menu rounded-[5px] p-0" data-diff-question-control=""
+      side="bottom" align="end" sideOffset={4} hideWhenDetached aria-label="Selected code actions"
       onOpenAutoFocus={event => event.preventDefault()}
       onCloseAutoFocus={event => event.preventDefault()}>{content}</PopoverContent>
   </Popover>;
