@@ -5,6 +5,7 @@ import type { ConnectionState } from '../../shared/protocol/shell';
 import type { ChatPort } from '../host/chatIntent';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import { Button } from '../ui/button';
+import { Tooltip } from '../ui/overlays';
 import { DroidConnectionDot } from '../ui/droid-motion';
 import type { SessionRecoveryStatus } from './ConnectionFeedback';
 
@@ -38,15 +39,18 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
   const failed = recovery.failed || recovery.active && recovery.timedOut || !recovery.active && ideFailed;
   const connecting = pending || recovery.waiting || ide.status === 'preparing';
   const status = pending ? 'connecting' : failed ? 'unavailable' : connecting ? 'connecting' : 'connected';
-  const label = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting' : 'Offline';
+  const label = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting'
+    : connection.status === 'connected' && !recovery.active ? 'IDE offline' : 'Offline';
+  const detail = reconnect.error ?? (recovery.active ? connection.message : ide.message) ?? label;
   const actionLabel = pending ? 'Reconnecting…' : 'Reconnect';
   return <>
-    <span role="status" aria-atomic="true" className="ml-1.5 mr-auto inline-flex h-6 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <Tooltip content={detail}><span role="status" aria-atomic="true" tabIndex={0} aria-label={`${label}. ${detail}`}
+      className="ml-1.5 mr-auto inline-flex h-6 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       <span className="grid size-3 shrink-0 place-items-center"><DroidConnectionDot state={status} working={working} /></span>
       <span className="truncate">{label}</span>
-    </span>
+    </span></Tooltip>
     {retry ? <Button variant="plain" size="icon-sm" className="chat-header-control mr-1 text-muted-foreground"
-      aria-label={actionLabel} title={actionLabel} aria-busy={pending} disabled={retry.disabled} onClick={retry.run}>
+      aria-label={actionLabel} title={retry.disabled ? detail : actionLabel} aria-busy={pending} disabled={retry.disabled} onClick={retry.run}>
       <RefreshCw aria-hidden="true" className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} />
     </Button> : null}
   </>;

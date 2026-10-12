@@ -18,10 +18,14 @@ interface RecoveredIdeIntent { runtime: DroidRuntime; generation: number; sessio
 const recoveredIntents = new WeakMap<ChatController, RecoveredIdeIntent>();
 const recoveredAttempts = new WeakMap<ChatController, number>();
 
+function needsIdeRecovery(status: IdeState['status'] | undefined): boolean {
+  return status === 'reconnect-required' || status === 'error' || status === 'disconnected';
+}
+
 /** Only callers that have confirmed the recovered daemon is idle may request this. */
 export function reconnectRecoveredIde(ctl: ChatController, runtime: DroidRuntime, generation: number, sessionId: string, cwd: string): void {
   if (recoveredAttempts.get(ctl) === generation || !ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd) ||
-      ctl.nativeIde?.read(sessionId).status !== 'reconnect-required') return;
+      !needsIdeRecovery(ctl.nativeIde?.read(sessionId).status)) return;
   recoveredIntents.set(ctl, { runtime, generation, sessionId, cwd });
   resumeRecoveredIdeReconnect(ctl);
 }
@@ -31,7 +35,7 @@ export function resumeRecoveredIdeReconnect(ctl: ChatController): void {
   const intent = recoveredIntents.get(ctl);
   if (!intent) return;
   if (!ctl.isCurrentSessionOperation(intent.runtime, intent.generation, intent.sessionId, intent.cwd) ||
-      ctl.nativeIde?.read(intent.sessionId).status !== 'reconnect-required') {
+      !needsIdeRecovery(ctl.nativeIde?.read(intent.sessionId).status)) {
     recoveredIntents.delete(ctl);
     return;
   }
@@ -73,8 +77,8 @@ export function readControllerIde(ctl: ChatController): IdeState {
   return {
     ...state,
     canReconnect: eligible(ctl),
-    ...(state.status === 'reconnect-required' && ctl.nativeIde.reconnect !== undefined && isTurnActive(ctl.turnState.turn)
-      ? { message: 'The background task is still running. IDE will reconnect after it finishes.' }
+    ...(needsIdeRecovery(state.status) && ctl.nativeIde.reconnect !== undefined && isTurnActive(ctl.turnState.turn)
+      ? { message: 'The background task is still running. Wait for it to finish or stop it before reconnecting IDE.' }
       : {}),
   };
 }
