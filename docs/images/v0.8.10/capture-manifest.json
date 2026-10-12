@@ -1,0 +1,1074 @@
+{
+  "version": "0.8.10",
+  "capturedOn": "2026-10-12",
+  "sourceCommit": "eab11b41e357a29b36564e66de9e482c2c13ba8a",
+  "installedVsixSha256": "b96905c12e814b45156e6139911b1cefade9db3e67f86d473029d7c1dc582b18",
+  "publication": "Local review assets only. No README, marketplace listing, release page or website was replaced or published.",
+  "method": {
+    "browser": "Exact release production components and styles rendered with an isolated local demo transport. No generated interface images.",
+    "native": "22 and 26 captured from Microsoft VS Code with the existing v0.8.10 VSIX installed into an isolated profile. Local deterministic completion responses; no real model inference.",
+    "presentation": "Framing, captions and WebP encoding added around screenshots. Hero combines two independent UI scenes. Raw PNGs are retained.",
+    "verification": "Visual inspection of captures and presentation exports. No unit/integration suites or production rebuild/reinstall in the user profile."
+  },
+  "recommendedHero": {
+    "id": "01-overview",
+    "title": "从任务计划到代码审阅",
+    "description": "推荐首页主视觉：同时呈现任务计划、聊天改动归属和独立多文件分栏审阅。",
+    "image": "final/01-overview.webp",
+    "png": "final/01-overview.png",
+    "rawSources": [
+      "raw/02-chat-plan.png",
+      "raw/04-review-split.png"
+    ],
+    "sourceKind": "composite-of-release-production-screenshots",
+    "dimensions": [
+      3440,
+      2020
+    ],
+    "recommended": true
+  },
+  "groups": [
+    {
+      "id": "chat",
+      "title": "聊天、计划与任务控制",
+      "ids": [
+        "02",
+        "25",
+        "27",
+        "28",
+        "29",
+        "30",
+        "39"
+      ],
+      "scope": "完成与进行中的任务计划、工具输出、Markdown / Mermaid、方案审批、结构化问题和排队请求。",
+      "boundary": "对话、执行结果与用量为演示数据；未执行真实模型任务、批准方案或发送队列。"
+    },
+    {
+      "id": "review",
+      "title": "代码审阅与 Git",
+      "ids": [
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11"
+      ],
+      "scope": "分栏 / 合并 Diff、逐次编辑、全文、六种范围、行内问答、已读进度与提交预览。",
+      "boundary": "比较与回答使用演示数据。没有执行文件撤销、SDK Rewind 或实际 Git 提交；本轮未验证这些写入链路。"
+    },
+    {
+      "id": "models",
+      "title": "模型与 BYOK",
+      "ids": [
+        "03",
+        "12",
+        "13",
+        "14",
+        "38"
+      ],
+      "scope": "模型推理档位、渠道、协议、密钥状态、模型发现、可恢复禁用与别名。",
+      "boundary": "渠道使用 .example 域名与虚构模型名；未访问真实提供商，未做真实调用验证。"
+    },
+    {
+      "id": "sessions",
+      "title": "会话与上下文管理",
+      "ids": [
+        "15",
+        "16",
+        "35",
+        "37",
+        "44"
+      ],
+      "scope": "跨文件夹历史、收藏、切换入口、上下文预算与压缩、会话和子任务默认值。",
+      "boundary": "未执行跨目录恢复、Fork、Compact 或长会话压力验证。截图中的用量为演示值。"
+    },
+    {
+      "id": "context",
+      "title": "侧问答与附件",
+      "ids": [
+        "17",
+        "32",
+        "33",
+        "36"
+      ],
+      "scope": "引用正文进行 BTW 侧问答、独立模型、文件和图片附件、图片预览及上下文入口。",
+      "boundary": "附件图片由真实 Mermaid 渲染图提供；数据经隔离 transport 注入，未验证 Host 文件读取、拖放或粘贴链路。"
+    },
+    {
+      "id": "agents",
+      "title": "子代理与 Mission",
+      "ids": [
+        "18",
+        "19",
+        "20",
+        "21",
+        "31",
+        "40"
+      ],
+      "scope": "普通 Task 卡片、只读 Viewer、Mission 目录 / 进度、三角色模型配置与验证开关。",
+      "boundary": "普通 Task 展示只读记录；未演示 Mission child 跟进聊天、真实执行或恢复。Enabled 只表示验证已启用。"
+    },
+    {
+      "id": "completion",
+      "title": "编辑器补全与 Next Edit",
+      "ids": [
+        "22",
+        "26",
+        "23"
+      ],
+      "scope": "已安装扩展在 Microsoft VS Code 中的灰字建议、Next Edit 跨行修改提示，以及独立补全服务设置。",
+      "boundary": "22、26 是原生 VS Code 实机截图，使用本地确定性演示响应；不代表真实模型的质量、延迟或接受率。"
+    },
+    {
+      "id": "extensions",
+      "title": "Skills、MCP 与 Plugins",
+      "ids": [
+        "41",
+        "42",
+        "43"
+      ],
+      "scope": "技能的范围与开关，MCP 连接 / 工具 / 认证入口，插件范围 / 版本 / 启用状态。",
+      "boundary": "列表内容为演示数据；未安装插件、切换真实技能、授权 MCP 或调用外部工具。"
+    },
+    {
+      "id": "appearance",
+      "title": "外观与连接设置",
+      "ids": [
+        "24",
+        "34"
+      ],
+      "scope": "常规设置、连接与版本信息、独立审阅问答模型和浅色聊天主题。",
+      "boundary": "保留 v0.8.10 原有中英文标签，不伪造全量本地化或连接验收。"
+    }
+  ],
+  "exclusions": [
+    {
+      "capability": "后台恢复、IDE 重连、流式性能和可靠性",
+      "reason": "静态截图无法证明时间相关行为，本次没有运行恢复或性能验收。"
+    },
+    {
+      "capability": "Worktree 生命周期、Droid 管理终端、更新、原生资源管理",
+      "reason": "需要真实 Runtime / Host 状态及相应原生操作。本次没有创建或清理 Worktree，也没有操作现有后台任务。"
+    },
+    {
+      "capability": "新会话系统提示",
+      "reason": "v0.8.10 源码保留 SettingsMenu / SystemPromptDialog，但当前 ChatApp 使用的 ComposerControls / SettingsPopover 中未找到该入口。未将孤立组件截图当成可达功能。"
+    },
+    {
+      "capability": "云端会话、账户计费、SDK 自动化、SSH / relay 管理",
+      "reason": "发布源码中的能力矩阵标为部分、受限或未接入，不制作暗示完整支持的展示图。"
+    },
+    {
+      "capability": "动画、键盘操作、实际文件撤销与任务执行",
+      "reason": "单张图片只展示界面状态，不作为这些交互已经验收的证据。"
+    }
+  ],
+  "images": [
+    {
+      "id": "02-chat-plan",
+      "title": "任务计划与按轮次改动",
+      "description": "计划、工具读取、回复和本轮三文件改动集中在同一段对话。",
+      "raw": "raw/02-chat-plan.png",
+      "image": "final/02-chat-plan.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1360,
+        1480
+      ],
+      "dimensions": [
+        1584,
+        1944
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "fc6ba9d6eb03c29c080d19669e42375c5e21747c9812182817ac6a8deea8361f",
+      "bytes": 152262
+    },
+    {
+      "id": "03-model-reasoning",
+      "title": "模型与推理强度",
+      "description": "聊天内切换可用模型，并选择该模型支持的推理档位。",
+      "raw": "raw/03-model-reasoning.png",
+      "image": "final/03-model-reasoning.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1360,
+        1480
+      ],
+      "dimensions": [
+        1584,
+        1944
+      ],
+      "reviewed": true,
+      "group": "models",
+      "sha256": "3b01b3b3cad7360f9e7037e736546990cc3f9e37e75d28219f8ea6e5a76002e7",
+      "bytes": 157122
+    },
+    {
+      "id": "04-review-split",
+      "title": "多文件分栏审阅",
+      "description": "按文件查看修改前后内容、增删行与已读状态。",
+      "raw": "raw/04-review-split.png",
+      "image": "final/04-review-split.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "7261aefe78e822ceef63f8da3d0c45ded6351c001ca8d40fb7fbe661e243aa9f",
+      "bytes": 215594
+    },
+    {
+      "id": "05-review-unified",
+      "title": "合并 Diff",
+      "description": "在单栏中连续阅读改动，保留文件导航与逐项审阅。",
+      "raw": "raw/05-review-unified.png",
+      "image": "final/05-review-unified.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "565a5409acd0f4ded824d0165f8a832cf2583711fda2c5abd890f63a2e2a3940",
+      "bytes": 185390
+    },
+    {
+      "id": "06-review-history",
+      "title": "逐次编辑记录",
+      "description": "查看文件在单次任务中的多次工具编辑记录。",
+      "raw": "raw/06-review-history.png",
+      "image": "final/06-review-history.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "fb16663df849928d6f457e798024b94c20b5b3dbea11e618a623955ed8c05e94",
+      "bytes": 215132
+    },
+    {
+      "id": "07-review-full-file",
+      "title": "完整文件上下文",
+      "description": "审阅范围支持 3、20、100 行及 Full file，连贯阅读修改上下文。",
+      "raw": "raw/07-review-full-file.png",
+      "image": "final/07-review-full-file.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "8facaf045222c96cae8bc42ecaca842f5d82f6ea084153df41bf1490ba5d2183",
+      "bytes": 222504
+    },
+    {
+      "id": "08-review-scopes",
+      "title": "六种比较范围",
+      "description": "区分已记录操作、Agent Turn、未提交、分支、未暂存与已暂存改动。",
+      "raw": "raw/08-review-scopes.png",
+      "image": "final/08-review-scopes.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "06807997f9a221c9ec5f8018df5bd2eb9c63527751380ba1d771d2046af2f9d1",
+      "bytes": 215332
+    },
+    {
+      "id": "09-review-question",
+      "title": "围绕选中代码提问",
+      "description": "浮动只读问答保留代码选区，在审阅上下文中解释改动。",
+      "raw": "raw/09-review-question.png",
+      "image": "final/09-review-question.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "5b29747235cad033d4dea52936693a02c308b96f9116530d65b7a7316152267f",
+      "bytes": 209252
+    },
+    {
+      "id": "10-review-progress",
+      "title": "逐文件审阅状态",
+      "description": "确认文件已读后记录进度，继续检查其余文件。",
+      "raw": "raw/10-review-progress.png",
+      "image": "final/10-review-progress.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "84692cea3ea3eb1048c5dd7c7585462613ee169861103f0f7908d9431fab99a6",
+      "bytes": 236916
+    },
+    {
+      "id": "11-commit-preview",
+      "title": "提交前核对文件",
+      "description": "提交面板展示选择范围、文件状态和说明；截图未执行提交。",
+      "raw": "raw/11-commit-preview.png",
+      "image": "final/11-commit-preview.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "review",
+      "sha256": "0758a4fae34765195b2c0926eb7c48e9755bf7339dc2b10e554be14eb3a22d8d",
+      "bytes": 195896
+    },
+    {
+      "id": "12-byok-models",
+      "title": "BYOK 渠道与模型管理",
+      "description": "按渠道管理模型、显示别名和启停状态，选择主聊天使用的模型。",
+      "raw": "raw/12-byok-models.png",
+      "image": "final/12-byok-models.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "models",
+      "sha256": "8a171076cf4607ad68bdde9f611c6a7ee37f3e09f63bf5c0e4af30252f552336",
+      "bytes": 125362
+    },
+    {
+      "id": "13-byok-connection",
+      "title": "模型渠道配置",
+      "description": "渠道独立保存兼容协议、API 地址与密钥状态。",
+      "raw": "raw/13-byok-connection.png",
+      "image": "final/13-byok-connection.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "models",
+      "sha256": "2df493bd1ddd3a944d5068b6b4604b5e009773957748239b61cfc8de8d19d199",
+      "bytes": 153830
+    },
+    {
+      "id": "14-byok-discovery",
+      "title": "发现与导入模型",
+      "description": "在指定渠道发现模型目录，选择要添加的模型。",
+      "raw": "raw/14-byok-discovery.png",
+      "image": "final/14-byok-discovery.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "models",
+      "sha256": "6d3b1c28f62172fbc20e101cb68105bf1d02099badd99e9a365856d1275d070f",
+      "bytes": 143036
+    },
+    {
+      "id": "15-session-history",
+      "title": "跨文件夹会话历史",
+      "description": "按标题或文件夹查找会话，保留收藏、消息数量与继续入口。",
+      "raw": "raw/15-session-history.png",
+      "image": "final/15-session-history.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "sessions",
+      "sha256": "446bae36d2f54b0b1f579b4c391a83f08cb9362e10fe51ef6e29d5ade74fdbf5",
+      "bytes": 125780
+    },
+    {
+      "id": "16-session-defaults",
+      "title": "新会话默认设置",
+      "description": "默认模型、推理强度、交互模式、自主等级与 Spec 模型。",
+      "raw": "raw/16-session-defaults.png",
+      "image": "final/16-session-defaults.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "sessions",
+      "sha256": "eefcbdde6f47521d6e4ddf22c71f6ed49c0896dde9291a5ae572bf891a0709f8",
+      "bytes": 92270
+    },
+    {
+      "id": "17-btw",
+      "title": "BTW 独立侧问答",
+      "description": "引用正文进行侧问答，独立选择模型，保留主任务上下文。",
+      "raw": "raw/17-btw.png",
+      "image": "final/17-btw.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2160,
+        1440
+      ],
+      "dimensions": [
+        2384,
+        1904
+      ],
+      "reviewed": true,
+      "group": "context",
+      "sha256": "eb9ee16945d15598386734cd94d7ef4dd7666fc8b30d7b6b6019d551e15c9df6",
+      "bytes": 206928
+    },
+    {
+      "id": "18-subagents",
+      "title": "子代理任务记录",
+      "description": "查看每次派发的任务、工具数和返回状态；示例任务均为只读检查。",
+      "raw": "raw/18-subagents.png",
+      "image": "final/18-subagents.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "58d4ad0b52319cd608e9175385c84ccdba5cbe1e9ba7ac26898dc6332c28777a",
+      "bytes": 120404
+    },
+    {
+      "id": "19-subagent-viewer",
+      "title": "只读任务详情",
+      "description": "打开子代理记录，阅读对应任务、回复与工具过程。",
+      "raw": "raw/19-subagent-viewer.png",
+      "image": "final/19-subagent-viewer.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "be3861b504877f41b7a8a22122c0878c1488ad488cb6067b93cd8b9c206b39de",
+      "bytes": 99954
+    },
+    {
+      "id": "20-mission-progress",
+      "title": "Mission 进度",
+      "description": "按 Feature 跟踪任务，查看当前 Worker，并控制暂停与停止。",
+      "raw": "raw/20-mission-progress.png",
+      "image": "final/20-mission-progress.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1760
+      ],
+      "dimensions": [
+        1744,
+        2224
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "8e3e2525cf3f76e7cb2be9ea0d5733cde0c3edf33711c5f65ae87b3d60f59867",
+      "bytes": 99670
+    },
+    {
+      "id": "21-mission-validation",
+      "title": "Mission 验证状态",
+      "description": "明确展示启用的 Scrutiny 与 User Testing 检查；启用状态不代表验证已通过。",
+      "raw": "raw/21-mission-validation.png",
+      "image": "final/21-mission-validation.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1300
+      ],
+      "dimensions": [
+        1744,
+        1764
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "90a66d7d01b0b2d1c5b7dd783c0c8f019e5841c490be88f969a1b96859b9d4cc",
+      "bytes": 106274
+    },
+    {
+      "id": "22-inline-completion",
+      "title": "原生灰字补全",
+      "description": "安装版在独立 VS Code 中请求本地演示服务，真实显示行内建议。",
+      "raw": "raw/22-inline-completion.png",
+      "image": "final/22-inline-completion.webp",
+      "sourceKind": "installed-vscode-extension-local-response",
+      "sourceLabel": "VS Code 实机 · 本地演示响应",
+      "rawDimensions": [
+        1400,
+        875
+      ],
+      "dimensions": [
+        2784,
+        2064
+      ],
+      "reviewed": true,
+      "group": "completion",
+      "sha256": "c0ec61a84d00698098bbc358acbb8b40641835e974501c0c6c34256d1044ab27",
+      "bytes": 180618
+    },
+    {
+      "id": "23-completion-settings",
+      "title": "独立的补全服务",
+      "description": "编辑器补全独立配置提供商、协议、触发方式与关联文件上下文。",
+      "raw": "raw/23-completion-settings.png",
+      "image": "final/23-completion-settings.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "completion",
+      "sha256": "736c8440114f31d4f4813f6277564d6720949ea63bafbd75f6d288228e6b13d7",
+      "bytes": 111694
+    },
+    {
+      "id": "24-general-settings",
+      "title": "主题与审阅问答配置",
+      "description": "常规设置集中管理外观、独立审阅问答模型、连接和版本。",
+      "raw": "raw/24-general-settings.png",
+      "image": "final/24-general-settings.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "appearance",
+      "sha256": "a5c5fcc52bbbf1fb01f0965dd7058739e179d95ed65cbf00a4344e8826f823c1",
+      "bytes": 93690
+    },
+    {
+      "id": "25-markdown-code-diagram",
+      "title": "Markdown、代码与图表",
+      "description": "正文直接展示表格、语法高亮代码和 Mermaid 图表。",
+      "raw": "raw/25-markdown-code-diagram.png",
+      "image": "final/25-markdown-code-diagram.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1760,
+        2160
+      ],
+      "dimensions": [
+        1984,
+        2624
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "75f3a552760bf5332e18b1e760bb083ad74657426e36ed416b8b4408cba26ba4",
+      "bytes": 147574
+    },
+    {
+      "id": "26-next-edit",
+      "title": "Next Edit 修改建议",
+      "description": "安装版接收本地演示服务返回的替换片段，真实显示修改提示与 Tab / Esc 操作。",
+      "raw": "raw/26-next-edit.png",
+      "image": "final/26-next-edit.webp",
+      "sourceKind": "installed-vscode-extension-local-response",
+      "sourceLabel": "VS Code 实机 · 本地演示响应",
+      "rawDimensions": [
+        1800,
+        1000
+      ],
+      "dimensions": [
+        2784,
+        1886
+      ],
+      "reviewed": true,
+      "group": "completion",
+      "sha256": "b9d83b1b095c94568bc789512b1b6eaeee8c6e69e80d84cf90673c4863de5ca7",
+      "bytes": 189624
+    },
+    {
+      "id": "27-tools-output",
+      "title": "工具过程与命令输出",
+      "description": "展开搜索结果和命令输出，保留每项活动的独立阅读入口。",
+      "raw": "raw/27-tools-output.png",
+      "image": "final/27-tools-output.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "adbe5464766ae4ffcf2b442c872ad56822b72e44b659ee35d06a779498b5e60a",
+      "bytes": 151312
+    },
+    {
+      "id": "28-plan-approval",
+      "title": "方案确认",
+      "description": "Spec Mode 中查看计划并选择继续规划、编辑或批准。",
+      "raw": "raw/28-plan-approval.png",
+      "image": "final/28-plan-approval.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1380
+      ],
+      "dimensions": [
+        1744,
+        1844
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "1f13d187d2f3b998e99c00c52ab5f57a41bed50f2c291c94619774304ae9e6bb",
+      "bytes": 132604
+    },
+    {
+      "id": "29-structured-questions",
+      "title": "结构化需求澄清",
+      "description": "单选与多选问题收集明确约束。",
+      "raw": "raw/29-structured-questions.png",
+      "image": "final/29-structured-questions.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        2360
+      ],
+      "dimensions": [
+        1744,
+        2824
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "de32513af4885e3d0fa896f586556e39c8ad01e09a66c61b9da5ffb6fb3c9e57",
+      "bytes": 119690
+    },
+    {
+      "id": "30-task-progress",
+      "title": "任务进行中",
+      "description": "显示已完成、进行中与待处理步骤，以及停止入口。",
+      "raw": "raw/30-task-progress.png",
+      "image": "final/30-task-progress.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1180
+      ],
+      "dimensions": [
+        1744,
+        1644
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "bb66b1f0f8bbf943b99d7b94cf0790c175cbc778d5ae961a3a2f7a85db8c9d88",
+      "bytes": 83778
+    },
+    {
+      "id": "31-mission-setup",
+      "title": "Mission 角色与验证配置",
+      "description": "独立配置 Orchestrator、Worker、Validator 的模型与推理强度，选择验证步骤。",
+      "raw": "raw/31-mission-setup.png",
+      "image": "final/31-mission-setup.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        2820
+      ],
+      "dimensions": [
+        1744,
+        3284
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "d6f966d8cfc864511aaa77b726a92e854e7b7e965fabedd9909ad0978de6d390",
+      "bytes": 231564
+    },
+    {
+      "id": "32-attachment-context",
+      "title": "文件与图片上下文",
+      "description": "输入区保留文件和图片附件，示例为重试说明及流程图。",
+      "raw": "raw/32-attachment-context.png",
+      "image": "final/32-attachment-context.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1180
+      ],
+      "dimensions": [
+        1744,
+        1644
+      ],
+      "reviewed": true,
+      "group": "context",
+      "sha256": "1b6cffa8c099289925956571a18e8a1576a2702df57963a11788386b5c0dfab9",
+      "bytes": 87478
+    },
+    {
+      "id": "33-image-preview",
+      "title": "图片预览",
+      "description": "直接查看当前图片附件，保留聊天上下文。",
+      "raw": "raw/33-image-preview.png",
+      "image": "final/33-image-preview.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "context",
+      "sha256": "dab18f1d99705ce3a6706901e6b0fee34f3995d8612cb64a201492b8ae07c693",
+      "bytes": 66294
+    },
+    {
+      "id": "34-light-theme",
+      "title": "浅色主题",
+      "description": "同一真实聊天组件的浅色主题。",
+      "raw": "raw/34-light-theme.png",
+      "image": "final/34-light-theme.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "appearance",
+      "sha256": "414dfb798cdb607f7ea357a58e4ecd57f28612361538b5551f2850261b8974d6",
+      "bytes": 127560
+    },
+    {
+      "id": "35-session-switcher",
+      "title": "会话切换",
+      "description": "收藏与历史会话入口。",
+      "raw": "raw/35-session-switcher.png",
+      "image": "final/35-session-switcher.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "sessions",
+      "sha256": "99ea1ebde409b48a5930cdd55bc89d0a4036568ae04c832cca1cb6d26ed81eb8",
+      "bytes": 142326
+    },
+    {
+      "id": "36-context-actions",
+      "title": "上下文与扩展入口",
+      "description": "附加文件、当前编辑器、选区、问题与 Git 改动，并提供 Skills、MCP、Plugins 入口。",
+      "raw": "raw/36-context-actions.png",
+      "image": "final/36-context-actions.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "context",
+      "sha256": "009be97bba43fbe9331930e01b85e2d42922135ddc4af6639f32113b591be6a7",
+      "bytes": 147330
+    },
+    {
+      "id": "37-context-budget",
+      "title": "上下文预算",
+      "description": "查看上下文使用量和压缩入口。",
+      "raw": "raw/37-context-budget.png",
+      "image": "final/37-context-budget.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1560
+      ],
+      "dimensions": [
+        1744,
+        2024
+      ],
+      "reviewed": true,
+      "group": "sessions",
+      "sha256": "c8e9a2db51bbd8c408b9c076d24d33dbddfdac9a75ad7b489f4b0bb6499f258a",
+      "bytes": 141808
+    },
+    {
+      "id": "38-model-alias",
+      "title": "模型别名",
+      "description": "使用独立展示名辨认渠道模型，保留真实 Model ID。",
+      "raw": "raw/38-model-alias.png",
+      "image": "final/38-model-alias.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "models",
+      "sha256": "6228d121d8ea35b716047a63e633d4003a7d6a5ee380ee98d37964b3b3e57348",
+      "bytes": 120466
+    },
+    {
+      "id": "39-queued-followups",
+      "title": "排队的后续指令",
+      "description": "任务运行时保留后续请求，提供编辑与移除入口。",
+      "raw": "raw/39-queued-followups.png",
+      "image": "final/39-queued-followups.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1180
+      ],
+      "dimensions": [
+        1744,
+        1644
+      ],
+      "reviewed": true,
+      "group": "chat",
+      "sha256": "7648ec018297653a40721bb7138ef41faddf4b2e89325fe36f88e927033fae07",
+      "bytes": 109318
+    },
+    {
+      "id": "40-mission-catalog",
+      "title": "Mission 目录",
+      "description": "本地目录按运行、暂停、完成状态组织 Mission，展示工作区与进度。",
+      "raw": "raw/40-mission-catalog.png",
+      "image": "final/40-mission-catalog.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "agents",
+      "sha256": "0a93afa8071d173c97c42a386c5fc091969b69c2ff8fee1b4591786048c4a3cc",
+      "bytes": 103212
+    },
+    {
+      "id": "41-skills",
+      "title": "Skills 列表与启停",
+      "description": "查看项目及个人技能，控制启用状态。",
+      "raw": "raw/41-skills.png",
+      "image": "final/41-skills.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1480
+      ],
+      "dimensions": [
+        1744,
+        1944
+      ],
+      "reviewed": true,
+      "group": "extensions",
+      "sha256": "4d144c7c3ddbe008539d4ac2a08d34b39eb42b73d0eb087e063fc3b5a94aa35b",
+      "bytes": 151120
+    },
+    {
+      "id": "42-mcp-servers",
+      "title": "MCP 服务器",
+      "description": "查看连接状态、工具数量，以及添加、启停和认证入口。",
+      "raw": "raw/42-mcp-servers.png",
+      "image": "final/42-mcp-servers.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1480
+      ],
+      "dimensions": [
+        1744,
+        1944
+      ],
+      "reviewed": true,
+      "group": "extensions",
+      "sha256": "6cb64b7680400bb37d9fd5cd052cff5638d2ac0258c8f56cc10f79b8c2772831",
+      "bytes": 149362
+    },
+    {
+      "id": "43-plugins",
+      "title": "Plugins 列表",
+      "description": "查看已安装插件的范围、版本与启用状态。",
+      "raw": "raw/43-plugins.png",
+      "image": "final/43-plugins.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        1520,
+        1480
+      ],
+      "dimensions": [
+        1744,
+        1944
+      ],
+      "reviewed": true,
+      "group": "extensions",
+      "sha256": "2f23cfb80a050e67a8793432f5e9cb5ff948810a3d0f4fb5bb117228c3150dcd",
+      "bytes": 145636
+    },
+    {
+      "id": "44-subagent-defaults",
+      "title": "压缩与子任务默认模型",
+      "description": "为上下文压缩和不同复杂度的子任务选择默认模型与推理强度。",
+      "raw": "raw/44-subagent-defaults.png",
+      "image": "final/44-subagent-defaults.webp",
+      "sourceKind": "release-production-components-demo-state",
+      "sourceLabel": "v0.8.10 生产组件 · 演示数据",
+      "rawDimensions": [
+        2400,
+        1520
+      ],
+      "dimensions": [
+        2624,
+        1984
+      ],
+      "reviewed": true,
+      "group": "sessions",
+      "sha256": "5a9a3d639a8ae478a150a5e4f850e2855f64b954b973ec82ccfc1dd36924af6e",
+      "bytes": 102504
+    }
+  ]
+}
