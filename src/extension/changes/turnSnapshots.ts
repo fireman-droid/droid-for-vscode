@@ -40,6 +40,8 @@ export {
 } from './turnSnapshotRecords';
 
 export const SNAPSHOT_TIMEOUT_MS = 10_000;
+// Full workspace capture enumerates and hashes disk bytes; it is not a small tree read.
+export const SNAPSHOT_CAPTURE_TIMEOUT_MS = 60_000;
 export const MAX_SNAPSHOT_OBJECT_BYTES = 256 * 1024 * 1024;
 export const MAX_NUMSTAT_OUTPUT_BYTES = 1024 * 1024;
 export const MAX_OPEN_BASELINE_BYTES = 16 * 1024 * 1024;
@@ -373,7 +375,7 @@ export function createTurnSnapshotStore(
     if (root === undefined) {
       return undefined;
     }
-    const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+    const deadline = dependencies.now() + SNAPSHOT_CAPTURE_TIMEOUT_MS;
     const resolved = await resolveLayout(root, deadline);
     if (resolved === undefined) {
       return failCapture(scope, phase, 'not-a-git-workspace');
