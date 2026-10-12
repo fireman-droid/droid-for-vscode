@@ -53,7 +53,7 @@ export function handleSend(
   });
   const preparing = new AbortController();
   ctl.turnState.turn!.preparing = preparing;
-  const beforeSnapshot = captureSnapshotBeforeSend(ctl, sessionId, turnId, preparing.signal);
+  const beforeSnapshot = captureSnapshotBeforeSend(ctl, sessionId, turnId, preparing.signal, runtime);
   ctl.interactions.beginTurn(sessionId, turnId);
   // Edit-resend consumes the edit staging area passed in by the
   // caller; a plain send consumes the composer staging area.

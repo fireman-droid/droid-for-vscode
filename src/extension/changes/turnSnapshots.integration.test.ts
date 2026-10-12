@@ -10,6 +10,8 @@ import { readInlineDiff } from './inlineDiff';
 import { readReviewPatch } from '../review/reviewContent';
 import { loadTurnReviewScope, refreshTurnReviewStats } from '../review/reviewTurnScope';
 import type { RecordedOperation } from '../review/reviewOperationScope';
+import { captureSnapshotBeforeSend } from '../chat/changes/snapshotCapture';
+import type { RuntimeSessionWorkingState } from '../../runtime/DroidRuntime';
 
 vi.mock('vscode', () => ({}));
 
@@ -17,6 +19,48 @@ const execute = promisify(execFile);
 const stores: TurnSnapshotStore[] = [];
 const directories: string[] = [];
 const scope = { sessionId: 'session', turnId: 'turn' };
+
+it('recovers the durable old capture before a retried send only after the daemon is idle', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dvx-pending-capture-'));
+  directories.push(directory);
+  const root = join(directory, 'workspace');
+  const storage = join(directory, 'store');
+  await mkdir(root);
+  await execute('git', ['init', '--quiet', root], { windowsHide: true });
+  await writeFile(join(root, 'app.ts'), 'before\n');
+  await execute('git', ['-C', root, 'add', 'app.ts'], { windowsHide: true });
+  const index = await readFile(join(root, '.git', 'index'));
+  const persistence = memory();
+  const original = createTurnSnapshotStore(() => root, storage, persistence);
+  stores.push(original);
+  await original.capture(scope, 'before');
+  await original.markDispatched!(scope);
+  await writeFile(join(root, 'app.ts'), 'old reply finished\n');
+  await original.dispose();
+  const reloaded = createTurnSnapshotStore(() => root, storage, persistence);
+  stores.push(reloaded);
+  const runtime = { readSessionWorkingState: vi.fn(async (): Promise<RuntimeSessionWorkingState> => 'idle') };
+  const host = { turnSnapshots: reloaded };
+  await expect(captureSnapshotBeforeSend(host, 'another-session', 'retry', undefined, runtime))
+    .rejects.toThrow('Reopen session session');
+  expect(runtime.readSessionWorkingState).not.toHaveBeenCalled();
+  for (const state of ['running', 'waiting-for-user', 'unknown'] as const) {
+    runtime.readSessionWorkingState.mockResolvedValue(state);
+    await expect(captureSnapshotBeforeSend(host, scope.sessionId, 'retry', undefined, runtime))
+      .rejects.toThrow('The previous reply is still running or its state could not be confirmed');
+    expect(reloaded.read(scope.sessionId, scope.turnId)?.after).toBeUndefined();
+    expect(await reloaded.readPendingCapture!()).toEqual(scope);
+  }
+  runtime.readSessionWorkingState.mockResolvedValue('idle');
+  await captureSnapshotBeforeSend(host, scope.sessionId, 'retry', undefined, runtime);
+  expect(await reloaded.readTreeBytes(scope, 'app.ts', 'before')).toEqual(Buffer.from('before\n'));
+  expect(await reloaded.readTreeBytes(scope, 'app.ts', 'after')).toEqual(Buffer.from('old reply finished\n'));
+  const retry = { sessionId: scope.sessionId, turnId: 'retry' };
+  expect(await reloaded.readTreeBytes(retry, 'app.ts', 'before')).toEqual(Buffer.from('old reply finished\n'));
+  expect(await readFile(join(root, '.git', 'index'))).toEqual(index);
+  expect(await reloaded.readPendingCapture!()).toBeUndefined();
+  await reloaded.capture(retry, 'after');
+}, 30_000);
 
 it('keeps turn counts and patches consistent across CRLF changes, settlement and history reload', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dvx-turn-eol-'));

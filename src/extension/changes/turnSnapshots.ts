@@ -29,7 +29,7 @@ import {
 } from './turnSnapshotRecords';
 import { snapshotWorkspaceFiles, isSnapshotWorkspacePath } from './snapshotWorkspaceFiles';
 import { captureWorkspaceTree } from './captureWorkspaceTree';
-import { acquireWorkspaceTurnLease, releaseCompletedWorkspaceTurn, type WorkspaceTurnLease } from './workspaceTurnLease';
+import { acquireWorkspaceTurnLease, readPendingWorkspaceTurn, releaseCompletedWorkspaceTurn, type WorkspaceTurnLease } from './workspaceTurnLease';
 import { pruneSnapshotObjects } from './snapshotPruning';
 import { createGitTreeReader } from '../workspace/gitTreeReader';
 export {
@@ -96,6 +96,7 @@ export interface TurnSnapshotStore {
   ): Promise<string | undefined>;
   capturePaths(scope: TurnSnapshotScope, paths: readonly string[]): Promise<void>;
   markDispatched?(scope: TurnSnapshotScope): Promise<void>;
+  readPendingCapture?(): Promise<TurnSnapshotScope | undefined>;
   diff(scope: TurnSnapshotScope): Promise<ReadonlyMap<string, FileChangeStat>>;
   readTreeFile(scope: TurnSnapshotScope, path: string): Promise<string | undefined>;
   /**
@@ -550,6 +551,10 @@ export function createTurnSnapshotStore(
     return result.stdout;
   }, true);
   return {
+    async readPendingCapture() {
+      const root = getWorkspaceRoot();
+      return root && !closing ? readPendingWorkspaceTurn(root) : undefined;
+    },
     async capture(scope, phase, signal) {
       if (closing) return undefined;
       const key = turnKey(scope);

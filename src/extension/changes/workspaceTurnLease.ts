@@ -14,6 +14,12 @@ export interface WorkspaceTurnLease {
   detach(): Promise<void>;
 }
 
+/** Read the durable owner, which can outlive the displayed/retried turn. */
+export async function readPendingWorkspaceTurn(root: string): Promise<Scope | undefined> {
+  const owner = await readOwner(await ownerFile(root));
+  return owner?.phase === 'running' ? { sessionId: owner.sessionId, turnId: owner.turnId } : undefined;
+}
+
 /** Serialize controlled turns across controllers/windows before reading their baseline. */
 export async function acquireWorkspaceTurnLease(
   root: string, scope: Scope, signal?: AbortSignal, resumeOnly = false,
