@@ -160,6 +160,15 @@ export function handleRuntimeEvent(
       return;
     }
     case 'user-message': {
+      const turn = ctl.turnState.turn;
+      if (turn?.turnId !== turnId) return;
+      const user = ctl.recoveryState.transcript.transcript.find(
+        (item) => item.kind === 'user' && item.id === stableTranscriptId('user', turnId),
+      );
+      // Daemon reminders also arrive as user messages. Only the submitted prompt
+      // owns this turn; process sessions keep their first acknowledged message id.
+      const messageId = turn.backendTurnId ?? (user?.kind === 'user' ? user.messageId : undefined);
+      if (messageId !== undefined && messageId !== event.messageId) return;
       ctl.recoveryState.transcript = attachUserMessageId(
         ctl.recoveryState.transcript,
         turnId,
@@ -167,9 +176,6 @@ export function handleRuntimeEvent(
       );
       ctl.effects.retainSentAttachments(turnId, event.messageId);
       ctl.effects.scheduleRecoveryCheckpoint();
-      const user = ctl.recoveryState.transcript.transcript.find(
-        (item) => item.kind === 'user' && item.id === stableTranscriptId('user', turnId),
-      );
       ctl.emit({
         type: 'user.message-meta',
         sessionId,

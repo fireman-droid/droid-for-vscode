@@ -1,4 +1,5 @@
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
+import type { OperationDiff } from '../../shared/protocol/operationDiff';
 import { trimTranscriptToLimits } from '../../shared/transcript/transcriptLimits';
 import { preserveSubagentSummaries } from '../../shared/transcript/preserveSubagentSummaries';
 import type { ConversationRecoveryRecord, ConversationTurnRecord } from './conversationRecoveryState';
@@ -28,6 +29,7 @@ export function historyWithLocalChanges(
   // Loaded ledger fields remain authoritative; only absent fields are filled.
   const observed = preserveSubagentSummaries(history.transcript, currentTranscript);
   const restored = preserveSubagentSummaries(observed, conversation?.display.transcript.transcript ?? []);
+  restoreTurnMessageIds(restored, conversation?.turns ?? [], turns);
   for (const item of restored) {
     if (item.kind === 'user') {
       finish();
@@ -44,4 +46,57 @@ export function historyWithLocalChanges(
     historyStatus: bounded.trimmed ? 'partial' : history.historyStatus,
     truncated: history.truncated || bounded.trimmed,
   };
+}
+
+/** Repair old reminder-bound records only when recorded calls identify one user turn. */
+function restoreTurnMessageIds(
+  transcript: readonly SessionTranscriptItem[],
+  recordedTurns: readonly ConversationTurnRecord[],
+  turns: Map<string, ConversationTurnRecord>,
+): void {
+  const visibleIds = new Set(transcript.flatMap(item =>
+    item.kind === 'user' && item.messageId !== undefined ? [item.messageId] : []));
+  const owners = new Map<string, ConversationTurnRecord | null>();
+  for (const turn of recordedTurns) {
+    if (!turn.changesSettled) continue;
+    for (const operation of turn.toolOperations ?? []) {
+      const key = operationIdentity(operation);
+      if (key === undefined) continue;
+      const previous = owners.get(key);
+      owners.set(key, previous === undefined || previous?.turnId === turn.turnId ? turn : null);
+    }
+  }
+  const candidates = new Map<string, Set<ConversationTurnRecord | null>>();
+  let messageId: string | undefined;
+  for (const item of transcript) {
+    if (item.kind === 'user') {
+      messageId = item.messageId;
+    } else if (item.kind === 'tool' && messageId !== undefined && !turns.has(messageId)) {
+      const key = operationIdentity(item);
+      const owner = key === undefined ? undefined : owners.get(key);
+      if (owner === undefined) continue;
+      const matches = candidates.get(messageId) ?? new Set();
+      matches.add(owner);
+      candidates.set(messageId, matches);
+    }
+  }
+  const claims = new Map<string, { messageId: string; turn: ConversationTurnRecord } | null>();
+  for (const [id, matches] of candidates) {
+    if (matches.size !== 1) continue;
+    const turn = [...matches][0];
+    if (turn == null || (turn.messageId !== undefined && visibleIds.has(turn.messageId))) continue;
+    // A record spanning two actual user messages cannot establish either boundary.
+    claims.set(turn.turnId, claims.has(turn.turnId) ? null : { messageId: id, turn });
+  }
+  for (const claim of claims.values()) {
+    if (claim !== null) turns.set(claim.messageId, claim.turn);
+  }
+}
+
+function operationIdentity(operation: { toolUseId: string; operationDiff?: OperationDiff }): string | undefined {
+  const diff = operation.operationDiff;
+  if (diff?.status !== 'ready' || diff.source !== 'tool-result' || diff.sourceSessionId === undefined) {
+    return undefined;
+  }
+  return JSON.stringify([diff.sourceSessionId, diff.callId ?? operation.toolUseId]);
 }
