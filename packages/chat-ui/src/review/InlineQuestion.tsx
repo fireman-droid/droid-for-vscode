@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -45,6 +46,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
   focusRequested: boolean;
   onFocused(): void;
 }) {
+  const { t } = useI18n();
   const input = useRef<HTMLTextAreaElement>(null);
   const history = useRef<HTMLDivElement>(null);
   const historyContent = useRef<HTMLDivElement>(null);
@@ -67,7 +69,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
     return () => observer.disconnect();
   }, []);
   const send = () => { if (!disabled && !busy && draft.trim()) { follow.current = true; onSend(); } };
-  return <section className="review-inline-question" aria-label="Ask about selected code">
+  return <section className="review-inline-question" aria-label={t("Ask about selected code")}>
     <div ref={history} className="review-question-history" onScroll={event => {
       const node = event.currentTarget;
       if (followedOffset.current !== null && Math.abs(node.scrollTop - followedOffset.current) < 1) return;
@@ -79,18 +81,18 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></div>
     <div className="review-question-composer">
-      <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label="Question about selected code"
-        placeholder={entries.length ? 'Add a follow-up…' : 'Ask a quick question…'} value={draft} maxLength={maxLength}
+      <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label={t("Question about selected code")}
+        placeholder={entries.length ? t("Add a follow-up…") : t("Ask a quick question…")} value={draft} maxLength={maxLength}
         onChange={event => onDraft(event.target.value)} onKeyDown={event => {
           if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
         }} />
       {message ? <p className="review-question-error" role="alert">{message}</p> : null}
       <div className="review-question-actions">
-        {busy ? <span className="review-question-progress" role="status" aria-label="Answering"><LoaderCircle /></span> : null}
+        {busy ? <span className="review-question-progress" role="status" aria-label={t("Answering")}><LoaderCircle /></span> : null}
         {actions}
         <Button variant="plain" size="none" className="review-question-send" disabled={!busy && (disabled || !draft.trim())}
-          aria-label={busy ? 'Stop answer' : 'Send question'} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
+          aria-label={busy ? t("Stop answer") : t("Send question")} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
       </div>
     </div>
   </section>;

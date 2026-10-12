@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { type ThemePreference } from '../../shared/protocol/shell';
 import type { ChatSurfaceRole } from '../../shared/chatSurfacePolicy';
+import type { UiLocaleMessage } from '../../shared/protocol/localeProtocol';
 
 export interface WebviewSecurityContext {
   readonly cspSource: string;
@@ -56,6 +57,7 @@ export function getWebviewHtml(
   nonce = createNonce(),
   theme: WebviewBootTheme = DEFAULT_BOOT_THEME,
   chatRole?: ChatSurfaceRole,
+  locale: Pick<UiLocaleMessage, 'preference' | 'resolved'> = { preference: 'auto', resolved: 'en' },
 ): string {
   if (!/^[A-Za-z0-9_-]+$/.test(nonce)) {
     throw new Error('Webview nonce contains unsupported characters.');
@@ -73,7 +75,7 @@ export function getWebviewHtml(
   // takes over the attribute); the inline style covers the window
   // between HTML parse and stylesheet load.
   return /* html */ `<!doctype html>
-<html lang="en" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
+<html lang="${locale.resolved}" data-dvx-language="${locale.preference}" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
 <head>
   <meta charset="UTF-8">
   <meta

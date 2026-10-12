@@ -10,6 +10,7 @@ import { handleWebviewClipboard } from '../../webview/webviewClipboard';
 import { routeWebviewMessage } from '../../webview/webviewMessageRouter';
 import { createWebviewStateDelivery } from '../../webview/webviewStateDelivery';
 import { readWebviewBootTheme, readWebviewThemePreference } from '../../webview/webviewTheme';
+import { bindWebviewLocale, readWebviewLocale } from '../../webview/webviewLocale';
 import { createModelSourcePreference } from '../../webview/modelSourcePreference';
 
 export interface AgentChatPanelOptions {
@@ -47,7 +48,7 @@ export class AgentChatPanel implements vscode.Disposable {
     });
     let disposed = false;
     const modelSourcePreference = createModelSourcePreference(panel.webview);
-    const subscriptions: vscode.Disposable[] = [modelSourcePreference];
+    const subscriptions: vscode.Disposable[] = [modelSourcePreference, bindWebviewLocale(panel.webview)];
     const post = (message: unknown): void => {
       if (disposed) return;
       void panel.webview.postMessage(message).then(() => undefined, () => {
@@ -117,7 +118,7 @@ export class AgentChatPanel implements vscode.Disposable {
     panel.webview.html = getWebviewHtml(panel.webview, {
       script: vscode.Uri.joinPath(webviewDistUri, 'webview.js'),
       style: vscode.Uri.joinPath(webviewDistUri, 'webview.css'),
-    }, undefined, readWebviewBootTheme(), 'child');
+    }, undefined, readWebviewBootTheme(), 'child', readWebviewLocale());
     this.reveal = () => { if (!disposed) panel.reveal(undefined, false); };
     this.dispose = () => { if (!disposed) { panel.dispose(); cleanup(); } };
   }

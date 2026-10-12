@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { Fragment, isValidElement, memo, useContext, useDeferredValue, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 import type { RootContent } from 'hast';
@@ -39,12 +40,13 @@ function MarkdownPre({ children }: ComponentProps<'pre'>) {
 }
 
 function InlineCode({ children }: ComponentProps<'code'>) {
+  const { t } = useI18n();
   const { actions } = useContent();
   const { thinking } = useContext(MarkdownState);
   const path = actions?.openPath && !thinking ? detectPathLink(nodeText(children)) : null;
   return <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]">
     {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="text-link hover:underline">
-      <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={`Open ${path.path}`}
+      <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={t("Open {p0}", { p0: path.path })}
         onClick={(event) => { event.preventDefault(); if (!isTextSelectionClick(event)) actions.openPath?.(path); }}>
         {nodeText(children).split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
       </a>
@@ -53,14 +55,16 @@ function InlineCode({ children }: ComponentProps<'code'>) {
 }
 
 function MarkdownImage({ src, alt }: ComponentProps<'img'>) {
+  const { t } = useI18n();
   const { thinking } = useContext(MarkdownState);
   if (thinking || typeof src !== 'string' || src.length === 0) return null;
   if (isSafeMarkdownUrl(src) && (src.length > MAX_IMAGE_PATH_LENGTH || /[\u0000-\u001f\u007f]/u.test(src)))
-    return <span className="text-xs text-muted-foreground">Image preview unavailable: <SafeLink href={src}>{alt || 'Open image'}</SafeLink></span>;
+    return <span className="text-xs text-muted-foreground">{t("Image preview unavailable:")} <SafeLink href={src}>{alt || t("Open image")}</SafeLink></span>;
   return <ReferencedImage path={isSafeMarkdownUrl(src) ? src : decodeImagePath(src)} alt={alt ?? ''} />;
 }
 
 function ReferencedImage({ path, alt }: { readonly path: string; readonly alt: string }) {
+  const { t } = useI18n();
   const { images, actions } = useContent();
   const host = useRef<HTMLSpanElement>(null);
   useLocalImageVisit(host, path, images?.request);
@@ -69,10 +73,10 @@ function ReferencedImage({ path, alt }: { readonly path: string; readonly alt: s
   const link = remote ? null : detectPathLink(path);
   return <span ref={host}>
     {image?.status === 'ok' && image.mediaType !== null
-      ? image.data.length === 0 ? <span role="note">Image preview unavailable</span> : <ImageContent src={`data:${image.mediaType};base64,${image.data}`} alt={alt || 'Message image'} />
-      : image === undefined && images !== undefined ? <span role="status" className="text-xs text-muted-foreground">Loading image…</span>
-        : remote ? <span className="text-xs text-muted-foreground">Image preview unavailable: <SafeLink href={path}>{alt || 'Open image'}</SafeLink>{image?.status === 'too-large' ? ' (too large)' : image?.status === 'unsupported' ? ' (unsupported source or format)' : ''}</span>
-          : <span className="text-xs text-muted-foreground">{alt ? `${alt}: ` : ''}{link && actions?.openPath ? <Button textSelectable variant="plain" size="none" className="text-link hover:underline" onClick={() => actions.openPath?.(link)}>{path}</Button> : <code>{path}</code>}{image?.status === 'too-large' ? ' (too large to preview)' : image?.status === 'unsupported' ? ' (not a previewable image)' : ''}</span>}
+      ? image.data.length === 0 ? <span role="note">{t("Image preview unavailable")}</span> : <ImageContent src={`data:${image.mediaType};base64,${image.data}`} alt={alt || t("Message image")} />
+      : image === undefined && images !== undefined ? <span role="status" className="text-xs text-muted-foreground">{t("Loading image…")}</span>
+        : remote ? <span className="text-xs text-muted-foreground">{t("Image preview unavailable:")} <SafeLink href={path}>{alt || t("Open image")}</SafeLink>{image?.status === 'too-large' ? t("(too large)") : image?.status === 'unsupported' ? t("(unsupported source or format)") : ''}</span>
+          : <span className="text-xs text-muted-foreground">{alt ? `${alt}: ` : ''}{link && actions?.openPath ? <Button textSelectable variant="plain" size="none" className="text-link hover:underline" onClick={() => actions.openPath?.(link)}>{path}</Button> : <code>{path}</code>}{image?.status === 'too-large' ? t("(too large to preview)") : image?.status === 'unsupported' ? t("(not a previewable image)") : ''}</span>}
   </span>;
 }
 
@@ -90,6 +94,7 @@ export const Markdown = memo(function Markdown({ text, streaming = false, thinki
   readonly streaming?: boolean;
   readonly thinking?: boolean;
 }) {
+  const { t } = useI18n();
   const deferred = useDeferredValue(text);
   const displayed = streaming ? deferred : text;
   const parsed = useParsedMarkdown(displayed, thinking, streaming);
@@ -105,7 +110,7 @@ export const Markdown = memo(function Markdown({ text, streaming = false, thinki
     <StreamingTextBoundary initialLength={initialLength} running={renderingStream}>
     <div aria-busy={pending || undefined} data-markdown-pending={pending || undefined} className={`markdown-content min-w-0 break-words ${typography} [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1`}>
       {mounted.nodes.map((node, index) => <ParsedNode key={index} node={node} />)}
-      {pending && !streaming ? <div role="status" className="py-2 text-xs text-muted-foreground">Preparing reply…</div> : null}
+      {pending && !streaming ? <div role="status" className="py-2 text-xs text-muted-foreground">{t("Preparing reply…")}</div> : null}
     </div>
     </StreamingTextBoundary>
   </MarkdownState.Provider>;

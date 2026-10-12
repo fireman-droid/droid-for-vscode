@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 // The `+` popover keeps attachments, session settings and capability search together.
 
 import { useRef, useState } from 'react';
@@ -79,6 +80,7 @@ export function SettingsPopover({
   readonly onAttach: (source: AttachSource) => void;
   readonly showModeControl?: boolean;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const theme = useTheme();
   const confirmed = settings.value;
@@ -101,7 +103,7 @@ export function SettingsPopover({
       id={id}
       className="dvx-composer-popover dvx-settings-popover"
       role="dialog"
-      aria-label={label}
+      aria-label={t(label)}
     >
       <div
         key={group}
@@ -114,7 +116,7 @@ export function SettingsPopover({
   );
   if (confirmed === null) {
     return shell(
-      'Session controls',
+      t('Session controls'),
       <>
         <AttachRows disabled={attachDisabled} onAttach={onAttach} />
         <div className="dvx-settings-divider" />
@@ -123,9 +125,7 @@ export function SettingsPopover({
             {settings.message}
           </p>
         ) : (
-          <p className="dvx-popover-message" role="status">
-            Loading session settings…
-          </p>
+          <p className="dvx-popover-message" role="status">{t("Loading session settings…")}</p>
         )}
       </>,
     );
@@ -153,7 +153,7 @@ export function SettingsPopover({
 
   if (view === 'skills') {
     return shell(
-      'Skills',
+      t('Skills'),
       <SkillsPanel
         skills={skills}
         disabled={disabled}
@@ -177,7 +177,7 @@ export function SettingsPopover({
 
   if (view === 'mcp') {
     return shell(
-      'MCP servers',
+      t('MCP servers'),
       <McpPanel
         mcp={mcp}
         auth={mcpAuth}
@@ -194,7 +194,7 @@ export function SettingsPopover({
 
   if (view === 'plugins') {
     return shell(
-      'Plugins',
+      t('Plugins'),
       <PluginsPanel
         plugins={plugins}
         onBack={() => onViewChange('root')}
@@ -204,11 +204,9 @@ export function SettingsPopover({
   }
 
   return shell(
-    'Session controls',
+    t('Session controls'),
     <>
-      <label className="dvx-visually-hidden" htmlFor={`${id}-action-search`}>
-        Search actions
-      </label>
+      <label className="dvx-visually-hidden" htmlFor={`${id}-action-search`}>{t("Search actions")}</label>
       <div className="dvx-settings-search-shell">
         <SearchIcon />
         <Input
@@ -216,7 +214,7 @@ export function SettingsPopover({
           className="dvx-settings-search h-9 rounded-none border-0 bg-transparent p-0 text-[13px] focus-visible:border-transparent"
           type="search"
           value={query}
-          placeholder="Search actions, skills, MCP…"
+          placeholder={t("Search actions, skills, MCP…")}
           autoComplete="off"
           onChange={(event) => {
             const next = event.currentTarget.value;
@@ -243,7 +241,7 @@ export function SettingsPopover({
       {showMode ? (
         <SettingsDropdown
           id={`${id}-mode`}
-          title="Mode"
+          title={t("Mode")}
           expanded={view === 'mode'}
           current={confirmed.interactionMode}
           options={MODE_OPTIONS}
@@ -260,7 +258,7 @@ export function SettingsPopover({
       {showAutonomy ? (
         <SettingsDropdown
           id={`${id}-autonomy`}
-          title="Autonomy"
+          title={t("Autonomy")}
           expanded={view === 'autonomy'}
           current={confirmed.autonomyLevel}
           options={AUTONOMY_OPTIONS}
@@ -277,7 +275,7 @@ export function SettingsPopover({
       {showTheme ? (
         <SettingsDropdown
           id={`${id}-theme`}
-          title="Theme"
+          title={t("Theme")}
           expanded={view === 'theme'}
           current={theme.preference}
           options={THEME_OPTIONS}
@@ -306,13 +304,11 @@ export function SettingsPopover({
         >
           <SettingsInfoIcon kind="skills" />
           <span className="dvx-popover-row-copy">
-            <strong>Skills</strong>
+            <strong>{t("Skills")}</strong>
           </span>
           <span className="dvx-popover-row-value">
             {skills.status === 'ready'
-              ? `${skills.items.filter((skill) => skill.enabled).length}/${
-                  skills.items.length
-                } on`
+              ? t("{p0}/{p1} on", { p0: skills.items.filter((skill) => skill.enabled).length, p1: skills.items.length })
               : ''}
           </span>
           <ChevronDownIcon />
@@ -329,13 +325,11 @@ export function SettingsPopover({
         >
           <SettingsInfoIcon kind="mcp" />
           <span className="dvx-popover-row-copy">
-            <strong>MCP servers</strong>
+            <strong>{t("MCP servers")}</strong>
           </span>
           <span className="dvx-popover-row-value">
             {mcp.status === 'ready'
-              ? `${
-                  mcp.items.filter((server) => server.status !== 'disabled').length
-                }/${mcp.items.length} on`
+              ? t("{p0}/{p1} on", { p0: mcp.items.filter((server) => server.status !== 'disabled').length, p1: mcp.items.length })
               : ''}
           </span>
           <ChevronDownIcon />
@@ -354,10 +348,10 @@ export function SettingsPopover({
         >
           <SettingsInfoIcon kind="plugins" />
           <span className="dvx-popover-row-copy">
-            <strong>Plugins</strong>
+            <strong>{t("Plugins")}</strong>
           </span>
           <span className="dvx-popover-row-value">
-            {plugins.status === 'ready' ? `${plugins.items.length} installed` : ''}
+            {plugins.status === 'ready' ? t("{p0} installed", { p0: plugins.items.length }) : ''}
           </span>
           <ChevronDownIcon />
         </Button>
@@ -380,7 +374,7 @@ export function SettingsPopover({
                 <strong>{skill.name}</strong>
                 {skill.description !== null ? <span>{skill.description}</span> : null}
               </span>
-              <span className="dvx-popover-row-value">Skill</span>
+              <span className="dvx-popover-row-value">{t("Skill")}</span>
             </Button>
           ))}
           {matchedServers.map((server) => (
@@ -411,13 +405,11 @@ export function SettingsPopover({
       !showAttach &&
       matchedSkills.length === 0 &&
       matchedServers.length === 0 ? (
-        <p className="dvx-popover-message">No matching actions.</p>
+        <p className="dvx-popover-message">{t("No matching actions.")}</p>
       ) : null}
       <SettingsStatus settings={settings} />
       {disabled && settings.status === 'ready' ? (
-        <p className="dvx-popover-message" role="status">
-          Settings can be changed after the current turn.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Settings can be changed after the current turn.")}</p>
       ) : null}
     </>,
   );
@@ -430,66 +422,67 @@ function AttachRows({
   readonly disabled: boolean;
   readonly onAttach: (source: AttachSource) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <div className="dvx-attach-rows">
       <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
-        title="Images, PDFs, or text files"
+        title={t("Images, PDFs, or text files")}
         disabled={disabled}
         onClick={() => onAttach('files')}
       >
         <AttachIcon kind="files" />
         <span className="dvx-popover-row-copy">
-          <strong>Attach files…</strong>
+          <strong>{t("Attach files…")}</strong>
         </span>
       </Button>
       <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
-        title="Current file contents"
+        title={t("Current file contents")}
         disabled={disabled}
         onClick={() => onAttach('editor')}
       >
         <AttachIcon kind="editor" />
         <span className="dvx-popover-row-copy">
-          <strong>Attach active editor</strong>
+          <strong>{t("Attach active editor")}</strong>
         </span>
       </Button>
       <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
-        title="Highlighted editor text"
+        title={t("Highlighted editor text")}
         disabled={disabled}
         onClick={() => onAttach('selection')}
       >
         <AttachIcon kind="selection" />
         <span className="dvx-popover-row-copy">
-          <strong>Attach selection</strong>
+          <strong>{t("Attach selection")}</strong>
         </span>
       </Button>
       <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
-        title="Workspace errors and warnings"
+        title={t("Workspace errors and warnings")}
         disabled={disabled}
         onClick={() => onAttach('problems')}
       >
         <AttachIcon kind="problems" />
         <span className="dvx-popover-row-copy">
-          <strong>Attach problems</strong>
+          <strong>{t("Attach problems")}</strong>
         </span>
       </Button>
       <Button variant="plain" size="none"
         type="button"
         className="dvx-popover-row dvx-attach-row"
-        title="Uncommitted diff vs HEAD"
+        title={t("Uncommitted diff vs HEAD")}
         disabled={disabled}
         onClick={() => onAttach('git-changes')}
       >
         <AttachIcon kind="git-changes" />
         <span className="dvx-popover-row-copy">
-          <strong>Attach git changes</strong>
+          <strong>{t("Attach git changes")}</strong>
         </span>
       </Button>
     </div>
@@ -613,6 +606,7 @@ function SettingsDropdown<Value extends string>({
   readonly onToggle: () => void;
   readonly onSelect: (value: Value) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const trigger = useRef<HTMLButtonElement>(null);
   const select = (value: Value) => {
     onSelect(value);
@@ -623,19 +617,19 @@ function SettingsDropdown<Value extends string>({
       onOpenChange={(open) => { if (open !== expanded) onToggle(); }}>
       <CollapsibleTrigger asChild>
         <Button ref={trigger} variant="plain" size="none" className="dvx-popover-row"
-          aria-label={title} aria-controls={id} disabled={disabled}>
-          <span className="dvx-popover-row-copy"><strong>{title}</strong></span>
-          <span className="dvx-popover-row-value">{options.find((option) => option.value === current)?.label ?? current}</span>
+          aria-label={t(title)} aria-controls={id} disabled={disabled}>
+          <span className="dvx-popover-row-copy"><strong>{t(title)}</strong></span>
+          <span className="dvx-popover-row-value">{t(options.find((option) => option.value === current)?.label ?? current)}</span>
           <ChevronDownIcon />
         </Button>
       </CollapsibleTrigger>
       <AnimatedCollapsibleContent id={id} open={expanded}>
-        <RadioGroup className="dvx-settings-select-options" aria-label={`${title} options`}
+        <RadioGroup className="dvx-settings-select-options" aria-label={t("{p0} options", { p0: title })}
           value={current} disabled={disabled} onValueChange={(value) => select(value as Value)}>
           {options.map((option) => (
             <label key={option.value} className="dvx-option-row dvx-settings-inline-option">
-              <span>{option.label}</span>
-              <RadioGroupItem value={option.value} aria-label={option.label}
+              <span>{t(option.label)}</span>
+              <RadioGroupItem value={option.value} aria-label={t(option.label)}
                 onClick={() => { if (option.value === current) select(current); }} />
             </label>
           ))}

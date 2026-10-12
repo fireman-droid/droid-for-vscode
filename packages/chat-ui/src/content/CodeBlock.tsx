@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { CodeSyntax } from './CodeSyntax';
@@ -6,6 +7,7 @@ import { MarkdownState } from './context';
 import { useUiEnvironment } from '../environment';
 
 export function CodeBlock({ text, language }: { readonly text: string; readonly language: string | null }) {
+  const { t } = useI18n();
   const { copyText } = useUiEnvironment();
   const { streaming } = useContext(MarkdownState);
   const [copied, setCopied] = useState(false);
@@ -16,7 +18,7 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
     <div className="v2-code-body">
     <header data-transcript-selection-exclude="" className="v2-code-toolbar flex select-none items-center justify-between border-b border-border bg-muted px-2 py-1">
       <span className="v2-code-language text-[11px] text-muted-foreground">{language ?? 'text'}</span>
-      <Button variant="ghost" size="icon-sm" aria-label={copied ? 'Copied' : 'Copy code'} onClick={() => {
+      <Button variant="ghost" size="icon-sm" aria-label={copied ? t("Copied") : t("Copy code")} onClick={() => {
         void copyText(text).then(() => {
           setCopied(true); setCopyError(false);
           if (timer.current !== null) clearTimeout(timer.current);
@@ -24,11 +26,11 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
         }, () => setCopyError(true));
       }}>{copied ? <Check /> : <Copy />}</Button>
     </header>
-    <pre tabIndex={0} role="region" aria-label={`${language ?? 'Plain text'} code`}
+    <pre tabIndex={0} role="region" aria-label={t("{p0} code", { p0: language ?? 'Plain text' })}
       className="max-h-[480px] max-w-full overflow-auto overscroll-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
       <CodeSyntax text={text} language={language} streaming={streaming} />
     </pre>
     </div>
-    {copyError ? <p role="alert" className="px-2 py-1 text-xs text-destructive">Could not copy code.</p> : null}
+    {copyError ? <p role="alert" className="px-2 py-1 text-xs text-destructive">{t("Could not copy code.")}</p> : null}
   </div>;
 }

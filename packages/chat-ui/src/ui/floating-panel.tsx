@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { MoveDiagonal2, MoreHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
@@ -15,6 +16,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 export function FloatingPanel({ anchor, boundary, title, children, onClose, className, ...props }: {
   anchor: Anchor; boundary?: Element | null; title: string; children: ReactNode; onClose(): void;
 } & Omit<ComponentProps<typeof DialogPrimitive.Content>, 'title' | 'children'>) {
+  const { t } = useI18n();
   const container = usePortalContainer();
   const bounds = () => {
     const box = boundary?.getBoundingClientRect();
@@ -76,22 +78,22 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
         onCloseAutoFocus={event => event.preventDefault()}>
         <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
         <div className="dvx-floating-panel-header">
-          <Button variant="plain" size="none" className="dvx-floating-panel-move" aria-label="Move question panel"
-            title="Drag to move · Arrow keys to adjust" {...handle('move')}><PinwheelIcon /></Button>
+          <Button variant="plain" size="none" className="dvx-floating-panel-move" aria-label={t("Move question panel")}
+            title={t("Drag to move · Arrow keys to adjust")} {...handle('move')}><PinwheelIcon /></Button>
           <DropdownMenu modal={false}><DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Panel position and size"><MoreHorizontal /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={t("Panel position and size")}><MoreHorizontal /></Button>
           </DropdownMenuTrigger><DropdownMenuContent>
-            <DropdownMenuItem onSelect={() => setFrame(initial())}>Return to selection</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setFrame(initial())}>{t("Return to selection")}</DropdownMenuItem>
             {([['Move left', -40, 0], ['Move right', 40, 0], ['Move up', 0, -40], ['Move down', 0, 40]] as const).map(([label, x, y]) =>
-              <DropdownMenuItem key={label} onSelect={() => change('move', frame, x, y)}>{label}</DropdownMenuItem>)}
-            <DropdownMenuItem onSelect={() => change('resize', frame, 60, 40)}>Larger</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => change('resize', frame, -60, -40)}>Smaller</DropdownMenuItem>
+              <DropdownMenuItem key={label} onSelect={() => change('move', frame, x, y)}>{t(label)}</DropdownMenuItem>)}
+            <DropdownMenuItem onSelect={() => change('resize', frame, 60, 40)}>{t("Larger")}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => change('resize', frame, -60, -40)}>{t("Smaller")}</DropdownMenuItem>
           </DropdownMenuContent></DropdownMenu>
-          <Button variant="ghost" size="icon-sm" aria-label="Close question" onClick={onClose}><X /></Button>
+          <Button variant="ghost" size="icon-sm" aria-label={t("Close question")} onClick={onClose}><X /></Button>
         </div>
         <div className="dvx-floating-panel-body">{children}</div>
-        <Button variant="plain" size="none" className="dvx-floating-panel-resize" aria-label="Resize question panel"
-          title="Drag to resize · Arrow keys to adjust" {...handle('resize')}><MoveDiagonal2 /></Button>
+        <Button variant="plain" size="none" className="dvx-floating-panel-resize" aria-label={t("Resize question panel")}
+          title={t("Drag to resize · Arrow keys to adjust")} {...handle('resize')}><MoveDiagonal2 /></Button>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>;

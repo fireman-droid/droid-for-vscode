@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { adoptDiagramStyles, reapplyInlineStyles, type MermaidOutcome } from '../markdown/diagramStyles';
 import { Button } from '../ui/button';
@@ -6,6 +7,7 @@ import { MarkdownState, useContent } from './context';
 import { MediaPreview, type MediaSize } from './MediaPreview';
 
 export function MermaidBlock({ text }: { readonly text: string }) {
+  const { t } = useI18n();
   const { streaming } = useContext(MarkdownState);
   const { theme, renderDiagram } = useContent();
   const [outcome, setOutcome] = useState<MermaidOutcome | null>(null);
@@ -22,18 +24,19 @@ export function MermaidBlock({ text }: { readonly text: string }) {
   }, [text, streaming, theme, renderDiagram]);
   if (streaming || outcome?.ok !== true) return <>
     <CodeBlock text={text} language="mermaid" />
-    {outcome?.ok === false ? <p role="status" className="text-xs text-muted-foreground">Diagram could not be rendered; showing the source.</p> : null}
+    {outcome?.ok === false ? <p role="status" className="text-xs text-muted-foreground">{t("Diagram could not be rendered; showing the source.")}</p> : null}
   </>;
   return <div className="my-3 space-y-1">
-    {source ? <CodeBlock text={text} language="mermaid" /> : <Button variant="plain" size="none" aria-label="Enlarge diagram" className="v2-media-trigger v2-diagram-trigger block w-full overflow-hidden rounded border border-border p-2" onClick={() => setOpen(true)}>
+    {source ? <CodeBlock text={text} language="mermaid" /> : <Button variant="plain" size="none" aria-label={t("Enlarge diagram")} className="v2-media-trigger v2-diagram-trigger block w-full overflow-hidden rounded border border-border p-2" onClick={() => setOpen(true)}>
       <DiagramFigure svg={outcome.svg} css={outcome.css} onSize={setSize} />
     </Button>}
-    <Button variant="ghost" size="sm" onClick={() => setSource(!source)}>{source ? 'Hide source' : 'View source'}</Button>
-    {open ? <MediaPreview label="Diagram preview" size={size} onClose={() => setOpen(false)}><DiagramFigure svg={outcome.svg} css={outcome.css} full /></MediaPreview> : null}
+    <Button variant="ghost" size="sm" onClick={() => setSource(!source)}>{source ? t("Hide source") : t("View source")}</Button>
+    {open ? <MediaPreview label={t("Diagram preview")} size={size} onClose={() => setOpen(false)}><DiagramFigure svg={outcome.svg} css={outcome.css} full /></MediaPreview> : null}
   </div>;
 }
 
 function DiagramFigure({ svg, css, full, onSize }: { readonly svg: string; readonly css: string; readonly full?: boolean; readonly onSize?: (size: MediaSize) => void }) {
+  const { t } = useI18n();
   const host = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = host.current!;
@@ -52,5 +55,5 @@ function DiagramFigure({ svg, css, full, onSize }: { readonly svg: string; reado
     }
     return () => { release(); element.replaceChildren(); };
   }, [svg, css, full, onSize]);
-  return <div ref={host} role="img" aria-label="Mermaid diagram" className="size-full [&>svg]:max-w-full" />;
+  return <div ref={host} role="img" aria-label={t("Mermaid diagram")} className="size-full [&>svg]:max-w-full" />;
 }

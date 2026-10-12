@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
@@ -26,6 +27,7 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
   readonly side?: 'top' | 'bottom';
   readonly align?: 'start' | 'end';
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const { mode } = useModelSource();
   const selected = models.find((model) => model.id === value);
@@ -42,14 +44,14 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
     </PopoverTrigger>
     <PopoverContent aria-label={label} side={side} align={align} className="flex max-h-[min(360px,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-[min(240px,calc(100vw-16px))] max-w-[calc(100vw-16px)] flex-col gap-2 p-2">
       {visible.length === 0 ? <ModelSourceEmpty /> : (
-        <RadioGroup aria-label={`${label} options`} value={value ?? ''} className="min-h-0 overflow-y-auto"
+        <RadioGroup aria-label={t("{p0} options", { p0: label })} value={value ?? ''} className="min-h-0 overflow-y-auto"
           onValueChange={(next) => { if (next !== value) onChange(next); setOpen(false); }}>
           {visible.map((model) => <RadioGroupItem key={model.id} value={model.id} disabled={model.disabled} onClick={() => setOpen(false)}
             className="dvx-menu-item flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs">
             <span className="min-w-0">
               <span className="block break-words">{model.displayName}</span>
               <span className="block break-words text-[11px] text-muted-foreground">
-                {model.isCustom === undefined ? '来源未知' : model.isCustom ? 'BYOK' : '官方'}
+                {model.isCustom === undefined ? t("来源未知") : model.isCustom ? 'BYOK' : t("官方")}
                 {model.description ? ` · ${model.description}` : ''}
               </span>
             </span>

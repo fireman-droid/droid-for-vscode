@@ -9,6 +9,7 @@ import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { parseWebviewMessage } from '../../shared/validateMessage';
 import type { ChatController } from '../chat/ChatController';
 import type { ReviewPanelOpen } from '../../shared/protocol/reviewPanelProtocol';
+import { isUiLocaleRead } from '../../shared/protocol/localeProtocol';
 
 const BEACON_ERROR_KINDS: ReadonlySet<string> = new Set([
   'boot-timeout',
@@ -41,6 +42,8 @@ export function routeWebviewMessage(
   untrustedMessage: unknown,
   options: WebviewMessageRouteOptions,
 ): void {
+  // The independent locale binding replies before chat protocol routing.
+  if (isUiLocaleRead(untrustedMessage)) return;
   if (options.missionWorkspace?.handleMessage(untrustedMessage) === true) {
     return;
   }

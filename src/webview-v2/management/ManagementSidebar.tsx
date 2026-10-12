@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useState } from 'react';
 import { PinwheelIcon } from '@droidvisx/chat-ui/ui/pinwheel-icon';
 import { SelectionIndicator } from '@droidvisx/chat-ui/ui/selection-indicator';
@@ -16,6 +17,7 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
   readonly onToggle: () => void;
   readonly onNavigate: (page: ManagementPage) => void;
 }) {
+  const { t } = useI18n();
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 640px)').matches);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 640px)');
@@ -24,17 +26,17 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
     return () => media.removeEventListener('change', update);
   }, []);
   return <aside className="management-sidebar">
-    <Tooltip content={collapsed ? '展开侧栏' : '收起侧栏'}>
+    <Tooltip content={collapsed ? t("展开侧栏") : t("收起侧栏")}>
       <Button variant="plain" size="icon-sm" className="management-sidebar-toggle"
-        aria-label={collapsed ? '展开侧栏' : '收起侧栏'} aria-expanded={!collapsed}
+        aria-label={collapsed ? t("展开侧栏") : t("收起侧栏")} aria-expanded={!collapsed}
         aria-controls="management-navigation" onClick={onToggle}><PanelLeft /></Button>
     </Tooltip>
-    <nav id="management-navigation" aria-label="管理页面" data-animated-indicator>
+    <nav id="management-navigation" aria-label={t("管理页面")} data-animated-indicator>
       {MANAGEMENT_PAGES.map(key => {
         const Icon = icons[key];
-        return <Tooltip key={key} content={names[key]} disabled={!collapsed && !narrow}><Button variant="plain" size="none"
-          className="management-nav" aria-label={names[key]} aria-current={page === key ? 'page' : undefined}
-          onClick={() => onNavigate(key)}><Icon /><span className="management-nav-label">{names[key]}</span></Button></Tooltip>;
+        return <Tooltip key={key} content={t(names[key])} disabled={!collapsed && !narrow}><Button variant="plain" size="none"
+          className="management-nav" aria-label={t(names[key])} aria-current={page === key ? 'page' : undefined}
+          onClick={() => onNavigate(key)}><Icon /><span className="management-nav-label">{t(names[key])}</span></Button></Tooltip>;
       })}
       <SelectionIndicator activeSelector='[aria-current="page"]' variant="surface" />
     </nav>

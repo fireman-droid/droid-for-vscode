@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { Separator as SeparatorPrimitive } from 'radix-ui';
 import { useRef, useState } from 'react';
 
@@ -8,6 +9,7 @@ export function ResizeHandle({ value, min, max, defaultValue, label, onValueChan
   readonly onValueChange: (value: number) => void;
   readonly edge?: 'left' | 'right';
 }) {
+  const { t } = useI18n();
   const drag = useRef<{ pointerId: number; x: number; value: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const direction = edge === 'left' ? -1 : 1;
@@ -16,7 +18,7 @@ export function ResizeHandle({ value, min, max, defaultValue, label, onValueChan
   return <SeparatorPrimitive.Root decorative={false} orientation="vertical" tabIndex={0}
     className="dvx-resize-handle" data-edge={edge} aria-label={label} aria-valuemin={min} aria-valuemax={max}
     aria-valuenow={value} aria-valuetext={`${Math.round(value)} pixels`} data-dragging={dragging || undefined}
-    title="Drag to resize · Arrow keys to adjust · Double-click to reset"
+    title={t("Drag to resize · Arrow keys to adjust · Double-click to reset")}
     onPointerDown={(event) => {
       if (!event.isPrimary || event.button !== 0) return;
       event.preventDefault();

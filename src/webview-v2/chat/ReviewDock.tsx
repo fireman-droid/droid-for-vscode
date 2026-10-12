@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -15,6 +16,7 @@ import { cn } from '../ui/cn';
 import { ChevronDown, FileDiff } from 'lucide-react';
 
 export function ReviewDock(props: ReviewDockProps) {
+  const { t } = useI18n();
   const { changes, review, restorePreview, operation, agent } = props;
   const [expanded, setExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -30,40 +32,40 @@ export function ReviewDock(props: ReviewDockProps) {
   const selected = pendingScope?.kind ?? (ownsLatest ? 'turn' : review?.scopeKind === 'workspace' || review?.scopeKind === 'branch' ? review.scopeKind : 'none');
   const agentRunning = agent?.reviewScopeId === review?.reviewScopeId && (agent?.status === 'starting' || agent?.status === 'running');
   const locked = writing || current === null || current.status === 'open-only' || current.status === 'reviewed';
-  return <section aria-label="Review changes" className="overflow-hidden rounded-xl border border-[var(--panel-edge)] bg-input-background">
+  return <section aria-label={t("Review changes")} className="overflow-hidden rounded-xl border border-[var(--panel-edge)] bg-input-background">
     <Tool open={expanded} onOpenChange={setExpanded}>
       <div className="flex min-h-[34px] min-w-0 items-center gap-2 py-[3px] pr-2 pl-2.5">
         <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-chat-disclosure flex h-6 min-w-0 flex-1 items-center gap-[7px] text-left">
           <ChevronDown className={`size-[13px] shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
-          <span className="truncate text-[11.5px] font-semibold">{changes.files.length} {changes.files.length === 1 ? 'file' : 'files'} changed</span>
-          <span className="truncate text-[10.5px] text-muted-foreground">{showOpenNotice ? operation.message : writing ? 'Writing changes' : review?.lifecycle === 'complete' ? 'Review complete' : 'Ready to review'}</span>
-          {writing ? <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground"><span className="size-1 rounded-full bg-primary" />writing</span> : null}
+          <span className="truncate text-[11.5px] font-semibold">{changes.files.length} {changes.files.length === 1 ? t("file") : t("files")} {t("changed")}</span>
+          <span className="truncate text-[10.5px] text-muted-foreground">{showOpenNotice ? operation.message : writing ? t("Writing changes") : review?.lifecycle === 'complete' ? t("Review complete") : t("Ready to review")}</span>
+          {writing ? <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground"><span className="size-1 rounded-full bg-primary" />{t("writing")}</span> : null}
         </Button></CollapsibleTrigger>
-        <Button size="sm" className="h-6 rounded-[7px] px-3 text-[11px]" disabled={pendingScope !== null} onClick={() => { setExpanded(true); openScope('turn', changes.turnId, true); }}>{writing ? 'View live' : 'Review'}</Button>
+        <Button size="sm" className="h-6 rounded-[7px] px-3 text-[11px]" disabled={pendingScope !== null} onClick={() => { setExpanded(true); openScope('turn', changes.turnId, true); }}>{writing ? t("View live") : t("Review")}</Button>
       </div>
       <ToolContent className="max-h-[45vh] space-y-2 overflow-auto border-t border-[var(--panel-edge)] px-2.5 pt-[7px] pb-2 text-[11px]">
         <ToggleGroup type="single" value={selected} onValueChange={(value) => {
           if (value) { const kind = value as 'turn' | 'workspace' | 'branch'; openScope(kind, kind === 'turn' ? changes.turnId : undefined); }
-        }} className="grid grid-cols-3 gap-0.5" aria-label="Review scope">
+        }} className="grid grid-cols-3 gap-0.5" aria-label={t("Review scope")}>
           {(['turn', 'workspace', 'branch'] as const).map((kind) => <ToggleGroupItem key={kind} value={kind}
             className={`h-6 min-w-0 px-1 text-[10.5px] ${selected === kind ? 'bg-[var(--control-surface-active)] text-foreground' : 'text-muted-foreground'}`}
             disabled={pendingScope !== null}>
-            {kind === 'turn' ? 'Latest Turn' : kind === 'workspace' ? 'Workspace' : 'Branch'}
+            {kind === 'turn' ? t("Latest Turn") : kind === 'workspace' ? t("Workspace") : t("Branch")}
           </ToggleGroupItem>)}
         </ToggleGroup>
-        {review === null ? <p>Choose Review to open the latest Turn.</p>
-          : review.lifecycle === 'unavailable' || review.lifecycle === 'stale' ? <p role="status">{review.message ?? 'This review scope is unavailable.'}</p>
+        {review === null ? <p>{t("Choose Review to open the latest Turn.")}</p>
+          : review.lifecycle === 'unavailable' || review.lifecycle === 'stale' ? <p role="status">{review.message ?? t("This review scope is unavailable.")}</p>
           : <>
             <div className="flex items-start justify-between gap-3 border-y border-[var(--panel-edge)] py-2">
-              <div className="min-w-0"><span className="text-[10px] text-muted-foreground">{review.baselineLabel}</span><p className="truncate" title={current?.path}>{current?.path ?? 'No comparable files'}</p></div>
-              <div className="shrink-0 text-right"><span className="text-[10px] text-muted-foreground">{newerChanges ? 'Newer changes available' : `${review.scopeKind === 'branch' && review.branchCommitCount !== undefined ? `${review.branchCommitCount} ${review.branchCommitCount === 1 ? 'commit' : 'commits'} · ` : ''}${review.reviewedCount} / ${review.reviewableCount} reviewed`}</span>
+              <div className="min-w-0"><span className="text-[10px] text-muted-foreground">{review.baselineLabel}</span><p className="truncate" title={current?.path}>{current?.path ?? t("No comparable files")}</p></div>
+              <div className="shrink-0 text-right"><span className="text-[10px] text-muted-foreground">{newerChanges ? t("Newer changes available") : `${review.scopeKind === 'branch' && review.branchCommitCount !== undefined ? `${t(review.branchCommitCount === 1 ? '{count} commit' : '{count} commits', { count: review.branchCommitCount })} · ` : ''}${t('{reviewed} of {total} reviewed', { reviewed: review.reviewedCount, total: review.reviewableCount })}`}</span>
             {review.files.length > 1 ? <div className="flex justify-end gap-1">
-              <Button variant="ghost" size="sm" disabled={review.currentIndex === null || review.currentIndex === 0} onClick={() => props.onNavigate('previous')}>Previous</Button>
-              <Button variant="ghost" size="sm" disabled={review.currentIndex === null || review.currentIndex >= review.files.length - 1} onClick={() => props.onNavigate('next')}>Next</Button>
+              <Button variant="ghost" size="sm" disabled={review.currentIndex === null || review.currentIndex === 0} onClick={() => props.onNavigate('previous')}>{t("Previous")}</Button>
+              <Button variant="ghost" size="sm" disabled={review.currentIndex === null || review.currentIndex >= review.files.length - 1} onClick={() => props.onNavigate('next')}>{t("Next")}</Button>
             </div> : null}</div></div>
             <ul className="max-h-48 space-y-1 overflow-auto">
               {review.files.map((file, index) => <li key={file.path}>
-                <Button variant="plain" size="none" aria-label={`Open diff for ${file.path}`} onClick={() => props.onSelectFile(file.path)}
+                <Button variant="plain" size="none" aria-label={t('Open diff for {path}', { path: file.path })} onClick={() => props.onSelectFile(file.path)}
                   className={cn('flex w-full min-w-0 items-center gap-2 rounded px-1 py-1 text-left outline-none hover:bg-[var(--control-surface-hover)] focus-visible:ring-1 focus-visible:ring-ring', index === review.currentIndex && 'bg-[var(--control-surface-active)]')}>
                   <span role="img" aria-label={file.status} title={file.status} className={`size-1.5 shrink-0 rounded-full ${file.status === 'reviewed' ? 'bg-muted-foreground' : file.status === 'open-only' ? 'border border-muted-foreground' : 'bg-primary'}`} />
                   <span className="min-w-0 flex-1 truncate" title={file.path}>{file.path}</span>
@@ -72,23 +74,23 @@ export function ReviewDock(props: ReviewDockProps) {
               </li>)}
             </ul>
             <div className="flex flex-wrap items-center gap-1 border-t border-[var(--panel-edge)] pt-2 [&>button]:h-6 [&>button]:px-2 [&>button]:text-[10.5px]">
-              <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(false)}>Mark reviewed</Button>
-              <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(true)}>Mark &amp; Next</Button>
+              <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(false)}>{t("Mark reviewed")}</Button>
+              <Button variant="outline" size="sm" disabled={locked} onClick={() => props.onMarkReviewed(true)}>{t("Mark & Next")}</Button>
               <Popover open={moreOpen} onOpenChange={setMoreOpen}>
-                <PopoverTrigger asChild><Button variant="ghost" size="sm" className="ml-auto">More</Button></PopoverTrigger>
+                <PopoverTrigger asChild><Button variant="ghost" size="sm" className="ml-auto">{t("More")}</Button></PopoverTrigger>
                 <PopoverContent align="end" className="w-80 space-y-1">
                   {!writing && ownsLatest ? <ChangesCommitEntry key={changes.turnId} turnId={changes.turnId} /> : null}
-                  {!writing && review.scopeKind === 'operations' && current?.restorable ? <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { setMoreOpen(false); props.onPreviewRestore('file'); }}>Undo file operations</Button> : null}
-                  {!writing && review.scopeKind === 'operations' && review.files.length > 0 && review.files.every((file) => file.restorable) ? <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { setMoreOpen(false); props.onPreviewRestore('turn'); }}>Undo turn operations</Button> : null}
-                  {review.scopeKind === 'workspace' || review.scopeKind === 'branch' ? <Button variant="ghost" size="sm" disabled={writing || agentRunning} onClick={() => { setMoreOpen(false); props.onRunAgentReview(); }}>{agentRunning ? 'Agent Review running' : 'Agent Review'}</Button> : null}
+                  {!writing && review.scopeKind === 'operations' && current?.restorable ? <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { setMoreOpen(false); props.onPreviewRestore('file'); }}>{t("Undo file operations")}</Button> : null}
+                  {!writing && review.scopeKind === 'operations' && review.files.length > 0 && review.files.every((file) => file.restorable) ? <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { setMoreOpen(false); props.onPreviewRestore('turn'); }}>{t("Undo turn operations")}</Button> : null}
+                  {review.scopeKind === 'workspace' || review.scopeKind === 'branch' ? <Button variant="ghost" size="sm" disabled={writing || agentRunning} onClick={() => { setMoreOpen(false); props.onRunAgentReview(); }}>{agentRunning ? t("Agent Review running") : t("Agent Review")}</Button> : null}
                 </PopoverContent>
               </Popover>
             </div>
-            {agentRunning ? <p role="status">{agent?.message ?? 'Agent Review running'}</p> : null}
+            {agentRunning ? <p role="status">{agent?.message ?? t("Agent Review running")}</p> : null}
             {preview !== null ? <div role="status" className="space-y-2 border-t border-[var(--panel-edge)] pt-2">
-              <p>{preview.issues?.length || preview.conflicted.length ? 'Undo is blocked. Review the file details.' : `${preview.restorable.length} file(s) can be undone.`}</p>
+              <p>{preview.issues?.length || preview.conflicted.length ? t("Undo is blocked. Review the file details.") : t("{p0} file(s) can be undone.", { p0: preview.restorable.length })}</p>
               {preview.issues?.map(issue => <p key={issue.path}>{issue.path}: {issue.reason}</p>)}
-              <Button variant="outline" size="sm" disabled={preview.conflicted.length > 0 || !!preview.issues?.length || !preview.restorable.length} onClick={() => props.onConfirmRestore(preview.target, preview.previewId)}>Confirm undo</Button>
+              <Button variant="outline" size="sm" disabled={preview.conflicted.length > 0 || !!preview.issues?.length || !preview.restorable.length} onClick={() => props.onConfirmRestore(preview.target, preview.previewId)}>{t("Confirm undo")}</Button>
             </div> : null}
             {operation?.reviewScopeId === review.reviewScopeId && (operation.operation !== 'open' || !operation.ok) ? <p role="status" className={!operation.ok ? 'text-destructive' : undefined}>{operation.message}</p> : null}
           </>}
@@ -119,19 +121,20 @@ export function ReviewDockSlot({ store, vscode }: {
   readonly store: ChatStore;
   readonly vscode: ChatPort;
 }) {
+  const { t } = useI18n();
   const { turnId, count, sessionId, complete } = useStore(store, useShallow(selectOperationReview));
   if (turnId === null || count === 0) return null;
   const status = complete ? 'Review complete' : null;
-  return <Button variant="plain" size="none" className="review-launcher" aria-label="Open Review"
-    title={`${count} directly confirmed ${count === 1 ? 'file' : 'files'} in this turn${status ? ` · ${status}` : ''}`}
+  return <Button variant="plain" size="none" className="review-launcher" aria-label={t("Open Review")}
+    title={`${t('{count} directly confirmed files in this turn', { count })}${status ? ` · ${t(status)}` : ''}`}
     disabled={sessionId === null} onClick={() => vscode.postMessage({
     type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'turn', turnId,
   })}>
     <FileDiff className="review-launcher-icon" aria-hidden="true" />
     <span className="review-launcher-summary">
-      <strong>{count} {count === 1 ? 'File' : 'Files'}</strong>
-      <span role={status ? 'status' : undefined}>{status ?? 'This turn'}</span>
+      <strong>{count} {count === 1 ? t("File") : t("Files")}</strong>
+      <span role={status ? 'status' : undefined}>{status ?? t("This turn")}</span>
     </span>
-    <span className="review-launcher-action" aria-hidden="true">Review</span>
+    <span className="review-launcher-action" aria-hidden="true">{t("Review")}</span>
   </Button>;
 }

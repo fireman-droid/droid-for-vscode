@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
@@ -50,6 +51,7 @@ const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, re
   return renderMessage(id, { placeholder, placeholderHeight });
 });
 export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, onQuote, onBtwQuote, reportLayout, ref }: TranscriptViewProps) {
+  const { t } = useI18n();
   const selectionRoot = useRef<HTMLDivElement>(null);
   const selecting = useTranscriptSelection(selectionRoot);
   const viewport = useRef<HTMLDivElement>(null);
@@ -247,11 +249,11 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   }, [conversationId, pinned?.id, pinnedHeight, nextQuestion, nextTop, virtualizer, selecting]);
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
-      <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label="Chat transcript">
+      <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
         <div ref={content} className="v2-chat-rail min-h-full pb-3 pt-5">
           <div ref={leading} className="flow-root">
             {leadingContent}
-            {hiddenMessageCount > 0 ? <Button variant="ghost" size="sm" className="mb-3 w-full text-xs text-muted-foreground" onClick={revealEarlier}>Show earlier messages ({hiddenMessageCount} hidden)</Button> : null}
+            {hiddenMessageCount > 0 ? <Button variant="ghost" size="sm" className="mb-3 w-full text-xs text-muted-foreground" onClick={revealEarlier}>{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</Button> : null}
           </div>
           <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow}>
           <div style={{ paddingTop: Math.max(0, (virtualItems[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
@@ -282,7 +284,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       {showNavigator ? <QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /> : null}
       {onQuote ? <SelectionToolbar viewport={viewport} selectionRoot={selectionRoot} onQuote={onQuote} onBtwQuote={onBtwQuote} /> : null}
       {scrolling.away ? (
-        <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label="Scroll to bottom" className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
+        <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")} className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
       ) : null}
     </div>
   );

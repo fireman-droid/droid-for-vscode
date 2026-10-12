@@ -1,5 +1,6 @@
 import { createSetupDraft, type MissionCreationDefaults } from './missionCreationDefaults';
 import * as vscode from 'vscode';
+import { bindWebviewLocale, readWebviewLocale } from '../../webview/webviewLocale';
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
   parseMissionControlPanelWebviewMessage,
@@ -236,7 +237,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     const entry: PanelEntry = {
       instance,
       panel,
-      disposables: [modelSourcePreference],
+      disposables: [modelSourcePreference, bindWebviewLocale(panel.webview)],
       seenRequestIds: new Set(),
       ready: false,
     };
@@ -259,6 +260,8 @@ export class MissionControlPanelController implements vscode.Disposable {
       },
       undefined,
       readWebviewBootTheme(),
+      undefined,
+      readWebviewLocale(),
     );
   }
 

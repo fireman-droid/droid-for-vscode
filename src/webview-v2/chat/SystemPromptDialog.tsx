@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { MAX_SYSTEM_PROMPT_LENGTH, type SystemPromptPreference } from '../../shared/protocol/systemPromptProtocol';
 import { subscribeHostMessages } from '../host/hostMessageSource';
@@ -12,6 +13,7 @@ export function SystemPromptDialog({ open, onOpenChange, port }: {
   readonly onOpenChange: (open: boolean) => void;
   readonly port: ChatPort;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<SystemPromptPreference['mode']>('default');
   const [text, setText] = useState('');
   const [pending, setPending] = useState<'read' | 'save' | null>('read');
@@ -53,27 +55,25 @@ export function SystemPromptDialog({ open, onOpenChange, port }: {
   const invalid = mode !== 'default' && (text.trim().length === 0 || text.length > MAX_SYSTEM_PROMPT_LENGTH || text.includes('\0'));
   return <Dialog open={open} onOpenChange={(value) => { if (pending !== 'save') onOpenChange(value); }}>
     <DialogContent className="space-y-4" closeDisabled={pending === 'save'}>
-      <DialogTitle className="pr-8 text-base font-semibold">System prompt for new sessions</DialogTitle>
-      <DialogDescription className="text-xs text-muted-foreground">
-        Saved for this VS Code profile. Applies to new chats, worktree sessions and Missions. Existing, resumed and forked sessions keep their original prompt.
-      </DialogDescription>
-      <SettingChoice label="Prompt mode" value={mode} disabled={!loaded || pending !== null} options={[
-        { label: 'Droid default', value: 'default' },
-        { label: 'Append to Droid default', value: 'append' },
-        { label: 'Replace Droid default', value: 'replace' },
+      <DialogTitle className="pr-8 text-base font-semibold">{t("System prompt for new sessions")}</DialogTitle>
+      <DialogDescription className="text-xs text-muted-foreground">{t("Saved for this VS Code profile. Applies to new chats, worktree sessions and Missions. Existing, resumed and forked sessions keep their original prompt.")}</DialogDescription>
+      <SettingChoice label={t("Prompt mode")} value={mode} disabled={!loaded || pending !== null} options={[
+        { label: t('Droid default'), value: 'default' },
+        { label: t('Append to Droid default'), value: 'append' },
+        { label: t('Replace Droid default'), value: 'replace' },
       ]} onChange={(value) => { setMode(value as SystemPromptPreference['mode']); setSaved(false); }} />
       {mode !== 'default' ? <div className="space-y-2">
-        <label htmlFor={fieldId} className="text-xs font-medium">{mode === 'append' ? 'Additional instructions' : 'Replacement system prompt'}</label>
+        <label htmlFor={fieldId} className="text-xs font-medium">{mode === 'append' ? t("Additional instructions") : t("Replacement system prompt")}</label>
         <Textarea id={fieldId} rows={10} value={text} disabled={pending !== null} maxLength={MAX_SYSTEM_PROMPT_LENGTH}
           aria-invalid={invalid} aria-describedby={`${fieldId}-hint`}
           onChange={(event) => { setText(event.target.value); setSaved(false); }} />
-        <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">{mode === 'replace' ? 'Replaces Droid’s built-in system instructions. Tools and permission settings remain configured separately.' : 'Keeps Droid’s built-in instructions and adds your text.'} {text.length.toLocaleString()} / {MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()} characters.</p>
+        <p id={`${fieldId}-hint`} className="text-xs text-muted-foreground">{mode === 'replace' ? t("Replaces Droid’s built-in system instructions. Tools and permission settings remain configured separately.") : t("Keeps Droid’s built-in instructions and adds your text.")} {text.length.toLocaleString()} / {MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()} {t("characters.")}</p>
       </div> : null}
-      {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
-      {saved ? <p role="status" className="text-xs text-muted-foreground">Saved. Start a new session to use this prompt.</p> : null}
+      {error ? <p role="alert" className="text-xs text-destructive">{t(error)}</p> : null}
+      {saved ? <p role="status" className="text-xs text-muted-foreground">{t("Saved. Start a new session to use this prompt.")}</p> : null}
       <div className="flex justify-end gap-2">
-        <Button variant="outline" disabled={pending === 'save'} onClick={() => onOpenChange(false)}>Close</Button>
-        <Button disabled={!loaded || pending !== null || invalid} onClick={() => send('save')}>{pending === 'save' ? 'Saving…' : pending === 'read' ? 'Loading…' : 'Save for new sessions'}</Button>
+        <Button variant="outline" disabled={pending === 'save'} onClick={() => onOpenChange(false)}>{t("Close")}</Button>
+        <Button disabled={!loaded || pending !== null || invalid} onClick={() => send('save')}>{pending === 'save' ? t("Saving…") : pending === 'read' ? t("Loading…") : t("Save for new sessions")}</Button>
       </div>
     </DialogContent>
   </Dialog>;

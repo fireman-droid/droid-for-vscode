@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useId } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../../ui/button';
@@ -18,13 +19,14 @@ export function SkillSuggestion({ id, name, description, selected, preview, onHo
   readonly onActivate: () => void;
   readonly onSelect: () => void;
 }) {
+  const { t } = useI18n();
   const titleId = useId();
   const content = (closable: boolean) => <>
     <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
       <p id={titleId} className="min-w-0 flex-1 break-words text-xs font-medium">{name}</p>
-      <span className="text-[10px] text-muted-foreground">Skill</span>
+      <span className="text-[10px] text-muted-foreground">{t("Skill")}</span>
       {closable ? <PopoverClose asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Close skill preview"><X /></Button>
+        <Button variant="ghost" size="icon-sm" aria-label={t("Close skill preview")}><X /></Button>
       </PopoverClose> : null}
     </div>
     <p className="min-h-0 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words px-3 py-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
@@ -43,7 +45,7 @@ export function SkillSuggestion({ id, name, description, selected, preview, onHo
           </HoverCardTrigger>
         </PopoverAnchor>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" aria-label={`View ${name} skill description`} className="text-[11px]">View</Button>
+          <Button variant="ghost" size="sm" aria-label={t("View {p0} skill description", { p0: name })} className="text-[11px]">{t("View")}</Button>
         </PopoverTrigger>
       </div>
       <HoverCardContent data-suggestion-preview="" side="top" align="end" hideWhenDetached

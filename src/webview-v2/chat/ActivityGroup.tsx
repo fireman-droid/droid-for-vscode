@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useMemo, type ReactNode } from 'react';
 import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
@@ -38,9 +39,10 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   readonly waiting: ProcessWaiting | null;
   readonly children: ReactNode;
 }) {
+  const { t } = useI18n();
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
   if (members.length === 1 || cluster.items.every((item) => item.kind === 'thinking')) return <>{children}</>;
-  const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting });
+  const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting, t });
   return <ActivityGroupView messageId={messageId} groupId={cluster.id} incomplete={incomplete}
     presentation={presentation}>{children}</ActivityGroupView>;
 }

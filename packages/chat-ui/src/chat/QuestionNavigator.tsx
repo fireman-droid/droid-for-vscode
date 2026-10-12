@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { Ref } from 'react';
 import { visibleQuestionItems, type QuestionNavigationItem } from '../navigation/questionNavigation';
@@ -10,18 +11,19 @@ export function QuestionNavigator({ items, activeIndex, onNavigate, ref }: {
   readonly onNavigate: (id: string) => void;
   readonly ref?: Ref<HTMLElement>;
 }) {
+  const { t } = useI18n();
   if (items.length === 0) return null;
   const current = Math.min(Math.max(activeIndex, 0), items.length - 1);
   const visible = visibleQuestionItems(items, current);
   const dense = items.length > 6;
-  return <nav ref={ref} aria-label="Question navigation" className="absolute right-0 top-1/2 z-20 flex max-h-[min(52%,246px)] w-[18px] -translate-y-1/2 flex-col items-center text-muted-foreground"
+  return <nav ref={ref} aria-label={t("Question navigation")} className="absolute right-0 top-1/2 z-20 flex max-h-[min(52%,246px)] w-[18px] -translate-y-1/2 flex-col items-center text-muted-foreground"
     style={{ height: Math.max(4, (visible.length - 1) * (dense ? 10 : 14) + 4) + 42 }}>
-    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label="Previous question" disabled={current === 0}
+    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label={t("Previous question")} disabled={current === 0}
       onClick={() => onNavigate(items[current - 1]!.key)}><ChevronUp /></Button>
     <div className={`relative my-[3px] flex min-h-0 w-[18px] flex-1 flex-col items-center justify-between ${dense ? 'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-current before:opacity-10' : ''}`}>
       {visible.map(({ item, index }) => (
         <Button key={item.key} variant="plain" size="none"
-          aria-label={`Jump to question ${index + 1}: ${item.preview}`}
+          aria-label={t("Jump to question {p0}: {p1}", { p0: index + 1, p1: item.preview })}
           aria-current={index === current ? 'true' : undefined}
           onClick={() => onNavigate(item.key)}
           className="group relative grid h-2 w-[18px] shrink-0 place-items-center outline-none focus-visible:ring-1 focus-visible:ring-ring">
@@ -32,7 +34,7 @@ export function QuestionNavigator({ items, activeIndex, onNavigate, ref }: {
         </Button>
       ))}
     </div>
-    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label="Next question" disabled={current === items.length - 1}
+    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label={t("Next question")} disabled={current === items.length - 1}
       onClick={() => onNavigate(items[current + 1]!.key)}><ChevronDown /></Button>
   </nav>;
 }

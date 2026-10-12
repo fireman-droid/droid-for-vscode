@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ImageIcon, Minus, Plus, Scan } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -17,6 +18,7 @@ export function MediaPreview({ label, size, onClose, children, actions, onEscape
   readonly preventDismiss?: boolean;
   readonly returnFocus?: HTMLElement | null;
 }) {
+  const { t } = useI18n();
   const opener = useRef(returnFocus ?? document.activeElement);
   const dialog = useRef<HTMLDivElement>(null);
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -36,13 +38,14 @@ export function MediaPreview({ label, size, onClose, children, actions, onEscape
         <DialogTitle className="min-w-0 flex-1 truncate text-xs font-medium" title={label}>{label}</DialogTitle>
         {size ? <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{size.width} × {size.height}</span> : null}
       </header>
-      <DialogDescription className="sr-only">Scroll to zoom, drag to pan, or double-click to toggle fit and actual size.</DialogDescription>
+      <DialogDescription className="sr-only">{t("Scroll to zoom, drag to pan, or double-click to toggle fit and actual size.")}</DialogDescription>
       <MediaViewport size={size} actions={actions}>{children}</MediaViewport>
     </DialogContent>
   </Dialog>;
 }
 
 function MediaViewport({ size, children, actions }: { readonly size: MediaSize | null; readonly children: ReactNode; readonly actions?: ReactNode }) {
+  const { t } = useI18n();
   const viewport = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const view = useRef({ scale: 1, fit: 1, x: 0, y: 0 });
@@ -112,7 +115,7 @@ function MediaViewport({ size, children, actions }: { readonly size: MediaSize |
   const endDrag = () => { drag.current = null; setPanning(false); };
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="relative min-h-0 flex-1 bg-background/70">
-    <div ref={viewport} data-media-viewport="" role="region" aria-label="Image viewport" tabIndex={0}
+    <div ref={viewport} data-media-viewport="" role="region" aria-label={t("Image viewport")} tabIndex={0}
       className={`absolute inset-0 overflow-hidden touch-none select-none outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring ${panning ? 'cursor-grabbing' : 'cursor-grab'}`}
       onPointerDownCapture={(event) => event.currentTarget.focus({ preventScroll: true })}
       onDoubleClick={(event) => {
@@ -144,13 +147,13 @@ function MediaViewport({ size, children, actions }: { readonly size: MediaSize |
       <div ref={stage} className="absolute left-0 top-0 origin-top-left"
         style={size ? { width: size.width, height: size.height } : undefined}>{children}</div>
     </div>
-    <div role="group" aria-label="Media controls" className="v2-media-toolbar absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 backdrop-blur-sm">
-      <Button variant="ghost" size="icon" aria-label="Zoom out" title="Zoom out" disabled={!size || percent <= Math.round(Math.min(0.25, view.current.fit) * 100)} onClick={() => step(-1)}><Minus /></Button>
+    <div role="group" aria-label={t("Media controls")} className="v2-media-toolbar absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 backdrop-blur-sm">
+      <Button variant="ghost" size="icon" aria-label={t("Zoom out")} title={t("Zoom out")} disabled={!size || percent <= Math.round(Math.min(0.25, view.current.fit) * 100)} onClick={() => step(-1)}><Minus /></Button>
       <span className="w-11 text-center text-[11px] tabular-nums text-muted-foreground" aria-live="polite">{percent}%</span>
-      <Button variant="ghost" size="icon" aria-label="Zoom in" title="Zoom in" disabled={!size || percent >= 800} onClick={() => step(1)}><Plus /></Button>
+      <Button variant="ghost" size="icon" aria-label={t("Zoom in")} title={t("Zoom in")} disabled={!size || percent >= 800} onClick={() => step(1)}><Plus /></Button>
       <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-      <Button variant="ghost" size="icon" aria-label="Fit to preview" title="Fit to preview" disabled={!size} onClick={() => reset()}><Scan /></Button>
-      <Button variant="ghost" size="icon" aria-label="Actual size" title="Actual size" disabled={!size} className="text-[11px]" onClick={() => reset(true)}>1:1</Button>
+      <Button variant="ghost" size="icon" aria-label={t("Fit to preview")} title={t("Fit to preview")} disabled={!size} onClick={() => reset()}><Scan /></Button>
+      <Button variant="ghost" size="icon" aria-label={t("Actual size")} title={t("Actual size")} disabled={!size} className="text-[11px]" onClick={() => reset(true)}>1:1</Button>
     </div>
     </div>
     {actions ? <div className="v2-media-actions shrink-0 border-t border-border px-3 py-2">{actions}</div> : null}
@@ -158,13 +161,14 @@ function MediaViewport({ size, children, actions }: { readonly size: MediaSize |
 }
 
 export function ImageContent({ src, alt, generated = false, thumbnail = false }: { readonly src: string; readonly alt: string; readonly generated?: boolean; readonly thumbnail?: boolean }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState<MediaSize | null>(null);
   return <span className={thumbnail ? 'inline-block' : 'my-2 block'}>
-    <Button variant="plain" size="none" aria-label={`Enlarge ${alt}`} className="v2-media-trigger block min-h-7 min-w-7 max-w-full rounded" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>
+    <Button variant="plain" size="none" aria-label={t("Enlarge {p0}", { p0: alt })} className="v2-media-trigger block min-h-7 min-w-7 max-w-full rounded" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>
       <img src={src} alt={alt} className={thumbnail ? 'size-12 rounded-[7px] object-cover' : 'max-h-64 max-w-full rounded object-contain'} loading="lazy" onLoad={(event) => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
     </Button>
-    {generated ? <span className="text-[11px] text-muted-foreground">Generated</span> : null}
-    {open ? <MediaPreview label="Image preview" size={size} onClose={() => setOpen(false)}><img src={src} alt={alt} draggable={false} className="size-full max-w-none object-contain" /></MediaPreview> : null}
+    {generated ? <span className="text-[11px] text-muted-foreground">{t("Generated")}</span> : null}
+    {open ? <MediaPreview label={t("Image preview")} size={size} onClose={() => setOpen(false)}><img src={src} alt={alt} draggable={false} className="size-full max-w-none object-contain" /></MediaPreview> : null}
   </span>;
 }

@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ModelCatalogState, SessionReasoningEffort } from '../../../shared/protocol/settings';
@@ -19,6 +20,7 @@ export function BtwModelSelect({ catalog, value, disabled, onChange, reasoning, 
   readonly reasoning?: BtwReasoningControl;
   readonly onOpenModels?: () => void;
 }) {
+  const { t } = useI18n();
   const id = useId();
   const [open, setOpen] = useState(false);
   const pickerDisabled = disabled || catalog?.status !== 'ready';
@@ -31,7 +33,7 @@ export function BtwModelSelect({ catalog, value, disabled, onChange, reasoning, 
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>
       <Button variant="ghost" size="sm" disabled={pickerDisabled}
-        aria-label="Side conversation model" title={label}
+        aria-label={t("Side conversation model")} title={label}
         className="ml-auto h-6 w-auto min-w-0 max-w-[180px] flex-initial gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground">
         <span className="truncate">{label}</span><ChevronDown className="dvx-select-icon size-3 shrink-0" aria-hidden="true" />
       </Button>

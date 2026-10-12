@@ -8,6 +8,7 @@ import {
 import { getWebviewHtml } from '../webview/webviewHtml';
 import { handleWebviewClipboard } from '../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../webview/webviewTheme';
+import { bindWebviewLocale, hostText, readWebviewLocale } from '../webview/webviewLocale';
 import { createModelSourcePreference } from '../webview/modelSourcePreference';
 import { ModelManager, ModelManagerError, modelManagerFailure } from './ModelManager';
 import { ManagementBinding, type ManagementServices } from '../management/ManagementBinding';
@@ -39,12 +40,12 @@ export class ModelsPanelController implements vscode.Disposable {
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     const panel = vscode.window.createWebviewPanel(
       'droidvisx.models',
-      this.management ? 'Droid · 管理' : 'Models',
+      hostText(this.management ? 'Droid · Management' : 'Models'),
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] },
     );
     const modelSourcePreference = createModelSourcePreference(panel.webview);
-    const entry: PanelEntry = { panel, subscriptions: [modelSourcePreference], operation: null };
+    const entry: PanelEntry = { panel, subscriptions: [modelSourcePreference, bindWebviewLocale(panel.webview)], operation: null };
     this.entry = entry;
     if (this.management) {
       entry.management = new ManagementBinding(panel.webview, this.management, page);
@@ -90,6 +91,8 @@ export class ModelsPanelController implements vscode.Disposable {
       },
       undefined,
       readWebviewBootTheme(),
+      undefined,
+      readWebviewLocale(),
     );
   }
 

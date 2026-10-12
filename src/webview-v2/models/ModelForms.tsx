@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, LoaderCircle } from 'lucide-react';
 import { CUSTOM_MODEL_PROVIDERS, type CustomModelProvider } from '../../shared/protocol/customModelsProtocol';
@@ -30,6 +31,7 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
   readonly onSave: (draft: ConnectionDraft) => void;
   readonly onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const formId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
@@ -53,25 +55,25 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
     onSave({ ...(connection === null ? {} : { id: connection.id }), name: name.trim(), protocol, baseUrl: baseUrl.trim(), setApiKey });
   }}>
     <fieldset disabled={busy} className="space-y-5">
-      <p className="models-form-intro">{connection ? '更新接口信息，已添加的模型继续使用此接口。' : '先保存接口信息，再选择要使用的模型。'}</p>
+      <p className="models-form-intro">{connection ? t("更新接口信息，已添加的模型继续使用此接口。") : t("先保存接口信息，再选择要使用的模型。")}</p>
       <div className="models-field">
-        <label htmlFor={`${formId}-name`}>接口别名</label>
-        <Input id={`${formId}-name`} ref={nameRef} autoFocus required maxLength={80} value={name} placeholder="例如：官方接口、备用线路"
+        <label htmlFor={`${formId}-name`}>{t("接口别名")}</label>
+        <Input id={`${formId}-name`} ref={nameRef} autoFocus required maxLength={80} value={name} placeholder={t("例如：官方接口、备用线路")}
           aria-invalid={!!nameMessage} aria-describedby={`${formId}-name-hint${nameMessage ? ` ${formId}-name-error` : ''}`}
           onBlur={() => setTouched((current) => ({ ...current, name: true }))} onChange={(event) => setName(event.target.value)} />
         <FieldError id={`${formId}-name-error`} message={nameMessage} />
-        <p id={`${formId}-name-hint`} className="models-field-hint">方便识别线路，不会修改服务商别名或模型名称。</p>
+        <p id={`${formId}-name-hint`} className="models-field-hint">{t("方便识别线路，不会修改服务商别名或模型名称。")}</p>
       </div>
       <div className="models-field">
-        <label htmlFor={`${formId}-url`}>接口地址 <span className="models-optional">Base URL</span></label>
+        <label htmlFor={`${formId}-url`}>{t("接口地址")} <span className="models-optional">Base URL</span></label>
         <Input id={`${formId}-url`} ref={urlRef} required type="url" maxLength={2048} value={baseUrl} placeholder="https://gateway.example.com/v1" spellCheck={false}
           aria-invalid={!!urlMessage} aria-describedby={`${formId}-url-hint${urlMessage ? ` ${formId}-url-error` : ''}`}
           onBlur={() => setTouched((current) => ({ ...current, url: true }))} onChange={(event) => setBaseUrl(event.target.value)} />
         <FieldError id={`${formId}-url-error`} message={urlMessage} />
-        <p id={`${formId}-url-hint`} className="models-field-hint">填写服务方提供的基础地址及路径，不要填写密钥或最终请求路由。</p>
+        <p id={`${formId}-url-hint`} className="models-field-hint">{t("填写服务方提供的基础地址及路径，不要填写密钥或最终请求路由。")}</p>
       </div>
       <div className="models-field">
-        <label htmlFor={`${formId}-protocol`}>接口类型</label>
+        <label htmlFor={`${formId}-protocol`}>{t("接口类型")}</label>
         <Select value={protocol} disabled={busy} onValueChange={(value) => setProtocol(value as CustomModelProvider)}>
           <SelectTrigger id={`${formId}-protocol`} className="w-full" aria-describedby={`${formId}-protocol-hint`}><SelectValue /></SelectTrigger>
           <SelectContent className="management-menu">{CUSTOM_MODEL_PROVIDERS.map((value) => <SelectItem key={value} value={value}>{PROTOCOLS[value].name}</SelectItem>)}</SelectContent>
@@ -80,13 +82,13 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
       </div>
       <div className="models-key-note">
         <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={setApiKey} onCheckedChange={(checked) => setSetApiKey(checked === true)} />
-          {connection?.hasKey ? '保存时更换 API Key' : '保存后输入 API Key'}
+          {connection?.hasKey ? t("保存时更换 API Key") : t("保存后输入 API Key")}
         </label>
-        <p className="models-field-hint mt-2">{connection?.hasKey ? '已有密钥不会显示在此页面。不勾选则保留原密钥。' : '如果接口无需密钥，可取消勾选。'}
-          {' '}密钥会在编辑器的安全输入框中填写，同一接口的模型共用。</p>
-        {connection?.imported ? <p className="models-field-hint mt-2">已有模型验证直接使用 Droid 保存的配置。首次获取列表或新增模型如需补输密钥，后续会自动复用。</p> : null}
+        <p className="models-field-hint mt-2">{connection?.hasKey ? t("已有密钥不会显示在此页面。不勾选则保留原密钥。") : t("如果接口无需密钥，可取消勾选。")}
+          {' '}{t("密钥会在编辑器的安全输入框中填写，同一接口的模型共用。")}</p>
+        {connection?.imported ? <p className="models-field-hint mt-2">{t("已有模型验证直接使用 Droid 保存的配置。首次获取列表或新增模型如需补输密钥，后续会自动复用。")}</p> : null}
       </div>
-      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>取消</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? '正在保存…' : setApiKey ? '保存并输入密钥' : '保存接口'}</Button></div>
+      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : setApiKey ? t("保存并输入密钥") : t("保存接口")}</Button></div>
     </fieldset>
   </form>;
 }
@@ -99,6 +101,7 @@ export function AliasForm({ name, label, maxLength, busy, onSave, onCancel }: {
   readonly onSave: (name: string) => void;
   readonly onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const fieldId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(name);
@@ -112,14 +115,14 @@ export function AliasForm({ name, label, maxLength, busy, onSave, onCancel }: {
     onSave(value.trim());
   }}>
     <fieldset disabled={busy} className="space-y-5">
-      <div className="models-field"><label htmlFor={fieldId}>{label}</label>
+      <div className="models-field"><label htmlFor={fieldId}>{t(label)}</label>
         <Input id={fieldId} ref={inputRef} autoFocus required maxLength={maxLength} value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => setTouched(true)}
           aria-invalid={touched && !!error} aria-describedby={touched && error ? `${fieldId}-error` : undefined} />
         <FieldError id={`${fieldId}-error`} message={touched ? error : undefined} />
       </div>
-      <p className="models-field-hint">只修改显示名称，不修改接口地址、Model ID 或已保存的密钥。</p>
-      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>取消</Button>
-        <Button type="submit"><SavingIcon busy={busy} />{busy ? '正在保存…' : '保存别名'}</Button>
+      <p className="models-field-hint">{t("只修改显示名称，不修改接口地址、Model ID 或已保存的密钥。")}</p>
+      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button>
+        <Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : t("保存别名")}</Button>
       </div>
     </fieldset>
   </form>;
@@ -135,6 +138,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
   readonly onSave: (draft: ManagedModelDraft, verify: boolean) => void;
   readonly onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const formId = useId();
   const idRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -170,45 +174,45 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
     }, model?.enabled !== false && (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') === 'verify');
   }}>
     <fieldset disabled={busy} className="space-y-5">
-      {showConnection ? <div className="models-form-intro"><span>当前接口</span><strong>{connection.name}</strong><span>{PROTOCOLS[connection.protocol].name}</span></div> : null}
+      {showConnection ? <div className="models-form-intro"><span>{t("当前接口")}</span><strong>{connection.name}</strong><span>{PROTOCOLS[connection.protocol].name}</span></div> : null}
       <div className="models-field">
-        <label htmlFor={`${formId}-id`}>Model ID</label>
-        <Input id={`${formId}-id`} ref={idRef} required maxLength={256} value={id} placeholder="填写服务方提供的完整模型 ID" spellCheck={false}
+        <label htmlFor={`${formId}-id`}>{t("Model ID")}</label>
+        <Input id={`${formId}-id`} ref={idRef} required maxLength={256} value={id} placeholder={t("填写服务方提供的完整模型 ID")} spellCheck={false}
           aria-invalid={!!idMessage} aria-describedby={`${formId}-id-hint${idMessage ? ` ${formId}-id-error` : ''}`}
           onBlur={() => setTouched((current) => ({ ...current, id: true }))} onChange={(event) => setId(event.target.value)} />
         <FieldError id={`${formId}-id-error`} message={idMessage} />
-        <p id={`${formId}-id-hint`} className="models-field-hint">请与服务方的 ID 保持一致，包含大小写和版本后缀。</p>
+        <p id={`${formId}-id-hint`} className="models-field-hint">{t("请与服务方的 ID 保持一致，包含大小写和版本后缀。")}</p>
       </div>
       <div className="models-field">
-        <label htmlFor={`${formId}-name`}>模型别名 <span className="models-optional">可选</span></label>
-        <Input id={`${formId}-name`} ref={nameRef} maxLength={160} value={name} placeholder="留空时使用模型 ID"
+        <label htmlFor={`${formId}-name`}>{t("模型别名")} <span className="models-optional">{t("可选")}</span></label>
+        <Input id={`${formId}-name`} ref={nameRef} maxLength={160} value={name} placeholder={t("留空时使用模型 ID")}
           aria-invalid={!!nameMessage} aria-describedby={`${formId}-name-hint${nameMessage ? ` ${formId}-name-error` : ''}`}
           onBlur={() => setTouched((current) => ({ ...current, name: true }))} onChange={(event) => setName(event.target.value)} />
         <FieldError id={`${formId}-name-error`} message={nameMessage} />
-        <p id={`${formId}-name-hint`} className="models-field-hint">用于聊天中的模型选择。同名模型会自动补充渠道标识。</p>
+        <p id={`${formId}-name-hint`} className="models-field-hint">{t("用于聊天中的模型选择。同名模型会自动补充渠道标识。")}</p>
       </div>
       <Collapsible open={advanced} onOpenChange={setAdvanced} className="models-advanced">
         <CollapsibleTrigger asChild><Button disabled={busy} variant="plain" size="none" className="models-advanced-trigger inline-flex min-h-6 max-w-full items-center gap-1 py-0.5 text-left text-xs leading-[18px] text-muted-foreground">
           <ChevronRight aria-hidden="true" className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${advanced ? 'rotate-90' : ''}`} />
-          <span>高级设置{tokensMessage ? <span className="text-[var(--error-ink)]"> · 需要修正</span> : null}</span>
+          <span>{t("高级设置")}{tokensMessage ? <span className="text-[var(--error-ink)]"> {t("· 需要修正")}</span> : null}</span>
         </Button></CollapsibleTrigger>
         <CollapsibleContent forceMount hidden={!advanced}>
           <div className="space-y-3 pb-2 pt-2">
             <div className="models-field">
-              <label htmlFor={`${formId}-tokens`}>最大输出 Token <span className="models-optional">可选</span></label>
-              <Input id={`${formId}-tokens`} ref={tokensRef} inputMode="numeric" value={tokens} placeholder="使用 Droid 默认值"
+              <label htmlFor={`${formId}-tokens`}>{t("最大输出 Token")} <span className="models-optional">{t("可选")}</span></label>
+              <Input id={`${formId}-tokens`} ref={tokensRef} inputMode="numeric" value={tokens} placeholder={t("使用 Droid 默认值")}
                 aria-invalid={!!tokensMessage} aria-describedby={`${formId}-tokens-hint${tokensMessage ? ` ${formId}-tokens-error` : ''}`}
                 onBlur={() => setTouched((current) => ({ ...current, tokens: true }))} onChange={(event) => setTokens(event.target.value)} />
               <FieldError id={`${formId}-tokens-error`} message={tokensMessage} />
-              <p id={`${formId}-tokens-hint`} className="models-field-hint">仅在服务方要求时填写输出上限。</p>
+              <p id={`${formId}-tokens-hint`} className="models-field-hint">{t("仅在服务方要求时填写输出上限。")}</p>
             </div>
-            <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />此模型不支持图片输入</label>
-            <Button variant="outline" type="submit" value="verify" size="sm" disabled={model?.enabled === false}><SavingIcon busy={busy} />保存并验证…</Button>
-            <p className="models-field-hint">{model?.enabled === false ? '此模型已禁用，可保存修改；恢复后才能验证。' : '验证会请求一次真实模型回复，由 Droid 确认后执行。'}</p>
+            <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />{t("此模型不支持图片输入")}</label>
+            <Button variant="outline" type="submit" value="verify" size="sm" disabled={model?.enabled === false}><SavingIcon busy={busy} />{t("保存并验证…")}</Button>
+            <p className="models-field-hint">{model?.enabled === false ? t("此模型已禁用，可保存修改；恢复后才能验证。") : t("验证会请求一次真实模型回复，由 Droid 确认后执行。")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
-      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>取消</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? '正在保存…' : model ? '保存修改' : '添加模型'}</Button></div>
+      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : model ? t("保存修改") : t("添加模型")}</Button></div>
     </fieldset>
   </form>;
 }

@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/button';
@@ -20,6 +21,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
   readonly onQuote: (text: string) => void;
   readonly onBtwQuote?: (text: string) => void;
 }) {
+  const { t } = useI18n();
   const { copyText } = useUiEnvironment();
   const container = usePortalContainer();
   const toolbar = useRef<HTMLDivElement>(null);
@@ -86,16 +88,16 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     window.getSelection()?.removeAllRanges();
     setSelection(null);
   };
-  return createPortal(<div ref={toolbar} role="toolbar" aria-label="Selected text actions" data-webview-overlay=""
+  return createPortal(<div ref={toolbar} role="toolbar" aria-label={t("Selected text actions")} data-webview-overlay=""
     className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none gap-1 rounded border border-[var(--panel-edge)] bg-popover p-1 shadow-sm"
     style={{ left: selection.left, top: selection.top }} onMouseDown={(event) => event.preventDefault()}>
     <Button size="sm" variant="ghost" onClick={() => {
       const current = readQuoteSelection(selectionRoot.current);
       if (!current || current.toString() !== selection.text) { setSelection(null); return; }
       void copyText(selection.text).then(() => setCopyState('copied'), () => setCopyState('error'));
-    }}>{copyState === 'copied' ? 'Copied' : 'Copy'}</Button>
-    <Button size="sm" variant="ghost" onClick={() => choose(onQuote)}>Add to Chat</Button>
-    {onBtwQuote ? <Button size="sm" variant="ghost" onClick={() => choose(onBtwQuote)}>By the Way</Button> : null}
-    {copyState === 'error' ? <span role="alert" className="w-full px-2 text-xs text-destructive">Could not copy selected text.</span> : null}
+    }}>{copyState === 'copied' ? t("Copied") : t("Copy")}</Button>
+    <Button size="sm" variant="ghost" onClick={() => choose(onQuote)}>{t("Add to Chat")}</Button>
+    {onBtwQuote ? <Button size="sm" variant="ghost" onClick={() => choose(onBtwQuote)}>{t("By the Way")}</Button> : null}
+    {copyState === 'error' ? <span role="alert" className="w-full px-2 text-xs text-destructive">{t("Could not copy selected text.")}</span> : null}
   </div>, container ?? document.body);
 }

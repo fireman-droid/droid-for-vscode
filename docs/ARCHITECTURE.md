@@ -6,6 +6,12 @@
 最后查阅各功能的实现细节。源码链接指向仓库中的对应入口；设计目标与验证状态分别查看
 [DESIGN](DESIGN.md) 和 [STATUS](STATUS.md)，不将它们混作运行结果。
 
+## 界面语言
+
+`webviewLocale` 在 Host 读取应用级 `droidvisx.language` 与 `vscode.env.language`，解析后写入 Webview 启动 HTML，避免先显示错误语言。`localeProtocol` 约束独立的 `ui.locale.read`／`ui.locale` 消息；每个生产面板各自订阅配置变化，隐藏面板也可接收更新，不经过聊天轮次或 Runtime。
+
+`WebviewLocaleProvider` 只更新上下文和文档 `lang`，保留组件实例与输入状态。公共 `@droidvisx/chat-ui/i18n` 提供三语词条、带参数的 `translate` 和 React Provider，不依赖 Droid Bridge、Runtime 或 VS Code；业务设置入口通过已有管理协议的 `language.set` 保存偏好。只对明确标记的界面文案翻译，消息正文、代码、模型名称和服务原文不进行 DOM 替换。`package.nls` 负责编辑器自身呈现的命令与设置说明。
+
 ## 管理页默认设置
 
 `managementDefaultsProtocol` 定义会话／Mission 默认设置的字段白名单、模型目录和策略锁定投影；Webview 表单只发送本页差量。`ManagementDefaultsService` 将扁平 Bridge 字段映射到 SDK 的写入结构，并从既有 `DaemonApi.settings` 读取／保存；公开 UI 包不依赖 SDK 或 Bridge。

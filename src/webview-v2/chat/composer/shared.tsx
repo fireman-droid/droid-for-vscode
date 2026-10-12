@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 // Shared types, option tables, helpers, and small components of the
 // ComposerControls popover family. Moved verbatim from
 // ComposerControls.tsx (structure-only split: mode / context / model /
@@ -129,17 +130,16 @@ export function SettingsStatus({
 }: {
   readonly settings: SessionSettingsState;
 }): React.JSX.Element | null {
+  const { t } = useI18n();
   if (settings.status === 'updating') {
     return (
-      <p className="dvx-popover-message" role="status">
-        Applying setting…
-      </p>
+      <p className="dvx-popover-message" role="status">{t("Applying setting…")}</p>
     );
   }
   if (settings.status === 'error') {
     return (
       <p className="dvx-popover-message dvx-error-text" role="alert">
-        {settings.message}
+        {t(settings.message)}
       </p>
     );
   }
@@ -153,9 +153,10 @@ export function Stat({
   readonly label: string;
   readonly value: string;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <div>
-      <dt>{label}</dt>
+      <dt>{t(label)}</dt>
       <dd>{value}</dd>
     </div>
   );

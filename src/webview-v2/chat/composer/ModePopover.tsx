@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 // The mode trigger's popover (Auto / Spec / Mission). Cursor menu
 // form (spec §3.1): one icon-led single-line row per mode, the
 // two-line descriptions retired into hover titles, the selected row
@@ -27,33 +28,32 @@ export function ModePopover({
   readonly allowMission?: boolean;
   readonly onSelect: (value: SessionInteractionMode) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <div
       id={id}
       className="dvx-composer-popover dvx-mode-popover"
       role="dialog"
-      aria-label="Mode"
+      aria-label={t("Mode")}
     >
-      <RadioGroup className="dvx-option-list" aria-label="Mode options" value={shownMode} disabled={disabled}
+      <RadioGroup className="dvx-option-list" aria-label={t("Mode options")} value={shownMode} disabled={disabled}
         onValueChange={(value) => onSelect(value as SessionInteractionMode)}>
         {MODE_OPTIONS.filter((option) => allowMission || option.value !== 'mission').map((option) => (
           <label
             key={option.value}
             className="dvx-option-row dvx-mode-option"
-            title={option.description}
+            title={t(option.description)}
           >
             <ModeIcon mode={option.value} />
-            <span className="dvx-mode-option-label">{option.label}</span>
-            <RadioGroupItem value={option.value} aria-label={option.label}
+            <span className="dvx-mode-option-label">{t(option.label)}</span>
+            <RadioGroupItem value={option.value} aria-label={t(option.label)}
               onClick={() => { if (option.value === 'mission' && shownMode === 'mission') onSelect('mission'); }} />
           </label>
         ))}
       </RadioGroup>
       <SettingsStatus settings={settings} />
       {disabled && settings.status === 'ready' ? (
-        <p className="dvx-popover-message" role="status">
-          Mode can be changed after the current turn.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Mode can be changed after the current turn.")}</p>
       ) : null}
     </div>
   );

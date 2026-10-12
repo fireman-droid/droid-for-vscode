@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useContext, useEffect, useState } from 'react';
 import { ChangeSummaryView } from '@droidvisx/chat-ui/chat/ChangeSummaryView';
 import { InlineDiffContext } from '../review/useInlineDiff';
@@ -9,6 +10,7 @@ import { subscribeHostMessages } from '../host/hostMessageSource';
 export { summarizeOperations, type OperationSummary } from './operationSummary';
 
 export function AiOperationSummary({ summary, onInteract }: { readonly summary: OperationSummary; readonly onInteract?: () => void }) {
+  const { t } = useI18n();
   const context = useContext(InlineDiffContext);
   const [undoScope, setUndoScope] = useState<ReviewScopeState | null>(null);
   useEffect(() => {
@@ -39,11 +41,11 @@ export function AiOperationSummary({ summary, onInteract }: { readonly summary: 
     undoReason={undoReason}
     onSelectFile={connected ? (path) => open(path) : undefined}
     renderFileDetails={(path) => summary.files.get(path)?.records.map((file, index) => <div key={index}>
-      {summary.files.get(path)!.records.length > 1 ? <p className="operation-diff-note">Recorded operation {index + 1}</p> : null}
+      {summary.files.get(path)!.records.length > 1 ? <p className="operation-diff-note">{t("Recorded operation")} {index + 1}</p> : null}
       <OperationFileDetails file={file} />
     </div>)}
     note={summary.unconfirmed || summary.delegated ? <>
-      {summary.unconfirmed ? `${summary.unconfirmed} failed or unconfirmed file results are excluded. ` : ''}
-      {summary.delegated ? 'Delegated results are available in Review and excluded from these counts.' : ''}
+      {summary.unconfirmed ? t("{p0} failed or unconfirmed file results are excluded. ", { p0: summary.unconfirmed }) : ''}
+      {summary.delegated ? t("Delegated results are available in Review and excluded from these counts.") : ''}
     </> : undefined} />;
 }

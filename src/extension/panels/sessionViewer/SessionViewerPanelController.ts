@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { bindWebviewLocale, readWebviewLocale } from '../../webview/webviewLocale';
 
 import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics';
 import type { SessionHistoryLoader } from '../../../runtime/history/SessionHistory';
@@ -127,11 +128,13 @@ export class SessionViewerPanelController implements vscode.Disposable {
       },
       undefined,
       readWebviewBootTheme(),
+      undefined,
+      readWebviewLocale(),
     );
     const entry: ViewerEntry = {
       target,
       panel,
-      disposables: [],
+      disposables: [bindWebviewLocale(panel.webview)],
       timer: null,
       refreshBusy: false,
       refreshTrailing: false,

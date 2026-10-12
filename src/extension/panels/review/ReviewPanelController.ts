@@ -7,6 +7,7 @@ import { parseReviewPanelRequest, type ReviewPanelOpen } from '../../../shared/p
 import { getWebviewHtml } from '../../webview/webviewHtml';
 import { handleWebviewClipboard } from '../../webview/webviewClipboard';
 import { readWebviewBootTheme } from '../../webview/webviewTheme';
+import { bindWebviewLocale, hostText, readWebviewLocale } from '../../webview/webviewLocale';
 import { isTurnActive } from '../../chat/internals';
 import type { SessionViewerPanelController } from '../sessionViewer/SessionViewerPanelController';
 import { MAX_GIT_COMMIT_SUBJECT_LENGTH } from '../../../shared/protocol/gitCommitFlow';
@@ -91,11 +92,12 @@ export class ReviewPanelController implements vscode.Disposable {
       this.initialize();
       return;
     }
-    const panel = vscode.window.createWebviewPanel('droidvisx.review', 'Review changes', vscode.ViewColumn.Active, {
+    const panel = vscode.window.createWebviewPanel('droidvisx.review', hostText('Review changes'), vscode.ViewColumn.Active, {
       enableScripts: true, retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
     });
     this.panel = panel;
+    const locale = bindWebviewLocale(panel.webview);
     const receive = panel.webview.onDidReceiveMessage((value) => {
       const request = parseReviewPanelRequest(value) ?? parseWebviewMessage(value);
       const requestId = request && 'requestId' in request && isId(request.requestId) ? request.requestId : undefined;
@@ -103,13 +105,13 @@ export class ReviewPanelController implements vscode.Disposable {
       void this.handle(value).catch((error) => this.postError(error, requestId, sessionId));
     });
     const dispose = panel.onDidDispose(() => {
-      receive.dispose(); dispose.dispose();
+      receive.dispose(); locale.dispose(); dispose.dispose();
       if (this.panel === panel) { this.questions.reset(); this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
     });
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     panel.webview.html = getWebviewHtml(panel.webview, {
       script: vscode.Uri.joinPath(dist, 'review.js'), style: vscode.Uri.joinPath(dist, 'webview.css'),
-    }, undefined, readWebviewBootTheme());
+    }, undefined, readWebviewBootTheme(), undefined, readWebviewLocale());
   }
   dispose(): void {
     this.questions.reset();

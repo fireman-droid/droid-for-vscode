@@ -2,6 +2,7 @@ import { Dialog as DialogPrimitive, HoverCard as HoverCardPrimitive, Popover as 
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from './cn';
+import { useI18n } from '../i18n';
 import { Button } from './button';
 
 const PortalContainerContext = createContext<HTMLElement | undefined>(undefined);
@@ -92,6 +93,7 @@ export function DialogContent({
   closeLabel = 'Close',
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & { readonly closeDisabled?: boolean; readonly closeLabel?: string }) {
+  const { t } = useI18n();
   const container = usePortalContainer();
   return (
     <DialogPrimitive.Portal container={container}>
@@ -104,7 +106,7 @@ export function DialogContent({
       >
         {children}
         <DialogClose asChild>
-          <Button variant="ghost" size="icon" aria-label={closeLabel} disabled={closeDisabled} className="absolute right-2 top-2">
+          <Button variant="ghost" size="icon" aria-label={t(closeLabel)} disabled={closeDisabled} className="absolute right-2 top-2">
             <X />
           </Button>
         </DialogClose>

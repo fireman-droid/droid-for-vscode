@@ -1,3 +1,6 @@
+import { translate } from '../i18n/translate';
+import type { UiLocale } from '../i18n/locale';
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -26,21 +29,24 @@ const MONTHS = [
  * (completedAt in the future) clamps to "just now" instead of
  * inventing negative ages.
  */
-export function formatRelativeTime(completedAt: number, now: number): string {
+export function formatRelativeTime(completedAt: number, now: number, locale: UiLocale = 'en'): string {
   const delta = Math.max(0, now - completedAt);
   if (delta < MINUTE_MS) {
-    return 'just now';
+    return translate(locale, 'just now');
   }
   if (delta < HOUR_MS) {
-    return `${Math.floor(delta / MINUTE_MS)}m ago`;
+    return translate(locale, '{count}m ago', { count: Math.floor(delta / MINUTE_MS) });
   }
   if (delta < DAY_MS) {
-    return `${Math.floor(delta / HOUR_MS)}h ago`;
+    return translate(locale, '{count}h ago', { count: Math.floor(delta / HOUR_MS) });
   }
   if (delta < WEEK_MS) {
-    return `${Math.floor(delta / DAY_MS)}d ago`;
+    return translate(locale, '{count}d ago', { count: Math.floor(delta / DAY_MS) });
   }
   const date = new Date(completedAt);
+  if (locale !== 'en') return date.toLocaleDateString(locale, {
+    month: 'short', day: 'numeric', ...(date.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } as const : {}),
+  });
   const label = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
   return date.getFullYear() === new Date(now).getFullYear()
     ? label

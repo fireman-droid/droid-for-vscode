@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Key } from 'react';
 import { Check, ChevronDown, ChevronRight, Folder, FolderTree, List, Search, SlidersHorizontal } from 'lucide-react';
 export interface ReviewFile { readonly path: string; readonly status: string; readonly changeKind?: string; readonly additions: number | null; readonly deletions: number | null }
@@ -27,6 +28,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
   filters?: ReviewFileFilters; onFiltersChange?(filters: ReviewFileFilters): void;
   side?: 'left' | 'right';
 }) {
+  const { t } = useI18n();
   const [localFilters, setLocalFilters] = useState<ReviewFileFilters>({ query: '', unreviewed: false });
   const { query: filter, unreviewed } = filters ?? localFilters;
   const updateFilters = onFiltersChange ?? setLocalFilters;
@@ -104,38 +106,38 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     ref: virtual ? list.virtualizer.measureElement : undefined,
     style: { display: 'flow-root', ...(virtual ? { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` } : {}) } as CSSProperties,
   });
-  return <aside ref={panel} className="review-files" data-side={side} aria-label="Changed files" style={{ width: visibleWidth }}>
+  return <aside ref={panel} className="review-files" data-side={side} aria-label={t("Changed files")} style={{ width: visibleWidth }}>
     <div className="review-files-tools">
       <div className="review-file-search"><Search aria-hidden="true" />
-        <Input className="h-7 pl-7 text-xs" type="search" aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(event) => setFilter(event.target.value)} />
+        <Input className="h-7 pl-7 text-xs" type="search" aria-label={t("Filter files")} placeholder={t("Filter files")} value={filter} onChange={(event) => setFilter(event.target.value)} />
       </div>
-      <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="File filters" data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
+      <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("File filters")} data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
         <PopoverContent className="review-file-options" data-motion="anchored" align="start" sideOffset={6}>
-          <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />Unreviewed only</label>
+          <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />{t("Unreviewed only")}</label>
         </PopoverContent>
       </Popover>
-      <ToggleGroup type="single" className="review-file-layout" aria-label="File layout" value={tree ? 'tree' : 'list'} onValueChange={(value) => { if (value) setTree(value === 'tree'); }}>
-        <ToggleGroupItem className="h-7 w-6 p-1" value="list" aria-label="Show flat file list" title="List view"><List aria-hidden="true" /></ToggleGroupItem>
-        <ToggleGroupItem className="h-7 w-6 p-1" value="tree" aria-label="Show file tree" title="Tree view"><FolderTree aria-hidden="true" /></ToggleGroupItem>
+      <ToggleGroup type="single" className="review-file-layout" aria-label={t("File layout")} value={tree ? 'tree' : 'list'} onValueChange={(value) => { if (value) setTree(value === 'tree'); }}>
+        <ToggleGroupItem className="h-7 w-6 p-1" value="list" aria-label={t("Show flat file list")} title={t("List view")}><List aria-hidden="true" /></ToggleGroupItem>
+        <ToggleGroupItem className="h-7 w-6 p-1" value="tree" aria-label={t("Show file tree")} title={t("Tree view")}><FolderTree aria-hidden="true" /></ToggleGroupItem>
       </ToggleGroup>
     </div>
-    <div className="review-files-title"><strong>{unreviewed ? 'Unreviewed files' : 'Changed files'}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
+    <div className="review-files-title"><strong>{unreviewed ? t("Unreviewed files") : t("Changed files")}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
     <div className="review-file-list" ref={list.viewport} onKeyDown={list.onKeyDown} onFocusCapture={list.onFocusCapture} onBlurCapture={list.onBlurCapture}>
       <div style={virtual ? { position: 'relative', height: list.virtualizer.getTotalSize() } : undefined}>
       {[...visibleGroups].map(([directory, items]) => <Collapsible key={directory} open={!directory || !collapsed.has(directory)} onOpenChange={(open) => setCollapsed((old) => {
         const next = new Set(old); if (open) next.delete(directory); else next.add(directory); return next;
       })}>
-        {items.filter((item) => !rows[item.index]!.file).map((item) => <div key={item.key} {...rowProps(item)}><CollapsibleTrigger asChild><Button variant="plain" size="none" className="review-directory" aria-label={`${collapsed.has(directory) ? 'Expand' : 'Collapse'} ${directory}`}>
+        {items.filter((item) => !rows[item.index]!.file).map((item) => <div key={item.key} {...rowProps(item)}><CollapsibleTrigger asChild><Button variant="plain" size="none" className="review-directory" aria-label={`${collapsed.has(directory) ? t("Expand") : t("Collapse")} ${directory}`}>
           {collapsed.has(directory) ? <ChevronRight aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}<Folder aria-hidden="true" /><span title={directory}>{directory}</span>
         </Button></CollapsibleTrigger></div>)}
         <CollapsibleContent>{items.filter((item) => rows[item.index]!.file).map((item) => {
           const file = rows[item.index]!.file!;
           const basename = file.path.split('/').at(-1)!;
           const directory = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
-          const reviewState = fileStatusLabels[file.status] ?? file.status;
+          const reviewState = t(fileStatusLabels[file.status] ?? file.status);
           const label = [file.path, reviewState, file.changeKind,
-            file.additions === null ? null : `${file.additions} additions`,
-            file.deletions === null ? null : `${file.deletions} deletions`].filter(Boolean).join(', ');
+            file.additions === null ? null : t('{count} additions', { count: file.additions }),
+            file.deletions === null ? null : t('{count} deletions', { count: file.deletions })].filter(Boolean).join(', ');
           return <div key={item.key} {...rowProps(item)}><Button variant="plain" size="none" className="review-file"
           data-review-status={file.status} aria-current={selected === file.path ? 'true' : undefined} aria-label={label} onClick={() => onSelect(file.path)} title={`${file.path}\n${reviewState}`}>
           {file.status === 'reviewed' ? <Check className="review-file-check" aria-hidden="true" /> : <ChangeFileIcon path={file.path} />}
@@ -150,10 +152,10 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         })}</CollapsibleContent>
       </Collapsible>)}
       </div>
-      {!filtered.length ? <p className="review-empty">{files.length === 0 ? 'No changed files in this scope.' : 'No matching files.'}
-        {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>Clear filters</Button> : null}
+      {!filtered.length ? <p className="review-empty">{files.length === 0 ? t("No changed files in this scope.") : t("No matching files.")}
+        {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button> : null}
       </p> : null}
     </div>
-    <ResizeHandle edge={side === 'right' ? 'left' : 'right'} value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label="Resize file sidebar" onValueChange={setWidth} />
+    <ResizeHandle edge={side === 'right' ? 'left' : 'right'} value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label={t("Resize file sidebar")} onValueChange={setWidth} />
   </aside>;
 });

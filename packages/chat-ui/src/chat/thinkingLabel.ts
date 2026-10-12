@@ -1,29 +1,32 @@
+import { translate, type TranslationParams } from '../i18n/translate';
+
 // Completed Thinking rows read as a past-tense fact, mirroring the
 // Cursor "Thought for Xs" affordance; sub-500ms runs are too short
 // for a number to be meaningful.
 export function formatThinkingLabel(
   statusType: string | undefined,
   durationMs: number | null,
+  t: (message: string, params?: TranslationParams) => string = (message, params) => translate('en', message, params),
 ): string {
   if (statusType === 'incomplete') {
-    return 'Thinking stopped';
+    return t('Thinking stopped');
   }
   if (durationMs === null) {
-    return 'Thought';
+    return t('Thought');
   }
   if (durationMs < 500) {
-    return 'Thought briefly';
+    return t('Thought briefly');
   }
   if (durationMs < 1_000) {
-    return `Thought for ${(durationMs / 1_000).toFixed(1)}s`;
+    return t('Thought for {seconds}s', { seconds: (durationMs / 1_000).toFixed(1) });
   }
   const totalSeconds = Math.round(durationMs / 1_000);
   if (totalSeconds < 60) {
-    return `Thought for ${totalSeconds}s`;
+    return t('Thought for {seconds}s', { seconds: totalSeconds });
   }
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return seconds === 0
-    ? `Thought for ${minutes}m`
-    : `Thought for ${minutes}m ${seconds}s`;
+    ? t('Thought for {minutes}m', { minutes })
+    : t('Thought for {minutes}m {seconds}s', { minutes, seconds });
 }

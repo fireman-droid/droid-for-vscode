@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronRight, Users } from 'lucide-react';
 import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
@@ -50,16 +51,17 @@ export function AgentSection({ count, running, children }: {
   readonly running: number;
   readonly children: ReactNode;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   return <Collapsible open={expanded} onOpenChange={setExpanded} asChild>
-    <section className="v2-composer-changes v2-composer-agents" aria-label="Agents">
+    <section className="v2-composer-changes v2-composer-agents" aria-label={t("Agents")}>
       <div className="v2-composer-changes-header v2-composer-agents-header">
         <CollapsibleTrigger asChild>
           <Button variant="plain" size="none" className="v2-composer-changes-toggle" aria-controls={id}>
             <ChevronRight aria-hidden="true" className={expanded ? 'rotate-90' : undefined} />
-            <span>{count} {count === 1 ? 'Agent' : 'Agents'}</span>
-            <span className="ml-auto text-[11px] text-muted-foreground">{running} running</span>
+            <span>{count} {count === 1 ? t("Agent") : t("Agents")}</span>
+            <span className="ml-auto text-[11px] text-muted-foreground">{running} {t("running")}</span>
           </Button>
         </CollapsibleTrigger>
       </div>
@@ -74,6 +76,7 @@ export function AgentNavigation({ navigation, port }: {
   readonly navigation: AgentChatNavigationMessage;
   readonly port: ChatPort;
 }) {
+  const { t } = useI18n();
   if (navigation.parentSessionId === null || navigation.agents.length === 0) return null;
   const parentSessionId = navigation.parentSessionId;
   const running = navigation.agents.filter((agent) => agent.status === 'running').length;
@@ -86,19 +89,19 @@ export function AgentNavigation({ navigation, port }: {
       return <li key={agent.key} className="flex min-w-0 items-center">
         <Button variant="plain" size="none" className="v2-composer-changes-file min-w-0 flex-1"
           aria-current={row.selected ? 'page' : undefined}
-          title={`${row.title}\n${row.role} · ${row.statusLabel}`}
+          title={`${row.title}\n${row.role} · ${t(row.statusLabel)}`}
           onClick={row.onOpen}>
           {row.selected ? <Check aria-hidden="true" /> : <Users aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{row.title}</span>
-          <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{row.statusLabel}</span>
+          <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{t(row.statusLabel)}</span>
         </Button>
         {row.onStop ? <Button variant="plain" size="none"
           className="v2-composer-changes-stop min-h-6 w-[68px] shrink-0 whitespace-nowrap"
           disabled={row.stopPending} aria-busy={row.stopPending || undefined}
-          aria-label={`${row.stopPending ? 'Stopping' : 'Stop'} agent task: ${row.title}`}
-          title={`${row.stopPending ? 'Stopping' : 'Stop'} ${row.title}`}
+          aria-label={t("{p0} agent task: {p1}", { p0: row.stopPending ? t("Stopping") : t("Stop"), p1: row.title })}
+          title={`${row.stopPending ? t("Stopping") : t("Stop")} ${row.title}`}
           onClick={row.onStop}>
-          {row.stopPending ? 'Stopping…' : 'Stop'}
+          {row.stopPending ? t("Stopping…") : t("Stop")}
         </Button> : null}
       </li>;
     })}

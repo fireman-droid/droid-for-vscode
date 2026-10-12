@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useLayoutEffect, useRef, type ClipboardEventHandler, type DragEventHandler, type ReactNode, type RefObject } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { cn } from '../ui/cn';
@@ -39,6 +40,7 @@ export interface QuestionCardViewProps {
   readonly onDragOver?: DragEventHandler;
 }
 export function QuestionCardView({ item, editor, quote, placeholder, placeholderHeight, canResend, editAvailable = true, originalAttachments, stagedAttachments, editSettings, restoreFiles, resendLabel = 'Resend', plan, onResend, onAttach, editDisabled, rejection, maxLength, onPaste, onDrop, onDragOver }: QuestionCardViewProps) {
+  const { t } = useI18n();
   const draft = editor.draft?.messageId === item.messageId ? editor.draft : null;
   const draftQuote = draft ? parseSelectionQuotes(draft.text) : null;
   const draftBody = draftQuote?.body ?? draft?.text ?? '';
@@ -116,7 +118,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           }} className="mb-1" />
           <Textarea variant="plain"
             ref={input}
-            aria-label="Edit message and resend"
+            aria-label={t("Edit message and resend")}
             rows={1}
             value={draftBody}
             maxLength={maxLength === undefined ? undefined : Math.max(0, maxLength - draftPrefixLength)}
@@ -140,7 +142,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           {draft.notice ? <p role="status" className="mt-1 text-xs text-muted-foreground">{draft.notice}</p> : null}
           {rejection ? <p role="status" className="mt-1 text-xs text-destructive">{rejection}</p> : null}
           <div className="v2-user-edit-footer">
-            {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label="Attach files to edited message" title="Attach files"
+            {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label={t("Attach files to edited message")} title={t("Attach files")}
               disabled={editDisabled} onClick={onAttach}>+</Button> : null}
             <div className={cn('v2-user-edit-controls', Boolean(editSettings) && 'v2-user-edit-controls-with-settings')}>
               {editSettings}
@@ -160,7 +162,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           {messageCopy}
         </UserMessageBubble>
       )}
-      {draft?.phase === 'resending' ? <p role="status" className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><DroidActivity phase="loading" />{draft.resumeOnly ? 'Reconnecting the restored conversation…' : draft.restoreFiles ? 'Restoring files and preparing the conversation…' : 'Preparing the conversation to resend…'}</p> : null}
+      {draft?.phase === 'resending' ? <p role="status" className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><DroidActivity phase="loading" />{draft.resumeOnly ? t("Reconnecting the restored conversation…") : draft.restoreFiles ? t("Restoring files and preparing the conversation…") : t("Preparing the conversation to resend…")}</p> : null}
       {draft?.phase !== 'resending' ? plan : null}
     </div>
   );

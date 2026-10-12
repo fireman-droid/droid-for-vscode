@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { memo, useMemo, type ReactNode } from 'react';
 import { ReplyView } from '@droidvisx/chat-ui/chat/ReplyView';
 import { shallow } from 'zustand/shallow';
@@ -24,6 +25,7 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
   readonly operationsLive?: boolean;
   readonly onInteract?: () => void;
 }) {
+  const { t } = useI18n();
   const summarized = !operationsLive && !!operationSummary?.files.size;
   const clusters = useMemo(() => clusterActivity(summarized ? descriptor.items.filter((item) => !isFoldableFileOperation(item)) : descriptor.items).filter((cluster) => {
     const item = cluster.items[0]!;
@@ -32,7 +34,7 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
   const render = renderItem ?? ((item: SessionTranscriptItem, grouped: boolean) =>
     <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} hideConfirmedOperations={summarized} onInteract={onInteract} />);
   const diagnosticOnly = descriptor.items.every((item) => item.kind === 'diagnostic');
-  return <ReplyView label={diagnosticOnly ? 'System notice' : readOnly ? 'Subagent' : 'Droid'} diagnosticOnly={diagnosticOnly}
+  return <ReplyView label={diagnosticOnly ? t("System notice") : readOnly ? t("Subagent") : 'Droid'} diagnosticOnly={diagnosticOnly}
     readOnly={readOnly} replyText={replyText} running={status.type === 'running'} completedAt={completedAt} regenerate={regenerate} fork={fork}>
     {clusters.map((cluster, index) => cluster.grouped ? (
       <ActivityGroup

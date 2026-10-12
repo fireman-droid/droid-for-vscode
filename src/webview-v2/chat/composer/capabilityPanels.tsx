@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 // Skills / MCP / Plugins drill-in panels of the `+` settings popover.
 
 import { useEffect, useState } from 'react';
@@ -38,6 +39,7 @@ export function SkillsPanel({
   readonly onToggle: (name: string, disabled: boolean) => void;
   readonly onNewSession?: () => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const busy = skills.status === 'loading' || skills.status === 'idle';
   // Row-level pending: only the toggled row waits for the round-trip,
   // the rest of the panel stays interactive.
@@ -64,11 +66,11 @@ export function SkillsPanel({
         <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
-          aria-label="Back to session controls"
+          aria-label={t("Back to session controls")}
           onClick={onBack}
         >
           <ChevronLeftIcon />
-          <span className="dvx-panel-title">Skills</span>
+          <span className="dvx-panel-title">{t("Skills")}</span>
         </Button>
         <div className="dvx-panel-actions">
           <Button variant="plain" size="none"
@@ -76,9 +78,7 @@ export function SkillsPanel({
             className="dvx-panel-action"
             disabled={skills.status === 'loading'}
             onClick={onRefresh}
-          >
-            Refresh
-          </Button>
+          >{t("Refresh")}</Button>
         </div>
       </div>
       {skills.status === 'unsupported' || skills.status === 'error' ? (
@@ -92,17 +92,13 @@ export function SkillsPanel({
         </p>
       ) : null}
       {busy && skills.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          Loading skills…
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Loading skills…")}</p>
       ) : null}
       {skills.status === 'ready' && skills.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          No skills found in this workspace.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("No skills found in this workspace.")}</p>
       ) : null}
       {skills.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label="Skills">
+        <ul className="dvx-skill-list" aria-label={t("Skills")}>
           {skills.items.map((skill) => (
             <SkillRow
               key={skill.name}
@@ -118,14 +114,10 @@ export function SkillsPanel({
           ))}
         </ul>
       ) : null}
-      <p className="dvx-popover-message dvx-skills-session-note">
-        Skill changes take effect in new sessions.
-        {changed && onNewSession !== undefined ? (
+      <p className="dvx-popover-message dvx-skills-session-note">{t("Skill changes take effect in new sessions.")}{changed && onNewSession !== undefined ? (
           <>
             {' '}
-            <Button variant="plain" size="none" type="button" className="dvx-skills-apply-new" onClick={onNewSession}>
-              Start a new session
-            </Button>
+            <Button variant="plain" size="none" type="button" className="dvx-skills-apply-new" onClick={onNewSession}>{t("Start a new session")}</Button>
           </>
         ) : null}
       </p>
@@ -144,6 +136,7 @@ function SkillRow({
   readonly pending: boolean;
   readonly onToggle: (name: string, disabled: boolean) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <li className="dvx-skill-row">
       <div className="dvx-skill-copy">
@@ -152,7 +145,7 @@ function SkillRow({
           <span className="dvx-skill-location">{skill.location}</span>
           {pending ? (
             <span className="dvx-skill-location" role="status">
-              {skill.enabled ? 'Disabling…' : 'Enabling…'}
+              {skill.enabled ? t("Disabling…") : t("Enabling…")}
             </span>
           ) : null}
         </span>
@@ -164,7 +157,7 @@ function SkillRow({
       </div>
       <Switch
         className="dvx-skill-switch h-4 w-7 px-px [&>span]:size-3"
-        aria-label={`${skill.name} enabled`}
+        aria-label={t("{p0} enabled", { p0: skill.name })}
         checked={skill.enabled}
         disabled={disabled || pending}
         onCheckedChange={(enabled) => onToggle(skill.name, !enabled)}
@@ -194,6 +187,7 @@ export function McpPanel({
   readonly onRemove: (name: string) => void;
   readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const [adding, setAdding] = useState(false);
   const busy = mcp.status === 'loading' || mcp.status === 'idle';
   // Row-level pending: only the mutated row waits for the round-trip.
@@ -221,11 +215,11 @@ export function McpPanel({
         <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
-          aria-label="Back to session controls"
+          aria-label={t("Back to session controls")}
           onClick={onBack}
         >
           <ChevronLeftIcon />
-          <span className="dvx-panel-title">MCP servers</span>
+          <span className="dvx-panel-title">{t("MCP servers")}</span>
         </Button>
         <div className="dvx-panel-actions">
           <Button variant="plain" size="none"
@@ -235,16 +229,14 @@ export function McpPanel({
             aria-expanded={adding}
             onClick={() => setAdding((current) => !current)}
           >
-            {adding ? 'Close' : 'Add'}
+            {adding ? t("Close") : t("Add")}
           </Button>
           <Button variant="plain" size="none"
             type="button"
             className="dvx-panel-action"
             disabled={mcp.status === 'loading'}
             onClick={onRefresh}
-          >
-            Refresh
-          </Button>
+          >{t("Refresh")}</Button>
         </div>
       </div>
       {adding ? (
@@ -267,17 +259,13 @@ export function McpPanel({
         </p>
       ) : null}
       {busy && mcp.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          Loading MCP servers…
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Loading MCP servers…")}</p>
       ) : null}
       {mcp.status === 'ready' && mcp.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          No MCP servers configured.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("No MCP servers configured.")}</p>
       ) : null}
       {mcp.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label="MCP servers">
+        <ul className="dvx-skill-list" aria-label={t("MCP servers")}>
           {mcp.items.map((server) => (
             <McpServerRow
               key={server.name}
@@ -324,6 +312,7 @@ function McpAddServerForm({
   readonly disabled: boolean;
   readonly onSubmit: (params: McpServerAddParams) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [serverType, setServerType] = useState<McpServerType>('stdio');
   const [target, setTarget] = useState('');
@@ -342,18 +331,18 @@ function McpAddServerForm({
     }
   };
   return (
-    <div className="dvx-mcp-add-form" role="form" aria-label="Add MCP server">
+    <div className="dvx-mcp-add-form" role="form" aria-label={t("Add MCP server")}>
       <Input
         className="dvx-mcp-add-input h-auto text-xs"
         type="text"
-        placeholder="Server name"
-        aria-label="Server name"
+        placeholder={t("Server name")}
+        aria-label={t("Server name")}
         value={name}
         maxLength={128}
         onChange={(event) => setName(event.currentTarget.value)}
         onKeyDown={submitOnEnter}
       />
-      <RadioGroup className="dvx-mcp-add-types" aria-label="Server type" value={serverType} disabled={disabled}
+      <RadioGroup className="dvx-mcp-add-types" aria-label={t("Server type")} value={serverType} disabled={disabled}
         onValueChange={(value) => setServerType(value as McpServerType)}>
         {MCP_SERVER_TYPES.map((type) => (
           <RadioGroupItem
@@ -370,10 +359,10 @@ function McpAddServerForm({
         type="text"
         placeholder={
           serverType === 'stdio'
-            ? 'Command, e.g. npx -y my-mcp-server'
-            : 'URL, e.g. https://example.com/mcp'
+            ? t("Command, e.g. npx -y my-mcp-server")
+            : t("URL, e.g. https://example.com/mcp")
         }
-        aria-label={serverType === 'stdio' ? 'Launch command' : 'Server URL'}
+        aria-label={serverType === 'stdio' ? t("Launch command") : t("Server URL")}
         value={target}
         maxLength={1024}
         onChange={(event) => setTarget(event.currentTarget.value)}
@@ -389,9 +378,7 @@ function McpAddServerForm({
         className="dvx-mcp-add-submit"
         disabled={!canSubmit}
         onClick={submit}
-      >
-        Add server
-      </Button>
+      >{t("Add server")}</Button>
     </div>
   );
 }
@@ -416,6 +403,7 @@ function McpServerRow({
   readonly onRemove: (name: string) => void;
   readonly onAuthenticate: (name: string) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // A stray click should not leave the destructive confirm armed.
@@ -467,9 +455,9 @@ function McpServerRow({
           {server.name}
           <span className="dvx-skill-location">{formatLabel(server.status)}</span>
           {needsAuth ? (
-            <span className="dvx-skill-location">needs auth</span>
+            <span className="dvx-skill-location">{t("needs auth")}</span>
           ) : server.requiresAuth ? (
-            <span className="dvx-skill-location">authenticated</span>
+            <span className="dvx-skill-location">{t("authenticated")}</span>
           ) : null}
           {pendingText !== null ? (
             <span className="dvx-skill-location" role="status">
@@ -484,7 +472,7 @@ function McpServerRow({
             disabled={authDisabled}
             onClick={() => onAuthenticate(server.name)}
           >
-            {authPending ? 'Authenticating…' : 'Authenticate in browser'}
+            {authPending ? t("Authenticating…") : t("Authenticate in browser")}
           </Button>
         ) : null}
         {authStatusText !== null ? (
@@ -505,10 +493,10 @@ function McpServerRow({
               type="button"
               className="dvx-mcp-tools-toggle"
             >
-              {expanded ? 'Hide tools' : `Show ${toolCount} tools`}
+              {expanded ? t("Hide tools") : t("Show {p0} tools", { p0: toolCount })}
             </Button></CollapsibleTrigger>
           ) : (
-            <span className="dvx-skill-description">{toolCount} tools</span>
+            <span className="dvx-skill-description">{toolCount} {t("tools")}</span>
           )}
           <Button variant="plain" size="none"
             type="button"
@@ -525,19 +513,19 @@ function McpServerRow({
               }
             }}
           >
-            {confirmingRemove ? 'Confirm remove' : 'Remove'}
+            {confirmingRemove ? t("Confirm remove") : t("Remove")}
           </Button>
         </span>
         <CollapsibleContent>
-          <ul className="dvx-mcp-tool-list" aria-label={`${server.name} tools`}>
+          <ul className="dvx-mcp-tool-list" aria-label={t("{p0} tools", { p0: server.name })}>
             {server.tools.map((tool) => (
               <li key={tool.name} className="dvx-mcp-tool">
                 <span className="dvx-mcp-tool-name">
                   {tool.name}
                   {tool.readOnly ? (
-                    <span className="dvx-skill-location">read-only</span>
+                    <span className="dvx-skill-location">{t("read-only")}</span>
                   ) : null}
-                  {!tool.enabled ? <span className="dvx-skill-location">off</span> : null}
+                  {!tool.enabled ? <span className="dvx-skill-location">{t("off")}</span> : null}
                 </span>
                 {tool.description !== null ? (
                   <span className="dvx-skill-description" title={tool.description}>
@@ -551,7 +539,7 @@ function McpServerRow({
       </div>
       <Switch
         className="dvx-skill-switch h-4 w-7 px-px [&>span]:size-3"
-        aria-label={`${server.name} enabled`}
+        aria-label={t("{p0} enabled", { p0: server.name })}
         checked={enabled}
         disabled={rowDisabled}
         onCheckedChange={(next) => onToggle(server.name, next)}
@@ -574,6 +562,7 @@ export function PluginsPanel({
   readonly onBack: () => void;
   readonly onRefresh: () => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const busy = plugins.status === 'loading' || plugins.status === 'idle';
   // Same session-switch recovery as the skills panel: an idle catalog
   // under a visible panel means nobody re-queried after the reset, so
@@ -589,11 +578,11 @@ export function PluginsPanel({
         <Button variant="plain" size="none"
           type="button"
           className="dvx-panel-back"
-          aria-label="Back to session controls"
+          aria-label={t("Back to session controls")}
           onClick={onBack}
         >
           <ChevronLeftIcon />
-          <span className="dvx-panel-title">Plugins</span>
+          <span className="dvx-panel-title">{t("Plugins")}</span>
         </Button>
         <div className="dvx-panel-actions">
           <Button variant="plain" size="none"
@@ -601,9 +590,7 @@ export function PluginsPanel({
             className="dvx-panel-action"
             disabled={plugins.status === 'loading'}
             onClick={onRefresh}
-          >
-            Refresh
-          </Button>
+          >{t("Refresh")}</Button>
         </div>
       </div>
       {plugins.status === 'unsupported' || plugins.status === 'error' ? (
@@ -617,17 +604,13 @@ export function PluginsPanel({
         </p>
       ) : null}
       {busy && plugins.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          Loading plugins…
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Loading plugins…")}</p>
       ) : null}
       {plugins.status === 'ready' && plugins.items.length === 0 ? (
-        <p className="dvx-popover-message" role="status">
-          No plugins installed.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("No plugins installed.")}</p>
       ) : null}
       {plugins.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label="Plugins">
+        <ul className="dvx-skill-list" aria-label={t("Plugins")}>
           {plugins.items.map((plugin) => (
             <PluginRow key={plugin.id} plugin={plugin} />
           ))}
@@ -635,17 +618,14 @@ export function PluginsPanel({
       ) : null}
       <p className="dvx-popover-message dvx-skills-session-note">
         {plugins.status === 'ready'
-          ? `${plugins.marketplaceCount} ${
-              plugins.marketplaceCount === 1 ? 'marketplace' : 'marketplaces'
-            } registered. `
-          : ''}
-        Manage plugins with the droid CLI.
-      </p>
+          ? t('{count} marketplaces registered.', { count: plugins.marketplaceCount }) + ' '
+          : ''}{t("Manage plugins with the droid CLI.")}</p>
     </div>
   );
 }
 
 function PluginRow({ plugin }: { readonly plugin: PluginSummary }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <li className="dvx-skill-row">
       <div className="dvx-skill-copy">
@@ -657,7 +637,7 @@ function PluginRow({ plugin }: { readonly plugin: PluginSummary }): React.JSX.El
           {plugin.version}
         </span>
       </div>
-      <span className="dvx-popover-row-value">{plugin.active ? 'Active' : 'Off'}</span>
+      <span className="dvx-popover-row-value">{plugin.active ? t("Active") : t("Off")}</span>
     </li>
   );
 }

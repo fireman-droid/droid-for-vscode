@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { MODEL_SOURCE_VERSION, isModelSourceMode, matchesModelSource, parseModelSourceState,
   type ModelSourceMode, type ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
@@ -34,15 +35,16 @@ export function ModelSourceControl({ models, className = '', compact = false }: 
   readonly className?: string;
   readonly compact?: boolean;
 }) {
+  const { t } = useI18n();
   const { mode, setMode, error } = useModelSource();
   return <div className={`min-w-0 space-y-1.5 ${className}`}>
-    <ToggleGroup type="single" value={mode} animatedIndicator={compact} aria-label="模型来源" className={compact ? 'flex gap-4' : 'flex w-full gap-1 rounded-md border border-border bg-muted/40 p-1'}
+    <ToggleGroup type="single" value={mode} animatedIndicator={compact} aria-label={t("模型来源")} className={compact ? 'flex gap-4' : 'flex w-full gap-1 rounded-md border border-border bg-muted/40 p-1'}
       onValueChange={(value) => { if (isModelSourceMode(value)) setMode(value); }}>
       {(['official', 'byok', 'mixed'] as const).map((value) => {
         const count = models?.filter((model) => matchesModelSource(model, value)).length;
-        return <ToggleGroupItem key={value} value={value} aria-label={`${LABELS[value]}模型${count === undefined ? '' : `，${count} 个`}`}
+        return <ToggleGroupItem key={value} value={value} aria-label={count === undefined ? t('{name} models', { name: t(LABELS[value]) }) : t('{name} models, {count}', { name: t(LABELS[value]), count })}
           className={compact ? 'h-7 min-w-0 rounded-none bg-transparent px-0 text-[11px] hover:bg-transparent active:bg-transparent data-[state=on]:bg-transparent' : 'h-7 min-w-0 flex-1 gap-1 px-2 text-xs'}>
-          {LABELS[value]}{compact || count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
+          {t(LABELS[value])}{compact || count === undefined ? null : <span className="text-[10px] text-muted-foreground">{count}</span>}
         </ToggleGroupItem>;
       })}
     </ToggleGroup>
@@ -51,8 +53,9 @@ export function ModelSourceControl({ models, className = '', compact = false }: 
 }
 
 export function ModelSourceEmpty() {
+  const { t } = useI18n();
   const { mode } = useModelSource();
   return <div role="status" className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
-    <p>{mode === 'mixed' ? '没有匹配的模型。' : `此范围内没有匹配的${LABELS[mode]}模型。`}</p>
+    <p>{mode === 'mixed' ? t("没有匹配的模型。") : t("此范围内没有匹配的{p0}模型。", { p0: t(LABELS[mode]) })}</p>
   </div>;
 }

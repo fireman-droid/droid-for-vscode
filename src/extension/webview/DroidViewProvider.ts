@@ -10,6 +10,7 @@ import type { ReviewPanelOpen } from '../../shared/protocol/reviewPanelProtocol'
 import { createWebviewStateDelivery } from './webviewStateDelivery';
 import type { AgentNavigationPort } from '../panels/agentChat/AgentChatManager';
 import { createModelSourcePreference } from './modelSourcePreference';
+import { bindWebviewLocale, readWebviewLocale } from './webviewLocale';
 
 export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'droidvisx.chat';
@@ -23,6 +24,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   private controllerSubscription: vscode.Disposable | undefined;
   private agentSubscription: vscode.Disposable | undefined;
   private modelSourcePreference: ReturnType<typeof createModelSourcePreference> | undefined;
+  private localeBinding: vscode.Disposable | undefined;
   private stateDelivery: ReturnType<typeof createWebviewStateDelivery> | undefined;
   private webviewView: vscode.WebviewView | undefined;
   private disposed = false;
@@ -57,6 +59,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 
     this.disposeViewSubscriptions();
     this.webviewView = webviewView;
+    this.localeBinding = bindWebviewLocale(webviewView.webview);
     const modelSourcePreference = createModelSourcePreference(webviewView.webview);
     this.modelSourcePreference = modelSourcePreference;
     const webviewDistUri = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
@@ -184,6 +187,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       undefined,
       readWebviewBootTheme(),
       'main',
+      readWebviewLocale(),
     );
   }
 
@@ -198,6 +202,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
   }
 
   private disposeViewSubscriptions(): void {
+    this.localeBinding?.dispose();
+    this.localeBinding = undefined;
     this.modelSourcePreference?.dispose();
     this.modelSourcePreference = undefined;
     this.stateDelivery?.dispose();

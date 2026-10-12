@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
@@ -49,6 +50,7 @@ export function ModelPopover({
   id, settings, selection, modelCatalog, disabled, refreshDisabled = disabled,
   onRefresh, onUpdate,
 }: ModelPopoverProps): React.JSX.Element {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
   const [view, setView] = useState<'root' | 'spec'>('root');
@@ -100,7 +102,7 @@ export function ModelPopover({
         id={id}
         className="dvx-composer-popover dvx-model-popover"
         role="dialog"
-        aria-label="Reasoning effort"
+        aria-label={t("Reasoning effort")}
       >
         <div className="dvx-model-panel">
           <div className="dvx-panel-head">
@@ -111,7 +113,7 @@ export function ModelPopover({
               onClick={() => setEditingReasoning(false)}
             >
               <ChevronLeftIcon />
-              <span className="dvx-panel-title">Back to models</span>
+              <span className="dvx-panel-title">{t("Back to models")}</span>
             </Button>
           </div>
           <div className="dvx-reasoning-flyout">
@@ -134,7 +136,7 @@ export function ModelPopover({
       id={id}
       className="dvx-composer-popover dvx-model-popover"
       role="dialog"
-      aria-label={isSpecView ? 'Spec drafting model' : 'Model'}
+      aria-label={isSpecView ? t("Spec drafting model") : t("Model")}
       aria-busy={modelCatalog.status === 'loading'}
     >
       {modelCatalog.status === 'ready' ? (
@@ -145,17 +147,15 @@ export function ModelPopover({
                 <Button variant="plain" size="none"
                   type="button"
                   className="dvx-panel-back"
-                  aria-label="Back to model"
+                  aria-label={t("Back to model")}
                   onClick={() => goToView('root')}
                 >
                   <ChevronLeftIcon />
-                  <span className="dvx-panel-title">Spec drafting</span>
+                  <span className="dvx-panel-title">{t("Spec drafting")}</span>
                 </Button>
               </div>
             ) : null}
-            <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>
-              Search models
-            </label>
+            <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>{t("Search models")}</label>
             <div className="dvx-model-search-shell">
               <Search aria-hidden="true" />
               <Input
@@ -164,7 +164,7 @@ export function ModelPopover({
                 type="search"
                 autoFocus
                 value={query}
-                placeholder="Search models"
+                placeholder={t("Search models")}
                 autoComplete="off"
                 onChange={(event) => setQuery(event.currentTarget.value)}
               />
@@ -172,7 +172,7 @@ export function ModelPopover({
             <div
               className="dvx-model-list"
               role="list"
-              aria-label={isSpecView ? 'Spec drafting models' : 'Available models'}
+              aria-label={isSpecView ? t("Spec drafting models") : t("Available models")}
             >
               {isSpecView ? (
                 <>
@@ -184,7 +184,7 @@ export function ModelPopover({
                     <Button variant="plain" size="none"
                       type="button"
                       className="dvx-model-choice"
-                      aria-label="Same as session"
+                      aria-label={t("Same as session")}
                       disabled={disabled}
                       onClick={() => {
                         if (usesSessionModel) {
@@ -193,12 +193,12 @@ export function ModelPopover({
                         onUpdate({ field: 'specModeModelId', value: null });
                       }}
                     >
-                      <span className="dvx-model-name">Same as session</span>
+                      <span className="dvx-model-name">{t("Same as session")}</span>
                       {usesSessionModel ? (
                         <span className="dvx-model-effort-suffix">
                           {scopedReasoning === undefined
-                            ? 'Default'
-                            : formatReasoningLabel(scopedReasoning)}
+                            ? t("Default")
+                            : t(formatReasoningLabel(scopedReasoning))}
                         </span>
                       ) : null}
                     </Button>
@@ -207,7 +207,7 @@ export function ModelPopover({
                         <Button variant="plain" size="none"
                           type="button"
                           className="dvx-model-edit"
-                          aria-label="Edit reasoning for the session model"
+                          aria-label={t("Edit reasoning for the session model")}
                           disabled={
                             disabled ||
                             selected === undefined ||
@@ -228,7 +228,7 @@ export function ModelPopover({
               {filtered.map((model) => {
                 const isSelected = model.id === rowMatchId;
                 const modelLabel = model.displayName;
-                const modelDetails = `${modelLabel} (${model.id}) · ${model.isCustom ? 'BYOK' : '官方'} · ${model.supportsImages ? 'Images' : 'Text only'}${model.supportsImageGeneration ? ' · Image generation' : ''}${model.disabledReason ? ` · ${model.disabledReason}` : ''}`;
+                const modelDetails = `${modelLabel} (${model.id}) · ${model.isCustom ? 'BYOK' : t('官方')} · ${t(model.supportsImages ? 'Images' : 'Text only')}${model.supportsImageGeneration ? ` · ${t('Image generation')}` : ''}${model.disabledReason ? ` · ${model.disabledReason}` : ''}`;
                 return (
                   <div
                     key={model.id}
@@ -261,11 +261,11 @@ export function ModelPopover({
                       {isSelected ? (
                         <span className="dvx-model-effort-suffix">
                           {isSpecView && scopedReasoning === undefined
-                            ? 'Default'
-                            : formatReasoningLabel(scopedReasoning)}
+                            ? t("Default")
+                            : t(formatReasoningLabel(scopedReasoning))}
                         </span>
                       ) : null}
-                      {model.disabled ? <span className="dvx-model-source">Unavailable</span>
+                      {model.disabled ? <span className="dvx-model-source">{t("Unavailable")}</span>
                         : model.isCustom && sourceMode === 'mixed' && !isSelected ? <span className="dvx-model-source">BYOK</span> : null}
                     </Button>
                     {isSelected ? (
@@ -273,7 +273,7 @@ export function ModelPopover({
                         <Button variant="plain" size="none"
                           type="button"
                           className="dvx-model-edit"
-                          aria-label={`Edit reasoning for ${modelLabel}`}
+                          aria-label={t("Edit reasoning for {p0}", { p0: modelLabel })}
                           disabled={
                             disabled || model.disabled || model.supportedReasoningEfforts.length === 0
                           }
@@ -300,16 +300,16 @@ export function ModelPopover({
             <Button variant="plain" size="none"
               type="button"
               className="dvx-model-spec-row"
-              aria-label="Spec drafting"
-              title={`Spec drafting · ${specModelOverrideId === null ? 'Same as session' : getModelName(specModelOverrideId, modelCatalog)}`}
+              aria-label={t("Spec drafting")}
+              title={t("Spec drafting · {p0}", { p0: specModelOverrideId === null ? t("Same as session") : getModelName(specModelOverrideId, modelCatalog) })}
               disabled={disabled}
               onClick={() => goToView('spec')}
             >
-              <span className="dvx-model-spec-row-label">Spec</span>
+              <span className="dvx-model-spec-row-label">{t("Spec")}</span>
               <span className="dvx-model-spec-row-right">
                 <span className="dvx-model-spec-row-value">
                   {specModelOverrideId === null
-                    ? 'Session'
+                    ? t("Session")
                     : getModelName(specModelOverrideId, modelCatalog)}
                 </span>
                 <ChevronDownIcon />
@@ -319,9 +319,7 @@ export function ModelPopover({
       </div>}
       {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
       {disabled && settings?.status === 'ready' ? (
-        <p className="dvx-popover-message" role="status">
-          Model settings can be changed after the current turn.
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Model settings can be changed after the current turn.")}</p>
       ) : null}
     </div>
   );
@@ -341,10 +339,11 @@ function ReasoningEditor({
   readonly defaultOptionLabel?: string;
   readonly onSelect: (effort: SessionReasoningEffort | null) => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <>
-      <h3 className="dvx-reasoning-heading">Reasoning effort</h3>
-      <RadioGroup className="dvx-option-list" aria-label="Reasoning" disabled={disabled}
+      <h3 className="dvx-reasoning-heading">{t("Reasoning effort")}</h3>
+      <RadioGroup className="dvx-option-list" aria-label={t("Reasoning")} disabled={disabled}
         value={current ?? 'default'} onValueChange={(value) => onSelect(value === 'default' ? null : value as SessionReasoningEffort)}>
         {defaultOptionLabel !== undefined ? (
           <label
@@ -359,8 +358,8 @@ function ReasoningEditor({
             key={effort}
             className="dvx-option-row dvx-reasoning-option"
           >
-            <span className="dvx-reasoning-label">{formatReasoningLabel(effort)}{effort === model.defaultReasoningEffort ? ' (default)' : ''}</span>
-            <RadioGroupItem value={effort} aria-label={formatReasoningLabel(effort)} />
+            <span className="dvx-reasoning-label">{t(formatReasoningLabel(effort))}{effort === model.defaultReasoningEffort ? t("(default)") : ''}</span>
+            <RadioGroupItem value={effort} aria-label={t(formatReasoningLabel(effort))} />
           </label>
         ))}
       </RadioGroup>
@@ -379,6 +378,7 @@ function ModelCatalogStatus({
   readonly disabled: boolean;
   readonly onRefresh?: () => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const message =
     modelCatalog.status === 'loading'
       ? 'Loading available models…'
@@ -386,12 +386,12 @@ function ModelCatalogStatus({
   return (
     <>
       <div className="dvx-popover-heading">
-        <strong>Current model</strong>
+        <strong>{t("Current model")}</strong>
       </div>
       {current !== null ? (
         <dl className="dvx-current-model">
-          <Stat label="Model" value={formatModelId(current.modelId)} />
-          <Stat label="Reasoning" value={formatReasoningLabel(current.reasoningEffort)} />
+          <Stat label={t("Model")} value={formatModelId(current.modelId)} />
+          <Stat label={t("Reasoning")} value={t(formatReasoningLabel(current.reasoningEffort))} />
         </dl>
       ) : null}
       <p
@@ -406,9 +406,7 @@ function ModelCatalogStatus({
         <Button variant="ghost" size="sm" className="mx-2 mb-2"
           disabled={disabled || modelCatalog.status === 'loading'}
           onClick={onRefresh}>
-          <RefreshCw aria-hidden="true" />
-          Retry models
-        </Button>
+          <RefreshCw aria-hidden="true" />{t("Retry models")}</Button>
       ) : null}
     </>
   );

@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { renderMermaid } from '../content/mermaidRenderer';
 import { ChatLayout } from '@droidvisx/chat-ui/chat/ChatLayout';
 import type { TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
@@ -50,6 +51,7 @@ import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtoc
 import { getChatSurfaceCapabilities, type ChatSurfaceRole } from '../../shared/chatSurfacePolicy';
 
 export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; readonly role?: ChatSurfaceRole }) {
+  const { t } = useI18n();
   const [store] = useState(createChatStore);
   const transcript = useRef<TranscriptHandle>(null);
   // Stream text has its own subscriber; controls observe arrivals and domain state.
@@ -190,24 +192,24 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
             ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
               state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
         {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
-            {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>Mission</Button> : null}
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="New session" disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
+            {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
+            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
             <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label="打开 Droid 管理" title="管理" onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
+            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
         </div> : null}
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
         {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
         {statusMessage && !running && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
-          ? <p role="status" className="text-xs text-muted-foreground">{statusMessage}</p> : null}
+          ? <p role="status" className="text-xs text-muted-foreground">{t(statusMessage)}</p> : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
         {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
-          <span>Editing queued message</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>Cancel edit</Button>
+          <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
         </div>}
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           capabilities={capabilities}

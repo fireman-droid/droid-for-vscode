@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Copy, GitBranch, LoaderCircle, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -8,6 +9,7 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
   readonly completedAt?: number; readonly regenerate?: () => void; readonly fork?: () => void;
   readonly readOnly?: boolean; readonly diagnosticOnly?: boolean; readonly label?: string; readonly showTimestamp?: boolean;
 }) {
+  const { t } = useI18n();
   const { copyText, assistantName } = useUiEnvironment();
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -21,16 +23,16 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
       <div data-transcript-selection-exclude="" className="flex min-h-6 select-none items-center gap-0.5 text-[11px] text-muted-foreground [&_button]:size-6 [&_button]:p-0 [&_svg]:size-[13px] [&_.dvx-message-time]:pr-1.5 [&_.dvx-message-time]:text-[10.5px]">
         {showTime ? <MessageTimestamp completedAt={completedAt ?? null} /> : null}
         {showActions ? <>
-        <Button variant="ghost" size="icon-sm" aria-label={copied ? 'Copied reply' : 'Copy reply'} disabled={!replyText} onClick={() => {
+        <Button variant="ghost" size="icon-sm" aria-label={copied ? t("Copied reply") : t("Copy reply")} disabled={!replyText} onClick={() => {
           void copyText(replyText).then(() => {
             setCopied(true); setCopyError(false);
             if (reset.current) clearTimeout(reset.current);
             reset.current = setTimeout(() => setCopied(false), 1500);
           }, () => setCopyError(true));
         }}>{copied ? <Check /> : <Copy />}</Button>
-        {!readOnly && regenerate ? <ReplyAction label="Regenerate response" busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
-        {!readOnly && fork ? <ReplyAction label="Fork chat" busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
-        {copyError ? <span role="alert" className="text-destructive">Could not copy reply.</span> : null}
+        {!readOnly && regenerate ? <ReplyAction label={t("Regenerate response")} busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
+        {!readOnly && fork ? <ReplyAction label={t("Fork chat")} busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
+        {copyError ? <span role="alert" className="text-destructive">{t("Could not copy reply.")}</span> : null}
         </> : null}
       </div>
     ) : null}

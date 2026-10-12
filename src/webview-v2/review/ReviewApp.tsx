@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReviewFile } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
@@ -15,6 +16,7 @@ import { VirtualReviewFiles } from './VirtualReviewFiles';
 import { ReviewQuestions } from './ReviewQuestions';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
+  const { t } = useI18n();
   const flow = useReviewWorkbench(port);
   const { target, review, current, actions } = flow;
   const [split, setSplit] = useState(true);
@@ -72,20 +74,20 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     <ReviewToolbar flow={flow} split={split} onSplit={setSplit} showFiles={showFiles} onFiles={() => setShowFiles(value => !value)}
       onFind={() => { setShowFiles(true); setFindRequest(value => value + 1); }} onHunk={hunk} onCommit={() => setCommit(true)}
       allCollapsed={allCollapsed} onCollapse={() => setCollapsed(allCollapsed ? new Set() : new Set(filtered.map(file => file.path)))} />
-    {!valid ? target ? <div className="review-empty" role="status">This review target is no longer active. Reopen Review from the current Chat.</div>
+    {!valid ? target ? <div className="review-empty" role="status">{t("This review target is no longer active. Reopen Review from the current Chat.")}</div>
       : flow.error ? <div className="review-empty" role="alert">{flow.error}</div>
-        : <DroidLoading label="Connecting to the workspace…" /> : <>
+        : <DroidLoading label={t("Connecting to the workspace…")} /> : <>
       {flow.error ? <p className="review-error review-notice" role="alert">{flow.error}</p> : null}
-      {flow.scopePending ? <p className="review-notice" role="status">Loading comparison…{review ? ' The previous comparison remains visible.' : ''}</p> : null}
-      {flow.choosingBranch && !flow.scopePending && flow.branches && review?.scopeKind !== 'branch' ? <p className="review-notice" role="status">{flow.branches.refs.length ? 'Choose a base branch to compare local changes.' : 'No local branch references are available.'}</p> : null}
+      {flow.scopePending ? <p className="review-notice" role="status">{t("Loading comparison…")}{review ? t("The previous comparison remains visible.") : ''}</p> : null}
+      {flow.choosingBranch && !flow.scopePending && flow.branches && review?.scopeKind !== 'branch' ? <p className="review-notice" role="status">{flow.branches.refs.length ? t("Choose a base branch to compare local changes.") : t("No local branch references are available.")}</p> : null}
       {flow.operation?.ok && flow.operation.reviewScopeId === review?.reviewScopeId ? <p className="review-notice" role="status">{flow.operation.message}</p> : null}
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
-        <section className="review-code" aria-label="File comparisons">
+        <section className="review-code" aria-label={t("File comparisons")}>
           <div className="review-code-scroll review-stream" ref={scroll} onWheelCapture={() => { pendingReveal.current = null; }}>
             {target?.operation?.status === 'unavailable' ? <p className="review-empty">{OPERATION_UNAVAILABLE[target.operation.reason]}</p>
-              : !files.length ? <p className="review-empty">{flow.scopePending ? 'Reading comparison…' : 'No changes in this comparison.'}</p>
-              : !filtered.length ? <p className="review-empty">No matching files. <Button variant="link" size="sm" onClick={() => setFilters({ query: '', unreviewed: false })}>Clear filters</Button></p>
+              : !files.length ? <p className="review-empty">{flow.scopePending ? t("Reading comparison…") : t("No changes in this comparison.")}</p>
+              : !filtered.length ? <p className="review-empty">{t("No matching files.")} <Button variant="link" size="sm" onClick={() => setFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button></p>
               : <VirtualReviewFiles key={`${scopeKey}:${flow.context}:${allCollapsed}`} files={filtered} scroll={scroll} jump={jump} collapsed={collapsed} render={(entry, index) => <ReviewFileSection entry={entry} flow={flow} port={port} split={split}
                 open={!collapsed.has(entry.path)} onOpenChange={open => setCollapsed(previous => {
                   const next = new Set(previous); if (open) next.delete(entry.path); else next.add(entry.path); return next;
@@ -95,27 +97,27 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
         {showFiles ? <ReviewFiles side="right" files={files} selected={selectedPath} onSelect={selectFile} filters={filters} onFiltersChange={setFilters} /> : null}
       </div>
       <footer className="review-statusbar">
-        <span>{operation ? 'Recorded operation' : review?.lifecycle === 'writing' ? 'Live changes'
-          : review?.scopeKind === 'operations' ? 'Recorded edits · saved evidence'
-          : review?.recordedOnly ? 'Saved excerpts · turn snapshot unavailable' : review?.baselineLabel}</span>
-        {review && !operation ? <span>{review.reviewedCount} / {review.reviewableCount} reviewed</span> : null}
+        <span>{operation ? t("Recorded operation") : review?.lifecycle === 'writing' ? t("Live changes")
+          : review?.scopeKind === 'operations' ? t("Recorded edits · saved evidence")
+          : review?.recordedOnly ? t("Saved excerpts · turn snapshot unavailable") : review?.baselineLabel}</span>
+        {review && !operation ? <span>{review.reviewedCount} / {review.reviewableCount} {t("reviewed")}</span> : null}
       </footer>
-      {flow.agent ? <div className="review-agent-status" role="status">Agent Review: {flow.agent.status}. {flow.agent.message ?? 'Report opens in its independent session tab.'}
-        {flow.agent.reviewSessionId ? <Button variant="link" size="sm" onClick={() => port.postMessage({ type: 'reviewPanel.openAgent' })}>Open report</Button> : null}
+      {flow.agent ? <div className="review-agent-status" role="status">{t("Agent Review:")} {flow.agent.status}. {flow.agent.message ?? t("Report opens in its independent session tab.")}
+        {flow.agent.reviewSessionId ? <Button variant="link" size="sm" onClick={() => port.postMessage({ type: 'reviewPanel.openAgent' })}>{t("Open report")}</Button> : null}
       </div> : null}
     </>}
     <Dialog open={commit && valid} onOpenChange={setCommit}>
-      <DialogContent className="max-w-2xl border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Commit</DialogTitle><DialogDescription className="review-dialog-description">Choose the files to commit. Existing staged files require explicit selection.</DialogDescription>
+      <DialogContent className="max-w-2xl border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">{t("Commit")}</DialogTitle><DialogDescription className="review-dialog-description">{t("Choose the files to commit. Existing staged files require explicit selection.")}</DialogDescription>
         {target?.sessionId ? <ReviewCommit port={port} sessionId={target.sessionId} initialMode={review?.scopeKind === 'staged' ? 'staged' : 'files'} onClose={closeCommit} /> : null}
       </DialogContent>
     </Dialog>
     <Dialog open={!!flow.preview && flow.preview.reviewScopeId === review?.reviewScopeId && valid} onOpenChange={(open) => { if (!open) flow.setPreview(null); }}>
-      <DialogContent className="border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">Undo confirmed AI operations?</DialogTitle><DialogDescription className="review-dialog-description">Reverses recorded edits and deletes confirmed new files whose contents still match. Conversation history stays unchanged. Unsaved edits, conflicting content or incomplete evidence block undo.</DialogDescription>
-        {flow.preview ? <><ul className="review-restore-files">{flow.preview.restorable.map(path => <li key={path}>{path}{flow.preview!.deleted.includes(path) ? ' · delete new file' : ' · reverse edits'}</li>)}
+      <DialogContent className="border-[var(--panel-edge)]"><DialogTitle className="review-dialog-title">{t("Undo confirmed AI operations?")}</DialogTitle><DialogDescription className="review-dialog-description">{t("Reverses recorded edits and deletes confirmed new files whose contents still match. Conversation history stays unchanged. Unsaved edits, conflicting content or incomplete evidence block undo.")}</DialogDescription>
+        {flow.preview ? <><ul className="review-restore-files">{flow.preview.restorable.map(path => <li key={path}>{path}{flow.preview!.deleted.includes(path) ? t("· delete new file") : t("· reverse edits")}</li>)}
           {(flow.preview.issues ?? flow.preview.conflicted.map(path => ({ path, status: 'conflicted', reason: 'The file has conflicting changes.' }))).map(issue => <li key={issue.path} data-conflict="true">{issue.path} · {issue.reason}</li>)}
         </ul>
-          <div className="review-dialog-actions"><Button variant="ghost" onClick={() => flow.setPreview(null)}>Cancel</Button>
-            <Button disabled={!!flow.preview.conflicted.length || !!flow.preview.issues?.length || !flow.preview.restorable.length} onClick={() => actions.onConfirmRestore(flow.preview!.target, flow.preview!.previewId)}>Confirm undo</Button>
+          <div className="review-dialog-actions"><Button variant="ghost" onClick={() => flow.setPreview(null)}>{t("Cancel")}</Button>
+            <Button disabled={!!flow.preview.conflicted.length || !!flow.preview.issues?.length || !flow.preview.restorable.length} onClick={() => actions.onConfirmRestore(flow.preview!.target, flow.preview!.previewId)}>{t("Confirm undo")}</Button>
           </div></> : null}
       </DialogContent>
     </Dialog>

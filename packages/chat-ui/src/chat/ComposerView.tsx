@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEventHandler, type DragEventHandler, type KeyboardEventHandler, type ReactNode } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -53,6 +54,7 @@ export function ComposerView({
   suggestions, suggestionsOpen = false, onSuggestionsOpenChange, suggestionsListId, activeSuggestionId,
   onKeyDown, onPaste, onDrop, onDragOver, renderInputRow, onLayout,
 }: ComposerViewProps) {
+  const { t } = useI18n();
   const { assistantName } = useUiEnvironment();
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
@@ -94,10 +96,10 @@ export function ComposerView({
   }, [value, expanded, inputReplacement, placeholder, assistantName, onLayout]);
   const submit = () => { if (!sendDisabled) onSend(); };
   const editor = inputReplacement != null ? <div className="v2-composer-replacement">{inputReplacement}</div>
-    : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={`Message ${assistantName}`}
+    : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
     aria-controls={suggestionsOpen ? suggestionsListId : undefined} aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
-    placeholder={placeholder ?? `Message ${assistantName}`} rows={1} maxLength={maxLength} value={value}
+    placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} rows={1} maxLength={maxLength} value={value}
     onChange={(event) => onChange(event.target.value, event.target.selectionStart)}
     onKeyDown={(event) => {
       if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -111,8 +113,8 @@ export function ComposerView({
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
     }}
     onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px] focus-visible:ring-0" />;
-  const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={stopLabel} title={stopLabel} onClick={onStop}><Square className="size-3 fill-current" /></Button>
-    : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
+  const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={t(stopLabel)} title={t(stopLabel)} onClick={onStop}><Square className="size-3 fill-current" /></Button>
+    : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={t(sendLabel)} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>
     <PopoverAnchor asChild>
       <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragEnter={onDragOver} onDragOver={onDragOver}
@@ -122,7 +124,7 @@ export function ComposerView({
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}
-        {notice ? <p role="status" className="px-3 text-xs text-muted-foreground">{notice}</p> : null}
+        {notice ? <p role="status" className="px-3 text-xs text-muted-foreground">{t(notice)}</p> : null}
       </form>
     </PopoverAnchor>
     {suggestionsOpen ? suggestions : null}

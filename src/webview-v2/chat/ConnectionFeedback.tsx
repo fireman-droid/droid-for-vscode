@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Unplug } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
@@ -118,6 +119,7 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
   readonly handshakeTimedOut: boolean;
   readonly connection: AssistantWebviewState['connection'];
 }) {
+  const { t } = useI18n();
   const failed = connection.status === 'unavailable';
   const label = failed ? 'Unable to connect.'
     : handshakeTimedOut ? 'Connection timed out.'
@@ -127,7 +129,7 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
     <p role={failed ? 'alert' : 'status'} className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
       {failed ? <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
         : <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />}
-      <span>{label}</span>
+      <span>{t(label)}</span>
     </p>
   </div>;
 }

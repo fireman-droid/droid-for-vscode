@@ -1,3 +1,4 @@
+import { translate, type Translate } from '@droidvisx/chat-ui/i18n';
 import {
   activeActivityIndex,
   summarizeActivityGroup,
@@ -46,6 +47,7 @@ export function presentActivity({
   incomplete,
   turnId,
   waiting,
+  t = (message, params) => translate('en', message, params),
 }: {
   readonly members: readonly GroupCandidatePart[];
   readonly messageRunning: boolean;
@@ -53,8 +55,9 @@ export function presentActivity({
   readonly incomplete: string | null;
   readonly turnId: string | null;
   readonly waiting: ProcessWaiting | null;
+  readonly t?: Translate;
 }) {
-  const summary = summarizeActivityGroup(members);
+  const summary = summarizeActivityGroup(members, t);
   const summaryLabel = [summary.countsLabel, ...summary.resultFacts].filter(Boolean).join(' · ');
   const wait =
     incomplete === null && messageRunning && tail && waiting?.turnId === turnId
@@ -82,21 +85,21 @@ export function presentActivity({
   }
   const facts: string[] = [];
   const failed = summary.failedCount > 0 || (tail && incomplete === 'error');
-  if (summary.failedCount > 0) facts.push(`${summary.failedCount} failed`);
-  else if (failed) facts.push('failed');
+  if (summary.failedCount > 0) facts.push(t('{count} failed', { count: summary.failedCount }));
+  else if (failed) facts.push(t('failed'));
   if (summary.stoppedCount > 0 || (tail && incomplete === 'cancelled'))
-    facts.push('stopped');
-  if (summary.truncated) facts.push('reasoning truncated');
+    facts.push(t('stopped'));
+  if (summary.truncated) facts.push(t('reasoning truncated'));
   if (summary.resultTruncatedCount > 0)
     facts.push(
-      `${summary.resultTruncatedCount} result${summary.resultTruncatedCount === 1 ? '' : 's'} truncated`,
+      t(summary.resultTruncatedCount === 1 ? '{count} result truncated' : '{count} results truncated', { count: summary.resultTruncatedCount }),
     );
   if (wait !== null && summary.runningToolCount > 0)
     facts.push(
-      `${summary.runningToolCount} tool${summary.runningToolCount === 1 ? '' : 's'} running`,
+      t(summary.runningToolCount === 1 ? '{count} tool running' : '{count} tools running', { count: summary.runningToolCount }),
     );
   else if (running && summary.runningToolCount > 1)
-    facts.push(`${summary.runningToolCount - 1} other running`);
+    facts.push(t('{count} other running', { count: summary.runningToolCount - 1 }));
   return {
     running,
     action,

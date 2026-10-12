@@ -49,71 +49,71 @@
     "commands": [
       {
         "command": "droidvisx.openManagement",
-        "title": "Droid: Open Management"
+        "title": "%droidvisx.openManagement.title%"
       },
       {
         "command": "droidvisx.manageCapabilities",
-        "title": "Droid: Manage Droid Capabilities"
+        "title": "%droidvisx.manageCapabilities.title%"
       },
       {
         "command": "droidvisx.openReview",
-        "title": "Droid: Review Changes"
+        "title": "%droidvisx.openReview.title%"
       },
       {
         "command": "droidvisx.focusView",
-        "title": "Droid: Open Chat"
+        "title": "%droidvisx.focusView.title%"
       },
       {
         "command": "droidvisx.openLogs",
-        "title": "Droid: Open Logs"
+        "title": "%droidvisx.openLogs.title%"
       },
       {
         "command": "droidvisx.exportDiagnostics",
-        "title": "Droid: Export Diagnostics Bundle"
+        "title": "%droidvisx.exportDiagnostics.title%"
       },
       {
         "command": "droidvisx.shutdownDaemon",
-        "title": "Droid: Shut Down Background Daemon"
+        "title": "%droidvisx.shutdownDaemon.title%"
       },
       {
         "command": "droidvisx.exportSessionMarkdown",
-        "title": "Droid: Export Session as Markdown"
+        "title": "%droidvisx.exportSessionMarkdown.title%"
       },
       {
         "command": "droidvisx.openMissionControl",
-        "title": "Droid: Open Mission Control"
+        "title": "%droidvisx.openMissionControl.title%"
       },
       {
         "command": "droidvisx.openModels",
-        "title": "Droid: Manage Models"
+        "title": "%droidvisx.openModels.title%"
       },
       {
         "command": "droidvisx.startBrowserDevClient",
-        "title": "Droid: Start Browser Dev Client"
+        "title": "%droidvisx.startBrowserDevClient.title%"
       },
       {
         "command": "droidvisx.stopBrowserDevClient",
-        "title": "Droid: Stop Browser Dev Client"
+        "title": "%droidvisx.stopBrowserDevClient.title%"
       },
       {
         "command": "droidvisx.autocomplete.configure",
-        "title": "Droid: Configure Autocomplete"
+        "title": "%droidvisx.autocomplete.configure.title%"
       },
       {
         "command": "droidvisx.autocomplete.toggle",
-        "title": "Droid: Toggle Autocomplete"
+        "title": "%droidvisx.autocomplete.toggle.title%"
       },
       {
         "command": "droidvisx.autocomplete.trigger",
-        "title": "Droid: Request Code Completion"
+        "title": "%droidvisx.autocomplete.trigger.title%"
       },
       {
         "command": "droidvisx.autocomplete.nextEdit.acceptOrJump",
-        "title": "Droid: Next Edit - Accept or Jump"
+        "title": "%droidvisx.autocomplete.nextEdit.acceptOrJump.title%"
       },
       {
         "command": "droidvisx.autocomplete.nextEdit.dismiss",
-        "title": "Droid: Next Edit - Dismiss"
+        "title": "%droidvisx.autocomplete.nextEdit.dismiss.title%"
       }
     ],
     "viewsContainers": {
@@ -137,6 +137,24 @@
     "configuration": {
       "title": "Droid",
       "properties": {
+        "droidvisx.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "zh-CN",
+            "zh-TW"
+          ],
+          "enumDescriptions": [
+            "%droidvisx.language.enum.0%",
+            "%droidvisx.language.enum.1%",
+            "%droidvisx.language.enum.2%",
+            "%droidvisx.language.enum.3%"
+          ],
+          "default": "auto",
+          "scope": "application",
+          "description": "%droidvisx.language.description%"
+        },
         "droidvisx.runtime.mode": {
           "type": "string",
           "enum": [
@@ -144,17 +162,17 @@
             "daemon"
           ],
           "enumDescriptions": [
-            "Each window runs its own droid subprocess.",
-            "Sessions run over a persistent local droid daemon connection, so tasks survive window reloads (default)."
+            "%droidvisx.runtime.mode.enum.0%",
+            "%droidvisx.runtime.mode.enum.1%"
           ],
           "default": "daemon",
-          "description": "How the extension runs Droid sessions. Changing this requires a window reload. Daemon is strict by default; per-window subprocesses are used only when Process is explicitly selected."
+          "description": "%droidvisx.runtime.mode.description%"
         },
         "droidvisx.browserDev.sourceRoot": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Absolute path to the Droid source repository used by the Browser Dev Client. Development hosts fall back to their extension source path."
+          "description": "%droidvisx.browserDev.sourceRoot.description%"
         },
         "droidvisx.theme": {
           "type": "string",
@@ -164,18 +182,18 @@
             "dark"
           ],
           "enumDescriptions": [
-            "Follow the editor's color theme (default).",
-            "Always use the warm light theme.",
-            "Always use the dark theme."
+            "%droidvisx.theme.enum.0%",
+            "%droidvisx.theme.enum.1%",
+            "%droidvisx.theme.enum.2%"
           ],
           "default": "auto",
-          "description": "Color theme for the Droid panel. Takes effect immediately."
+          "description": "%droidvisx.theme.description%"
         },
         "droidvisx.reviewQuestion.modelId": {
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "Model for inline questions in Review Changes. Leave empty to follow the main chat. Configure this in Droid Management > General > Code review questions."
+          "description": "%droidvisx.reviewQuestion.modelId.description%"
         },
         "droidvisx.modelSource": {
           "type": "string",
@@ -185,31 +203,31 @@
             "mixed"
           ],
           "enumDescriptions": [
-            "Show Factory-managed models.",
-            "Show custom models configured with your own API keys.",
-            "Show both Factory-managed and custom models (default)."
+            "%droidvisx.modelSource.enum.0%",
+            "%droidvisx.modelSource.enum.1%",
+            "%droidvisx.modelSource.enum.2%"
           ],
           "default": "mixed",
           "scope": "application",
-          "description": "Model sources shown in Droid model selectors. Takes effect immediately and does not change the active model."
+          "description": "%droidvisx.modelSource.description%"
         },
         "droidvisx.autocomplete.enabled": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "description": "Enable editor gray-text completions. Sends bounded cursor context and, when enabled, relevant workspace snippets to the configured provider. Independent of Droid chat; requires a trusted workspace."
+          "description": "%droidvisx.autocomplete.enabled.description%"
         },
         "droidvisx.autocomplete.endpoint": {
           "type": "string",
           "default": "https://api.mistral.ai/v1/fim/completions",
           "scope": "application",
-          "description": "Complete FIM, SiliconFlow, Ollama or Mercury Next Edit endpoint URL. Service presets store API keys in SecretStorage."
+          "description": "%droidvisx.autocomplete.endpoint.description%"
         },
         "droidvisx.autocomplete.model": {
           "type": "string",
           "default": "codestral-latest",
           "scope": "application",
-          "description": "FIM-capable model ID on the configured provider. Independent of the chat model."
+          "description": "%droidvisx.autocomplete.model.description%"
         },
         "droidvisx.autocomplete.debounceMs": {
           "type": "number",
@@ -217,7 +235,7 @@
           "minimum": 100,
           "maximum": 2000,
           "scope": "resource",
-          "description": "Wait after typing before requesting a completion. Manual requests skip this wait."
+          "description": "%droidvisx.autocomplete.debounceMs.description%"
         },
         "droidvisx.autocomplete.maxContextCharacters": {
           "type": "number",
@@ -225,7 +243,7 @@
           "minimum": 1000,
           "maximum": 32000,
           "scope": "resource",
-          "description": "Maximum UTF-16 text units in the complete request: current-file prefix/suffix plus related snippets and their headers."
+          "description": "%droidvisx.autocomplete.maxContextCharacters.description%"
         },
         "droidvisx.autocomplete.maxTokens": {
           "type": "number",
@@ -233,7 +251,7 @@
           "minimum": 32,
           "maximum": 1024,
           "scope": "resource",
-          "description": "Maximum number of generated completion tokens per request."
+          "description": "%droidvisx.autocomplete.maxTokens.description%"
         },
         "droidvisx.autocomplete.excludePatterns": {
           "type": "array",
@@ -247,7 +265,7 @@
             "**/{.git,node_modules,dist,build,vendor}/**"
           ],
           "scope": "resource",
-          "description": "Glob patterns excluded from completion context. Related files also respect workspace .gitignore and .droidignore. Clipboard and chat history are never read."
+          "description": "%droidvisx.autocomplete.excludePatterns.description%"
         },
         "droidvisx.autocomplete.protocol": {
           "type": "string",
@@ -258,50 +276,50 @@
             "mercury-edit"
           ],
           "enumDescriptions": [
-            "Native FIM endpoint using prompt and suffix with an SSE response.",
-            "Ollama /api/generate using prompt and suffix with an NDJSON response.",
-            "SiliconFlow prefix/suffix FIM extension on /v1/chat/completions with an SSE response.",
-            "Mercury Next Edit: predict replacements using editable regions and recent edit history."
+            "%droidvisx.autocomplete.protocol.enum.0%",
+            "%droidvisx.autocomplete.protocol.enum.1%",
+            "%droidvisx.autocomplete.protocol.enum.2%",
+            "%droidvisx.autocomplete.protocol.enum.3%"
           ],
           "default": "fim",
           "scope": "application",
-          "description": "Wire protocol for the configured model: ordinary FIM or Mercury Next Edit. Use the service preset to configure a compatible endpoint and model."
+          "description": "%droidvisx.autocomplete.protocol.description%"
         },
         "droidvisx.autocomplete.relatedFiles": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Include bounded snippets from definitions, recent edits and open files in the same workspace folder. Respects .gitignore, .droidignore and exclusions. Disable for current-file-only context."
+          "description": "%droidvisx.autocomplete.relatedFiles.description%"
         },
         "droidvisx.autocomplete.adaptiveDebounce": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Adapt the typing delay to recent response latency (150-1000 ms). Disable to use debounceMs."
+          "description": "%droidvisx.autocomplete.adaptiveDebounce.description%"
         },
         "droidvisx.autocomplete.includeClipboard": {
           "type": "boolean",
           "default": false,
           "scope": "application",
-          "description": "Opt in to including up to 4000 characters of clipboard text in ordinary completion context. Sent to the configured provider. Disabled by default."
+          "description": "%droidvisx.autocomplete.includeClipboard.description%"
         },
         "droidvisx.autocomplete.staticContext": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "description": "Use Kilo static syntax context analysis in addition to imports, recent edits and viewed files. Requires relatedFiles."
+          "description": "%droidvisx.autocomplete.staticContext.description%"
         },
         "droidvisx.autocomplete.autoTrigger": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Request suggestions automatically while typing. Disable to use Droid: Request Code Completion manually."
+          "description": "%droidvisx.autocomplete.autoTrigger.description%"
         },
         "droidvisx.autocomplete.snoozeUntil": {
           "type": "number",
           "default": 0,
           "scope": "application",
-          "description": "Pause automatic suggestions until this Unix timestamp in milliseconds. Set from the Droid Tab status menu."
+          "description": "%droidvisx.autocomplete.snoozeUntil.description%"
         }
       }
     },

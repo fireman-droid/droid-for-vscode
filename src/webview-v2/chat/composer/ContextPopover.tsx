@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 // Context-usage popover in Cursor's Context Usage form (spec §3.2,
 // 需求 4): a title row with quiet icon actions, one summary line
 // ("12% Full" · "~115.6K / 1M Tokens"), a segmented category bar over
@@ -53,22 +54,23 @@ export function ContextPopover({
   /** Cursor's top-right ×; omitted hosts fall back to Esc/outside. */
   readonly onClose?: () => void;
 }): React.JSX.Element {
+  const { t } = useI18n();
   return (
     <div
       id={id}
       className="dvx-composer-popover dvx-context-popover"
       role="dialog"
-      aria-label="Context usage"
+      aria-label={t("Context usage")}
       aria-busy={context.status === 'loading'}
     >
       <div className="dvx-context-head">
-        <span className="dvx-context-head-title">Context Usage</span>
+        <span className="dvx-context-head-title">{t("Context Usage")}</span>
         <div className="dvx-context-head-actions">
           <Button variant="plain" size="none"
             type="button"
             className="dvx-context-icon-button"
-            aria-label="Refresh"
-            title={context.status === 'loading' ? 'Refreshing…' : 'Refresh'}
+            aria-label={t("Refresh")}
+            title={context.status === 'loading' ? t("Refreshing…") : t("Refresh")}
             disabled={disabled}
             onClick={onRefresh}
           >
@@ -78,7 +80,7 @@ export function ContextPopover({
             <Button variant="plain" size="none"
               type="button"
               className="dvx-context-icon-button"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={onClose}
             >
               <CloseIcon />
@@ -89,9 +91,7 @@ export function ContextPopover({
       {context.value !== null ? (
         <ContextUsage stats={context.value} usage={tokenUsage} />
       ) : context.status === 'loading' ? (
-        <p className="dvx-popover-message" role="status">
-          Loading context usage…
-        </p>
+        <p className="dvx-popover-message" role="status">{t("Loading context usage…")}</p>
       ) : null}
       {context.status === 'error' ? (
         <p className="dvx-popover-message dvx-error-text" role="alert">
@@ -102,18 +102,16 @@ export function ContextPopover({
         <Button variant="plain" size="none"
           type="button"
           className="dvx-context-compact-button"
-          title="Summarizes earlier messages to free up context."
+          title={t("Summarizes earlier messages to free up context.")}
           disabled={disabled || compactPending}
           aria-busy={compactPending}
           onClick={compactPending ? undefined : onCompact}
         >
           {compactPending ? (
             <>
-              <span className="dvx-compact-spinner" aria-hidden="true" />
-              Compacting…
-            </>
+              <span className="dvx-compact-spinner" aria-hidden="true" />{t("Compacting…")}</>
           ) : (
-            'Compact conversation'
+            t("Compact conversation")
           )}
         </Button>
       </div> : null}
@@ -128,12 +126,10 @@ function ContextUsage({
   readonly stats: NonNullable<SessionContextState['value']>;
   readonly usage: SessionTokenUsageState | undefined;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const estimateNote =
     stats.estimatedTokens === undefined ? null : (
-      <p className="dvx-context-usage-note">
-        Estimated content size: ~{formatCompactTokens(stats.estimatedTokens)} tokens. This
-        character-based estimate is separate from compaction progress.
-      </p>
+      <p className="dvx-context-usage-note">{t("Estimated content size: ~")}{formatCompactTokens(stats.estimatedTokens)} {t("tokens. This character-based estimate is separate from compaction progress.")}</p>
     );
   if (stats.availability === 'unavailable') {
     const detail =
@@ -147,8 +143,8 @@ function ContextUsage({
         <div className="dvx-context-usage-summary">
           <strong>
             {stats.reason === 'awaiting-usage'
-              ? 'Waiting for model usage'
-              : 'Compaction progress unavailable'}
+              ? t("Waiting for model usage")
+              : t("Compaction progress unavailable")}
           </strong>
         </div>
         <p className="dvx-context-usage-note">{detail}</p>
@@ -177,15 +173,14 @@ function ContextUsage({
   return (
     <div className="dvx-context-usage">
       <div className="dvx-context-usage-summary">
-        <strong>{percentLabel} to compaction</strong>
+        <strong>{percentLabel} {t("to compaction")}</strong>
         <span>
-          ~{formatCompactTokens(stats.used)} / {formatCompactTokens(stats.limit)} Tokens
-        </span>
+          ~{formatCompactTokens(stats.used)} / {formatCompactTokens(stats.limit)} {t("Tokens")}</span>
       </div>
       <div
         className="dvx-context-bar"
         role="progressbar"
-        aria-label="Compaction progress"
+        aria-label={t("Compaction progress")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={roundedPercent}
@@ -202,15 +197,13 @@ function ContextUsage({
         />
       </div>
       <p className="dvx-context-usage-note"
-        title="Based on the last model response, adjusted like the Droid CLI meter. Automatic compaction is controlled by Droid.">
-        Last response · Auto-compaction by Droid
-      </p>
+        title={t("Based on the last model response, adjusted like the Droid CLI meter. Automatic compaction is controlled by Droid.")}>{t("Last response · Auto-compaction by Droid")}</p>
       {estimateNote}
       {legend.length === 0 ? null : (
         <ul
           className="dvx-context-legend"
           aria-label={
-            usage?.cumulative ? 'Session token totals' : 'Last turn token totals'
+            usage?.cumulative ? t("Session token totals") : t("Last turn token totals")
           }
         >
           {legend.map((category) => (
@@ -220,7 +213,7 @@ function ContextUsage({
               title={
                 lastTurn === null
                   ? undefined
-                  : `Last turn: ${formatCount(lastTurn[category.field])}`
+                  : t("Last turn: {p0}", { p0: formatCount(lastTurn[category.field]) })
               }
             >
               <span
@@ -237,7 +230,7 @@ function ContextUsage({
           {credits > 0 ? (
             <li className="dvx-context-legend-row dvx-context-legend-credits">
               <span className="dvx-context-legend-swatch" aria-hidden="true" />
-              <span className="dvx-context-legend-label">Credits</span>
+              <span className="dvx-context-legend-label">{t("Credits")}</span>
               <span className="dvx-context-legend-value">{formatCredits(credits)}</span>
             </li>
           ) : null}
@@ -246,8 +239,8 @@ function ContextUsage({
       {breakdown !== null ? (
         <p className="dvx-context-usage-note">
           {usage?.cumulative
-            ? 'Token counts above are session totals, not current compaction usage.'
-            : 'Token counts above are from the last turn, not current compaction usage.'}
+            ? t("Token counts above are session totals, not current compaction usage.")
+            : t("Token counts above are from the last turn, not current compaction usage.")}
         </p>
       ) : null}
     </div>

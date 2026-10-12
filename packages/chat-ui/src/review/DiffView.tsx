@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
 import { useDiffSyntax } from '../syntax/diffSyntax';
@@ -87,6 +88,7 @@ function textColumns(text: string): number {
 }
 
 function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivElement | null>; before: number; after: number }) {
+  const { t } = useI18n();
   const scrollbars = useRef<Array<HTMLDivElement | null>>([]);
   useSplitDiffDragScroll(root, scrollbars);
   useEffect(() => {
@@ -115,7 +117,7 @@ function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivEleme
   }, [root, before, after]);
   return <div className="review-split-scrollbars">{(['before', 'after'] as const).map((side, index) => <div key={side}>
     <div ref={(element) => { scrollbars.current[index] = element; }} className="review-split-scrollbar"
-      role="region" aria-label={`Scroll ${side} code horizontally`} tabIndex={0}
+      role="region" aria-label={t("Scroll {p0} code horizontally", { p0: side })} tabIndex={0}
       onScroll={(event) => root.current?.style.setProperty(`--diff-${side}-scroll`, `${-event.currentTarget.scrollLeft}px`)}>
       <div className="review-split-track" style={{ width: `calc(${side === 'before' ? before : after}ch + 16px)` }} />
     </div>
@@ -124,6 +126,7 @@ function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivEleme
 export const DiffView = memo(function DiffView({ patch, path, split = false, limit, source, questionKey = '' }: {
   patch: string; path: string; split?: boolean; limit?: number; source?: DiffSyntaxSource; questionKey?: string;
 }) {
+  const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
   const lines = useMemo(() => limit === undefined ? all : all.slice(0, limit), [all, limit]);
@@ -150,7 +153,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
     {...selection}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
-    role="region" aria-label={`Diff for ${path}`} tabIndex={0}>
+    role="region" aria-label={t("Diff for {p0}", { p0: path })} tabIndex={0}>
     {syntax.error ? <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block

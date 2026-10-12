@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import type { SideConversation } from './sideChat';
 import { DroidActivity } from '../ui/droid-motion';
 import { AssistantMessage } from './AssistantMessage';
@@ -9,6 +10,7 @@ const PROGRESS_LABELS = {
 };
 
 export function SideReply({ entry, preparing }: { readonly entry: SideConversation['entries'][number]; readonly preparing: boolean }) {
+  const { t } = useI18n();
   const running = entry.state === 'streaming';
   const progress = entry.progress ?? (entry.answer ? 'answering' : 'waiting');
   const thinking = running && progress === 'thinking';
@@ -20,7 +22,7 @@ export function SideReply({ entry, preparing }: { readonly entry: SideConversati
     {entry.answer ? <AssistantMessage text={entry.answer} streaming={running} /> : null}
     {running && !preparing && !thinking ? <p role="status" aria-live="polite" className="v2-btw-progress">
       <DroidActivity phase={progress === 'waiting' ? 'loading' : 'working'} />
-      {PROGRESS_LABELS[progress]}
+      {t(PROGRESS_LABELS[progress])}
     </p> : null}
   </ReplyView>;
 }

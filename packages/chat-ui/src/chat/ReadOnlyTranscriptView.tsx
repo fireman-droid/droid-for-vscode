@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
@@ -17,6 +18,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
   readonly truncated?: boolean;
   readonly renderMessage: (id: string, stopFollowing: () => void) => ReactNode;
 }) {
+  const { t } = useI18n();
   const viewport = useRef<HTMLDivElement>(null), content = useRef<HTMLDivElement>(null);
   const scrolling = useTranscriptScroll(viewport, content, null, 0);
   const leading = useRef<HTMLDivElement>(null);
@@ -47,10 +49,10 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
     (instance.itemSizeCache.has(item.key) ? item.end <= (instance.scrollOffset ?? 0) : item.start < (instance.scrollOffset ?? 0));
   const visible = virtualizer.getVirtualItems();
   return <div className="relative flex min-h-0 flex-col overflow-hidden">
-    <div ref={viewport} aria-label="Read-only session transcript" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">
+    <div ref={viewport} aria-label={t("Read-only session transcript")} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">
       <div ref={content} className="v2-chat-rail min-h-full pb-3 pt-5">
         <div ref={leading} className="flow-root">
-          {truncated ? <p role="note" className="mb-4 border-b border-[var(--panel-edge)] pb-2 text-center text-[11px] text-muted-foreground">Older transcript items were omitted.</p> : null}
+          {truncated ? <p role="note" className="mb-4 border-b border-[var(--panel-edge)] pb-2 text-center text-[11px] text-muted-foreground">{t("Older transcript items were omitted.")}</p> : null}
         </div>
         <ProcessPresentationProvider messageIds={ids} followingRef={scrolling.follow}>
           <div style={{ paddingTop: Math.max(0, (visible[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((visible.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
@@ -64,7 +66,7 @@ export function ReadOnlyTranscriptView({ messages, truncated = false, renderMess
         </ProcessPresentationProvider>
       </div>
     </div>
-    {scrolling.away ? <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label="Scroll to bottom"
+    {scrolling.away ? <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")}
       className="absolute bottom-3 right-4 rounded-full" onClick={() => scrolling.scrollToBottom()}><ArrowDown /></Button> : null}
   </div>;
 }

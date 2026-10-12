@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { AssistantWebviewState } from '../state/types';
 import { createTurnId } from '../host/chatIntent';
@@ -110,6 +111,7 @@ export function ComposerSuggestions({ suggestions, state }: {
   readonly suggestions: ReturnType<typeof useComposerSuggestions>;
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands'>;
 }) {
+  const { t } = useI18n();
   const list = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ name: string; mode: 'hover' | 'pinned' } | null>(null);
   useEffect(() => {
@@ -128,14 +130,14 @@ export function ComposerSuggestions({ suggestions, state }: {
   return <PopoverContent side="top" sideOffset={6} className="w-[var(--radix-popover-trigger-width,320px)] p-1"
     onOpenAutoFocus={(event) => event.preventDefault()} onCloseAutoFocus={(event) => event.preventDefault()}
     onInteractOutside={(event) => { if (event.target instanceof Element && event.target.closest('[data-composer-input], [data-suggestion-preview]')) event.preventDefault(); }}>
-    <div ref={list} id={suggestions.listId} role="listbox" aria-label={slash !== null ? 'Droid commands' : 'Attach workspace file'} className="max-h-60 overflow-auto">
+    <div ref={list} id={suggestions.listId} role="listbox" aria-label={slash !== null ? t("Droid commands") : t("Attach workspace file")} className="max-h-60 overflow-auto">
       {slash !== null ? matches.entries.map((entry, index) => {
         const name = entry.kind === 'command' ? entry.command.name : entry.name;
         const description = entry.kind === 'command' ? entry.command.description : entry.description;
         const previous = matches.entries[index - 1];
         const group = (value: SlashEntry) => value.kind === 'nav' ? 'builtin' : value.kind;
         return <div key={`${entry.kind}:${name}`}>
-          {previous === undefined || group(previous) !== group(entry) ? <p className="px-2 py-1 text-[10px] text-muted-foreground">{entry.kind === 'command' ? 'Commands (.factory/commands)' : entry.kind === 'skill' ? 'Skills (inserts a prompt)' : 'Built-in'}</p> : null}
+          {previous === undefined || group(previous) !== group(entry) ? <p className="px-2 py-1 text-[10px] text-muted-foreground">{entry.kind === 'command' ? t("Commands (.factory/commands)") : entry.kind === 'skill' ? t("Skills (inserts a prompt)") : t("Built-in")}</p> : null}
           {entry.kind === 'skill' && description ? <SkillSuggestion id={`${suggestions.listId}-${index}`}
             name={name} description={description} selected={index === activeIndex}
             preview={preview?.name === name ? preview.mode : null}
@@ -150,7 +152,7 @@ export function ComposerSuggestions({ suggestions, state }: {
           </Button>}
         </div>;
       }) : <>
-        {mention?.query === '' && results.length > 0 ? <p className="px-2 py-1 text-[10px] text-muted-foreground">Open editors</p> : null}
+        {mention?.query === '' && results.length > 0 ? <p className="px-2 py-1 text-[10px] text-muted-foreground">{t("Open editors")}</p> : null}
         {results.map((path, index) => {
           const split = splitMentionPath(path);
           return <Button key={path} variant="plain" size="none" id={`${suggestions.listId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} title={path}
@@ -159,13 +161,13 @@ export function ComposerSuggestions({ suggestions, state }: {
             <span className="truncate">{split.name}</span><span className="min-w-0 truncate text-muted-foreground">{split.directory}</span>
           </Button>;
         })}
-        {results.length === 0 ? <p role="status" className="p-2 text-xs text-muted-foreground">{searchPending ? 'Searching files…'
-          : state.fileSearch?.status === 'no-workspace' ? 'No folder is open in this window.'
-          : mention?.query === '' ? 'No open editors — type to search files' : 'No matching files'}</p> : null}
+        {results.length === 0 ? <p role="status" className="p-2 text-xs text-muted-foreground">{searchPending ? t("Searching files…")
+          : state.fileSearch?.status === 'no-workspace' ? t("No folder is open in this window.")
+          : mention?.query === '' ? t("No open editors — type to search files") : t("No matching files")}</p> : null}
       </>}
       {slash !== null && matches.commandMatches.length === 0 && (slash.query === '' || matches.entries.length === 0) ? <p role="status" className="p-2 text-xs text-muted-foreground">
-        {state.commands.status === 'loading' ? 'Loading commands…' : state.commands.status === 'error' ? state.commands.message
-          : slash.query === '' ? 'No custom commands (.factory/commands)' : 'No matching commands'}
+        {state.commands.status === 'loading' ? t("Loading commands…") : state.commands.status === 'error' ? state.commands.message
+          : slash.query === '' ? t("No custom commands (.factory/commands)") : t("No matching commands")}
       </p> : null}
     </div>
   </PopoverContent>;

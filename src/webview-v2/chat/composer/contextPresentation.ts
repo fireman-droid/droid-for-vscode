@@ -1,4 +1,5 @@
 import type { SessionContextState } from '../../../shared/protocol/settings';
+import { translate, type Translate } from '@droidvisx/chat-ui/i18n';
 
 /** Compact token counts, with at most one decimal and no trailing zero. */
 export function formatCompactTokens(value: number): string {
@@ -21,14 +22,14 @@ export function getContextPercent(context: SessionContextState): number {
   return Math.min(100, Math.round((context.value.used / context.value.limit) * 100));
 }
 
-export function getContextLabel(context: SessionContextState): string {
+export function getContextLabel(context: SessionContextState, t: Translate = (message, params) => translate('en', message, params)): string {
   if (context.value === null) {
-    return context.status === 'loading' ? 'Compaction progress loading' : 'Compaction progress unavailable';
+    return t(context.status === 'loading' ? 'Compaction progress loading' : 'Compaction progress unavailable');
   }
   if (!hasUsableContextRatio(context.value)) {
-    return context.value.reason === 'awaiting-usage' ? 'Waiting for model usage' : 'Compaction progress unavailable';
+    return t(context.value.reason === 'awaiting-usage' ? 'Waiting for model usage' : 'Compaction progress unavailable');
   }
-  return `Compaction progress: ${context.value.used.toLocaleString()} of ${context.value.limit.toLocaleString()} adjusted tokens`;
+  return t('Compaction progress: {used} of {limit} adjusted tokens', { used: context.value.used.toLocaleString(), limit: context.value.limit.toLocaleString() });
 }
 
 export function hasUsableContextRatio(

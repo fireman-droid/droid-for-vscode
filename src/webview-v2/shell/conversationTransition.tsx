@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type StoreHostMessage } from '../state/types';
@@ -210,6 +211,7 @@ function ConversationTransitionOverlay({
 }: {
   readonly phase: Exclude<TransitionPhase, 'boot-pending' | 'idle'>;
 }): React.JSX.Element {
+  const { t } = useI18n();
   const restoring = phase === 'restoring';
   return (
     <div
@@ -220,10 +222,10 @@ function ConversationTransitionOverlay({
     >
       <DroidSignalGrid />
       <span className="dvx-conversation-transition-label">
-        {restoring ? 'Restoring conversation' : 'Switching conversation'}
+        {restoring ? t("Restoring conversation") : t("Switching conversation")}
       </span>
       <span className="dvx-conversation-transition-copy">
-        {restoring ? 'Loading saved state' : 'Droid is reconnecting the thread'}
+        {restoring ? t("Loading saved state") : t("Droid is reconnecting the thread")}
       </span>
     </div>
   );

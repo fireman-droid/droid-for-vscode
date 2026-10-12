@@ -1,3 +1,4 @@
+import { useI18n, translate, type UiLocale } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Archive, ArchiveRestore, Download, Eye, Folder, MessageSquare, MoreHorizontal, Pencil, RefreshCw, Search, Star } from 'lucide-react';
 import type { ManagedSession, ManagementAction } from '../../shared/protocol/managementPageProtocol';
@@ -11,17 +12,18 @@ import { SessionPagination } from './SessionPagination';
 import type { ManagementState } from './useManagement';
 import { DefaultsSettings } from './DefaultsSettings';
 
-const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
-function updatedLabel(value: string): string {
+function updatedLabel(value: string, locale: UiLocale): string {
+  const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   const date = new Date(value);
   const minutes = Math.round((date.getTime() - Date.now()) / 60_000);
-  if (Math.abs(minutes) < 60) return minutes === 0 ? '刚刚' : relativeTime.format(minutes, 'minute');
+  if (Math.abs(minutes) < 60) return minutes === 0 ? translate(locale, 'just now') : relativeTime.format(minutes, 'minute');
   if (Math.abs(minutes) < 1440) return relativeTime.format(Math.round(minutes / 60), 'hour');
   if (Math.abs(minutes) < 10080) return relativeTime.format(Math.round(minutes / 1440), 'day');
-  return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
+  return date.toLocaleDateString(locale, { month: '2-digit', day: '2-digit' });
 }
 
 export function SessionManagement({ state, active }: { state: ManagementState; active: boolean }) {
+  const { t, locale } = useI18n();
   const [section, setSection] = useState('history');
   const historyActive = active && section === 'history';
   const [scope, setScope] = useState<'folder' | 'all'>('folder');
@@ -84,46 +86,46 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
     });
   };
   const disabled = state.busy || loading;
-  return <section aria-label="会话管理">
-    <header className="management-heading"><h1>会话</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label="刷新会话" disabled={disabled} onClick={() => void load()}><RefreshCw /></Button>}</header>
+  return <section aria-label={t("会话管理")}>
+    <header className="management-heading"><h1>{t("会话")}</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label={t("刷新会话")} disabled={disabled} onClick={() => void load()}><RefreshCw /></Button>}</header>
     <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
-      <TabsList animatedIndicator aria-label="会话页面"><TabsTrigger value="history">历史记录</TabsTrigger><TabsTrigger value="defaults">默认设置</TabsTrigger></TabsList>
+      <TabsList animatedIndicator aria-label={t("会话页面")}><TabsTrigger value="history">{t("历史记录")}</TabsTrigger><TabsTrigger value="defaults">{t("默认设置")}</TabsTrigger></TabsList>
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
       <TabsContent value="history" forceMount hidden={section !== 'history'}>
     <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
-      <TabsList animatedIndicator className="management-session-scope" aria-label="会话范围" aria-busy={loading}><Tooltip content={state.settings?.cwd || '未打开文件夹'}><TabsTrigger value="folder" disabled={disabled}>当前文件夹</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>全部文件夹</TabsTrigger></TabsList>
-    </Tabs><div className="management-actions"><ManagementChoice label="会话类型" value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', '聊天与 Exec' ], ['chat', '聊天'], ['exec', 'Exec']]} />
-      <ManagementChoice label="收藏与归档" value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', '未归档' ], ['favorites', '收藏'], ['archived', '已归档']]} /></div></div>
-    <div className="management-search management-session-search"><Search /><Input aria-label="筛选会话" placeholder="搜索标题或文件夹" value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>
-    {!state.settings?.sessionManagementAvailable ? <p className="management-empty">会话管理需要 daemon 运行模式。</p> : <>
-      {error && <p role="alert" className="management-caption text-destructive">{error}</p>}
+      <TabsList animatedIndicator className="management-session-scope" aria-label={t("会话范围")} aria-busy={loading}><Tooltip content={state.settings?.cwd || t("未打开文件夹")}><TabsTrigger value="folder" disabled={disabled}>{t("当前文件夹")}</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>{t("全部文件夹")}</TabsTrigger></TabsList>
+    </Tabs><div className="management-actions"><ManagementChoice label={t("会话类型")} value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', t('聊天与 Exec') ], ['chat', t('聊天')], ['exec', 'Exec']]} />
+      <ManagementChoice label={t("收藏与归档")} value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', t('未归档') ], ['favorites', t('收藏')], ['archived', t('已归档')]]} /></div></div>
+    <div className="management-search management-session-search"><Search /><Input aria-label={t("筛选会话")} placeholder={t("搜索标题或文件夹")} value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>
+    {!state.settings?.sessionManagementAvailable ? <p className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
+      {error && <p role="alert" className="management-caption text-destructive">{t(error)}</p>}
       <div className="management-session-table" aria-busy={loading}>
-        <div className="management-session-head"><span>标题</span><span>消息数</span><span>更新时间</span><span /></div>
+        <div className="management-session-head"><span>{t("标题")}</span><span>{t("消息数")}</span><span>{t("更新时间")}</span><span /></div>
         {pageRows.map(row => <div className="management-session-row" key={row.id}>
           <Button variant="plain" size="none" className="management-session-title"
-            title={row.kind === 'exec' ? '查看执行记录' : row.archived ? '恢复归档后可继续对话' : '在主聊天中打开'}
+            title={row.kind === 'exec' ? t("查看执行记录") : row.archived ? t("恢复归档后可继续对话") : t("在主聊天中打开")}
             onClick={() => act({ kind: row.kind === 'chat' ? 'session.resume' : 'session.view', id: row.id })} disabled={disabled}>
-            <span><span className="management-session-name">{row.title}</span>{row.favorite && <Star aria-label="已收藏" />}</span>
-            <small title={row.cwd}>{row.cwd.split(/[\\/]/).filter(Boolean).at(-1) || row.cwd}{row.kind === 'exec' ? ' · Exec' : row.active ? ' · 当前聊天' : ''}</small>
+            <span><span className="management-session-name">{row.title}</span>{row.favorite && <Star aria-label={t("已收藏")} />}</span>
+            <small title={row.cwd}>{row.cwd.split(/[\\/]/).filter(Boolean).at(-1) || row.cwd}{row.kind === 'exec' ? ' · Exec' : row.active ? t("· 当前聊天") : ''}</small>
           </Button>
-          <span className="management-count">{row.messageCount}</span><time dateTime={row.modifiedTime} title={new Date(row.modifiedTime).toLocaleString()}>{updatedLabel(row.modifiedTime)}</time>
-          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" aria-label={`${row.title}的操作`} disabled={disabled}><MoreHorizontal /></Button></DropdownMenuTrigger>
+          <span className="management-count">{row.messageCount}</span><time dateTime={row.modifiedTime} title={new Date(row.modifiedTime).toLocaleString(locale)}>{updatedLabel(row.modifiedTime, locale)}</time>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" aria-label={t("{p0}的操作", { p0: row.title })} disabled={disabled}><MoreHorizontal /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="management-menu">
-              <DropdownMenuItem onSelect={() => act({ kind: 'session.view', id: row.id })}><Eye />查看记录</DropdownMenuItem>
-              {row.kind === 'chat' && <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}><MessageSquare />继续对话</DropdownMenuItem>}
-              {!row.currentFolder && <DropdownMenuItem onSelect={() => act({ kind: 'session.folder', id: row.id })}><Folder />打开所属文件夹</DropdownMenuItem>}
-              <DropdownMenuItem onSelect={() => act({ kind: 'session.export', id: row.id })}><Download />导出 Markdown</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setRenaming(row); setTitle(row.title); }}><Pencil />重命名</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => act({ kind: 'session.favorite', id: row.id, value: !row.favorite }, { favorite: !row.favorite })}><Star />{row.favorite ? '取消收藏' : '收藏'}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => act({ kind: 'session.view', id: row.id })}><Eye />{t("查看记录")}</DropdownMenuItem>
+              {row.kind === 'chat' && <DropdownMenuItem disabled={row.archived} onSelect={() => act({ kind: 'session.resume', id: row.id })}><MessageSquare />{t("继续对话")}</DropdownMenuItem>}
+              {!row.currentFolder && <DropdownMenuItem onSelect={() => act({ kind: 'session.folder', id: row.id })}><Folder />{t("打开所属文件夹")}</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={() => act({ kind: 'session.export', id: row.id })}><Download />{t("导出 Markdown")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setRenaming(row); setTitle(row.title); }}><Pencil />{t("重命名")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => act({ kind: 'session.favorite', id: row.id, value: !row.favorite }, { favorite: !row.favorite })}><Star />{row.favorite ? t("取消收藏") : t("收藏")}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={row.active} onSelect={() => act({ kind: 'session.archive', id: row.id, value: !row.archived }, { archived: !row.archived })}>
-                {row.archived ? <ArchiveRestore /> : <Archive />}{row.archived ? '恢复会话' : '归档'}
+                {row.archived ? <ArchiveRestore /> : <Archive />}{row.archived ? t("恢复会话") : t("归档")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>)}
       </div>
-      {!loading && visible.length === 0 && !error && <p className="management-empty">没有匹配的会话</p>}
+      {!loading && visible.length === 0 && !error && <p className="management-empty">{t("没有匹配的会话")}</p>}
       {(loading || visible.length > 0 || cursor !== null) && <SessionPagination page={currentPage} pageSize={pageSize} count={visible.length}
         complete={loaded && cursor === null} loading={loading} disabled={disabled} onPageSize={size => changeFilter(() => setPageSize(size))}
         onPage={target => {
@@ -134,14 +136,14 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       </TabsContent>
     </Tabs>
     <Dialog open={renaming !== null} onOpenChange={open => { if (!open && !state.busy) setRenaming(null); }}><DialogContent className="management-dialog" closeDisabled={state.busy}>
-      <DialogTitle>重命名会话</DialogTitle><DialogDescription className="management-caption">{renaming?.cwd}</DialogDescription>
+      <DialogTitle>{t("重命名会话")}</DialogTitle><DialogDescription className="management-caption">{renaming?.cwd}</DialogDescription>
       <form onSubmit={e => { e.preventDefault(); if (!renaming || state.busy || !title.trim()) return;
         void state.run({ kind: 'session.rename', id: renaming.id, title: title.trim() }).then(result => {
           if (result.ok) { updateRow(renaming.id, { title: title.trim() }); setRenaming(null); }
         });
-      }}><Input aria-label="会话标题" autoFocus value={title} maxLength={200} onChange={e => setTitle(e.target.value)} disabled={state.busy} />
+      }}><Input aria-label={t("会话标题")} autoFocus value={title} maxLength={200} onChange={e => setTitle(e.target.value)} disabled={state.busy} />
         {state.notice && !state.notice.ok && <p role="alert" className="management-caption text-destructive">{state.notice.message}</p>}
-        <footer className="management-form-actions"><Button variant="plain" size="sm" disabled={state.busy} onClick={() => setRenaming(null)}>取消</Button><Button variant="outline" size="sm" type="submit" disabled={state.busy || !title.trim()}>保存</Button></footer>
+        <footer className="management-form-actions"><Button variant="plain" size="sm" disabled={state.busy} onClick={() => setRenaming(null)}>{t("取消")}</Button><Button variant="outline" size="sm" type="submit" disabled={state.busy || !title.trim()}>{t("保存")}</Button></footer>
       </form>
     </DialogContent></Dialog>
   </section>;

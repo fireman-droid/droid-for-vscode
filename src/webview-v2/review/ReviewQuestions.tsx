@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LoaderCircle, RotateCw } from 'lucide-react';
 import { DiffQuestionContext, DiffQuestionContentContext, type DiffQuestionAnchor } from '@droidvisx/chat-ui/review/diffQuestion';
@@ -11,6 +12,7 @@ type Models = Extract<ReviewQuestionResponse, { type: 'reviewQuestion.models' }>
 export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }: {
   port: ReviewPort; sessionId: string | null; scopeKey: string; enabled: boolean; children: ReactNode;
 }) {
+  const { t } = useI18n();
   const [anchor, setAnchor] = useState<DiffQuestionAnchor | null>(null);
   const [questionId, setQuestionId] = useState<string | null>(null);
   const activeId = useRef<string | null>(null);
@@ -85,10 +87,10 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
     focusRequested={focusRequested} onFocused={() => setFocusRequested(false)}
     onSend={send} onStop={() => port.postMessage({ type: 'reviewQuestion.stop', sessionId, questionId })} onClose={close}
     actions={<>
-      {!models || models.status === 'loading' ? <span className="review-question-progress" role="status" aria-label="Loading models"><LoaderCircle /></span> : null}
-      {modelError ? <Button variant="plain" size="icon-sm" aria-label="Refresh models" onClick={refresh}><RotateCw /></Button> : null}
-    </>} /> : <Button variant="plain" size="none" className="review-question-start" aria-label="Ask about selected code"
-      onPointerDown={event => event.preventDefault()} onClick={open}>Ask</Button>;
+      {!models || models.status === 'loading' ? <span className="review-question-progress" role="status" aria-label={t("Loading models")}><LoaderCircle /></span> : null}
+      {modelError ? <Button variant="plain" size="icon-sm" aria-label={t("Refresh models")} onClick={refresh}><RotateCw /></Button> : null}
+    </>} /> : <Button variant="plain" size="none" className="review-question-start" aria-label={t("Ask about selected code")}
+      onPointerDown={event => event.preventDefault()} onClick={open}>{t("Ask")}</Button>;
   const context = useMemo(() => ({ enabled, active: questionId !== null, anchor, select, close, clearSelection }), [enabled, questionId, anchor, select, close, clearSelection]);
   return <DiffQuestionContext.Provider value={context}><DiffQuestionContentContext.Provider value={content}>{children}</DiffQuestionContentContext.Provider></DiffQuestionContext.Provider>;
 }

@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { Check, Circle, CircleAlert, LoaderCircle, RotateCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SlidingText } from '../ui/sliding-text';
@@ -18,6 +19,7 @@ export interface AgentTaskProps {
 /** Presentation only: session resolution and lifecycle stay with the caller. */
 export function AgentTask({ title, role, statusLabel, tone, variant = 'card', elapsed,
   toolCount, activity, feedback, onOpen }: AgentTaskProps) {
+  const { t } = useI18n();
   const busy = tone === 'running' || feedback?.opening === true;
   const StatusIcon = busy ? LoaderCircle : tone === 'completed' ? Check
     : tone === 'failed' ? CircleAlert : Circle;
@@ -30,13 +32,13 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
       <span className="dvx-agent-task-body">
         <span className="dvx-agent-task-heading">
           <span className="dvx-agent-task-title" title={title}>{title}</span>
-          <span className="dvx-agent-task-role" title={role}>{role}<span className="sr-only"> subagent</span></span>
+          <span className="dvx-agent-task-role" title={role}>{role}<span className="sr-only"> {t("subagent")}</span></span>
           <span className="dvx-agent-task-status">{statusLabel}</span>
         </span>
         <span className="dvx-agent-task-meta">
           {activity ? <SlidingText text={activity} className="dvx-agent-task-activity" /> : null}
-          {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">Elapsed {elapsed}</span> : null}
-          {toolCount !== undefined ? <span>{toolCount} {toolCount === 1 ? 'tool' : 'tools'}</span> : null}
+          {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">{t("Elapsed")} {elapsed}</span> : null}
+          {toolCount !== undefined ? <span>{toolCount} {toolCount === 1 ? 'tool' : t("tools")}</span> : null}
         </span>
       </span>
     </Button>
@@ -46,7 +48,7 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         <span>{feedback.text}</span>
       </span>
       {onOpen ? <Button variant="ghost" size="sm" className="dvx-agent-task-retry"
-        onClick={onOpen} aria-label={`Retry opening ${title}`}><RotateCw aria-hidden="true" />Retry</Button> : null}
+        onClick={onOpen} aria-label={t("Retry opening {p0}", { p0: title })}><RotateCw aria-hidden="true" />{t("Retry")}</Button> : null}
     </div> : null}
   </div>;
 }

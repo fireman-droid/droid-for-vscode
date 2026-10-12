@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { useUiEnvironment } from '../environment';
@@ -7,6 +8,7 @@ import { Button } from '../ui/button';
 export function RecordedSource({ content, path, label = 'Recorded version' }: {
   readonly content: string; readonly path: string; readonly label?: string;
 }) {
+  const { t } = useI18n();
   const { copyText } = useUiEnvironment();
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -17,8 +19,8 @@ export function RecordedSource({ content, path, label = 'Recorded version' }: {
   }, [content]);
   return <section className="review-recorded-source">
     <header className="review-source-toolbar">
-      <span>{label}</span><span className="review-source-size">{lines.count === 0 ? 'Empty file' : `${lines.count} lines`}</span>
-      <Button variant="ghost" size="icon-sm" aria-label={copyState === 'copied' ? 'Copied recorded file' : 'Copy recorded file'} onClick={() => {
+      <span>{t(label)}</span><span className="review-source-size">{lines.count === 0 ? t("Empty file") : t("{p0} lines", { p0: lines.count })}</span>
+      <Button variant="ghost" size="icon-sm" aria-label={copyState === 'copied' ? t("Copied recorded file") : t("Copy recorded file")} onClick={() => {
         void copyText(content).then(() => {
           setCopyState('copied');
           if (timer.current !== null) clearTimeout(timer.current);
@@ -26,10 +28,10 @@ export function RecordedSource({ content, path, label = 'Recorded version' }: {
         }, () => setCopyState('error'));
       }}>{copyState === 'copied' ? <Check /> : <Copy />}</Button>
     </header>
-    <div className="review-source-scroll markdown-content" role="region" tabIndex={0} aria-label={`${label} of ${path}`}>
+    <div className="review-source-scroll markdown-content" role="region" tabIndex={0} aria-label={t("{p0} of {p1}", { p0: label, p1: path })}>
       <div className="review-source-lines" aria-hidden>{lines.numbers}</div>
       <pre><CodeSyntax text={content || ' '} path={path} /></pre>
     </div>
-    {copyState === 'error' ? <p className="review-recorded-note review-error" role="alert">Could not copy the recorded file.</p> : null}
+    {copyState === 'error' ? <p className="review-recorded-note review-error" role="alert">{t("Could not copy the recorded file.")}</p> : null}
   </section>;
 }

@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ComposerView, type ComposerLayout } from '@droidvisx/chat-ui/chat/ComposerView';
 import type { AssistantWebviewState } from '../state/types';
@@ -25,6 +26,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
   readonly onBtwOpen: () => void;
   readonly capabilities?: ChatSurfaceCapabilities;
 }) {
+  const { t } = useI18n();
   const [notice, setNotice] = useState<string | null>(null);
   const attachments = useAttachmentActions(port, state.sessionId, state.connection.status);
   const capabilityActions = useCapabilityActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status });
@@ -62,9 +64,9 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
-    placeholder={state.transcript.length ? 'Add a follow up' : 'Ask Droid about your workspace'} maxLength={Math.max(0, MAX_TURN_TEXT_LENGTH - quotePrefixLength)}
+    placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={Math.max(0, MAX_TURN_TEXT_LENGTH - quotePrefixLength)}
     focusSignal={flow.draftCommand.id} notice={ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice} onLayout={reportLayout}
-    inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">Answer Droid’s request to continue.</p> : undefined}
+    inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t("Answer Droid’s request to continue.")}</p> : undefined}
     attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}
     suggestionsListId={suggestions.listId} activeSuggestionId={suggestions.activeId}

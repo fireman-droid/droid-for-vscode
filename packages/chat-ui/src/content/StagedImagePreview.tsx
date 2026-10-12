@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Check, Hand, Pencil, RotateCcw, Undo2 } from 'lucide-react';
 export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -15,6 +16,7 @@ export function StagedImagePreview({ name, data, mediaType, onSave, onClose, ret
   readonly onClose: () => void;
   readonly returnFocus?: HTMLElement | null;
 }) {
+  const { t } = useI18n();
   const image = useRef<HTMLImageElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const space = useRef(false);
@@ -90,29 +92,29 @@ export function StagedImagePreview({ name, data, mediaType, onSave, onClose, ret
       if (live.current) setSaving(false);
     }
   };
-  return <MediaPreview label={`Preview ${name}`} size={size} onClose={onClose} returnFocus={returnFocus} preventDismiss={strokes.length > 0}
+  return <MediaPreview label={t("Preview {p0}", { p0: name })} size={size} onClose={onClose} returnFocus={returnFocus} preventDismiss={strokes.length > 0}
     onEscape={(event) => { if (strokes.length > 0 || active.current) { event.preventDefault(); cancel(); } }}
     actions={<div className="flex flex-wrap items-center gap-2 text-xs">
       {error ? <p role="status" className="w-full text-center text-destructive">{error}</p> : null}
       {annotatable ? <>
         <ToggleGroup type="single" value={mode} disabled={saving} onValueChange={(value) => {
           if (value === 'move' || value === 'draw') setMode(value);
-        }} aria-label="Image interaction mode" className="flex items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
-          <ToggleGroupItem value="move" aria-label="Move image" title="Drag to move the image" className="h-7 gap-1.5 px-2"><Hand />Move</ToggleGroupItem>
-          <ToggleGroupItem value="draw" aria-label="Annotate image" title="Draw to annotate; hold Space to move" className="h-7 gap-1.5 px-2"><Pencil />Draw</ToggleGroupItem>
+        }} aria-label={t("Image interaction mode")} className="flex items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
+          <ToggleGroupItem value="move" aria-label={t("Move image")} title={t("Drag to move the image")} className="h-7 gap-1.5 px-2"><Hand />{t("Move")}</ToggleGroupItem>
+          <ToggleGroupItem value="draw" aria-label={t("Annotate image")} title={t("Draw to annotate; hold Space to move")} className="h-7 gap-1.5 px-2"><Pencil />{t("Draw")}</ToggleGroupItem>
         </ToggleGroup>
         <div className="ml-auto flex items-center gap-1">
-        <Button variant="ghost" size="icon" aria-label="Undo annotation" title="Undo annotation" disabled={saving || strokes.length === 0} onClick={() => {
+        <Button variant="ghost" size="icon" aria-label={t("Undo annotation")} title={t("Undo annotation")} disabled={saving || strokes.length === 0} onClick={() => {
           const next = strokes.slice(0, -1); setStrokes(next); redraw(next);
         }}><Undo2 /></Button>
-        <Button variant="ghost" size="icon" aria-label="Clear annotations" title="Clear annotations" disabled={saving || strokes.length === 0} onClick={cancel}><RotateCcw /></Button>
-        <Button size="sm" className="ml-1 h-7 gap-1.5" aria-label="Save annotation" disabled={saving || strokes.length === 0} onClick={() => void save()}><Check />{saving ? 'Saving…' : 'Save'}</Button>
+        <Button variant="ghost" size="icon" aria-label={t("Clear annotations")} title={t("Clear annotations")} disabled={saving || strokes.length === 0} onClick={cancel}><RotateCcw /></Button>
+        <Button size="sm" className="ml-1 h-7 gap-1.5" aria-label={t("Save annotation")} disabled={saving || strokes.length === 0} onClick={() => void save()}><Check />{saving ? t("Saving…") : t("Save")}</Button>
         </div>
-      </> : <span className="text-muted-foreground">Drag to move · Scroll to zoom · Animated image</span>}
+      </> : <span className="text-muted-foreground">{t("Drag to move · Scroll to zoom · Animated image")}</span>}
     </div>}>
     <img ref={image} src={`data:${mediaType};base64,${data}`} alt={name} draggable={false} className="size-full max-w-none object-contain"
       onLoad={(event) => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
-    {annotatable && size ? <canvas ref={canvas} width={size.width} height={size.height} aria-label="Image annotation canvas"
+    {annotatable && size ? <canvas ref={canvas} width={size.width} height={size.height} aria-label={t("Image annotation canvas")}
       className={`absolute inset-0 size-full touch-none ${mode === 'draw' && !spacePressed && !saving ? 'cursor-crosshair' : 'pointer-events-none'}`}
       onDoubleClick={(event) => { if (mode === 'draw' && !space.current) event.stopPropagation(); }}
       onPointerDown={(event) => {

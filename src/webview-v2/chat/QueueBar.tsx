@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, Circle, CornerDownLeft, Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
@@ -19,6 +20,7 @@ export function QueueBar({ queue, flow }: {
   readonly flow: Pick<ReturnType<typeof useComposerFlow>,
     'queueEditingId' | 'handleQueueEditBegin' | 'handleQueuePromote' | 'handleQueueRemove' | 'handleQueueResume' | 'handleQueueClear'>;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(true);
   const id = useId();
   const previousPause = useRef(queue.paused);
@@ -31,20 +33,20 @@ export function QueueBar({ queue, flow }: {
   const label = `${queue.items.length} Queued ${queue.items.length === 1 ? 'Message' : 'Messages'}`;
   const markers = { image: '[image]', pdf: '[pdf]', text: '[file]', editor: '[editor]', selection: '[selection]' };
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section aria-label="Queued messages" className="v2-composer-queue">
+    <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section aria-label={t("Queued messages")} className="v2-composer-queue">
       <span aria-live="polite" className="sr-only">{label}{meta ? `, ${meta}` : ''}</span>
       <div className="v2-queue-heading">
         <CollapsibleTrigger asChild><Button variant="plain" size="none" aria-controls={id} className="v2-queue-toggle"
-          title={meta || 'Sends after the current turn. Queued text restores after reload.'}>
+          title={meta || t("Sends after the current turn. Queued text restores after reload.")}>
           <ChevronRight aria-hidden="true" className="v2-queue-chevron" />
           <span>{label}</span>
           {meta ? <span className="v2-queue-status">{meta}</span> : null}
         </Button></CollapsibleTrigger>
         <DropdownMenu><DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label="Queued message actions"><Ellipsis aria-hidden="true" /></Button>
+          <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label={t("Queued message actions")}><Ellipsis aria-hidden="true" /></Button>
         </DropdownMenuTrigger><DropdownMenuContent align="end">
-          {queue.paused !== null ? <DropdownMenuItem onSelect={flow.handleQueueResume}>Resume sending</DropdownMenuItem> : null}
-          <DropdownMenuItem onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />Clear queued messages</DropdownMenuItem>
+          {queue.paused !== null ? <DropdownMenuItem onSelect={flow.handleQueueResume}>{t("Resume sending")}</DropdownMenuItem> : null}
+          <DropdownMenuItem onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />{t("Clear queued messages")}</DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
       </div>
       <AnimatedCollapsibleContent id={id} open={expanded}>
@@ -61,17 +63,17 @@ export function QueueBar({ queue, flow }: {
                 </div>
                 {parsed ? <QuoteChips quotes={parsed.quotes} /> : null}
               </div>
-              {flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">Editing</span> : <div className="v2-queue-actions">
-                <Button variant="ghost" size="sm" className="v2-queue-send" aria-label="Send queued message now" onClick={() => flow.handleQueuePromote(item.queueId)}><span>Send Now</span><CornerDownLeft aria-hidden="true" /></Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Edit queued message" onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil aria-hidden="true" /></Button>
-                <Button variant="ghost" size="icon-sm" aria-label="Remove queued message" onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 aria-hidden="true" /></Button>
+              {flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">{t("Editing")}</span> : <div className="v2-queue-actions">
+                <Button variant="ghost" size="sm" className="v2-queue-send" aria-label={t("Send queued message now")} onClick={() => flow.handleQueuePromote(item.queueId)}><span>{t("Send Now")}</span><CornerDownLeft aria-hidden="true" /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label={t("Edit queued message")} onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil aria-hidden="true" /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label={t("Remove queued message")} onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 aria-hidden="true" /></Button>
               </div>}
             </div>;
           })}
         </div>
         {queue.paused !== null ? <div className="v2-queue-paused">
-          <span>Automatic sending is paused</span>
-          <Button variant="ghost" size="sm" onClick={flow.handleQueueResume}>Resume</Button>
+          <span>{t("Automatic sending is paused")}</span>
+          <Button variant="ghost" size="sm" onClick={flow.handleQueueResume}>{t("Resume")}</Button>
         </div> : null}
       </AnimatedCollapsibleContent>
     </section></Collapsible>

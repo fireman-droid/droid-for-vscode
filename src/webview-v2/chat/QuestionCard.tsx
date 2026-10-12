@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import type { ClipboardEventHandler, DragEventHandler, ReactNode } from 'react';
 import { QuestionCardView } from '@droidvisx/chat-ui/chat/QuestionCardView';
 import type { UserTranscriptItem } from '../../shared/protocol/transcript';
@@ -55,6 +56,7 @@ export function QuestionCard({
   readonly onPlanToggle?: (id: string, expanded: boolean) => void;
   readonly edit: QuestionEditing;
 }) {
+  const { t } = useI18n();
   const messageId = item.messageId;
   const stage = edit.stage?.messageId === messageId ? edit.stage : null;
   const impact = edit.impact?.messageId === messageId ? edit.impact : null;
@@ -71,8 +73,8 @@ export function QuestionCard({
   const originalAttachments = <>
     {images.length ? <div className="v2-sent-attachments">
       {images.map((image) => image.data.length === 0
-        ? <p key={image.id} role="note" className="text-xs text-muted-foreground">Image preview unavailable</p>
-        : <ImageContent key={image.id} src={`data:${image.mediaType};base64,${image.data}`} alt="Message attachment" thumbnail />)}
+        ? <p key={image.id} role="note" className="text-xs text-muted-foreground">{t("Image preview unavailable")}</p>
+        : <ImageContent key={image.id} src={`data:${image.mediaType};base64,${image.data}`} alt={t("Message attachment")} thumbnail />)}
     </div> : null}
     {item.attachments?.some((attachment) => attachment.kind !== 'image')
       ? <SentAttachments attachments={item.attachments} /> : null}

@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { createContext, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -15,14 +16,15 @@ export function UserMessageBubble({ children, attachments, context, onEdit, plac
   readonly pending?: boolean;
   readonly timestamp?: number | null;
 }) {
+  const { t } = useI18n();
   const anchor = useRef<HTMLDivElement>(null);
   const bubble = <div ref={anchor} className={cn('v2-user-message select-none outline-none focus-visible:outline-1 focus-visible:outline-[var(--focus)]', pending && 'opacity-[.72]')}
     tabIndex={!onEdit && timestamp !== undefined && !placeholder ? 0 : undefined}>
     {attachments}
     {context}
     {onEdit ? <Button variant="plain" size="none" data-transcript-selectable="" className="v2-user-copy block w-full select-none text-left"
-      tabIndex={placeholder ? -1 : undefined} aria-label="Edit message and resend from here"
-      title={timestamp === undefined ? 'Click to edit and resend from here' : undefined} onClick={onEdit}>{children}</Button>
+      tabIndex={placeholder ? -1 : undefined} aria-label={t("Edit message and resend from here")}
+      title={timestamp === undefined ? t("Click to edit and resend from here") : undefined} onClick={onEdit}>{children}</Button>
       : <div className="v2-user-copy min-w-0 w-full select-none">{children}</div>}
   </div>;
   return <UserMessageAnchorContext.Provider value={anchor}>

@@ -1,5 +1,6 @@
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
 import { isSafeModelId } from '../validation/guards';
+import { isLanguagePreference, type LanguagePreference } from './localeProtocol';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 
@@ -56,6 +57,7 @@ export type ManagementAction =
   | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
   | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
+  | { readonly kind: 'language.set'; readonly language: LanguagePreference }
   | { readonly kind: 'reviewQuestion.model.set'; readonly modelId: string | null }
   | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean }
   | { readonly kind: 'sessions.list'; readonly scope: 'folder' | 'all'; readonly cursor?: number }
@@ -104,6 +106,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   if (['ready', 'settings.read', 'defaults.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
   else if (a.kind === 'defaults.save') valid = hasExactKeys(a, ['kind', 'scope', 'patch']) && isDefaultsPatch(a.patch, a.scope);
   else if (a.kind === 'theme.set') valid = hasExactKeys(a, ['kind', 'theme']) && ['auto', 'light', 'dark'].includes(String(a.theme));
+  else if (a.kind === 'language.set') valid = hasExactKeys(a, ['kind', 'language']) && isLanguagePreference(a.language);
   else if (a.kind === 'reviewQuestion.model.set') valid = hasExactKeys(a, ['kind', 'modelId']) && (a.modelId === null || isSafeModelId(a.modelId));
   else if (a.kind === 'completion.save') valid = hasExactKeys(a, ['kind', 'preferences', 'setApiKey']) && isCompletionPreferences(a.preferences) && typeof a.setApiKey === 'boolean';
   else if (a.kind === 'sessions.list') valid = hasExactKeys(a, ['kind', 'scope'], ['cursor']) && (a.scope === 'all' || a.scope === 'folder')

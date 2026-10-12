@@ -1,3 +1,4 @@
+import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Paperclip } from 'lucide-react';
 import type { AttachmentKind, AttachmentSummary, EditAttachmentSummary, SentAttachmentSummary } from '../../shared/protocol/attachments';
@@ -18,6 +19,7 @@ export function AttachmentMenu({ actions, disabled, owner }: {
   readonly disabled: boolean;
   readonly owner?: string;
 }) {
+  const { t } = useI18n();
   const choices = owner === undefined ? [
     ['Attach files', actions.handleAttachFiles],
     ['Active editor', actions.handleAttachEditor],
@@ -32,8 +34,8 @@ export function AttachmentMenu({ actions, disabled, owner }: {
     ['Git changes', actions.handleEditAttachGitChanges],
   ] as const;
   return <Popover>
-    <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={owner === undefined ? 'Attach to message' : 'Attach to edited message'} disabled={disabled}><Paperclip /></Button></PopoverTrigger>
-    <PopoverContent data-editor-popup-owner={owner} className="w-48 space-y-0.5" aria-label="Attachment sources">
+    <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={owner === undefined ? t("Attach to message") : t("Attach to edited message")} disabled={disabled}><Paperclip /></Button></PopoverTrigger>
+    <PopoverContent data-editor-popup-owner={owner} className="w-48 space-y-0.5" aria-label={t("Attachment sources")}>
       {choices.map(([label, action]) => <PopoverClose key={label} asChild>
         <Button variant="ghost" size="sm" className="w-full justify-start" disabled={disabled} onClick={action}>{label}</Button>
       </PopoverClose>)}
@@ -48,15 +50,17 @@ export function StagedAttachments({ attachments, images, actions, disabled, stag
   readonly disabled: boolean;
   readonly stage?: AttachmentStage;
 }) {
+  const { t } = useI18n();
   if (attachments.length === 0) return null;
-  return <div aria-label={stage === 'edit' ? 'Attachments to resend' : 'Pending attachments'} className="v2-staged-attachments">
+  return <div aria-label={stage === 'edit' ? t("Attachments to resend") : t("Pending attachments")} className="v2-staged-attachments">
     {attachments.map((attachment) => <AttachmentTile key={attachment.id} attachment={attachment}
       image={images[attachment.id]} actions={actions} disabled={disabled} stage={stage} />)}
   </div>;
 }
 
 export function SentAttachments({ attachments }: { readonly attachments: readonly SentAttachmentSummary[] }) {
-  return <div aria-label="Attachments sent with this message" className="v2-sent-attachments">
+  const { t } = useI18n();
+  return <div aria-label={t("Attachments sent with this message")} className="v2-sent-attachments">
     {attachments.filter((attachment) => attachment.kind !== 'image').map((attachment, index) => (
       <AttachmentTile key={`${attachment.name}:${index}`} attachment={attachment} />
     ))}
@@ -70,6 +74,7 @@ function AttachmentTile({ attachment, image, actions, disabled = false, stage }:
   readonly disabled?: boolean;
   readonly stage?: AttachmentStage;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = 'id' in attachment ? attachment.id : undefined;
@@ -80,8 +85,8 @@ function AttachmentTile({ attachment, image, actions, disabled = false, stage }:
   }, [id, attachment.kind, image, readImage, missing, disabled, stage]);
   const ready = image?.status === 'ready' ? image : null;
   return <div className="v2-attachment-thumb" data-unrestorable={missing || undefined}>
-    <Button ref={trigger} variant="plain" size="none" aria-label={`Preview ${attachment.name}`}
-      title={`${attachment.name}${missing ? ' · Original unavailable; remove or reattach' : ''}${'truncated' in attachment && attachment.truncated ? ' · Truncated' : ''}`}
+    <Button ref={trigger} variant="plain" size="none" aria-label={t("Preview {p0}", { p0: attachment.name })}
+      title={`${attachment.name}${missing ? ` · ${t('Original unavailable; remove or reattach')}` : ''}${'truncated' in attachment && attachment.truncated ? ` · ${t('Truncated')}` : ''}`}
       onClick={(event) => { event.stopPropagation(); setOpen(true); }}
       className={ready ? 'v2-attachment-image' : 'v2-attachment-file'}>
       {ready ? <img src={`data:${ready.mediaType};base64,${ready.dataBase64}`} alt={attachment.name} />
@@ -92,7 +97,7 @@ function AttachmentTile({ attachment, image, actions, disabled = false, stage }:
           <span className="v2-attachment-badge">{fileBadge(attachment.name, attachment.kind)}</span>
         </>}
     </Button>
-    {id !== undefined && actions ? <Button variant="plain" size="none" className="v2-attachment-remove" disabled={disabled} aria-label={`Remove attachment ${attachment.name}`}
+    {id !== undefined && actions ? <Button variant="plain" size="none" className="v2-attachment-remove" disabled={disabled} aria-label={t("Remove attachment {p0}", { p0: attachment.name })}
       onClick={(event) => { event.stopPropagation(); stage === 'edit' ? actions.handleEditAttachmentRemove(id) : actions.handleAttachmentRemove(id); }}>×</Button> : null}
     {open && ready && id !== undefined && actions ? <StagedImagePreview maxBytes={MAX_ATTACHMENT_IMAGE_BYTES} name={attachment.name} data={ready.dataBase64} mediaType={ready.mediaType} returnFocus={trigger.current}
       onClose={() => setOpen(false)} onSave={(data, mediaType) => {
@@ -102,10 +107,10 @@ function AttachmentTile({ attachment, image, actions, disabled = false, stage }:
       <DialogContent className="flex flex-col overflow-hidden" onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
         <DialogTitle className="shrink-0 pr-8 break-words text-sm font-medium">{attachment.name}</DialogTitle>
         <DialogDescription className="mt-2 shrink-0 text-xs text-muted-foreground">{ATTACHMENT_KIND_LABELS[attachment.kind]} · {formatAttachmentBytes(attachment.sizeBytes)}</DialogDescription>
-        {attachment.kind === 'image' ? <p role="status" className="mt-2 text-xs">{missing || image?.status === 'unavailable' ? 'Image preview unavailable' : 'Loading image preview…'}</p> : null}
-        {!missing && attachment.kind === 'pdf' ? <p className="mt-3 text-xs text-muted-foreground">PDF preview is not available in this attachment viewer.</p> : null}
+        {attachment.kind === 'image' ? <p role="status" className="mt-2 text-xs">{missing || image?.status === 'unavailable' ? t("Image preview unavailable") : t("Loading image preview…")}</p> : null}
+        {!missing && attachment.kind === 'pdf' ? <p className="mt-3 text-xs text-muted-foreground">{t("PDF preview is not available in this attachment viewer.")}</p> : null}
         {!missing && attachment.kind !== 'image' && attachment.kind !== 'pdf' ? <AttachmentTextPreview name={attachment.name} attachmentId={id} stage={stage} request={actions?.handleAttachmentPreview} /> : null}
-        {missing ? <p className="mt-2 text-xs text-destructive">The original attachment is no longer retained. Remove it or attach it again before resending.</p> : null}
+        {missing ? <p className="mt-2 text-xs text-destructive">{t("The original attachment is no longer retained. Remove it or attach it again before resending.")}</p> : null}
       </DialogContent>
     </Dialog> : null}
   </div>;

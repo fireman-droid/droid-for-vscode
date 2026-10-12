@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Ellipsis } from 'lucide-react';
 import { tokenizeCommand } from './commandFormatting';
@@ -7,6 +8,7 @@ import { useToolActions } from '../content/toolActions';
 import { useUiEnvironment } from '../environment';
 
 export function CommandActions({ command, running }: { readonly command: string; readonly running: boolean }) {
+  const { t } = useI18n();
   const actions = useToolActions();
   const { copyText } = useUiEnvironment();
   const [open, setOpen] = useState(false);
@@ -18,14 +20,14 @@ export function CommandActions({ command, running }: { readonly command: string;
     return () => clearTimeout(timer);
   }, [copied]);
   return <DropdownMenu modal={false} open={open} onOpenChange={(value) => { setOpen(value); setCopied(false); setFailed(false); }}>
-    <DropdownMenuTrigger asChild><Button variant="plain" size="none" className="v2-command-menu-trigger" aria-label="Command actions"><Ellipsis /></Button></DropdownMenuTrigger>
+    <DropdownMenuTrigger asChild><Button variant="plain" size="none" className="v2-command-menu-trigger" aria-label={t("Command actions")}><Ellipsis /></Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" sideOffset={3} className="v2-command-menu p-[3px]">
       <DropdownMenuItem className="v2-command-menu-item" onSelect={(event) => {
         event.preventDefault();
         void copyText(command).then(() => { setCopied(true); setFailed(false); }, () => setFailed(true));
-      }}>{copied ? <Check /> : <Copy />}{copied ? 'Command copied' : 'Copy command'}</DropdownMenuItem>
-      {running && actions.openTerminalMirror ? <DropdownMenuItem className="v2-command-menu-item" onSelect={() => actions.openTerminalMirror!()}>View in terminal</DropdownMenuItem> : null}
-      {failed ? <p role="alert" className="text-xs text-destructive">Could not copy command.</p> : null}
+      }}>{copied ? <Check /> : <Copy />}{copied ? t("Command copied") : t("Copy command")}</DropdownMenuItem>
+      {running && actions.openTerminalMirror ? <DropdownMenuItem className="v2-command-menu-item" onSelect={() => actions.openTerminalMirror!()}>{t("View in terminal")}</DropdownMenuItem> : null}
+      {failed ? <p role="alert" className="text-xs text-destructive">{t("Could not copy command.")}</p> : null}
     </DropdownMenuContent>
   </DropdownMenu>;
 }
@@ -36,13 +38,14 @@ export function CommandOutput({ command, output, running, visible = true }: {
   readonly running: boolean;
   readonly visible?: boolean;
 }) {
+  const { t } = useI18n();
   const tokens = useMemo(() => tokenizeCommand(command), [command]);
   const pre = useRef<HTMLPreElement>(null);
   const following = useRef(true);
   useEffect(() => {
     if (visible && running && following.current && pre.current) pre.current.scrollTop = pre.current.scrollHeight;
   }, [visible, running, output]);
-  return <pre ref={pre} tabIndex={0} aria-label="Command and output" className="v2-command-well outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+  return <pre ref={pre} tabIndex={0} aria-label={t("Command and output")} className="v2-command-well outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
       onScroll={(event) => { const element = event.currentTarget; following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8; }}>
       <span className="v2-command-entry">
         <span aria-hidden="true" className="v2-command-prompt">$</span>

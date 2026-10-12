@@ -1,3 +1,4 @@
+import { translate, type Translate } from '@droidvisx/chat-ui/i18n';
 import { CATEGORY_PRESENTATION, toolPresentation, type ExploreCategory } from '../../../shared/transcript/toolCatalog';
 export type { ExploreCategory } from '../../../shared/transcript/toolCatalog';
 import { resolveToolAction } from '../../../shared/transcript/toolActivity';
@@ -86,6 +87,7 @@ export function activeActivityIndex(parts: readonly GroupCandidatePart[]): numbe
 
 export function summarizeActivityGroup(
   parts: readonly GroupCandidatePart[],
+  t: Translate = (message, params) => translate('en', message, params),
 ): GroupSummary {
   let toolCount = 0;
   let runningCount = 0;
@@ -148,21 +150,21 @@ export function summarizeActivityGroup(
     const count = counts[category];
     if (count > 0) {
       const nouns = CATEGORY_PRESENTATION[category].nouns;
-      segments.push(`${count} ${count === 1 ? nouns[0] : nouns[1]}`);
+      segments.push(t(`{count} ${count === 1 ? nouns[0] : nouns[1]}`, { count }));
     }
   }
-  if (diagnosticFiles.size > 0) segments.push(diagnosticFiles.size + (diagnosticFiles.size === 1 ? ' file' : ' files'));
+  if (diagnosticFiles.size > 0) segments.push(t(diagnosticFiles.size === 1 ? '{count} file' : '{count} files', { count: diagnosticFiles.size }));
   const resultFacts: string[] = [];
-  if (checksWithDiagnostics > 0) resultFacts.push(checksWithDiagnostics + (checksWithDiagnostics === 1 ? ' check reported diagnostics' : ' checks reported diagnostics'));
-  else if (diagnosticResults > 0 && diagnosticResults === counts.diagnostics) resultFacts.push('No diagnostics reported');
-  if (diagnosticResults > 0 && diagnosticResults < counts.diagnostics) resultFacts.push(diagnosticResults + '/' + counts.diagnostics + ' results summarized');
+  if (checksWithDiagnostics > 0) resultFacts.push(t(checksWithDiagnostics === 1 ? '{count} check reported diagnostics' : '{count} checks reported diagnostics', { count: checksWithDiagnostics }));
+  else if (diagnosticResults > 0 && diagnosticResults === counts.diagnostics) resultFacts.push(t('No diagnostics reported'));
+  if (diagnosticResults > 0 && diagnosticResults < counts.diagnostics) resultFacts.push(t('{completed}/{total} results summarized', { completed: diagnosticResults, total: counts.diagnostics }));
   const owners = new Map<string, Set<string>>();
   for (const { action, toolName } of otherActions.values()) {
     const names = owners.get(action) ?? new Set<string>();
     names.add(toolName); owners.set(action, names);
   }
   for (const { action, toolName, count } of otherActions.values()) {
-    const label = (owners.get(action)?.size ?? 0) > 1 ? action + ' (' + toolName + ')' : action;
+    const label = (owners.get(action)?.size ?? 0) > 1 ? t(action) + ' (' + toolName + ')' : t(action);
     segments.push(count > 1 ? label + ' × ' + count : label);
   }
   return {

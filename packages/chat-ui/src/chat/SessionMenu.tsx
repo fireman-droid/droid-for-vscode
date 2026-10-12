@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import { useUiEnvironment } from '../environment';
 import { groupSessions } from './sessionGroups';
 import type { SessionMenuState, SessionActions, SessionSummary } from './sessions';
@@ -18,6 +19,7 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
   readonly openSignal?: number;
   readonly onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const { assistantName } = useUiEnvironment();
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
@@ -50,44 +52,44 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
   };
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild><Button variant="outline" size="icon" className="size-6 rounded-full bg-input-background text-muted-foreground hover:bg-input-background active:bg-input-background" aria-label="Sessions"><History className="size-3.5" /></Button></PopoverTrigger>
-      <PopoverContent align="end" aria-label="Session history" className="w-[260px] space-y-1.5 p-1.5 [&_button]:hover:bg-transparent [&_button]:active:bg-transparent">
+      <PopoverTrigger asChild><Button variant="outline" size="icon" className="size-6 rounded-full bg-input-background text-muted-foreground hover:bg-input-background active:bg-input-background" aria-label={t("Sessions")}><History className="size-3.5" /></Button></PopoverTrigger>
+      <PopoverContent align="end" aria-label={t("Session history")} className="w-[260px] space-y-1.5 p-1.5 [&_button]:hover:bg-transparent [&_button]:active:bg-transparent">
         <div className="flex items-center gap-1">
-          <Input ref={searchInput} className="h-6 text-xs" type="search" aria-label="Search sessions" placeholder={actions.handleSearchContent ? 'Search chats · Enter searches content' : 'Search chats'}
+          <Input ref={searchInput} className="h-6 text-xs" type="search" aria-label={t("Search sessions")} placeholder={actions.handleSearchContent ? t("Search chats · Enter searches content") : t("Search chats")}
             maxLength={maxSearchLength} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); searchContent(); }
           }} />
         </div>
         {state.sessions.message ? <p role={state.sessions.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">{state.sessions.message}</p> : null}
-        {pending || state.sessions.status === 'loading' ? <p role="status" className="text-xs text-muted-foreground">{pending ? `Waiting for ${assistantName}…` : 'Loading sessions…'}</p> : null}
+        {pending || state.sessions.status === 'loading' ? <p role="status" className="text-xs text-muted-foreground">{pending ? t("Waiting for {p0}…", { p0: assistantName }) : t("Loading sessions…")}</p> : null}
         <div className="max-h-60 space-y-1.5 overflow-y-auto">
-            {groups.map((group) => <section key={group.key} aria-label={group.label ?? undefined}>
-              <h3 className="px-1 py-0.5 text-[11px] text-muted-foreground">{group.label}</h3>
+            {groups.map((group) => <section key={group.key} aria-label={group.label ? t(group.label) : undefined}>
+              <h3 className="px-1 py-0.5 text-[11px] text-muted-foreground">{group.label ? t(group.label) : null}</h3>
               {group.items.map((entry) => <SessionRow key={entry.id} entry={entry} maxTitleLength={maxTitleLength} disabled={controlsDisabled} actions={actions} runOnce={runOnce} onSelect={() => select(entry.id)} />)}
             </section>)}
-            {groups.length === 0 && state.sessions.status !== 'loading' ? <p className="p-2 text-xs text-muted-foreground">{search.trim() ? 'No sessions match your search.' : state.sessions.status === 'ready' ? `No ${assistantName} sessions found.` : 'Session history has not loaded yet.'}</p> : null}
-          {state.sessionSearch === null ? null : <section aria-label="Content matches" className="space-y-2 border-t border-[var(--panel-edge)] pt-2 text-xs">
-            <h3 className="font-medium">Content matches · “{state.sessionSearch.query}”</h3>
-            {state.sessionSearch.status === 'error' ? <p role="alert" className="text-destructive">{state.sessionSearch.message}</p> : state.sessionSearch.items.length === 0 ? <p className="text-muted-foreground">No content matches.</p> : state.sessionSearch.items.map((hit) => {
+            {groups.length === 0 && state.sessions.status !== 'loading' ? <p className="p-2 text-xs text-muted-foreground">{search.trim() ? t("No sessions match your search.") : state.sessions.status === 'ready' ? t("No {p0} sessions found.", { p0: assistantName }) : t("Session history has not loaded yet.")}</p> : null}
+          {state.sessionSearch === null ? null : <section aria-label={t("Content matches")} className="space-y-2 border-t border-[var(--panel-edge)] pt-2 text-xs">
+            <h3 className="font-medium">{t("Content matches · “")}{state.sessionSearch.query}”</h3>
+            {state.sessionSearch.status === 'error' ? <p role="alert" className="text-destructive">{state.sessionSearch.message}</p> : state.sessionSearch.items.length === 0 ? <p className="text-muted-foreground">{t("No content matches.")}</p> : state.sessionSearch.items.map((hit) => {
               const body = <><span>{hit.title}</span>{hit.snippet === null ? null : <span className="line-clamp-3 text-xs text-muted-foreground">{hit.snippet}</span>}</>;
               return catalogIds.has(hit.id) ? <Button key={hit.id} variant="ghost" className="h-auto w-full flex-col items-start gap-1 whitespace-normal py-2 text-left" disabled={controlsDisabled} onClick={() => select(hit.id)}>{body}</Button>
-                : <div key={hit.id} title="This session belongs to another workspace" className="space-y-1 px-2 py-2">{body}<p className="text-muted-foreground">Other workspace</p></div>;
+                : <div key={hit.id} title={t("This session belongs to another workspace")} className="space-y-1 px-2 py-2">{body}<p className="text-muted-foreground">{t("Other workspace")}</p></div>;
             })}
           </section>}
-          {state.worktreeCreateAvailable && actions.handleCreateWorktreeSession ? <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] text-muted-foreground" disabled={controlsDisabled} onClick={() => runOnce(() => { actions.handleCreateWorktreeSession?.(); onOpenChange(false); })}>New session in a worktree…</Button> : null}
+          {state.worktreeCreateAvailable && actions.handleCreateWorktreeSession ? <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] text-muted-foreground" disabled={controlsDisabled} onClick={() => runOnce(() => { actions.handleCreateWorktreeSession?.(); onOpenChange(false); })}>{t("New session in a worktree…")}</Button> : null}
           {actions.handleRefreshArchived ? <Collapsible open={archived} onOpenChange={(open) => {
             setArchived(open);
             if (open && state.archived.status === 'idle') actions.handleRefreshArchived?.();
-          }} asChild><section aria-label="Archived sessions" className="border-t border-[var(--panel-edge)] pt-1">
-            <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-full justify-start px-1 text-[11px] text-muted-foreground"><ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${archived ? 'rotate-90' : ''}`} />Archived{state.archived.status === 'ready' && archivedEntries.length ? ` (${archivedEntries.length})` : ''}</Button></CollapsibleTrigger>
+          }} asChild><section aria-label={t("Archived sessions")} className="border-t border-[var(--panel-edge)] pt-1">
+            <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-full justify-start px-1 text-[11px] text-muted-foreground"><ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${archived ? 'rotate-90' : ''}`} />{t("Archived")}{state.archived.status === 'ready' && archivedEntries.length ? ` (${archivedEntries.length})` : ''}</Button></CollapsibleTrigger>
             <CollapsibleContent>
               {state.archived.status === 'error' ? <p role="alert" className="text-xs text-destructive">{state.archived.message}</p> : null}
-              {state.archived.status === 'loading' || state.archived.status === 'idle' ? <p role="status" className="text-xs text-muted-foreground">Loading archived sessions…</p> : null}
+              {state.archived.status === 'loading' || state.archived.status === 'idle' ? <p role="status" className="text-xs text-muted-foreground">{t("Loading archived sessions…")}</p> : null}
               {archivedEntries.map((entry) => <div key={entry.id} className="group flex items-center gap-2 px-1 text-xs">
                 <span className="min-w-0 flex-1 truncate" title={entry.archivedTime}>{entry.title}</span>
-                {actions.handleUnarchiveSession ? <Button variant="ghost" size="sm" className="h-7 text-[11px]" aria-label={`Restore ${entry.title}`} disabled={controlsDisabled || state.archived.status === 'loading'} onClick={() => runOnce(() => actions.handleUnarchiveSession?.(entry.id))}>Restore</Button> : null}
+                {actions.handleUnarchiveSession ? <Button variant="ghost" size="sm" className="h-7 text-[11px]" aria-label={t("Restore {p0}", { p0: entry.title })} disabled={controlsDisabled || state.archived.status === 'loading'} onClick={() => runOnce(() => actions.handleUnarchiveSession?.(entry.id))}>{t("Restore")}</Button> : null}
               </div>)}
-              {state.archived.status === 'ready' && archivedEntries.length === 0 ? <p className="p-2 text-xs text-muted-foreground">No archived sessions.</p> : null}
+              {state.archived.status === 'ready' && archivedEntries.length === 0 ? <p className="p-2 text-xs text-muted-foreground">{t("No archived sessions.")}</p> : null}
             </CollapsibleContent>
           </section></Collapsible> : null}
         </div>
@@ -104,6 +106,7 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
   readonly runOnce: (action: () => void) => void;
   readonly onSelect: () => void;
 }) {
+  const { t } = useI18n();
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(entry.title);
   useEffect(() => { setRenaming(false); setTitle(entry.title); }, [entry.title]);
@@ -117,23 +120,23 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
       event.preventDefault();
       submitRename();
     }}>
-      <Input aria-label="Session title" autoFocus maxLength={maxTitleLength} value={title} onBlur={submitRename} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => {
+      <Input aria-label={t("Session title")} autoFocus maxLength={maxTitleLength} value={title} onBlur={submitRename} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setRenaming(false); setTitle(entry.title); }
         if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault();
       }} />
     </form> : <>
       <Button variant="ghost" className={`h-6 min-w-0 flex-1 justify-start pl-1 pr-8 text-xs hover:bg-transparent aria-[current=true]:opacity-100 ${entry.active ? 'group-hover:pr-20 group-focus-within:pr-20' : 'group-hover:pr-14 group-focus-within:pr-14'}`} aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
-        {entry.running ? <><LoaderCircle className="size-3 motion-safe:animate-spin" /><span className="sr-only">Turn still running. </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
+        {entry.running ? <><LoaderCircle className="size-3 motion-safe:animate-spin" /><span className="sr-only">{t("Turn still running.")} </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
         <span className="truncate">{entry.title}</span>
-        {entry.worktree ? <span title={entry.worktree.path} className="truncate text-[11px] text-muted-foreground">worktree{entry.worktree.branch ? ` · ${entry.worktree.branch}` : ''}</span> : null}
+        {entry.worktree ? <span title={entry.worktree.path} className="truncate text-[11px] text-muted-foreground">{t("worktree")}{entry.worktree.branch ? ` · ${entry.worktree.branch}` : ''}</span> : null}
         {entry.badge ? <span className="text-[11px] text-muted-foreground">{entry.badge}</span> : null}
       </Button>
       <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
       {entry.active ? <>
-        {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={`Rename ${entry.title}`} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
-        {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={`Fork ${entry.title}`} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}
-      </> : actions.handleArchiveSession ? <Button variant="ghost" size="icon-sm" aria-label={`Archive ${entry.title}`} disabled={disabled} onClick={() => runOnce(() => actions.handleArchiveSession?.(entry.id))}><Archive /></Button> : null}
-      {actions.handleToggleFavorite ? <Button variant="ghost" size="icon-sm" aria-label={`Favorite ${entry.title}`} aria-pressed={entry.isFavorite} disabled={disabled} onClick={() => runOnce(() => actions.handleToggleFavorite?.(entry.id, !entry.isFavorite))}><Star className={entry.isFavorite ? 'fill-current' : undefined} /></Button> : null}
+        {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Rename {p0}", { p0: entry.title })} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
+        {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Fork {p0}", { p0: entry.title })} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}
+      </> : actions.handleArchiveSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Archive {p0}", { p0: entry.title })} disabled={disabled} onClick={() => runOnce(() => actions.handleArchiveSession?.(entry.id))}><Archive /></Button> : null}
+      {actions.handleToggleFavorite ? <Button variant="ghost" size="icon-sm" aria-label={t("Favorite {p0}", { p0: entry.title })} aria-pressed={entry.isFavorite} disabled={disabled} onClick={() => runOnce(() => actions.handleToggleFavorite?.(entry.id, !entry.isFavorite))}><Star className={entry.isFavorite ? 'fill-current' : undefined} /></Button> : null}
       </div>
     </>}
   </div>;
