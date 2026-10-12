@@ -4,6 +4,14 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
 import { Message, MessageContent } from '../ai-elements/message';
 import { Markdown } from '../content/Markdown';
+import { useSmoothedAnswer } from './useSmoothedAnswer';
+
+function QuestionAnswer({ answer, state }: Pick<InlineQuestionEntry, 'answer' | 'state'>) {
+  const displayed = useSmoothedAnswer(answer, state === 'streaming');
+  return <Message from="assistant"><MessageContent>
+    <Markdown text={displayed} streaming={state === 'streaming' || displayed !== answer} />
+  </MessageContent></Message>;
+}
 
 function QuestionInput({ inputRef, ...props }: ComponentProps<typeof Textarea> & {
   inputRef: RefObject<HTMLTextAreaElement | null>;
@@ -67,7 +75,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
     }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
       <Message from="user"><MessageContent className="review-question-prompt text-[var(--review-question-ink,var(--link-ink))]">{entry.question}</MessageContent></Message>
-      {entry.answer ? <Message from="assistant"><MessageContent><Markdown text={entry.answer} streaming={entry.state === 'streaming'} /></MessageContent></Message> : null}
+      {entry.answer ? <QuestionAnswer answer={entry.answer} state={entry.state} /> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></div>
     <div className="review-question-composer">
