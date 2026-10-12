@@ -20,6 +20,7 @@ import { delay, isTurnActive } from '../internals';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn, restorePendingTools } from './recoveredHistoryForCurrentTurn';
 import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
+import { settleRecoveredSnapshot } from './settleRecoveredSnapshot';
 
 export /**
  * Poll cadence for a daemon-side turn recovered after a reload. The
@@ -105,6 +106,14 @@ export function reconcileDaemonTurn(
   void (async () => {
     const state = await readInitialRecoveredWorkingState(ctl, runtime, generation, sessionId, cwd);
     if (state === null) return;
+    const settleIdleSnapshot = async () => {
+      if (state !== 'idle') return;
+      if (await settleRecoveredSnapshot(ctl, sessionId,
+        () => ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd))) {
+        ctl.emitSnapshot();
+        flushRecoveryCheckpointInBackground(ctl);
+      }
+    };
     const existingRecoveryTurn =
       ctl.turnState.turn?.turnId === turnId && ctl.turnState.turn.recovery === true
         ? ctl.turnState.turn
@@ -112,7 +121,7 @@ export function reconcileDaemonTurn(
     if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
     if (ctl.turnState.turn !== null && existingRecoveryTurn === null) {
       if (state === 'idle' && !isTurnActive(ctl.turnState.turn)) {
-        settleRecoveredSnapshot(ctl, sessionId);
+        await settleIdleSnapshot();
         ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
@@ -138,7 +147,7 @@ export function reconcileDaemonTurn(
         recovery: true,
       });
       ctl.effects.setSessionRunning(sessionId, false);
-      if (state === 'idle') settleRecoveredSnapshot(ctl, sessionId);
+      await settleIdleSnapshot();
       ctl.emitSnapshot();
       if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       return;
@@ -165,7 +174,7 @@ export function reconcileDaemonTurn(
         );
       } else {
         ctl.interactions.endTurn(sessionId, turnId);
-        if (state === 'idle') settleRecoveredSnapshot(ctl, sessionId);
+        await settleIdleSnapshot();
         if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
@@ -381,14 +390,6 @@ function recoveredTranscriptAdvanced(
  * reconcile against the live transcript so the generating
  * placeholder is replaced by the full result in one snapshot.
  */
-/** A terminal checkpoint can precede the asynchronous final snapshot on reload. */
-function settleRecoveredSnapshot(ctl: RecoveryPort, sessionId: string): void {
-  const turn = ctl.turnState.turn;
-  if (!turn || isTurnActive(turn) || ctl.turnSnapshots?.read(sessionId, turn.turnId)?.coverage !== 'workspace-files-v1') return;
-  if (turn.status === 'completed' || turn.status === 'interrupted' || turn.status === 'failed')
-    ctl.effects.publishTurnChanges(sessionId, turn.turnId, turn.status);
-}
-
 export async function finishRecoveredTurn(
   ctl: RecoveryPort,
   runtime: DroidRuntime,
