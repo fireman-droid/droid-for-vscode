@@ -64,6 +64,12 @@ export function handleStop(ctl: TurnStopPort, sessionId: string, turnId: string)
     return;
   }
 
+  if (ctl.turnState.turn.preparing) {
+    setTurnStatus(ctl, sessionId, turnId, 'stopping');
+    ctl.turnState.turn.preparing.abort();
+    return;
+  }
+
   const turnGeneration = ctl.turnState.turnGeneration;
   if (ctl.turnState.stopRequestGeneration === turnGeneration) return;
   ctl.turnState.stopRequestGeneration = turnGeneration;

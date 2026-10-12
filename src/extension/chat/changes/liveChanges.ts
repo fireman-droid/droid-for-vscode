@@ -7,7 +7,7 @@ import { reconcileTurnChanges } from '../../recovery/hostTranscriptState';
 import { createTurnChangesLedger } from '../../changes/turnChangesLedger';
 import { isTurnActive } from '../internals';
 
-/** Captures a complete file-tool path set before the stream advances. */
+/** Warm the immutable saved baseline for a complete tool path set. */
 export async function capturePreToolBaseline(
   ctl: LiveChangesPort,
   sessionId: string,
@@ -22,7 +22,6 @@ export async function capturePreToolBaseline(
     return false;
   }
   try {
-    await ctl.turnSnapshots?.capturePaths({ sessionId, turnId }, paths);
     await ctl.changeStats.captureTurnBaseline?.({ sessionId, turnId }, paths);
   } catch {
     // Change accounting is advisory and never fails a turn.

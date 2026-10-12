@@ -113,6 +113,10 @@ export function publishTurnChanges(
         );
       };
       persistAndPublish();
+    }).catch((error: unknown) => {
+      if (ctl.sessionState.disposed || ctl.sessionState.sessionId !== sessionId) return;
+      ctl.emit({ type: 'runtime.diagnostic', sessionId, turnId, severity: 'error',
+        code: 'turn-changes-incomplete', message: error instanceof Error ? error.message : 'Turn changes could not be recorded.' });
     });
 }
 

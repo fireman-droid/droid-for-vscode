@@ -34,6 +34,8 @@ export interface CurrentTurn {
   readonly turnId: string;
   /** Exact daemon submission id, retained separately from the UI turn identity. */
   backendTurnId?: string;
+  /** Cancellable baseline/queue preparation; no runtime turn has started yet. */
+  preparing?: AbortController;
   status: TurnStatus;
   compacting?: boolean;
   error?: string;

@@ -17,7 +17,6 @@ import { historyWithLocalChanges } from '../../recovery/historyWithLocalChanges'
 import { dataValue, parseTranscriptItem } from '../../recovery/sessionRecoveryItems';
 import { SESSION_RECOVERY_DEBOUNCE_MS } from '../../recovery/SessionRecoveryStore';
 import { delay, isTurnActive } from '../internals';
-import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
 import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn, restorePendingTools } from './recoveredHistoryForCurrentTurn';
 import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
@@ -92,6 +91,7 @@ export function reconcileDaemonTurn(
         isTurnActive(ctl.turnState.turn)) {
       ctl.emitSessionDiagnostic('recovered-process-turn-interrupted',
         'The previous process reply cannot continue after reconnecting. Send another message to continue the conversation.', turnId);
+      ctl.effects.publishTurnChanges(sessionId, turnId, 'interrupted');
       ctl.effects.setTurnStatus(sessionId, turnId, 'interrupted');
       ctl.emitSnapshot();
       flushRecoveryCheckpointInBackground(ctl);
@@ -112,6 +112,7 @@ export function reconcileDaemonTurn(
     if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
     if (ctl.turnState.turn !== null && existingRecoveryTurn === null) {
       if (state === 'idle' && !isTurnActive(ctl.turnState.turn)) {
+        settleRecoveredSnapshot(ctl, sessionId);
         ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
@@ -137,6 +138,7 @@ export function reconcileDaemonTurn(
         recovery: true,
       });
       ctl.effects.setSessionRunning(sessionId, false);
+      if (state === 'idle') settleRecoveredSnapshot(ctl, sessionId);
       ctl.emitSnapshot();
       if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       return;
@@ -163,6 +165,7 @@ export function reconcileDaemonTurn(
         );
       } else {
         ctl.interactions.endTurn(sessionId, turnId);
+        if (state === 'idle') settleRecoveredSnapshot(ctl, sessionId);
         if (state === 'idle') ctl.effects.reconnectRecoveredIde(runtime, generation, sessionId, cwd);
       }
       return;
@@ -171,14 +174,10 @@ export function reconcileDaemonTurn(
     const turnGeneration = existingRecoveryTurn === null
       ? ctl.effects.beginTurn({ turnId, status: 'streaming', recovery: true })
       : ctl.turnState.turnGeneration;
-    if (existingRecoveryTurn === null) {
-      void captureSnapshotBeforeInBackground(ctl, sessionId, turnId).then(() => {
-        ctl.effects.startLiveChanges(sessionId, turnId);
-      });
-    } else {
-      if (existingRecoveryTurn.status !== 'stopping') existingRecoveryTurn.status = 'streaming';
-      ctl.effects.startLiveChanges(sessionId, turnId);
-    }
+    // A resumed daemon may already have changed disk. Only the pre-dispatch
+    // tree is a valid baseline; never fabricate one during recovery.
+    if (existingRecoveryTurn && existingRecoveryTurn.status !== 'stopping') existingRecoveryTurn.status = 'streaming';
+    ctl.effects.startLiveChanges(sessionId, turnId);
     ctl.recordHost({
       level: 'info',
       name: 'host.reload.turn-recovered',
@@ -382,6 +381,14 @@ function recoveredTranscriptAdvanced(
  * reconcile against the live transcript so the generating
  * placeholder is replaced by the full result in one snapshot.
  */
+/** A terminal checkpoint can precede the asynchronous final snapshot on reload. */
+function settleRecoveredSnapshot(ctl: RecoveryPort, sessionId: string): void {
+  const turn = ctl.turnState.turn;
+  if (!turn || isTurnActive(turn) || ctl.turnSnapshots?.read(sessionId, turn.turnId)?.coverage !== 'workspace-files-v1') return;
+  if (turn.status === 'completed' || turn.status === 'interrupted' || turn.status === 'failed')
+    ctl.effects.publishTurnChanges(sessionId, turn.turnId, turn.status);
+}
+
 export async function finishRecoveredTurn(
   ctl: RecoveryPort,
   runtime: DroidRuntime,
@@ -452,7 +459,7 @@ export async function finishRecoveredTurn(
       code: 'transport-recovered-outcome-unconfirmed',
       message: 'The connection and session history were restored. This turn has ended, but its completion status was not received.',
     });
-    if (transportRecovery) ctl.effects.publishTurnChanges(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
+    ctl.effects.publishTurnChanges(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
     ctl.effects.setTurnStatus(sessionId, turnId, interrupted ? 'interrupted' : 'completed');
   }
   ctl.emitSnapshot();

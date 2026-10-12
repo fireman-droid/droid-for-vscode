@@ -1,4 +1,5 @@
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/bridgeMessages';
+import { isAbsolute } from 'node:path';
 import { MAX_CHANGED_FILES_PER_TURN } from '../../shared/protocol/bounds';
 import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type {
@@ -17,6 +18,8 @@ export interface TurnSnapshotRecord {
   readonly before?: string;
   readonly after?: string;
   readonly snapshotPaths?: readonly string[];
+  readonly coverage?: 'workspace-files-v1';
+  readonly workspaceRoot?: string;
   readonly files?: readonly CommittedFileStat[];
 }
 
@@ -182,6 +185,8 @@ export function cloneRecord(
   return {
     turnId: record.turnId,
     ...(record.before === undefined ? {} : { before: record.before }),
+    ...(record.coverage ? { coverage: record.coverage } : {}),
+    ...(record.workspaceRoot ? { workspaceRoot: record.workspaceRoot } : {}),
     ...(record.after === undefined ? {} : { after: record.after }),
     ...(record.snapshotPaths === undefined
       ? {}
@@ -230,6 +235,12 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
   if (before === 'invalid' || after === 'invalid') {
     return undefined;
   }
+  const coverageValue = (entry as { coverage?: unknown }).coverage;
+  const rootValue = (entry as { workspaceRoot?: unknown }).workspaceRoot;
+  if (coverageValue !== undefined && coverageValue !== 'workspace-files-v1' ||
+      rootValue !== undefined && (typeof rootValue !== 'string' || !isAbsolute(rootValue))) return undefined;
+  const coverage = coverageValue as 'workspace-files-v1' | undefined;
+  const workspaceRoot = rootValue as string | undefined;
   const filesValue = (entry as { files?: unknown }).files;
   const snapshotPathsValue = (entry as { snapshotPaths?: unknown }).snapshotPaths;
   const snapshotPaths =
@@ -243,6 +254,8 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
     return {
       turnId,
       ...(before === undefined ? {} : { before }),
+      ...(coverage ? { coverage } : {}),
+      ...(workspaceRoot ? { workspaceRoot } : {}),
       ...(after === undefined ? {} : { after }),
       ...(snapshotPaths === undefined || snapshotPaths.length === 0
         ? {}
@@ -259,6 +272,8 @@ function parseTurnEntry(entry: unknown): TurnSnapshotRecord | undefined {
   return {
     turnId,
     ...(before === undefined ? {} : { before }),
+    ...(coverage ? { coverage } : {}),
+    ...(workspaceRoot ? { workspaceRoot } : {}),
     ...(after === undefined ? {} : { after }),
     ...(snapshotPaths === undefined || snapshotPaths.length === 0
       ? {}

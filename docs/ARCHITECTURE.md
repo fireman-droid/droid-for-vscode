@@ -368,7 +368,15 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 
 - `changes/turnSnapshots.ts` 保存 before/after，使用私有 index/对象目录。
   非 Git 工作区可用扩展存储里的私有 bare Git 仓库；不修改项目 index 或创建项目 `.git`。
+  新轮次先获得工作区写入队列位置，再从磁盘原始字节保存不可变 before，持久化成功后才发送。
+  枚举包含 Git 忽略文件，排除 `.git`、`node_modules`、`.venv`，符号链接只保存链接本身。
+  `hash-object --no-filters` 避免 clean filter／换行转换；旧记录保留原有部分覆盖语义。
+  工具启动通知只预热已保存的基线，恢复中的会话也不能从当前磁盘补造 before。
+  `workspaceTurnLease.ts` 按真实目录在窗口间排队，持有到 after 采集结束；等待可以取消。
+  Host 退出时保留已发送轮次的目录归属，恢复原会话并确认结束后收尾，不以 Host PID 消失判断后台停止。
+  收尾采集失败会显示记录不完整；失去原采集窗口后不能重读当前文件冒充历史 after。
   快照说明文件变化，不证明作者。无原始基线不回退 HEAD，忽略且未捕获的文件不当空文件。
+  外部程序、手动编辑、脱离会话的后台进程和嵌套目录中的独立会话不受同目录队列隔离。
   父树中 gitlink（160000）只保存子仓库提交，不含其文件正文；读取子模块路径失败返回
   unknown，不作为 absent，也不从当前文件补出“整文件新增”。
 - `runtime/tools/operationResult.ts` 从实际工具结果建立逐文件操作证据。

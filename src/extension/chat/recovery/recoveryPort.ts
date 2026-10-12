@@ -8,6 +8,7 @@ export interface RecoveryPort
   extends Pick<
     HostOperations,
     | 'recoveryStore'
+    | 'turnSnapshots'
     | 'recordHost'
     | 'emitSnapshot'
     | 'emit'

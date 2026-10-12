@@ -226,7 +226,7 @@ export function createGitChangeStatsReader(
         try {
           const captured = await snapshots?.readTreeBytes?.(scope, path, 'before');
           const bytes = captured === null ? Buffer.alloc(0)
-            : captured ?? await dependencies.readWorkspaceFile(absolute);
+            : snapshots ? captured : await dependencies.readWorkspaceFile(absolute);
           if (bytes === undefined || bytes.byteLength > MAX_BASELINE_FILE_BYTES) {
             continue;
           }

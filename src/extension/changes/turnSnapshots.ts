@@ -11,7 +11,6 @@ import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { MAX_CHANGED_FILES_PER_TURN } from '../../shared/protocol/bounds';
 import { isSafeWorkspaceRelativePath } from '../../shared/validation/guards';
 import type { RuntimeDiagnosticEvent } from '../../runtime/runtimeDiagnostics';
-import { toWorkspaceRelativePath } from '../../runtime/tools/toolFilePath';
 import {
   parseGitNumstat,
   type ChangeStatsPersistence,
@@ -28,7 +27,9 @@ import {
   type SavedReviewSnapshot,
   upsertTurn,
 } from './turnSnapshotRecords';
-import { snapshotWorkspaceFiles } from './snapshotWorkspaceFiles';
+import { snapshotWorkspaceFiles, isSnapshotWorkspacePath } from './snapshotWorkspaceFiles';
+import { captureWorkspaceTree } from './captureWorkspaceTree';
+import { acquireWorkspaceTurnLease, releaseCompletedWorkspaceTurn, type WorkspaceTurnLease } from './workspaceTurnLease';
 import { pruneSnapshotObjects } from './snapshotPruning';
 import { createGitTreeReader } from '../workspace/gitTreeReader';
 export {
@@ -89,8 +90,10 @@ export interface TurnSnapshotStore {
   capture(
     scope: TurnSnapshotScope,
     phase: 'before' | 'after',
+    signal?: AbortSignal,
   ): Promise<string | undefined>;
   capturePaths(scope: TurnSnapshotScope, paths: readonly string[]): Promise<void>;
+  markDispatched?(scope: TurnSnapshotScope): Promise<void>;
   diff(scope: TurnSnapshotScope): Promise<ReadonlyMap<string, FileChangeStat>>;
   readTreeFile(scope: TurnSnapshotScope, path: string): Promise<string | undefined>;
   /**
@@ -148,6 +151,8 @@ export function createTurnSnapshotStore(
   const turnKey = (scope: TurnSnapshotScope) => JSON.stringify([scope.sessionId, scope.turnId]);
   const retained = new Map<string, { count: number; record: TurnSnapshotRecord | undefined }>();
   const running = new Map<string, () => void>();
+  const leases = new Map<string, WorkspaceTurnLease>();
+  const shutdown = new AbortController();
   const recordFor = (scope: TurnSnapshotScope) =>
     readTurn(sessions, scope.sessionId, scope.turnId) ?? retained.get(turnKey(scope))?.record ??
     (savedReview?.sessionId === scope.sessionId && savedReview.turn.turnId === scope.turnId ? savedReview.turn : undefined);
@@ -333,21 +338,21 @@ export function createTurnSnapshotStore(
     return layout;
   };
 
-  const snapshotEnv = (indexFile: string, repoObjectsDir: string): NodeJS.ProcessEnv => ({
+  const snapshotEnv = (indexFile: string, repo: GitLayout): NodeJS.ProcessEnv => ({
     ...process.env,
     GIT_INDEX_FILE: indexFile,
     GIT_OBJECT_DIRECTORY: objectsDir,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: [repoObjectsDir, ...(legacyStorageDir ? [join(legacyStorageDir, 'objects')] : [])].join(delimiter),
-    ...(layout?.privateRepository ? { GIT_DIR: layout.gitDir, GIT_WORK_TREE: layout.root } : {}),
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: [repo.repoObjectsDir, ...(legacyStorageDir ? [join(legacyStorageDir, 'objects')] : [])].join(delimiter),
+    GIT_DIR: repo.gitDir, GIT_WORK_TREE: repo.root,
   });
 
   // Tree-to-tree reads need no index; binding one would make git
   // resolve paths against a stale or absent index file.
-  const readEnv = (repoObjectsDir: string): NodeJS.ProcessEnv => ({
+  const readEnv = (repo: GitLayout): NodeJS.ProcessEnv => ({
     ...process.env,
     GIT_OBJECT_DIRECTORY: objectsDir,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: [repoObjectsDir, ...(legacyStorageDir ? [join(legacyStorageDir, 'objects')] : [])].join(delimiter),
-    ...(layout?.privateRepository ? { GIT_DIR: layout.gitDir, GIT_WORK_TREE: layout.root } : {}),
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: [repo.repoObjectsDir, ...(legacyStorageDir ? [join(legacyStorageDir, 'objects')] : [])].join(delimiter),
+    GIT_DIR: repo.gitDir, GIT_WORK_TREE: repo.root,
   });
 
   const captureNow = async (
@@ -355,13 +360,16 @@ export function createTurnSnapshotStore(
     phase: 'before' | 'after',
   ): Promise<string | undefined> => {
     const started = dependencies.now();
+    const existing = recordFor(scope);
+    if (existing?.[phase]) return existing[phase];
+    if (phase === 'after' && !existing?.before) return undefined;
     if (disposed || storeDisabled || failedTurns.has(turnKey(scope))) {
       dependencies.recordDiagnostic({ level: 'warn', name: 'host.changes.snapshot.skipped',
         attributes: { ...scope, phase, reason: disposed ? 'disposed' : storeDisabled ? 'store-disabled' : 'turn-disabled' } });
       return undefined;
     }
     await flushPending();
-    const root = getWorkspaceRoot();
+    const root = recordFor(scope)?.workspaceRoot ?? getWorkspaceRoot();
     if (root === undefined) {
       return undefined;
     }
@@ -373,6 +381,18 @@ export function createTurnSnapshotStore(
     const indexFile = join(storageDir, `index-${++indexSeq}`);
     try {
       await dependencies.mkdir(objectsDir);
+      if (phase === 'before' || existing?.coverage === 'workspace-files-v1') {
+        const env = snapshotEnv(indexFile, resolved);
+        const oid = await captureWorkspaceTree(root, (args, maxBytes, input) =>
+          git(root, args, env, deadline, maxBytes, input));
+        if (!TREE_OID.test(oid)) return failCapture(scope, phase, 'invalid-tree-oid');
+        await persistPatch(scope, { [phase]: oid, coverage: 'workspace-files-v1', workspaceRoot: root });
+        dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot.capture',
+          attributes: { ...scope, phase, tree: oid, captureMode: 'workspace-files-v1', elapsedMs: dependencies.now() - started } });
+        return oid;
+      }
+      // Old sessions keep their original partial coverage when settling after a
+      // reload; a full after tree would falsely attribute all ignored files.
       try {
         await dependencies.copyFile(join(resolved.gitDir, 'index'), indexFile);
       } catch (error) {
@@ -380,7 +400,7 @@ export function createTurnSnapshotStore(
           return failCapture(scope, phase, 'copy-index-failed');
         }
       }
-      const env = snapshotEnv(indexFile, resolved.repoObjectsDir);
+      const env = snapshotEnv(indexFile, resolved);
       let add: GitRunResult;
       if (resolved.privateRepository) {
         const paths = await snapshotWorkspaceFiles(root);
@@ -449,98 +469,6 @@ export function createTurnSnapshotStore(
     }
   };
 
-  const capturePathsNow = async (
-    scope: TurnSnapshotScope,
-    paths: readonly string[],
-  ): Promise<void> => {
-    if (disposed || storeDisabled || failedTurns.has(turnKey(scope))) return;
-    const record = recordFor(scope);
-    if (record?.before === undefined) return;
-    const root = getWorkspaceRoot();
-    if (root === undefined) return;
-    const captured = new Set(record.snapshotPaths ?? []);
-    let additions = [...new Set(paths)]
-      .flatMap((path) => toWorkspaceRelativePath(root, path) ?? [])
-      .filter((path) => !captured.has(path))
-      .slice(0, Math.max(0, MAX_CHANGED_FILES_PER_TURN - captured.size));
-    if (additions.length === 0) return;
-    let indexFile: string | undefined;
-    try {
-      await flushPending();
-      const persistedRecord = recordFor(scope);
-      if (persistedRecord?.before === undefined) {
-        return;
-      }
-      const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
-      const resolved = await resolveLayout(root, deadline);
-      if (resolved === undefined) {
-        return failCapture(scope, 'before', 'not-a-git-workspace');
-      }
-      const ignored = await git(root, ['check-ignore', '--no-index', '-z', '--stdin'],
-        readEnv(resolved.repoObjectsDir), deadline, MAX_NUMSTAT_OUTPUT_BYTES, Buffer.from(`${additions.join('\0')}\0`));
-      if (ignored.timedOut || (ignored.code !== 0 && ignored.code !== 1))
-        return void failCapture(scope, 'before', 'ignore-check-failed');
-      const ignoredPaths = new Set(ignored.stdout.toString('utf8').split('\0'));
-      // The initial tree already proves presence/absence of non-ignored files.
-      // A later tool must not replace that baseline with changes from Execute.
-      additions = additions.filter((path) => ignoredPaths.has(path));
-      if (!additions.length) return;
-      indexFile = join(storageDir, `index-${++indexSeq}`);
-      await dependencies.mkdir(objectsDir);
-      const env = snapshotEnv(indexFile, resolved.repoObjectsDir);
-      const loaded = await git(
-        root,
-        ['read-tree', persistedRecord.before],
-        env,
-        deadline,
-        4096,
-      );
-      if (loaded.timedOut || loaded.code !== 0)
-        return void failCapture(
-          scope,
-          'before',
-          loaded.timedOut ? 'timeout' : 'read-tree-failed',
-        );
-      const added = await addSnapshotPaths(root, additions, env, deadline);
-      if (added !== 'ok')
-        return void failCapture(
-          scope,
-          'before',
-          added === 'timeout' ? 'timeout' : 'add-paths-failed',
-        );
-      const written = await git(root, ['write-tree'], env, deadline, 4096);
-      if (written.timedOut || written.code !== 0)
-        return void failCapture(
-          scope,
-          'before',
-          written.timedOut ? 'timeout' : 'write-tree-failed',
-        );
-      const oid = written.stdout.toString('utf8').trim().toLowerCase();
-      if (!TREE_OID.test(oid))
-        return void failCapture(scope, 'before', 'invalid-tree-oid');
-      await persistPatch(scope, {
-        before: oid,
-        snapshotPaths: [...captured, ...additions],
-      });
-      dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot.paths',
-        attributes: { ...scope, previousTree: persistedRecord.before, tree: oid,
-          requestedCount: paths.length, addedCount: additions.length, snapshotPathCount: captured.size + additions.length } });
-    } catch (error) {
-      if (persistenceFailed) {
-        throw error;
-      }
-      return void failCapture(
-        scope,
-        'before',
-        error instanceof Error ? error.message : 'capture-paths-failed',
-      );
-    } finally {
-      if (indexFile !== undefined) {
-        await dependencies.unlink(indexFile).catch(() => undefined);
-      }
-    }
-  };
-
   const readTreeBytes = async (
     scope: TurnSnapshotScope,
     path: string,
@@ -554,7 +482,7 @@ export function createTurnSnapshotStore(
     if (oid === undefined) {
       return undefined;
     }
-    const root = getWorkspaceRoot();
+    const root = record?.workspaceRoot ?? getWorkspaceRoot();
     if (root === undefined) {
       return undefined;
     }
@@ -563,7 +491,7 @@ export function createTurnSnapshotStore(
     if (resolved === undefined) {
       return undefined;
     }
-    const env = readEnv(resolved.repoObjectsDir);
+    const env = readEnv(resolved);
     await dependencies.mkdir(objectsDir);
     const result = await git(
       root,
@@ -597,9 +525,10 @@ export function createTurnSnapshotStore(
         { ...env, GIT_LITERAL_PATHSPECS: '1' }, deadline, 4096);
       if (entry.timedOut || entry.code !== 0) return undefined;
       const value = entry.stdout.toString('utf8');
-      if (value.startsWith('160000 ') || index === parts.length && value.length > 0) return undefined;
+      if (value.startsWith('160000 ') || value.startsWith('120000 ') || index === parts.length && value.length > 0) return undefined;
       if (!value.length) break;
     }
+    if (record?.coverage === 'workspace-files-v1') return isSnapshotWorkspacePath(path) ? null : undefined;
     if (!record?.snapshotPaths?.includes(path)) {
       // An ignored file omitted from a snapshot is not proof that it did not
       // exist. Otherwise watchers count its entire contents as a new file.
@@ -614,33 +543,59 @@ export function createTurnSnapshotStore(
     const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
     const layout = await resolveLayout(root, deadline);
     if (!layout || disposed || storeDisabled) throw new Error('The saved baseline is unavailable.');
-    const result = await git(root, args, readEnv(layout.repoObjectsDir), deadline, maxBytes, input);
+    const result = await git(root, args, readEnv(layout), deadline, maxBytes, input);
     if (result.timedOut || result.code !== 0) throw new Error('The saved baseline could not be read.');
     return result.stdout;
   }, true);
   return {
-    capture(scope, phase) {
-      if (closing) {
-        return Promise.resolve(undefined);
-      }
+    async capture(scope, phase, signal) {
+      if (closing) return undefined;
       const key = turnKey(scope);
+      const existing = recordFor(scope);
+      const root = existing?.workspaceRoot ?? getWorkspaceRoot();
+      if (!root) return undefined;
+      if (existing?.[phase]) {
+        if (phase === 'after' && existing.coverage === 'workspace-files-v1') {
+          const lease = leases.get(key);
+          if (lease) { await lease.finish(); leases.delete(key); }
+          else await releaseCompletedWorkspaceTurn(root, scope);
+        }
+        return existing[phase];
+      }
+      if (phase === 'after' && !existing?.before) return undefined;
+      const cancellation = signal ? AbortSignal.any([signal, shutdown.signal]) : shutdown.signal;
+      // Wait outside the store queue: otherwise another turn's before could
+      // block the active turn's after and deadlock the workspace.
+      if (!leases.has(key) && (phase === 'before' || existing?.coverage === 'workspace-files-v1')) {
+        const lease = await acquireWorkspaceTurnLease(root, scope, cancellation, phase === 'after');
+        leases.set(key, lease);
+      }
       if (phase === 'before' && !running.has(key)) running.set(key, retain(scope));
       return enqueue(async () => {
         let captured: string | undefined;
-        try { captured = await captureNow(scope, phase); return captured; }
-        finally {
+        try {
+          cancellation.throwIfAborted();
+          captured = await captureNow(scope, phase);
+          return captured;
+        } finally {
           if (phase === 'after' || captured === undefined) {
             running.get(key)?.();
             running.delete(key);
+            const lease = leases.get(key);
+            if (lease) { await lease.finish(); leases.delete(key); }
           }
         }
       });
     },
-    capturePaths(scope, paths) {
-      if (closing) {
-        return Promise.resolve();
-      }
-      return enqueue(() => capturePathsNow(scope, paths));
+    // Tool-start is a notification, not a barrier. Never read current disk bytes
+    // into an already saved before tree, including for older callers.
+    capturePaths() { return Promise.resolve(); },
+    markDispatched(scope) {
+      return enqueue(async () => {
+        const lease = leases.get(turnKey(scope));
+        if (!lease || closing) throw new Error('The workspace baseline reservation is unavailable. The request was not sent.');
+        await lease.dispatch();
+      });
     },
     async diff(scope) {
       const record = recordFor(scope);
@@ -655,7 +610,7 @@ export function createTurnSnapshotStore(
       ) {
         throw new Error('Turn snapshot comparison is unavailable.');
       }
-      const root = getWorkspaceRoot();
+      const root = record.workspaceRoot ?? getWorkspaceRoot();
       if (root === undefined) {
         throw new Error('Turn snapshot workspace is unavailable.');
       }
@@ -677,7 +632,7 @@ export function createTurnSnapshotStore(
           record.before,
           record.after,
         ],
-        readEnv(resolved.repoObjectsDir),
+        readEnv(resolved),
         deadline,
         MAX_NUMSTAT_OUTPUT_BYTES,
       );
@@ -717,8 +672,9 @@ export function createTurnSnapshotStore(
     readTreeBytes,
     async readTreeBytesBatched(scope, path, phase, maxBytes) {
       if (!isSafeWorkspaceRelativePath(path) || disposed || storeDisabled) return undefined;
-      const oid = recordFor(scope)?.[phase];
-      const root = getWorkspaceRoot();
+      const record = recordFor(scope);
+      const oid = record?.[phase];
+      const root = record?.workspaceRoot ?? getWorkspaceRoot();
       if (!oid || !root) return undefined;
       const bytes = await treeReader.read(root, oid, path, maxBytes);
       // Missing ignored paths require the original evidence checks; absence from
@@ -761,7 +717,7 @@ export function createTurnSnapshotStore(
         const resolved = await resolveLayout(root, deadline);
         if (!resolved) return;
         const result = await git(root, ['rev-list', '--objects', '--no-object-names', '--stdin'],
-          readEnv(resolved.repoObjectsDir), deadline, 32 * 1024 * 1024, Buffer.from(roots.join('\n') + '\n'));
+          readEnv(resolved), deadline, 32 * 1024 * 1024, Buffer.from(roots.join('\n') + '\n'));
         if (result.code !== 0 || result.timedOut) {
           dependencies.recordDiagnostic({ level: 'warn', name: 'host.changes.snapshot-prune-failed',
             attributes: { reason: 'reachability-unavailable', retainedTrees: roots.length } });
@@ -782,11 +738,14 @@ export function createTurnSnapshotStore(
         return disposeOutcome;
       }
       closing = true;
+      shutdown.abort();
       disposeOutcome = queue.then(async () => {
         disposed = true;
         failedTurns.clear();
         retained.clear();
         running.clear();
+        for (const lease of leases.values()) await lease.detach();
+        leases.clear();
         layout = undefined;
         if (persistenceFailed) {
           throw persistenceFailure;

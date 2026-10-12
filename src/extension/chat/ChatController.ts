@@ -346,6 +346,7 @@ export class ChatController {
     clearTurnWatchdog(this);
     this.fileDiff.dispose?.();
     this.turnState.turn?.changesLedger?.cancel();
+    this.turnState.turn?.preparing?.abort();
     this.changeStats.dispose?.();
     const snapshotDisposal = this.turnSnapshots?.dispose();
     this.reviewCoordinator?.dispose();

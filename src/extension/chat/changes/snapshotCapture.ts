@@ -1,34 +1,13 @@
 import type { TurnSnapshotStore } from '../../changes/turnSnapshots';
 
-interface SnapshotCaptureHost {
-  readonly turnSnapshots?: TurnSnapshotStore;
-  recordHost(event: {
-    readonly level: 'warn';
-    readonly name: 'host.changes.snapshot-failed';
-    readonly attributes: {
-      readonly sessionId: string;
-      readonly turnId: string;
-      readonly phase: 'before';
-      readonly reason: 'persistence-failed';
-    };
-  }): void;
-}
-
-export function captureSnapshotBeforeInBackground(
-  host: SnapshotCaptureHost,
+/** Sending is gated by a durable baseline; capture failure must not start the agent. */
+export async function captureSnapshotBeforeSend(
+  host: { readonly turnSnapshots?: TurnSnapshotStore },
   sessionId: string,
   turnId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const snapshots = host.turnSnapshots;
-  if (snapshots !== undefined) {
-    if (snapshots.read(sessionId, turnId)?.before !== undefined) return Promise.resolve();
-    return snapshots.capture({ sessionId, turnId }, 'before').then(() => undefined, () => {
-      host.recordHost({
-        level: 'warn',
-        name: 'host.changes.snapshot-failed',
-        attributes: { sessionId, turnId, phase: 'before', reason: 'persistence-failed' },
-      });
-    });
-  }
-  return Promise.resolve();
+  if (!host.turnSnapshots) throw new Error('Change recording is unavailable. The request was not sent.');
+  const before = await host.turnSnapshots.capture({ sessionId, turnId }, 'before', signal);
+  if (!before) throw new Error('Could not save the workspace baseline. The request was not sent. Check file access and retry.');
 }

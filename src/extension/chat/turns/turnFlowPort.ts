@@ -72,7 +72,7 @@ export type TurnStopPort = TurnStatusPort & TurnIdentityPort & Pick<HostOperatio
 };
 
 /** The send/consume orchestrator composes the roles required by its event and settlement stages. */
-export type TurnFlowPort = TurnRuntimeEventPort & TurnCompletionPort & TurnIdentityPort & Pick<HostOperations, 'modelAvailability' | 'missionGateway'> & {
+export type TurnFlowPort = TurnRuntimeEventPort & TurnCompletionPort & TurnIdentityPort & Pick<HostOperations, 'modelAvailability' | 'missionGateway' | 'turnSnapshots'> & {
   readonly metadata: Readonly<Pick<HostOperations['metadata'], 'settings'>>;
   readonly sessionState: Readonly<Pick<SessionLifecycleState, 'runtimeGeneration'>>;
   readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;

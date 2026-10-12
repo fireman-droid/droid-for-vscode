@@ -3,7 +3,7 @@ import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
 import type { TurnStatus } from '../../../shared/protocol/turns';
 import { appendAcceptedUserPrompt } from '../../recovery/hostTranscriptState';
 import { sentAttachmentSummaries } from '../attachments/attachments';
-import { captureSnapshotBeforeInBackground } from '../changes/snapshotCapture';
+import { captureSnapshotBeforeSend } from '../changes/snapshotCapture';
 import type { PendingAttachment } from '../internals';
 import { evaluateTurnStart } from '../operationEligibility';
 import { recoverTransportTurn } from '../recovery/recoverTransportTurn';
@@ -51,8 +51,9 @@ export function handleSend(
     },
     detail: text,
   });
-  const beforeSnapshot = captureSnapshotBeforeInBackground(ctl, sessionId, turnId);
-  ctl.effects.armTurnWatchdog(sessionId, turnId);
+  const preparing = new AbortController();
+  ctl.turnState.turn!.preparing = preparing;
+  const beforeSnapshot = captureSnapshotBeforeSend(ctl, sessionId, turnId, preparing.signal);
   ctl.interactions.beginTurn(sessionId, turnId);
   // Edit-resend consumes the edit staging area passed in by the
   // caller; a plain send consumes the composer staging area.
@@ -119,6 +120,19 @@ export async function consumeTurn(
       handleTurnComplete(ctl, sessionId, turnId, { type: 'turn-complete', outcome: 'interrupted' });
       return;
     }
+    // A detached daemon retains workspace ownership. Persist the UI turn first
+    // so reopening this session can finish its snapshot and release that owner.
+    if (!await ctl.effects.flushRecoveryCheckpointOrReport()) {
+      failTurn(ctl, sessionId, turnId, 'recovery-checkpoint-failed');
+      return;
+    }
+    if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+    ctl.turnState.turn?.preparing?.signal.throwIfAborted();
+    await ctl.turnSnapshots?.markDispatched?.({ sessionId, turnId });
+    if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+    ctl.turnState.turn?.preparing?.signal.throwIfAborted();
+    delete ctl.turnState.turn!.preparing;
+    ctl.effects.armTurnWatchdog(sessionId, turnId);
     ctl.effects.startLiveChanges(sessionId, turnId);
     for await (const event of runtime.sendTurn(text, attachments)) {
       if (
@@ -186,7 +200,9 @@ export async function consumeTurn(
       ctl.effects.flushPendingThinking(sessionId, turnId);
       completeEvent = null;
       terminalEventSeen = true;
-      if (recoverTransportTurn(ctl, runtime, runtimeGeneration, sessionId, turnId, error)) return;
+      const preparing = ctl.turnState.turn?.preparing;
+      if (!preparing && recoverTransportTurn(ctl, runtime, runtimeGeneration, sessionId, turnId, error)) return;
+      if (ctl.turnState.turn) delete ctl.turnState.turn.preparing;
       if (ctl.turnState.turn?.status === 'stopping' && error instanceof Error && error.name === 'AbortError')
         completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
       else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed',

@@ -28,19 +28,25 @@ export async function resolveSettledChangeFiles(
   if (snapshots === undefined) {
     return fallback('no-snapshot-store');
   }
+  const before = snapshots.read(sessionId, turnId);
+  if (!before?.before) return fallback('missing-before-tree');
   try {
     await snapshots.capture(scope, 'after');
-  } catch {
+  } catch (error) {
+    if (before.coverage === 'workspace-files-v1') throw error;
     return fallback('after-capture-threw');
   }
   const record = snapshots.read(sessionId, turnId);
+  if (before.coverage === 'workspace-files-v1' && !record?.after)
+    throw new Error('The final workspace snapshot could not be saved. Turn changes are incomplete.');
   if (record?.before === undefined || record.after === undefined) {
     return fallback(record?.before === undefined ? 'missing-before-tree' : 'missing-after-tree');
   }
   let treeStats: ReadonlyMap<string, FileChangeStat>;
   try {
     treeStats = await snapshots.diff(scope);
-  } catch {
+  } catch (error) {
+    if (before.coverage === 'workspace-files-v1') throw error;
     return fallback('snapshot-diff-failed');
   }
   const files = composeChangeFiles(treeStats, toolPaths);
