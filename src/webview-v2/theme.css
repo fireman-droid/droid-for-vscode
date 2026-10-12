@@ -25,6 +25,7 @@
   :root {
     --chat-font-sans: var(--vscode-font-family, 'Segoe UI');
     --chat-font-mono: var(--vscode-editor-font-family, Consolas);
+    --review-question-ink: #ff5a00;
   }
   :root[data-theme-preference='auto'] {
     /* Editor text and its background are a pair. Workbench descriptions and

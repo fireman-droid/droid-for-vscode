@@ -66,7 +66,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       followedOffset.current = null;
       follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
     }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
-      <Message from="user"><MessageContent className="review-question-prompt text-[var(--link-ink)]">{entry.question}</MessageContent></Message>
+      <Message from="user"><MessageContent className="review-question-prompt text-[var(--review-question-ink,var(--link-ink))]">{entry.question}</MessageContent></Message>
       {entry.answer ? <Message from="assistant"><MessageContent><Markdown text={entry.answer} streaming={entry.state === 'streaming'} /></MessageContent></Message> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></div>
