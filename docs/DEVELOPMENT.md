@@ -264,8 +264,8 @@ cursor --install-extension dist/droidvisx.vsix --force
 
 ## GitHub Releases 分发
 
-分发流程是 **准备源码 → 构建与校验 → 生成附件 → 草稿 → 人工公开发布**。
-不自动上传 Marketplace 或 Open VSX。
+分发流程是 **准备源码 → 构建与校验 → 生成附件 → 草稿 → 人工公开发布 → 自动上架 Open VSX**。
+Cursor 从 Open VSX 获取第三方扩展；本流程不发布到 Microsoft Marketplace。
 
 ### 本地准备附件
 
@@ -287,14 +287,39 @@ pnpm run release:assets
 | --- | --- | --- |
 | 只获得构建产物 | Actions → **Build Droid release**，tag 留空，不勾选 draft | 构建 `main`，上传保留 30 天的 artifact |
 | 准备版本草稿 | 推送已合入 `main` 的版本标签，或填写已有 tag 并勾选 draft | 构建并创建 Draft Release |
-| 公开版本 | 维护者检查版本说明、附件与公开范围后点击 **Publish release** | 对外发布该版本 |
+| 公开版本 | 维护者检查版本说明、附件与公开范围后点击 **Publish release** | 对外发布该版本，并触发 **Publish Droid to Open VSX** |
 
 普通分支 push 不触发 Release 工作流。标签、`package.json` 版本与 CHANGELOG 必须一致。
 已有同标签 Release 时工作流拒绝覆盖；上传中断只从原构建补缺失附件，避免混用重新构建的产物。
 公开版本有问题时递增版本，不移动旧标签或替换旧包。
 
-流程实现见 [release.yml](../.github/workflows/release.yml)
-和 [checkRelease.mjs](../scripts/checkRelease.mjs)。公开发布需维护者明确确认。
+### 首次配置 Open VSX 自动发布
+
+使用 [Open VSX Trusted Publishing](https://github.com/eclipse-openvsx/openvsx/wiki/Trusted-Publishing)，
+由 GitHub Actions 身份换取短期发布凭据，无需向仓库保存长期 Token。
+命名空间所有者在 [Trusted Publishers](https://open-vsx.org/user-settings/trusted-publishers)
+为扩展 `droidvisx.droidvisx` 添加一次 GitHub Actions 绑定：
+
+| 字段 | 值 |
+| --- | --- |
+| Namespace / Extension | `droidvisx` / `droidvisx` |
+| Organization or User name | `fireman-droid` |
+| Repository name | `droid-for-vscode` |
+| Workflow filename | `publish-openvsx.yml` |
+| Environment name | 留空 |
+
+绑定完成后，正式 Release 的 `published` 事件会下载该 Release 的原始 VSIX、摘要和构建信息，
+核对标签、源码提交、版本、扩展 ID 与 SHA-256 后上架；不重新构建或替换附件。
+普通 push、草稿和预发布不会上架。首次使用须创建包含该工作流的新版本标签；旧 Release 不会补发。
+版本号必须高于市场已有版本（配置时 Open VSX 已有 `0.8.5`），同时更新根版本与 CHANGELOG。
+缺少绑定、附件或校验失败会使 Actions 明确失败；修正配置后可在原运行点击 **Re-run failed jobs**。
+同版本已发布时会拒绝重复上架，不能借重跑覆盖原包。
+Open VSX 发布完成后，Cursor 的同步与审核可能稍后才显示更新，详见
+[Cursor 扩展说明](https://prod.cursor.com/help/customization/extensions)。
+
+流程实现见 [release.yml](../.github/workflows/release.yml)、
+[publish-openvsx.yml](../.github/workflows/publish-openvsx.yml)
+和 [checkRelease.mjs](../scripts/checkRelease.mjs)。公开发布仍由维护者点击确认。
 
 <a id="docs-site"></a>
 

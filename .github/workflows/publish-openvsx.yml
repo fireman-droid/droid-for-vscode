@@ -1,0 +1,82 @@
+name: Publish Droid to Open VSX
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openvsx-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ !github.event.release.draft && !github.event.release.prerelease }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require release source on main
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release source must be committed on main.' }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Check release version and changelog
+        id: metadata
+        run: node scripts/checkRelease.mjs
+      - name: Download the published release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          gh release download $env:RELEASE_TAG --dir release --pattern "droid-$env:RELEASE_VERSION.vsix" --pattern SHA256SUMS.txt --pattern build-info.json
+          if ($LASTEXITCODE -ne 0) { throw 'The release must include its VSIX, SHA256SUMS.txt and build-info.json.' }
+      - name: Verify the published package
+        id: package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          EXTENSION_ID: ${{ steps.metadata.outputs.extensionId }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.sourceSha }}
+        run: |
+          $assetName = "droid-$env:RELEASE_VERSION.vsix"
+          $packagePath = Join-Path release $assetName
+          $info = Get-Content -Raw -LiteralPath release/build-info.json | ConvertFrom-Json
+          if ($info.sourceDirty -ne $false -or $info.sourceSha -ne $env:SOURCE_SHA) { throw 'Package source must match the clean release tag.' }
+          if ($info.tag -ne $env:RELEASE_TAG -or $info.version -ne $env:RELEASE_VERSION -or $info.extensionId -ne $env:EXTENSION_ID -or $info.assetName -ne $assetName) { throw 'Release metadata does not match the tag and extension.' }
+          $actual = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksum = (Get-Content -Raw -LiteralPath release/SHA256SUMS.txt).Trim()
+          if ($actual -ne $info.sha256 -or $checksum -ne "$actual  $assetName") { throw 'Release package checksum mismatch.' }
+          $manifestText = tar -xOf $packagePath extension/package.json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read the packaged extension manifest.' }
+          $manifest = $manifestText | ConvertFrom-Json
+          if ("$($manifest.publisher).$($manifest.name)" -ne $env:EXTENSION_ID -or $manifest.version -ne $env:RELEASE_VERSION) { throw 'Packaged extension identity or version mismatch.' }
+          "path=$packagePath" >> $env:GITHUB_OUTPUT
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Publish the verified VSIX with GitHub identity
+        shell: pwsh
+        env:
+          VSIX_PATH: ${{ steps.package.outputs.path }}
+        run: |
+          pnpm exec ovsx publish $env:VSIX_PATH --trusted-publishing --registryUrl https://open-vsx.org
+          if ($LASTEXITCODE -ne 0) { throw 'Open VSX publish failed. Check the trusted publisher registration and version.' }
+          "Published $env:RELEASE_TAG to Open VSX. Cursor availability depends on its marketplace synchronization and checks." >> $env:GITHUB_STEP_SUMMARY
