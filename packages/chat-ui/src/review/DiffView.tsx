@@ -5,6 +5,7 @@ import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
 import { useSplitDiffSelection } from './splitDiffSelection';
+import { useSplitDiffDragScroll } from './splitDiffDragScroll';
 export { findDiffChange } from './diffNavigation';
 
 const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
@@ -85,6 +86,7 @@ function textColumns(text: string): number {
 
 function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivElement | null>; before: number; after: number }) {
   const scrollbars = useRef<Array<HTMLDivElement | null>>([]);
+  useSplitDiffDragScroll(root, scrollbars);
   useEffect(() => {
     const diff = root.current;
     if (!diff) return;
