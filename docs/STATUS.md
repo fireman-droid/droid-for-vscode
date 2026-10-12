@@ -15,6 +15,11 @@
 - `pnpm run typecheck`、`pnpm run lint:budgets`、`pnpm run package:vsix` 及 168 条 VSIX 静态校验通过，未加载运行时入口。已安装到 Microsoft VS Code 与 Cursor，两边清单及各 10 个主要文件均与 VSIX 一致；包 SHA256 为 `4746d0b45c3a1aaf373cf06fec31911872c024e923b83be1d441c14b6d978f94`。npm 配置与安装 CLI 弃用提示未阻断交付。
 - 按用户要求未新增或运行测试／界面自动化，需 Reload Window 后人工验收。本地仍使用 0.8.9 版本号，此增量包尚未另发 GitHub Release 或市场版本；下面的正式 0.8.9 发布记录对应原发布附件。
 
+## 外部文件拖入与附件预览（2026-10-12）
+
+- 主输入框和消息编辑区识别 VS Code／Cursor Explorer 的 `ResourceURLs`；附件拖入时截住 dragenter／dragover／drop 的冒泡，避免编辑器接管拖放。桌面／文件夹拖入优先读取用户选择的 File 字节，不再因同时带有工作区外路径而丢弃；纯 URI 仍沿用 Host 的工作区范围与附件限额。
+- 按用户当前要求只构建打包，不新增或运行测试／界面自动化；外部拖入与实际预览由用户重载后验收。
+
 ## v0.8.9 正式发布（2026-10-12）
 
 - 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍，以及重新打开会话时的遗留记录恢复；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。保留已有发布和标签。

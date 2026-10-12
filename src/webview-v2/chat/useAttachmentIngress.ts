@@ -68,25 +68,30 @@ export function useAttachmentIngress(options: IngressOptions) {
       stageFiles(files);
     },
     onDragOver: (event: DragEvent) => {
-      if (!Array.from(event.dataTransfer.types).some((type) => ['Files', 'text/uri-list', 'application/vnd.code.uri-list', 'text/html'].includes(type))) return;
+      if (!Array.from(event.dataTransfer.types).some((type) => ['files', 'text/uri-list', 'application/vnd.code.uri-list', 'resourceurls', 'text/html'].includes(type.toLowerCase()))) return;
       event.preventDefault();
+      event.stopPropagation();
       event.dataTransfer.dropEffect = disabled ? 'none' : 'copy';
     },
     onDrop: (event: DragEvent) => {
-      if (disabled || owner === null) { event.preventDefault(); return; }
+      if (disabled || owner === null) { event.preventDefault(); event.stopPropagation(); return; }
       const uris = readDroppedFileUris(event.dataTransfer);
       const files = Array.from(event.dataTransfer.files);
       const remote = readDroppedRemoteImageUrl(event.dataTransfer);
-      if (uris.length > 0) {
+      if (files.length > 0) {
+        // Native file drops carry user-selected bytes, even outside the workspace.
         event.preventDefault();
+        event.stopPropagation();
+        stageFiles(files);
+      } else if (uris.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
         const available = remaining();
         if (uris.length > available) capacityNotice();
         if (available > 0) actions.uris(uris.slice(0, Math.min(available, MAX_ATTACHMENT_URI_COUNT)));
-      } else if (files.length > 0) {
-        event.preventDefault();
-        stageFiles(files);
       } else if (remote !== null) {
         event.preventDefault();
+        event.stopPropagation();
         if (remaining() > 0) actions.remoteImage(remote); else capacityNotice();
       }
     },

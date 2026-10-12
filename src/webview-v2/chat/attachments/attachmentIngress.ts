@@ -39,6 +39,20 @@ export function readDroppedFileUris(
       }
     }
   }
+  if (entries.length === 0) {
+    // VS Code and Cursor's Explorer use this format, not text/uri-list.
+    const resources = dataTransfer.getData('ResourceURLs');
+    if (resources) {
+      try {
+        const parsed: unknown = JSON.parse(resources);
+        entries = Array.isArray(parsed)
+          ? parsed.filter((entry): entry is string => typeof entry === 'string')
+          : [];
+      } catch {
+        // A malformed external drag is not a file selection.
+      }
+    }
+  }
   return entries
     .filter((uri) => uri.startsWith('file://') && uri.length <= MAX_ATTACHMENT_URI_LENGTH)
     .slice(0, MAX_ATTACHMENT_URI_COUNT);

@@ -115,7 +115,7 @@ export function ComposerView({
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={sendLabel} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>
     <PopoverAnchor asChild>
-      <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragOver={onDragOver}
+      <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragEnter={onDragOver} onDragOver={onDragOver}
         onSubmit={(event) => { event.preventDefault(); submit(); }}>
         {inputReplacement == null ? <>
           <QuoteChips quotes={quotedContext} previewAnchor={surface} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="px-3 pt-2" />
