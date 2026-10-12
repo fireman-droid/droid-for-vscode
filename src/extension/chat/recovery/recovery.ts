@@ -425,7 +425,7 @@ export async function finishRecoveredTurn(
   // Stop pressed while the history loaded still ends as interrupted.
   const interrupted = ctl.turnState.turn?.status === 'stopping';
   ctl.interactions.endTurn(sessionId, turnId);
-  if (isFinalRecoveredHistory(loaded)) {
+  if (isFinalRecoveredHistory(loaded, outcome.status === 'confirmed')) {
     ctl.missionState.mission = loaded.mission ?? null;
     ctl.metadata.tokenUsage = {
       cumulative: loaded.tokenUsage ?? ctl.metadata.tokenUsage.cumulative,
@@ -490,6 +490,7 @@ async function loadBoundedRecoveryHistory(
 
 function isFinalRecoveredHistory(
   loaded: unknown,
+  confirmedOutcome: boolean,
 ): loaded is Extract<SessionHistoryResult, { status: 'available' }> {
   if (!isStrictRecord(loaded) || dataValue(loaded, 'status') !== 'available') {
     return false;
@@ -497,12 +498,16 @@ function isFinalRecoveredHistory(
   const state = dataValue(loaded, 'state');
   if (
     !isStrictRecord(state) ||
-    !hasExactKeys(state, ['transcript', 'historyStatus', 'truncated']) ||
-    dataValue(state, 'historyStatus') !== 'complete' ||
-    dataValue(state, 'truncated') !== false
+    !hasExactKeys(state, ['transcript', 'historyStatus', 'truncated'])
   ) {
     return false;
   }
+  const status = dataValue(state, 'historyStatus');
+  const truncated = dataValue(state, 'truncated');
+  // A bounded history window can omit old messages while the exact submitted
+  // turn already has a durable result. Retain partial history, not a false failure.
+  if (!(status === 'complete' && truncated === false) &&
+      !(confirmedOutcome && status === 'partial' && truncated === true)) return false;
   const transcript = dataValue(state, 'transcript');
   if (!isExactArray(transcript, 0, MAX_SESSION_TRANSCRIPT_ITEMS)) {
     return false;
