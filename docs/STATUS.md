@@ -1,7 +1,7 @@
 # 当前状态
 
 更新：2026-10-12。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.10`。
-[GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
+[GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开；正式版本与本地增量的交付状态分别记录如下。
 当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
 `v0.8.1`、`v0.8.6`、`v0.8.7` 保留为历史草稿，不移动旧标签，也不以旧包替代当前版本。
@@ -14,7 +14,8 @@
 - 新增简体中文、繁体中文和英语。默认读取编辑器语言；`zh-Hant`、台湾、香港和澳门地区归为繁体，其余中文归为简体，其他语言回退英语。管理页“常规 > 界面语言”支持立即切换，也可设置 `droidvisx.language`。
 - 聊天、旁问、Review 问答、模型管理、智能补全设置、会话历史、Mission 和只读 Viewer 共用词条与语言上下文；切换不重建编辑器、不清空草稿、不重启任务。用户消息、模型回答、代码、模型名称和外部服务原始错误保持原文。命令面板及编辑器原生配置说明通过 `package.nls` 跟随编辑器语言。
 - 获准的 16 项最小模拟验证通过，覆盖语言识别、Host 向已绑定面板广播、设置切换、聊天草稿／光标和任务草稿保留、三语言主要页面及词条占位符；没有调用模型、打开真实会话或改动业务文件。类型检查和文件预算检查通过。真实布局仍由用户在编辑器中验收。
-- 本次为 `0.8.10` 源码上的本地增量，尚未创建新的 GitHub Release 或市场版本；安装交付结果在打包完成后补充。
+- 已从干净的 `main` 提交 `1ff6e13` 完成生产构建，生成 `dist/droidvisx.vsix`；静态校验通过 171 个归档条目、打包依赖及三个语言文件的 53 个清单词条，未执行扩展入口加载。包 SHA256 为 `eb7134006ac1d70e9b63005df38466310afd029b6b062ec054dae8eb7460034d`。
+- 已安装到 Microsoft VS Code 和 Cursor 当前用户扩展目录，两边清单及各 13 个主要文件与安装包一致；需 Reload Window。本次为 `0.8.10` 源码上的本地增量，已本地提交，尚未推送或创建新的 GitHub Release／市场版本。
 
 ## v0.8.10 正式发布（2026-10-12）
 

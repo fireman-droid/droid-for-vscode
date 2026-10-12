@@ -38,6 +38,9 @@ const expectedEntries = [
   // Shipped so "Export Diagnostics Bundle" can include troubleshooting help.
   'extension/docs/TROUBLESHOOTING.md',
   'extension/package.json',
+  'extension/package.nls.json',
+  'extension/package.nls.zh-cn.json',
+  'extension/package.nls.zh-tw.json',
   'extension/readme.md',
   'extension/resources/droidvisx.png',
   'extension/resources/droidvisx.svg',
@@ -69,6 +72,14 @@ assert.deepEqual(
 );
 
 const manifest = JSON.parse(readEntry('extension/package.json'));
+const localizationKeys = [...JSON.stringify(manifest).matchAll(/"%([^%"]+)%"/gu)].map(match => match[1]);
+for (const filename of ['package.nls.json', 'package.nls.zh-cn.json', 'package.nls.zh-tw.json']) {
+  const translations = JSON.parse(readEntry(`extension/${filename}`));
+  for (const key of localizationKeys) {
+    assert.equal(typeof translations[key], 'string', `${filename} is missing ${key}`);
+    assert.ok(translations[key].trim(), `${filename} has an empty ${key}`);
+  }
+}
 for (const key of ['name', 'publisher', 'version']) {
   assert.equal(
     manifest[key],
