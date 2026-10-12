@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-12。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.8`。
+更新：2026-10-12。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.9`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -9,11 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
-## v0.8.8 正式发布（2026-10-12）
+## v0.8.9 正式发布（2026-10-12）
 
-- 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。版本号高于 Open VSX 当前的 0.8.5，保留已有发布和标签。
+- 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍，以及重新打开会话时的遗留记录恢复；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。保留已有发布和标签。
 - 由版本标签构建统一 VSIX、SHA256SUMS 与来源信息，通过发布校验后公开 GitHub Release，再由已绑定的可信发布工作流上传同一 VSIX 到 Open VSX；构建、发布和安装结果在完成后记录。
-- v0.8.6、v0.8.7 构建通过并保留为草稿；本次包含后台 IDE 恢复、遗留工作区记录恢复、问答样式及记录栏高度修复，使用 v0.8.8 标签统一交付。
+- v0.8.6、v0.8.7 构建通过并保留为草稿；v0.8.8 已公开到 GitHub，CI 完整 VSIX 校验及 VS Code／Cursor 安装完成，可信发布工作流报告 Open VSX 上传成功。公开 API 尚未查询到该版本，不能据此确认市场可下载；本次后续修复使用 v0.8.9 统一交付。
 
 ## 后台结束后的 IDE 错误恢复（2026-10-12）
 
