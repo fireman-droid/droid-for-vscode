@@ -33,7 +33,7 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         <span className="dvx-agent-task-heading">
           <span className="dvx-agent-task-title" title={title}>{title}</span>
           <span className="dvx-agent-task-role" title={role}>{role}<span className="sr-only"> {t("subagent")}</span></span>
-          <span className="dvx-agent-task-status">{statusLabel}</span>
+          <span className="dvx-agent-task-status">{t(statusLabel)}</span>
         </span>
         <span className="dvx-agent-task-meta">
           {activity ? <SlidingText text={activity} className="dvx-agent-task-activity" /> : null}

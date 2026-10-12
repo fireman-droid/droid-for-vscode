@@ -1,6 +1,11 @@
 import type { MessageTranslations } from './translate';
 
 export const dynamicMessages: readonly MessageTranslations[] = [
+  ["{count} Queued Message","{count} 条排队消息","{count} 條排隊訊息"],
+  ["{count} Queued Messages","{count} 条排队消息","{count} 條排隊訊息"],
+  ["paused after stop","停止后已暂停","停止後已暫停"],
+  ["paused after a failed turn","本轮失败后已暂停","本輪失敗後已暫停"],
+  ["sending is blocked right now","当前无法发送","目前無法發送"],
   ["Regenerating response","正在重新生成回答","正在重新生成回答"],
   ["Forking chat","正在分支对话","正在分支對話"],
   ["Today","今天","今天"],

@@ -29,8 +29,8 @@ export function QueueBar({ queue, flow }: {
     previousPause.current = queue.paused;
   }, [queue.paused]);
   if (queue.items.length === 0) return null;
-  const meta = queue.paused !== null ? pausedCopy[queue.paused] : queue.items.length >= MAX_QUEUED_MESSAGES ? 'Queue full' : '';
-  const label = `${queue.items.length} Queued ${queue.items.length === 1 ? 'Message' : 'Messages'}`;
+  const meta = t(queue.paused !== null ? pausedCopy[queue.paused] : queue.items.length >= MAX_QUEUED_MESSAGES ? 'Queue full' : '');
+  const label = t(queue.items.length === 1 ? '{count} Queued Message' : '{count} Queued Messages', { count: queue.items.length });
   const markers = { image: '[image]', pdf: '[pdf]', text: '[file]', editor: '[editor]', selection: '[selection]' };
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded} asChild><section aria-label={t("Queued messages")} className="v2-composer-queue">

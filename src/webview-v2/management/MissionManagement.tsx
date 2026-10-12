@@ -47,7 +47,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
         <tbody>{visible.map(row => <tr key={row.catalogId}>
           <td><Button variant="plain" size="none" className="management-mission-title" title={row.title} disabled={state.busy}
             onClick={() => void state.run({ kind: 'missions.open', id: row.catalogId })}>{row.title}</Button>
-            <small className="management-mission-status">{formatLifecycle(row.lifecycle)}</small></td>
+            <small className="management-mission-status">{t(formatLifecycle(row.lifecycle))}</small></td>
           <td><span className="management-mission-label" title={row.workspaceLabel}>{row.workspaceLabel}</span></td>
           <td><span className="management-mission-label" title={row.computerLabel}>{row.computerLabel}</span></td>
           <td>{row.progress ? <div className="management-mission-progress">

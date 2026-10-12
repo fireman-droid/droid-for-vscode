@@ -27,7 +27,7 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
     <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
       <TabsList aria-label={t("Mission filters")} className="v2-mission-filters inline-flex flex-wrap gap-0.5 rounded-lg border-0 p-0.5">
         {MISSION_CONTROL_CATALOG_FILTERS.map((value) => <TabsTrigger key={value} value={value}
-          className="flex items-center gap-1.5 rounded-md border-0 px-2.5 py-1.5">{formatFilter(value)}<span aria-hidden="true" className="v2-mission-filter-count rounded-full border border-border px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-muted-foreground">{state.rows.filter((row) => matchesFilter(row, value)).length}</span></TabsTrigger>)}
+          className="flex items-center gap-1.5 rounded-md border-0 px-2.5 py-1.5">{t(formatFilter(value))}<span aria-hidden="true" className="v2-mission-filter-count rounded-full border border-border px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-muted-foreground">{state.rows.filter((row) => matchesFilter(row, value)).length}</span></TabsTrigger>)}
       </TabsList>
     </div>
     {state.status === 'loading' && state.rows.length === 0 ? <DroidLoading label={t("Loading Missions…")} detail={t("Reading the local Droid catalog.")} />
@@ -39,7 +39,7 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
       {state.status === 'error' && state.retryable ? <Button variant="outline" onClick={onRefresh}>{t("Retry")}</Button> : null}
       {!refreshing && state.status !== 'error' && rows.length === 0 ? <section className="v2-mission-empty grid justify-items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
         <span className="grid size-10 place-items-center rounded-full bg-muted"><FolderGit2 className="size-5 text-muted-foreground" aria-hidden="true" /></span>
-        <h2 className="text-sm font-medium">{state.rows.length === 0 ? t("No Missions yet") : t("No {p0} Missions", { p0: formatFilter(filter).toLowerCase() })}</h2>
+        <h2 className="text-sm font-medium">{state.rows.length === 0 ? t("No Missions yet") : t("No {p0} Missions", { p0: t(formatFilter(filter)) })}</h2>
         <p className="max-w-sm text-muted-foreground">{state.rows.length === 0 ? t("Start with a concrete outcome. Your Mission plan and feature progress will appear here.") : t("Choose another filter to see the other Missions in this catalog.")}</p>
         {state.rows.length === 0 ? <Button variant="outline" className="mt-1" onClick={() => onNavigate({ route: 'new-mission' })}><Plus />{t("New Mission")}</Button> : null}
       </section> : null}
@@ -64,7 +64,7 @@ function MissionCard({ row, name, onOpen }: {
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-3">
             <strong className="min-w-0 whitespace-normal break-words font-medium">{row.title}</strong>
-            <span className="v2-mission-pill shrink-0" data-tone={tone}><span aria-hidden="true" className="v2-mission-dot" />{formatLifecycle(row.lifecycle)}</span>
+            <span className="v2-mission-pill shrink-0" data-tone={tone}><span aria-hidden="true" className="v2-mission-dot" />{t(formatLifecycle(row.lifecycle))}</span>
           </span>
           <span className="mt-2.5 flex items-center gap-2.5">
             {row.progress === null ? <span className="text-xs text-muted-foreground">—</span> : <>
