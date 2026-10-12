@@ -1,19 +1,13 @@
-<div align="center">
+# Droid - AI Coding Agent
 
-<img src="https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main/resources/droidvisx.png" alt="Droid" width="80" height="80">
+**把 Factory Droid 带进 VS Code 与 Cursor。**
 
-# Droid
-
-**在 VS Code 与 Cursor 里对话、旁问、审阅改动。**
-
-Factory Droid CLI 的非官方开源界面，支持使用自己的模型服务（BYOK）。
+在编辑器里推进编码任务、审阅文件改动，或选中代码随时提问。支持使用自己的模型服务（BYOK）。
 
 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx) · [下载 VSIX](https://github.com/fireman-droid/droid-for-vscode/releases/latest) · [使用文档](docs/README.md) · [更新记录](CHANGELOG.md)
 
-</div>
-
-Droid 连接本机的 Factory Droid，把会话、工具执行和文件修改带进编辑器。
-长回复可以展开阅读，临时问题可以单独追问，代码改动可以直接对照检查，让任务与代码保持在同一个工作区。
+Droid 是由 droidvisx 维护的非官方社区扩展，连接本机的 Factory Droid CLI。
+会话、工具执行与代码审阅集中在同一个工作区；旁问保留主任务上下文，逐项对照改动后再继续。
 
 ![Droid 实际界面：左侧对照文件改动，右侧查看对话、任务计划与工具执行](https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main/docs/images/review-split.png)
 

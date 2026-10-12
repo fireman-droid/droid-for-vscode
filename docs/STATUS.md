@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-12。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.9`。
+更新：2026-10-12。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.9`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
 当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -13,7 +13,7 @@
 
 - 发布范围为 main 已完成的修复、Review 问答与交互优化、新图标和介绍，以及重新打开会话时的遗留记录恢复；暂停的 Thinking 改动保留在本地，不进入版本标签或安装包。保留已有发布和标签。
 - [v0.8.9 构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38239478983)完成类型检查、预算检查、生产构建和完整 VSIX 校验；来源为干净的 main 提交 `8ff2da11f715c44b1a1d0ab5dbfa32dedc221395`，包 SHA256 为 `0066408a89b98c7e2391c57b8e6cf7b36d74bb341ff465701cf777fa347f0ade`。已安装到 Microsoft VS Code 与 Cursor，各 10 个文件及清单和发布包一致，需 Reload Window；安装 CLI 的 DEP0169 弃用提示未阻断交付。
-- [GitHub v0.8.9](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.9) 已公开，[Open VSX 自动发布](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38239814207)成功上传同一包。0.8.8 已确认市场可下载，0.8.9 公开接口尚不可见，不能宣称 Cursor 市场更新已就绪；本地安装不受影响。
+- [GitHub v0.8.9](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.9) 已公开，[Open VSX 自动发布](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38239814207)成功上传同一包。Open VSX 已确认 0.8.9 可下载，Cursor 的公开市场接口亦返回 0.8.9、新简介和该版本黑底白色图标地址；旧搜索结果仍需在编辑器重新加载。
 - v0.8.6、v0.8.7 构建通过并保留为草稿，v0.8.8 保留为已公开历史版本。
 
 ## 后台结束后的 IDE 错误恢复（2026-10-12）
@@ -70,6 +70,7 @@
 
 ## GitHub 与扩展市场介绍（2026-10-12）
 
+- 按用户参照精简扩展详情首屏：显示名为 `Droid - AI Coding Agent`，一句话简介说明 Factory Droid、VS Code／Cursor、代码审阅与 BYOK，并注明社区扩展；README 使用左对齐标题、简短用途和安装入口，保留真实截图及文档。扩展 ID、发布者与黑底白色图标保持一致，新文案随当前本地包交付，尚未另发市场版本。
 - 重写 README 首屏、安装入口与功能介绍，使用现有真实截图和新图标；补充 Cursor／Open VSX 安装及更新方式，保留平台、数据和许可证边界。扩展简介明确 VS Code、Cursor、BYOK、旁问、审阅与补全；审阅指南同步行内问答模型的设置入口。
 - `typecheck`、`lint:budgets`、生产构建和 168 条 VSIX 静态校验通过，跳过运行时入口加载；核对了文档相对链接及包内图标、截图、文档 URL。已安装到 Microsoft VS Code 和 Cursor，两边 10 个文件与清单和安装包一致，需 Reload Window。未运行测试、浏览器自动化或截图验证；暂停的 Thinking 改动未进入安装包。
 - GitHub README 已随提交更新；Open VSX 简介、详情页及新图标已随 0.8.8 发布。GitHub About 与 Topics 保留现有配置。
