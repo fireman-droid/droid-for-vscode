@@ -79,7 +79,8 @@ export async function loadReviewGitScope(
     label = `${baseBranch} merge-base → HEAD`;
     commitCount = Number((await reviewGit(root, ['rev-list', '--count', `${before}..${head}`])).toString().trim());
   }
-  const args = ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', '--no-textconv', before];
+  const args = ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', '--no-textconv',
+    ...(after === 'worktree' ? ['--ignore-cr-at-eol'] : []), before];
   if (after !== 'worktree') args.push(after);
   args.push('--');
   const records = (await reviewGit(root, args)).toString('utf8').split('\0').filter(Boolean);
