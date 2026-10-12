@@ -60,6 +60,7 @@ SDK 中出现接口就自动成为产品功能。
 | SDK 消息回退 | 已接通，待 VS Code 人工验收 | 编辑重发使用原生 getRewindInfo／rewind；可选恢复旧文件、删除新文件，范围包含后续轮次。保留真实成功／失败数量；恢复部分失败或结果缺失时停止自动重发，文字与附件回到输入区。后继会话重接不重复恢复文件 |
 | Review 的 Git 比较 | 已接通，待 VS Code 人工验收 | 六个范围为记录操作、Agent Turn、Workspace、Branch、Unstaged、Staged；后四项统一使用本地 Git。无 HEAD 可查看 Workspace／Index 比较；Branch 采用本地所选引用的 merge-base→HEAD，无唯一默认分支时要求选择，不自动 fetch。不改变逐轮归属和撤销证据 |
 | Git Commit | 已接通，待 VS Code 人工验收 | Files 暂存所选文件当前修改，Staged 只提交已有 Index、保留未暂存部分；全部已有暂存文件必须明确选中。完整状态分页加载后才能提交，预览绑定分支／Index／内容，执行前复核，Files 暂存后再次核验。单仓库根目录约束保留；不承诺与外部 Git 进程原子隔离，失败可能保留已执行的暂存，不自动 push |
+| Review 行内问答 | 已接通，待 VS Code 人工验收 | 分栏／合并 Diff 选区下方提问、选模型、流式回答与追问；独立隐藏 fork 禁用工具，不提供 Edit，不改主聊天或 BTW。一次一个问答，关闭／切范围／布局／会话／原补丁变化时释放；File 全文与 Native Diff 不提供入口 |
 | Review Agent | 已接通，受限 | 复用独立 `/review` 会话与 Viewer 报告；不宣称精确审阅单次操作或 Index，不替用户执行 push |
 | Markdown、KaTeX、Mermaid | 已接通 | 禁止原始 HTML |
 | Canvas HTML | 已移除 | 不再提供文件、代码块、工具结果或 `/canvas` 预览入口；HTML 文件仍可正常打开 |

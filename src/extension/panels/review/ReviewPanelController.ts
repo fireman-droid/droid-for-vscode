@@ -15,6 +15,7 @@ import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 import { gitStatusPages } from '../../../shared/protocol/gitStatusPaging';
 import { isId } from '../../../shared/validation/guards';
 import { reviewWorkspaceRoot } from '../../review/reviewWorkspaceRoot';
+import { ReviewQuestionHost } from '../../review/ReviewQuestionHost';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -27,6 +28,7 @@ export class ReviewPanelController implements vscode.Disposable {
   private pendingIntent: { generation: number; request: ReviewPanelOpen } | null = null;
   private agentTarget: { sessionId: string; reviewSessionId: string; root: string } | null = null;
   private readonly subscriptions: vscode.Disposable[];
+  private readonly questions: ReviewQuestionHost;
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly controller: ChatController,
@@ -34,6 +36,7 @@ export class ReviewPanelController implements vscode.Disposable {
     private readonly git: GitWorkflow,
     private readonly viewer: SessionViewerPanelController,
   ) {
+    this.questions = new ReviewQuestionHost(controller, message => this.post(message));
     this.subscriptions = [
       controller.subscribe((message) => {
         if (message.type === 'review.agentReviewState' && message.reviewSessionId && this.target?.sessionId === message.sessionId)
@@ -41,9 +44,11 @@ export class ReviewPanelController implements vscode.Disposable {
         if (message.type === 'host.snapshot') {
           if (this.target && (this.target.sessionId !== controller.sessionState.sessionId || this.target.root !== reviewWorkspaceRoot(controller)))
             this.invalidated = true;
-          if (!this.current()) this.cancelPendingOpen();
+          if (!this.current()) { this.cancelPendingOpen(); this.questions.reset(); }
           this.postContext();
         }
+        if ((message.type === 'host.snapshot' || message.type === 'host.connection' || message.type === 'session.model-catalog' || message.type === 'session.settings') && this.current())
+          this.questions.models(this.target!.sessionId);
         if (message.type === 'review.operationResult' && message.sessionId === this.target?.sessionId &&
           message.operation === 'open' && !message.ok) this.pendingIntent = null;
         if ('sessionId' in message && message.sessionId === this.target?.sessionId &&
@@ -67,6 +72,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const latestOperation = this.latestOperationTurn();
     const latest = this.controller.effects.readLatestConversationChanges();
     this.cancelPendingOpen();
+    this.questions.reset();
     this.target = { sessionId, root,
       ...(message?.turnId ? { turnId: message.turnId } : {}),
       ...(message?.toolUseId ? { toolUseId: message.toolUseId } : {}),
@@ -96,7 +102,7 @@ export class ReviewPanelController implements vscode.Disposable {
     });
     const dispose = panel.onDidDispose(() => {
       receive.dispose(); dispose.dispose();
-      if (this.panel === panel) { this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
+      if (this.panel === panel) { this.questions.reset(); this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
     });
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     panel.webview.html = getWebviewHtml(panel.webview, {
@@ -104,6 +110,7 @@ export class ReviewPanelController implements vscode.Disposable {
     }, undefined, readWebviewBootTheme());
   }
   dispose(): void {
+    this.questions.reset();
     this.cancelPendingOpen();
     this.panel?.dispose();
     this.subscriptions.forEach((subscription) => subscription.dispose());
@@ -116,6 +123,7 @@ export class ReviewPanelController implements vscode.Disposable {
   private initialize(): void {
     if (!this.ready || !this.pendingOpen || !this.current()) return;
     this.postTheme(); this.postContext(true);
+    this.questions.models(this.target!.sessionId);
     const pending = this.pendingOpen;
     const operation = this.targetOperation();
     const message: ReviewPanelOpen = pending.toolUseId && operation?.status === 'ready' && operation.files.length > 0
@@ -221,6 +229,7 @@ export class ReviewPanelController implements vscode.Disposable {
     if (message?.type === 'reviewPanel.ready') { this.ready = true; this.initialize(); return; }
     if (!this.current()) { this.postContext(); return; }
     const target = this.target!;
+    if (this.questions.handle(value, target)) return;
     if (message?.type === 'reviewPanel.readFile' || message?.type === 'reviewPanel.openNative') {
       const request = { ...message, sessionId: target.sessionId };
       if (message.type === 'reviewPanel.openNative') {
@@ -276,6 +285,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const action = parseWebviewMessage(value);
     if (action && action.type.startsWith('review.') && 'sessionId' in action && action.sessionId === target.sessionId) {
       if (action.type === 'review.open') {
+        this.questions.reset();
         this.cancelPendingOpen();
         this.target = { sessionId: target.sessionId, root: target.root };
         this.postContext();

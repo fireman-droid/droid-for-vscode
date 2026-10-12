@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Columns2, History, Info, Rows3 } from 'lucide-react';
 import type { ReviewRecordedContent, ReviewRecordedEntry } from '../../shared/protocol/reviewPanelProtocol';
 import { hasOperationTextChanges } from '../../shared/protocol/operationDiff';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
+import { DiffQuestionContext } from '@droidvisx/chat-ui/review/diffQuestion';
 import { Button } from '../ui/button';
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
@@ -39,9 +40,9 @@ function SavedEdit({ entry, index, path, split, fullContext, showHeader = false,
   return <section className="review-recorded-patch">
     {showHeader ? <header><span className="review-operation-number">Edit {index + 1}</span><strong>{operationName(entry)}</strong><OperationStats entry={entry} /></header> : null}
     {entry.message && !(fullContext && entry.fullPatch !== undefined) ? <p className="review-recorded-note">{entry.message}</p> : null}
-    {fullContext && entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} source={entry.syntaxSource} />
+    {fullContext && entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} source={entry.syntaxSource} questionKey={entry.toolUseId} />
       : entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label="Submitted file version" />
-      : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} source={entry.syntaxSource} />
+      : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} source={entry.syntaxSource} questionKey={entry.toolUseId} />
       : entry.bodyRef ? <p className="review-recorded-note" role="status">{showHeader ? 'Select this edit from History to read its saved content.' : loading ? 'Reading saved edit…' : 'Saved content is not loaded. Retry loading this edit.'}</p>
       : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>No saved text for this operation</strong><p>The operation result is retained; its code changes are unavailable.</p></div></div>}
   </section>;
@@ -75,6 +76,11 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
   const selected = records[index];
   const activeView = content ? view : 'edits';
   const allEdits = editKey === 'all' && records.length > 1;
+  const question = useContext(DiffQuestionContext);
+  useEffect(() => {
+    if (question?.anchor?.selection.path === path && (activeView === 'file' ||
+      (!allEdits && question.anchor.key !== JSON.stringify([path, selected?.key, split])))) question.close();
+  }, [question, path, activeView, allEdits, selected?.key, split]);
   const hasPatch = activeView === 'edits' && (allEdits ? entries.some((entry) => hasOperationTextChanges(entry.fullPatch ?? entry.patch)) : !!selected && hasOperationTextChanges(selected.entry.fullPatch ?? selected.entry.patch));
   useEffect(() => {
     if (editKey === null && selected) setEditKey(selected.key);

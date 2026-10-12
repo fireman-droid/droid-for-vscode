@@ -1,4 +1,4 @@
-import { DroidClient, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
+import { DroidClient, ListToolsResultSchema, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
 import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 import { BtwThinkingProjection, type BtwThinkingEvent } from './btwThinking';
@@ -49,6 +49,7 @@ export interface BtwPromptOptions {
  */
 export interface BtwSidecarClient {
   loadSession(params: { sessionId: string }): Promise<unknown>;
+  loadReadOnlySession?(params: { sessionId: string }): Promise<void>;
   forkSession(params: {
     title?: string;
     tags?: { name: string }[];
@@ -93,6 +94,7 @@ export async function createBtwSidecar(options: {
   readonly cwd: string;
   readonly mainSessionId: string;
   readonly createClient?: BtwSidecarClientFactory;
+  readonly readOnly?: boolean;
 }): Promise<BtwSidecar> {
   const createClient = options.createClient ?? createLocalBtwClient;
   const client = await createClient(options.cwd);
@@ -106,7 +108,10 @@ export async function createBtwSidecar(options: {
     if (forkSessionId === null) {
       throw new Error('Droid returned an invalid fork response.');
     }
-    await client.loadSession({ sessionId: forkSessionId });
+    if (options.readOnly) {
+      if (!client.loadReadOnlySession) throw new Error('Read-only questions are unavailable with this client.');
+      await client.loadReadOnlySession({ sessionId: forkSessionId });
+    } else await client.loadSession({ sessionId: forkSessionId });
     return new BtwForkSidecar(client, forkSessionId);
   } catch (error) {
     await client.close().catch(() => undefined);
@@ -123,6 +128,17 @@ async function createLocalBtwClient(
     const client = new DroidClient({ transport });
     return {
       loadSession: (params) => client.loadSession(params),
+      loadReadOnlySession: async (params) => {
+        const policy = { autoRejectPermissionRequests: true, disableBuiltinSkills: true };
+        await client.loadSession({ ...params, ...policy });
+        const tools = ListToolsResultSchema.parse((await client.listTools()).result);
+        await client.loadSession({ ...params, ...policy,
+          disabledToolIds: tools.tools.map(tool => tool.llmId),
+        });
+        const restricted = ListToolsResultSchema.parse((await client.listTools()).result);
+        if (restricted.tools.some(tool => tool.currentlyAllowed))
+          throw new Error('Droid could not disable tools for this read-only question.');
+      },
       forkSession: (params) => client.forkSession(params),
       addUserMessage: async ({ modelId, reasoningEffort, signal, ...params }) => {
         if (modelId !== undefined || reasoningEffort !== undefined) await client.updateSessionSettings({

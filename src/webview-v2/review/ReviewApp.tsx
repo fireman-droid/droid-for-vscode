@@ -12,6 +12,7 @@ import { ReviewFileSection } from './ReviewFileSection';
 import { ReviewToolbar } from './ReviewToolbar';
 import { useReviewFileNavigation } from './useReviewFileNavigation';
 import { VirtualReviewFiles } from './VirtualReviewFiles';
+import { ReviewQuestions } from './ReviewQuestions';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
   const flow = useReviewWorkbench(port);
@@ -67,7 +68,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   };
   const hunk = useReviewHunkNavigation(scroll, filtered.map(file => file.path), selectFile, scopeKey);
   const allCollapsed = filtered.length > 0 && filtered.every(file => collapsed.has(file.path));
-  return <TooltipProvider><main ref={root} className="review-workbench">
+  return <TooltipProvider><ReviewQuestions scopeKey={`${scopeKey}:${split}:${valid}`} port={port} sessionId={valid ? target.sessionId : null} enabled={valid && !flow.scopePending}><main ref={root} className="review-workbench">
     <ReviewToolbar flow={flow} split={split} onSplit={setSplit} showFiles={showFiles} onFiles={() => setShowFiles(value => !value)}
       onFind={() => { setShowFiles(true); setFindRequest(value => value + 1); }} onHunk={hunk} onCommit={() => setCommit(true)}
       allCollapsed={allCollapsed} onCollapse={() => setCollapsed(allCollapsed ? new Set() : new Set(filtered.map(file => file.path)))} />
@@ -118,5 +119,5 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
           </div></> : null}
       </DialogContent>
     </Dialog>
-  </main></TooltipProvider>;
+  </main></ReviewQuestions></TooltipProvider>;
 }

@@ -2,6 +2,7 @@
 @import './review-records.css';
 @import './review-interactions.css';
 @import './review-stream.css';
+@import './review-question.css';
 
 @layer components {
   .review-diff {

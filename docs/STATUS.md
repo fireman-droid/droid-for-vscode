@@ -2,12 +2,19 @@
 
 更新：2026-10-12。扩展显示名为 Droid，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.3`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开，已提交的修复已同步到 `main`。
-当前源码包含 Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
+当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
 `v0.8.1` 保留为历史草稿，不移动旧标签，也不以旧包替代当前版本。
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## Review 行内问答（2026-10-12）
+
+- 在分栏／合并 Diff 中选中代码后，通过 Ask a quick question 在该片段下方打开紧凑问答框；沿用确认原型的 500px 最大宽度、6px 圆角、细边框、上下分隔与右下角模型选择。支持流式回答、连续追问、Stop 和关闭，不提供 Edit。
+- 请求携带文件、修改前／后版本、选区及附近 Diff；没有绝对行号的历史片段明确标为未知。选区最多 8,000 字符、附带上下文最多 16,000 字符、单次问题最多 4,000 字符。一次保留一个问答，关闭、切换比较范围／布局／会话／历史编辑／File 视图或原补丁变化后释放；离屏回收不丢失问答与输入草稿，重新挂载不抢焦点。
+- 模型来自当前启用目录，初始跟随主聊天模型；问答使用独立隐藏 fork 和进程通道，发送前禁用工具并核对结果，拒绝权限请求。不修改主聊天模型、转录或 BTW。目录加载失败可刷新，断线且目录未就绪时显示重连提示。
+- `typecheck`、`lint:budgets` 和最终 `package:vsix` 通过；168 个 VSIX 条目与静态引用校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code，8 个主要文件及安装清单（排除安装器追加的 `__metadata`）与 VSIX 一致。本轮未新增、修改或运行测试、浏览器自动化、截图 probe；真实模型问答、工具禁用行为与视觉由用户 Reload Window 后验收。首次 pnpm 启动器触发依赖重装确认而中止，改用缓存版本 10.2.0 后继续，未改依赖或 Lockfile；类型检查初次发现请求联合类型收窄和 SDK 工具列表结果类型问题，已修正。npm 配置与 CLI 弃用提示未阻断构建和安装。
 
 ## 分栏 Diff 拖选时横向滚动（2026-10-12）
 

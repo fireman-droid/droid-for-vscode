@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type RefObject } from 'react';
 import { formatDiffHunkHeader, inlineDiffLines, type InlineDiffLine } from './inlineDiffLines';
 import { useDiffSyntax } from '../syntax/diffSyntax';
 import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
@@ -6,6 +6,7 @@ import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
 import { useSplitDiffSelection } from './splitDiffSelection';
 import { useSplitDiffDragScroll } from './splitDiffDragScroll';
+import { useDiffQuestion } from './diffQuestion';
 export { findDiffChange } from './diffNavigation';
 
 const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
@@ -37,7 +38,7 @@ export function splitDiffRows(lines: readonly InlineDiffLine[]): DiffRow[] {
   return rows;
 }
 type DiffBlock<T> = { index: number; header: string } | { index: number; rows: readonly T[]; changes: readonly number[] };
-function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean): DiffBlock<T>[] {
+function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean, insertAfter = -1): DiffBlock<T>[] {
   const blocks: DiffBlock<T>[] = [];
   for (let index = 0; index < rows.length;) {
     const text = header(rows[index]!);
@@ -47,24 +48,26 @@ function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefine
     while (index < rows.length && index - start < 64 && header(rows[index]!) === undefined) {
       if (changed(rows[index]!) && (index === 0 || !changed(rows[index - 1]!))) changes.push(index - start);
       index++;
+      if (index === insertAfter + 1) break;
     }
     blocks.push({ index: start, rows: rows.slice(start, index), changes });
   }
   return blocks;
 }
 type WordDiffRanges = ReturnType<typeof wordDiffRanges>;
-function SplitRow({ row, index, syntax, words }: { row: DiffRow; index: number; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
+function SplitRow({ row, index, syntax, words, questionSide }: { row: DiffRow; index: number; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges; questionSide?: 'before' | 'after' }) {
   return <div className="review-split-row" data-diff-row={index} data-diff-before={row.left?.before} data-diff-after={row.right?.after}>{(['left', 'right'] as const).map((side) => {
     const line = row[side];
     return <div key={side} data-side={side} className={`review-diff-cell ${line ? `diff-${line.kind}` : 'diff-empty'}`}>
       <span className="diff-number" aria-hidden>{line && (side === 'left' ? line.before : line.after)}</span>
       <span className="diff-sign" aria-hidden>{line?.kind === 'remove' ? '−' : line?.kind === 'add' ? '+' : ''}</span>
-      <div className="review-diff-code">{line ? <Code text={line.text} highlighted={syntax.html(line, side === 'left' ? 'before' : 'after')} changes={words.get(line)} /> : null}</div>
+      <div className="review-diff-code" data-question-selected={line && questionSide === (side === 'left' ? 'before' : 'after') || undefined}>{line ? <Code text={line.text} highlighted={syntax.html(line, side === 'left' ? 'before' : 'after')} changes={words.get(line)} /> : null}</div>
     </div>;
   })}</div>;
 }
-function UnifiedRow({ line, syntax, words }: { line: InlineDiffLine; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges }) {
-  return <div className={`review-unified-row diff-${line.kind}`} data-diff-before={line.before} data-diff-after={line.after}>
+function UnifiedRow({ line, index, syntax, words, questionSide }: { line: InlineDiffLine; index: number; syntax: ReturnType<typeof useDiffSyntax>; words: WordDiffRanges; questionSide?: 'before' | 'after' }) {
+  return <div className={`review-unified-row diff-${line.kind}`} data-diff-row={index} data-diff-before={line.before} data-diff-after={line.after}
+    data-question-selected={!!questionSide && line.kind !== (questionSide === 'before' ? 'add' : 'remove') || undefined}>
     <span className="diff-number" aria-hidden>{line.before}</span>
     <span className="diff-number" aria-hidden>{line.after}</span>
     <span className="diff-sign" aria-hidden>{line.kind === 'remove' ? '−' : line.kind === 'add' ? '+' : ''}</span>
@@ -119,8 +122,8 @@ function SplitScrollbars({ root, before, after }: { root: RefObject<HTMLDivEleme
     </div>
   </div>)}</div>;
 }
-export const DiffView = memo(function DiffView({ patch, path, split = false, limit, source }: {
-  patch: string; path: string; split?: boolean; limit?: number; source?: DiffSyntaxSource;
+export const DiffView = memo(function DiffView({ patch, path, split = false, limit, source, questionKey = '' }: {
+  patch: string; path: string; split?: boolean; limit?: number; source?: DiffSyntaxSource; questionKey?: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
@@ -128,9 +131,11 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const words = useMemo(() => wordDiffRanges(lines), [lines]);
   const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
   const selection = useSplitDiffSelection(root, rows, path);
+  const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);
+  const questionRow = question?.row ?? -1;
   const blocks = useMemo(() => rows
-    ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
-    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, rows]);
+    ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add', questionRow)
+    : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove', questionRow), [lines, rows, questionRow]);
   const columns = useMemo(() => {
     let before = 0, after = 0;
     for (const line of lines) {
@@ -152,11 +157,13 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
-        : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
+        : <Fragment key={block.index}><DeferredDiffChunk count={block.rows.length} changes={block.changes} defer={defer} observe={observe}>
           {() => block.rows.map((row, index) => split
-            ? <SplitRow key={index} row={row as DiffRow} index={block.index + index} syntax={syntax} words={words} />
-            : <UnifiedRow key={index} line={row as InlineDiffLine} syntax={syntax} words={words} />)}
-        </DeferredDiffChunk>)}
+            ? <SplitRow key={index} row={row as DiffRow} index={block.index + index} syntax={syntax} words={words}
+              questionSide={question && block.index + index >= question.startRow && block.index + index <= question.row ? question.side : undefined} />
+            : <UnifiedRow key={index} line={row as InlineDiffLine} index={block.index + index} syntax={syntax} words={words}
+              questionSide={question && block.index + index >= question.startRow && block.index + index <= question.row ? question.side : undefined} />)}
+        </DeferredDiffChunk>{block.index + block.rows.length - 1 === questionRow ? question?.content : null}</Fragment>)}
     </div>
     {split ? <SplitScrollbars key={path} root={root} before={columns.before} after={columns.after} /> : null}
   </div>;
