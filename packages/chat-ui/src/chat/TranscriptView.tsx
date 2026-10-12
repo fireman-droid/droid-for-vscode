@@ -24,6 +24,7 @@ export interface MessagePresentation {
 export interface TranscriptHandle {
   readonly stopFollowing: () => void;
   readonly scrollToBottom: () => void;
+  readonly prepareForSend: () => void;
 }
 export interface TranscriptViewProps {
   readonly messages: readonly TranscriptMessage[];
@@ -80,9 +81,9 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   useLayoutEffect(() => {
     // Queueing/editing also changes sendSignal. Follow only when a new
     // question actually enters the transcript, not while the old turn stops.
-    if (lastQuestionId !== undefined && previousQuestion.current !== lastQuestionId) scrolling.scrollToBottom();
+    if (lastQuestionId !== undefined && previousQuestion.current !== lastQuestionId) scrolling.followNewQuestion();
     previousQuestion.current = lastQuestionId;
-  }, [lastQuestionId, scrolling.scrollToBottom]);
+  }, [lastQuestionId, scrolling.followNewQuestion]);
   const allDescriptors = messages;
   const [windowState, setWindowState] = useState({ sessionId: sessionKey, count: DEFAULT_MESSAGE_WINDOW });
   const messageWindow = windowState.sessionId === sessionKey ? windowState.count : DEFAULT_MESSAGE_WINDOW;
@@ -180,7 +181,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   useImperativeHandle(ref, () => ({
     stopFollowing: scrolling.stopFollowing,
     scrollToBottom: returnToBottom,
-  }), [scrolling.stopFollowing, returnToBottom]);
+    prepareForSend: scrolling.prepareForSend,
+  }), [scrolling.stopFollowing, scrolling.prepareForSend, returnToBottom]);
   const liveCandidate = virtualizer.getVirtualItemForOffset(questionEntryOffset(top + PINNED_QUESTION_GAP));
   const heldCandidate = useRef<{ conversationId: string | null; candidate: typeof liveCandidate; entered: boolean }>({
     conversationId: conversationId, candidate: liveCandidate, entered: false,

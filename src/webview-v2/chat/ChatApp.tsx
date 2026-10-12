@@ -122,6 +122,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     openBtw,
     askBtw,
     capabilities,
+    beforeSend: () => transcript.current?.prepareForSend(),
   }), [operationsBlocked, compact, openBtw, askBtw, setNavigation, capabilities]);
   const composer = useComposerFlow(port, state, dispatch, routes);
   const currentComposer = useRef(composer);

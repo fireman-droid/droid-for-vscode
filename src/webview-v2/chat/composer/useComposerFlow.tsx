@@ -37,6 +37,7 @@ export function useComposerFlow(
     readonly openBtw: () => void;
     readonly askBtw: (question: string) => void;
     readonly capabilities?: ChatSurfaceCapabilities;
+    readonly beforeSend?: () => void;
   },
 ) {
   const [draft, setDraft] = useState(() => restoreDraft(vscode));
@@ -147,7 +148,7 @@ export function useComposerFlow(
   const connectionStatus = state.connection.status;
   const interactionCount = state.interactions.length;
   const settingsUpdating = state.settings.status === 'updating';
-  const { blocked, compact, navigate, openBtw, askBtw, capabilities = getChatSurfaceCapabilities('main') } = routes;
+  const { blocked, compact, navigate, openBtw, askBtw, beforeSend, capabilities = getChatSurfaceCapabilities('main') } = routes;
   const handleSend = useCallback(
     async (text: string): Promise<void> => {
       if (blocked || settingsUpdating) return;
@@ -195,6 +196,7 @@ export function useComposerFlow(
       };
       const queueRoute = shouldQueueMessage(eligibility);
       if (!canSendMessage(eligibility, text, !queueRoute && pending.current)) return;
+      if (!queueRoute) beforeSend?.();
       setSendSignal((value) => value + 1);
       writeDraft('');
       if (queueRoute) {
@@ -244,6 +246,7 @@ export function useComposerFlow(
       navigate,
       openBtw,
       askBtw,
+      beforeSend,
       vscode,
       dispatch,
       writeDraft,

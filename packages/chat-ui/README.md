@@ -130,6 +130,8 @@ const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
 - 同一个稳定消息使用相同 id，token 到达时只更新内容，不重建会话身份。
 - `TranscriptView` 在新用户消息进入 `messages` 时恢复到底部跟随；
   `sendSignal` 用于输入／导航身份，不会因消息仍在队列中而滚动旧内容。
+  普通发送在清空输入和追加消息前调用 `TranscriptHandle.prepareForSend()`，
+  按发送前距底部 80px 的容差选择即时保持底部或平滑回底；排队时不调用。
   需要暂停跟随时调用其 `TranscriptHandle.stopFollowing()`。
   明确的用户操作需要恢复跟随时调用 `TranscriptHandle.scrollToBottom()`，
   同时退出问题导航；业务确认时机由接入层决定，不把普通回复结束当作恢复条件。

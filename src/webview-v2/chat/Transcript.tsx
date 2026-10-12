@@ -65,6 +65,7 @@ export function Transcript({
   useImperativeHandle(ref, () => ({
     stopFollowing,
     scrollToBottom: () => view.current?.scrollToBottom(),
+    prepareForSend: () => view.current?.prepareForSend(),
   }), [stopFollowing]);
   const pausedTurn = state.turn?.status === 'stopping' || state.turn?.status === 'interrupted'
     ? state.turn.turnId : null;

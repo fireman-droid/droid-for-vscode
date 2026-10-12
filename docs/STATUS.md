@@ -9,6 +9,11 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 发送消息时保持底部位置（2026-10-12）
+
+- 普通消息发送前记录滚动位置，距底部 80px 以内视为接近底部；清空输入框、追加消息与虚拟列表重新测量期间保持底部，布局稳定后恢复流式跟随，避免先露出旧内容再滚回来的闪动。明显离开底部时发送继续平滑回底；排队和编辑队列不触发此次发送定位。
+- `typecheck`、`lint:budgets`、`package:vsix` 与 168 个 VSIX 条目静态校验通过，跳过运行时入口加载。已安装到 Microsoft VS Code，8 个主要文件及安装清单与 VSIX 一致。未新增、修改或运行测试、浏览器自动化或截图 probe；真实滚动表现由用户 Reload Window 后验收。npm 配置与 CLI 弃用提示未阻断构建和安装。
+
 ## Review 行内问答（2026-10-12）
 
 - 在分栏／合并 Diff 中选中代码后，通过 Ask a quick question 在该片段下方打开紧凑问答框；沿用确认原型的 500px 最大宽度、6px 圆角、细边框、上下分隔与右下角模型选择。支持流式回答、连续追问、Stop 和关闭，不提供 Edit。

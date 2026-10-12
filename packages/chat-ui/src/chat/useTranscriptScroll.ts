@@ -8,6 +8,8 @@ import {
 import { hasTranscriptSelection, readTranscriptSelection } from './transcriptSelection';
 import { isNestedScrollTarget } from '../navigation/nestedScroll';
 
+const SEND_NEAR_BOTTOM_PX = 80;
+
 export function useTranscriptScroll(
   viewport: RefObject<HTMLDivElement | null>,
   content: RefObject<HTMLDivElement | null>,
@@ -22,6 +24,8 @@ export function useTranscriptScroll(
   const navigation = useRef<(() => number | undefined) | null>(null);
   const navigationTop = useRef<number | null>(null);
   const bottomNavigation = useRef(false);
+  const sendBehavior = useRef<ScrollBehavior | null>(null);
+  const settlingSend = useRef(false);
   const frame = useRef<number | null>(null);
   const lastFrame = useRef(0);
   const scheduleUpdate = useRef<() => void>(() => {});
@@ -32,6 +36,8 @@ export function useTranscriptScroll(
     navigation.current = null;
     navigationTop.current = null;
     bottomNavigation.current = false;
+    sendBehavior.current = null;
+    settlingSend.current = false;
   }, []);
   const stopFollowing = useCallback(() => {
     cancelAnimation();
@@ -94,6 +100,17 @@ export function useTranscriptScroll(
     setAway(false);
     scheduleUpdate.current();
   }, [viewport, writeTop, cancelAnimation]);
+  const prepareForSend = useCallback(() => {
+    const element = viewport.current;
+    // Capture before the draft clears and the new question changes either height.
+    sendBehavior.current = element !== null &&
+      element.scrollHeight - element.clientHeight - element.scrollTop <= SEND_NEAR_BOTTOM_PX ? 'auto' : 'smooth';
+  }, [viewport]);
+  const followNewQuestion = useCallback(() => {
+    const behavior = sendBehavior.current ?? 'smooth';
+    scrollToBottom(behavior);
+    settlingSend.current = behavior !== 'smooth';
+  }, [scrollToBottom]);
 
   useLayoutEffect(() => { scrollToBottom('auto'); }, [conversationId, scrollToBottom]);
   useEffect(() => {
@@ -115,7 +132,7 @@ export function useTranscriptScroll(
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
-      const waitingForMarkdown = () => readTarget !== null && column.querySelector('[data-markdown-pending]') !== null;
+      const waitingForMarkdown = () => (readTarget !== null || settlingSend.current) && column.querySelector('[data-markdown-pending]') !== null;
       if (readTarget) compensateNavigation();
       const target = readTarget ? readTarget() : follow.current.following ? bottom : undefined;
       if (target !== undefined) {
@@ -127,29 +144,31 @@ export function useTranscriptScroll(
           settledFrames = 0;
           const step = Math.sign(distance) * Math.min(Math.abs(distance), Math.max(1, Math.abs(distance) * blend));
           const previousTop = element.scrollTop;
-          writeTop(reducedMotion.matches ? bounded : previousTop + step);
+          writeTop(reducedMotion.matches || settlingSend.current ? bounded : previousTop + step);
           // Chromium can clamp/quantize scrollTop before the integer geometry
           // target is reached. A blocked write must not keep an idle RAF alive.
           if (Math.abs(element.scrollTop - previousTop) > 0.01) schedule();
-          else if (!waitingForMarkdown()) { navigation.current = null; navigationTop.current = null; bottomNavigation.current = false; }
+          else if (!waitingForMarkdown()) { navigation.current = null; navigationTop.current = null; bottomNavigation.current = false; settlingSend.current = false; }
         } else if (waitingForMarkdown()) {
           // Worker results and incremental DOM mounts can arrive after the
           // usual three frames. Keep this target until their layout settles;
           // observers wake it, so waiting does not spin an animation loop.
           settledFrames = 0;
-        } else if (readTarget && ++settledFrames < 3) {
+        } else if ((readTarget || settlingSend.current) && ++settledFrames < 3) {
           // Let newly mounted virtual rows report their final measurements.
           schedule();
         } else {
           navigation.current = null;
           navigationTop.current = null;
           bottomNavigation.current = false;
+          settlingSend.current = false;
           settledFrames = 0;
         }
       } else {
         navigation.current = null;
         navigationTop.current = null;
         bottomNavigation.current = false;
+        settlingSend.current = false;
         settledFrames = 0;
       }
       lastFrame.current = frame.current === null ? 0 : time;
@@ -219,6 +238,12 @@ export function useTranscriptScroll(
     let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
       const height = element.clientHeight;
+      // New virtual rows and the cleared composer settle together. Correct their
+      // geometry before paint, then return to the usual smooth streaming follow.
+      if (settlingSend.current && follow.current.following && !selecting()) {
+        writeTop(Math.max(0, element.scrollHeight - height));
+        settledFrames = 0;
+      }
       if (height !== previousHeight) {
         previousHeight = height;
         resizeCount += 1;
@@ -244,7 +269,7 @@ export function useTranscriptScroll(
     });
     observer.observe(element);
     observer.observe(column);
-    const pendingMarkdown = new MutationObserver(() => { if (navigation.current !== null) schedule(); });
+    const pendingMarkdown = new MutationObserver(() => { if (navigation.current !== null || settlingSend.current) schedule(); });
     pendingMarkdown.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-markdown-pending'] });
     element.addEventListener('scroll', onScroll, { passive: true });
     element.addEventListener('scrollend', onScrollEnd, { passive: true });
@@ -269,5 +294,5 @@ export function useTranscriptScroll(
       cancelAnimation();
     };
   }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom]);
-  return { follow, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef };
+  return { follow, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }
