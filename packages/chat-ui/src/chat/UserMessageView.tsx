@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
+import { createContext, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Tooltip } from '../ui/overlays';
 import { formatExactMessageTime } from './MessageTimestamp';
+
+export const UserMessageAnchorContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
 
 export function UserMessageBubble({ children, attachments, context, onEdit, placeholder, pending, timestamp }: {
   readonly children: ReactNode;
@@ -13,7 +15,8 @@ export function UserMessageBubble({ children, attachments, context, onEdit, plac
   readonly pending?: boolean;
   readonly timestamp?: number | null;
 }) {
-  const bubble = <div className={cn('v2-user-message select-none outline-none focus-visible:outline-1 focus-visible:outline-[var(--focus)]', pending && 'opacity-[.72]')}
+  const anchor = useRef<HTMLDivElement>(null);
+  const bubble = <div ref={anchor} className={cn('v2-user-message select-none outline-none focus-visible:outline-1 focus-visible:outline-[var(--focus)]', pending && 'opacity-[.72]')}
     tabIndex={!onEdit && timestamp !== undefined && !placeholder ? 0 : undefined}>
     {attachments}
     {context}
@@ -22,7 +25,9 @@ export function UserMessageBubble({ children, attachments, context, onEdit, plac
       title={timestamp === undefined ? 'Click to edit and resend from here' : undefined} onClick={onEdit}>{children}</Button>
       : <div className="v2-user-copy min-w-0 w-full select-none">{children}</div>}
   </div>;
-  return timestamp === undefined || placeholder ? bubble : <Tooltip content={formatExactMessageTime(timestamp)}>{bubble}</Tooltip>;
+  return <UserMessageAnchorContext.Provider value={anchor}>
+    {timestamp === undefined || placeholder ? bubble : <Tooltip content={formatExactMessageTime(timestamp)}>{bubble}</Tooltip>}
+  </UserMessageAnchorContext.Provider>;
 }
 
 export function UserMessageView({ id, text, quote, attachments, onEdit, placeholder = false, plan }: {
