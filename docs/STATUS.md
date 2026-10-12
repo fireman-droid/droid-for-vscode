@@ -17,8 +17,8 @@
 ## GitHub Release 自动上架 Open VSX（2026-10-12）
 
 - 新增 `publish-openvsx.yml`，仅在正式 GitHub Release 公开后运行，下载该 Release 的原始 VSIX、SHA256SUMS 与构建信息，核对 main 源码提交、版本、扩展 ID、干净构建与摘要后上架 Open VSX。普通 push、草稿与预发布不触发；不重新构建附件，不覆盖已发布版本。
-- 使用已有 ovsx 1.2.0 的 GitHub OIDC 身份发布，无需长期 Token。首次使用由 Open VSX 命名空间所有者绑定 `fireman-droid/droid-for-vscode` 的 `publish-openvsx.yml`；具体字段见 DEVELOPMENT。当前市场已有 0.8.5，下一次发布需使用更高版本与包含新工作流的标签。
-- `actionlint` 静态检查通过；未运行测试或触发真实市场发布。Cursor 显示更新还取决于其市场同步与审核。
+- 使用已有 ovsx 1.2.0 的 GitHub OIDC 身份发布，无需长期 Token。命名空间所有者已确认授权，Open VSX 页面已显示 `droidvisx.droidvisx` 绑定 `fireman-droid/droid-for-vscode` 的 `publish-openvsx.yml`，GitHub 工作流状态为 active；具体字段见 DEVELOPMENT。当前市场已有 0.8.5，下一次发布需使用更高版本与包含新工作流的标签。
+- `actionlint` 静态检查通过；本轮 `typecheck`、`lint:budgets` 与图标安装包构建／静态校验通过。未运行测试或触发真实市场发布；端到端上传结果待下一次正式 Release 验证，Cursor 显示更新还取决于其市场同步与审核。
 
 ## Plan 状态解析（2026-10-12）
 
