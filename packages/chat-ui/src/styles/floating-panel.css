@@ -3,7 +3,7 @@
   .dvx-floating-panel-header { display: flex; align-items: center; flex: 0 0 24px; gap: 2px; padding: 0 4px 0 10px; color: var(--muted-ink); }
   .dvx-floating-panel-header button, .dvx-floating-panel-resize { border: 0; background: transparent; box-shadow: none; padding: 0; color: inherit; }
   .dvx-floating-panel-header button:hover { color: var(--ink); }
-  .dvx-floating-panel-move { display: flex; align-items: center; justify-content: flex-start; flex: 1; min-width: 0; height: 22px; cursor: grab; touch-action: none; }
+  .dvx-floating-panel-move { display: flex; align-items: center; justify-content: center; flex: 0 0 22px; width: 22px; height: 22px; margin-right: auto; border-radius: var(--control-radius); cursor: grab; touch-action: none; }
   .dvx-floating-panel-move:active { cursor: grabbing; }
   .dvx-floating-panel-move svg { width: 14px; height: 14px; flex-shrink: 0; }
   .dvx-floating-panel-body { flex: 1; min-height: 0; overflow: hidden; }
