@@ -72,6 +72,9 @@ export class ManagementBinding implements vscode.Disposable {
       case 'theme.set':
         await vscode.workspace.getConfiguration('droidvisx').update('theme', action.theme, vscode.ConfigurationTarget.Global);
         return { settings: await s.settings.read() };
+      case 'reviewQuestion.model.set':
+        await s.settings.saveQuestionModel(action.modelId);
+        return { settings: await s.settings.read() };
       case 'completion.save':
         await s.settings.save(action.preferences, action.setApiKey);
         return { settings: await s.settings.read(), message: '已保存' };

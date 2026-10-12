@@ -22,6 +22,7 @@ interface DiffQuestionContextValue {
   anchor: DiffQuestionAnchor | null;
   select(anchor: DiffQuestionAnchor): void;
   close(): void;
+  clearSelection(key: string): void;
 }
 export const DiffQuestionContext = createContext<DiffQuestionContextValue | null>(null);
 export const DiffQuestionContentContext = createContext<ReactNode>(null);
@@ -86,6 +87,7 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
   const current = anchor?.key === key && anchor.source === source ? anchor : null;
   const select = question?.select;
   const close = question?.close;
+  const clearSelection = question?.clearSelection;
   const enabled = question?.enabled;
   useEffect(() => {
     if (anchor?.key === key && anchor.source !== source) close?.();
@@ -94,17 +96,25 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
     const diff = root.current;
     if (!diff || !enabled || !select) return;
     let frame = 0;
-    const capture = () => {
+    const capture = (event: Event) => {
       cancelAnimationFrame(frame);
+      if (event.target instanceof Node && !diff.contains(event.target)) { clearSelection?.(key); return; }
       frame = requestAnimationFrame(() => {
+        if (!diff.ownerDocument.hasFocus()) { clearSelection?.(key); return; }
         const selected = readSelection(diff, path, rows, lines);
         if (selected) select({ ...selected, key, source });
+        else clearSelection?.(key);
       });
     };
     diff.ownerDocument.addEventListener('pointerup', capture);
     diff.addEventListener('keyup', capture);
-    return () => { cancelAnimationFrame(frame); diff.ownerDocument.removeEventListener('pointerup', capture); diff.removeEventListener('keyup', capture); };
-  }, [root, enabled, select, key, source, path, rows, lines]);
+    const clearCollapsed = () => { if (diff.ownerDocument.getSelection()?.isCollapsed) clearSelection?.(key); };
+    diff.ownerDocument.addEventListener('selectionchange', clearCollapsed);
+    return () => {
+      cancelAnimationFrame(frame); diff.ownerDocument.removeEventListener('pointerup', capture); diff.removeEventListener('keyup', capture);
+      diff.ownerDocument.removeEventListener('selectionchange', clearCollapsed);
+    };
+  }, [root, enabled, select, clearSelection, key, source, path, rows, lines]);
   useLayoutEffect(() => {
     const diff = root.current;
     if (!diff || !question) return;

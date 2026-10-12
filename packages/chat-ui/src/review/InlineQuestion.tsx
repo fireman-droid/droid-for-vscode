@@ -12,14 +12,14 @@ export interface InlineQuestionEntry {
   state: 'streaming' | 'done' | 'error';
   message: string | null;
 }
-export function InlineQuestion({ entries, draft, onDraft, busy, disabled, message, model, onSend, onStop, onClose, maxLength, focusRequested, onFocused }: {
+export function InlineQuestion({ entries, draft, onDraft, busy, disabled, message, actions, onSend, onStop, onClose, maxLength, focusRequested, onFocused }: {
   entries: readonly InlineQuestionEntry[];
   draft: string;
   onDraft(value: string): void;
   busy: boolean;
   disabled: boolean;
   message: string | null;
-  model: ReactNode;
+  actions?: ReactNode;
   onSend(): void;
   onStop(): void;
   onClose(): void;
@@ -61,7 +61,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       {message ? <p className="review-question-error" role="alert">{message}</p> : null}
       <div className="review-question-actions">
         {busy ? <span className="review-question-progress" role="status" aria-label="Answering"><LoaderCircle /></span> : null}
-        {model}
+        {actions}
         <Button variant="plain" size="icon-sm" className="review-question-send" disabled={!busy && (disabled || !draft.trim())}
           aria-label={busy ? 'Stop answer' : 'Send question'} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
       </div>

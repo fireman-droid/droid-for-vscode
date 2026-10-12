@@ -171,6 +171,12 @@
           "default": "auto",
           "description": "Color theme for the Droid panel. Takes effect immediately."
         },
+        "droidvisx.reviewQuestion.modelId": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Model for inline questions in Review Changes. Leave empty to follow the main chat. Configure this in Droid Management > General > Code review questions."
+        },
         "droidvisx.modelSource": {
           "type": "string",
           "enum": [

@@ -5,10 +5,12 @@ import {
   readCompletionKey, readCompletionSettings, validateCompletionEndpoint,
 } from '../autocomplete/settings';
 import { readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
+import { readReviewQuestionModel, REVIEW_QUESTION_MODEL_SETTING } from '../review/reviewQuestionSettings';
 
 export class ManagementSettingsService {
   constructor(private readonly secrets: vscode.SecretStorage, private readonly version: string,
-    private readonly status: () => Pick<ManagementSettings, 'cwd' | 'connection' | 'ide' | 'sessionManagementAvailable'>) {}
+    private readonly status: () => Pick<ManagementSettings, 'cwd' | 'connection' | 'ide' | 'sessionManagementAvailable'>,
+    private readonly questionModels: () => ManagementSettings['reviewQuestion']['models']) {}
 
   async read(): Promise<ManagementSettings> {
     const status = this.status();
@@ -18,12 +20,19 @@ export class ManagementSettingsService {
     return {
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey,
+      reviewQuestion: { modelId: readReviewQuestionModel(), models: this.questionModels() },
       completion: {
         enabled: settings.enabled, autoTrigger: settings.autoTrigger !== false, relatedFiles: settings.relatedFiles,
         adaptiveDebounce: settings.adaptiveDebounce !== false, debounceMs: settings.debounceMs,
         protocol: settings.protocol, endpoint: settings.endpoint, model: settings.model,
       },
     };
+  }
+
+  async saveQuestionModel(modelId: string | null): Promise<void> {
+    if (modelId !== null && !this.questionModels().some(model => model.id === modelId))
+      throw new Error('此模型已不可用，请刷新设置后重新选择。');
+    await vscode.workspace.getConfiguration('droidvisx').update(REVIEW_QUESTION_MODEL_SETTING, modelId ?? '', vscode.ConfigurationTarget.Global);
   }
 
   async save(preferences: CompletionPreferences, setApiKey: boolean): Promise<void> {

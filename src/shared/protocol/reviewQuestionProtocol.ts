@@ -17,7 +17,7 @@ export type ReviewQuestionRequest =
   | { readonly type: 'reviewQuestion.close'; readonly sessionId: string; readonly questionId: string }
   | { readonly type: 'reviewQuestion.stop'; readonly sessionId: string; readonly questionId: string }
   | { readonly type: 'reviewQuestion.ask'; readonly sessionId: string; readonly questionId: string;
-      readonly selection: ReviewQuestionSelection; readonly modelId: string; readonly text: string };
+      readonly selection: ReviewQuestionSelection; readonly text: string };
 export type ReviewQuestionResponse =
   | { readonly type: 'reviewQuestion.state'; readonly sessionId: string; readonly questionId: string; readonly state: SessionBtwState }
   | { readonly type: 'reviewQuestion.models'; readonly sessionId: string; readonly status: 'loading' | 'ready' | 'error';
@@ -39,8 +39,8 @@ export function parseReviewQuestionRequest(value: unknown): ReviewQuestionReques
   if (!isId(value.questionId)) return null;
   if (value.type === 'reviewQuestion.close' || value.type === 'reviewQuestion.stop')
     return hasExactKeys(value, ['type', 'sessionId', 'questionId']) ? value as ReviewQuestionRequest : null;
-  return value.type === 'reviewQuestion.ask' && hasExactKeys(value, ['type', 'sessionId', 'questionId', 'selection', 'modelId', 'text']) &&
-    isSelection(value.selection) && isSafeModelId(value.modelId) && bounded(value.text, MAX_BTW_TEXT_LENGTH) && value.text.trim().length > 0
+  return value.type === 'reviewQuestion.ask' && hasExactKeys(value, ['type', 'sessionId', 'questionId', 'selection', 'text']) &&
+    isSelection(value.selection) && bounded(value.text, MAX_BTW_TEXT_LENGTH) && value.text.trim().length > 0
     ? value as ReviewQuestionRequest : null;
 }
 export function parseReviewQuestionResponse(value: unknown): ReviewQuestionResponse | null {

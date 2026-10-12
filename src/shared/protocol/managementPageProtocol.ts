@@ -1,4 +1,5 @@
 import { hasExactKeys, isStrictRecord } from '../validation/strictValidation';
+import { isSafeModelId } from '../validation/guards';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 
@@ -34,6 +35,10 @@ export interface ManagementSettings {
   readonly completion: CompletionPreferences;
   readonly completionHasKey: boolean;
   readonly sessionManagementAvailable: boolean;
+  readonly reviewQuestion: {
+    readonly modelId: string | null;
+    readonly models: readonly { readonly id: string; readonly label: string }[];
+  };
 }
 export interface ManagedSession {
   readonly id: string;
@@ -51,6 +56,7 @@ export type ManagementAction =
   | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
   | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
+  | { readonly kind: 'reviewQuestion.model.set'; readonly modelId: string | null }
   | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean }
   | { readonly kind: 'sessions.list'; readonly scope: 'folder' | 'all'; readonly cursor?: number }
   | { readonly kind: 'session.view' | 'session.export' | 'session.folder' | 'session.resume'; readonly id: string }
@@ -98,6 +104,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   if (['ready', 'settings.read', 'defaults.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
   else if (a.kind === 'defaults.save') valid = hasExactKeys(a, ['kind', 'scope', 'patch']) && isDefaultsPatch(a.patch, a.scope);
   else if (a.kind === 'theme.set') valid = hasExactKeys(a, ['kind', 'theme']) && ['auto', 'light', 'dark'].includes(String(a.theme));
+  else if (a.kind === 'reviewQuestion.model.set') valid = hasExactKeys(a, ['kind', 'modelId']) && (a.modelId === null || isSafeModelId(a.modelId));
   else if (a.kind === 'completion.save') valid = hasExactKeys(a, ['kind', 'preferences', 'setApiKey']) && isCompletionPreferences(a.preferences) && typeof a.setApiKey === 'boolean';
   else if (a.kind === 'sessions.list') valid = hasExactKeys(a, ['kind', 'scope'], ['cursor']) && (a.scope === 'all' || a.scope === 'folder')
     && (a.cursor === undefined || typeof a.cursor === 'number' && Number.isFinite(a.cursor) && a.cursor >= 0);
@@ -113,7 +120,9 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   const settings = (v: unknown): v is ManagementSettings => isStrictRecord(v) && isCompletionPreferences(v.completion)
     && ['auto', 'light', 'dark'].includes(String(v.theme)) && ['light', 'dark'].includes(String(v.resolvedTheme))
     && typeof v.version === 'string' && (v.cwd === null || typeof v.cwd === 'string')
-    && typeof v.connection === 'string' && typeof v.ide === 'string' && typeof v.completionHasKey === 'boolean' && typeof v.sessionManagementAvailable === 'boolean';
+    && typeof v.connection === 'string' && typeof v.ide === 'string' && typeof v.completionHasKey === 'boolean' && typeof v.sessionManagementAvailable === 'boolean'
+    && isStrictRecord(v.reviewQuestion) && (v.reviewQuestion.modelId === null || isSafeModelId(v.reviewQuestion.modelId))
+    && Array.isArray(v.reviewQuestion.models) && v.reviewQuestion.models.every(model => isStrictRecord(model) && isSafeModelId(model.id) && text(model.label));
   if (value.type === 'management.settings' && settings(value.settings)) return value as unknown as ManagementHostMessage;
   if (value.type !== 'management.result' || !text(value.requestId, 128) || typeof value.ok !== 'boolean') return undefined;
   if (value.settings !== undefined && !settings(value.settings)) return undefined;

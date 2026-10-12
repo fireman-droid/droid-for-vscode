@@ -29,11 +29,21 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
       onToggle={() => setSidebarCollapsed(value => !value)}
       onNavigate={page => { state.setPage(page); state.setNotice(null); }} />
     <main className="management-main">
-    <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、连接与版本</p></div>
+    <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>常规</h1><p>外观、问答、连接与版本</p></div>
       <Button variant="plain" size="icon-sm" aria-label="刷新信息" title="刷新信息" disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}><RefreshCw className={state.busy ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>
     </header>
       {s ? <>
         <div className="management-group"><ManagementRow label="主题"><ManagementChoice label="主题" value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', '跟随编辑器' ], ['light', '浅色'], ['dark', '深色']]} /></ManagementRow></div>
+        <h2 className="management-section-title">代码审阅问答</h2><div className="management-group"><ManagementRow label="问答模型" detail="用于 Review Changes 中的行内问答。">
+          <ManagementChoice label="代码审阅问答模型" value={s.reviewQuestion.modelId ?? 'follow-main'} disabled={state.busy}
+            onChange={value => void state.run({ kind: 'reviewQuestion.model.set', modelId: value === 'follow-main' ? null : value })}
+            options={[
+              ['follow-main', '跟随主聊天'],
+              ...(s.reviewQuestion.modelId && !s.reviewQuestion.models.some(model => model.id === s.reviewQuestion.modelId)
+                ? [[s.reviewQuestion.modelId, `${s.reviewQuestion.modelId}（不可用）`] as const] : []),
+              ...s.reviewQuestion.models.map(model => [model.id, model.label] as const),
+            ]} />
+        </ManagementRow></div>
         <h2 className="management-section-title">连接</h2><div className="management-group"><ManagementRow label="Droid 会话"><span className="select-none">{statusLabels[s.connection] ?? s.connection}</span></ManagementRow><ManagementRow label="IDE"><span className="select-none">{statusLabels[s.ide] ?? s.ide}</span></ManagementRow></div>
         <h2 className="management-section-title">版本</h2><div className="management-group"><ManagementRow label={`Droid ${s.version}`} detail={typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}>
           <Button variant="plain" size="icon-sm" aria-label="复制版本信息" onClick={() => { void copyText(`Droid ${s.version}\n${typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}`).then(() => setCopied(true), () => state.setNotice({ ok: false, message: '复制失败，可手动复制版本信息。' })); }}>{copied ? <Check /> : <Copy />}</Button>

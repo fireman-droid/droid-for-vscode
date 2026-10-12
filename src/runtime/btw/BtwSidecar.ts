@@ -136,7 +136,10 @@ async function createLocalBtwClient(
           disabledToolIds: tools.tools.map(tool => tool.llmId),
         });
         const restricted = ListToolsResultSchema.parse((await client.listTools()).result);
-        if (restricted.tools.some(tool => tool.currentlyAllowed))
+        // Droid keeps the built-in schema-discovery tool allowed even when its
+        // ID is disabled. It cannot execute the disabled tools it describes.
+        // All file, command and MCP tools must still be disabled.
+        if (restricted.tools.some(tool => tool.currentlyAllowed && !(tool.id === 'tool-search-cli' && tool.llmId === 'ToolSearch')))
           throw new Error('Droid could not disable tools for this read-only question.');
       },
       forkSession: (params) => client.forkSession(params),

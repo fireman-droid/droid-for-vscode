@@ -16,6 +16,7 @@ import { gitStatusPages } from '../../../shared/protocol/gitStatusPaging';
 import { isId } from '../../../shared/validation/guards';
 import { reviewWorkspaceRoot } from '../../review/reviewWorkspaceRoot';
 import { ReviewQuestionHost } from '../../review/ReviewQuestionHost';
+import { REVIEW_QUESTION_MODEL_SETTING } from '../../review/reviewQuestionSettings';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -58,6 +59,7 @@ export class ReviewPanelController implements vscode.Disposable {
       vscode.window.onDidChangeActiveColorTheme(() => this.postTheme()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('droidvisx.theme')) this.postTheme();
+        if (event.affectsConfiguration(`droidvisx.${REVIEW_QUESTION_MODEL_SETTING}`) && this.current()) this.questions.models(this.target!.sessionId);
       }),
     ];
   }

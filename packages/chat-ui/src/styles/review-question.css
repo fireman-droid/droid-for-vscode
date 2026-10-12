@@ -17,13 +17,11 @@
   .review-question-input::placeholder { color: var(--muted-ink); }
   .review-question-composer .review-question-close { position: absolute; top: 2px; right: 3px; width: 22px; height: 22px; color: var(--muted-ink); }
   .review-question-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; }
-  .review-question-actions .review-question-model { width: auto; max-width: min(240px, calc(100% - 34px)); height: 22px; padding: 0 2px; border: 0; border-radius: 3px; background: transparent; color: var(--secondary-ink); font-size: 10px; gap: 4px; box-shadow: none; }
-  .review-question-model-menu { width: max-content; min-width: 180px; max-width: min(320px, calc(100vw - 16px)); }
   .review-question-actions .review-question-send { width: 20px; height: 20px; border-radius: 50%; color: var(--code-surface); background: var(--secondary-ink); }
   .review-question-actions .review-question-send svg { width: 12px; height: 12px; }
   .review-question-actions .review-question-send[aria-label='Stop answer'] svg { width: 8px; height: 8px; fill: currentColor; }
   .review-question-send:disabled { opacity: .3; }
-  .review-question-close:hover, .review-question-model:hover { color: var(--ink); background: var(--soft-surface); }
+  .review-question-close:hover { color: var(--ink); background: var(--soft-surface); }
   .review-question-send:hover:not(:disabled) { background: var(--ink); }
   .review-question-progress { display: flex; margin-right: auto; color: var(--muted-ink); }
   .review-question-progress svg { width: 12px; height: 12px; animation: review-question-spin 1s linear infinite; }
