@@ -15,6 +15,8 @@
   .review-stream { scrollbar-gutter: auto; scroll-padding-top: 36px; }
   .review-file-section { min-width: 0; border-bottom: 1px solid var(--panel-edge); }
   .review-section-heading { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 2px; min-width: 0; min-height: 35px; padding: 3px 8px; background: var(--review-canvas); border-bottom: 1px solid var(--panel-edge); }
+  /* The file heading (or saved-edit toolbar) already supplies this divider. */
+  .review-file-section .review-diff-content > .review-hunk:first-child { border-top: 0; }
   .review-section-title { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; min-height: 28px; text-align: left; font-size: 12px; font-weight: 400; }
   .review-section-title > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .review-section-title .review-file-stats { margin-left: 2px; }
