@@ -1,8 +1,18 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { extractExecuteSummary, extractToolAction, extractToolTarget } from './toolDetail';
+import { extractExecuteSummary, extractToolAction, extractToolTarget, normalizeTodoDetail } from './toolDetail';
 
 const workspace = resolve('workspace');
+
+it.each([
+  'completed Inspect code\nin_progress Wire the selector\npending Verify the result',
+  '1. completed Inspect code\n2) in_progress Wire the selector\n- pending Verify the result',
+  ['completed Inspect code', 'in_progress Wire the selector', 'pending Verify the result'],
+].map(todos => ({ todos })))('preserves bare TodoWrite statuses instead of displaying them as pending task text: $todos', ({ todos }) => {
+  expect(normalizeTodoDetail(todos)).toBe(
+    '1. [completed] Inspect code\n2. [in_progress] Wire the selector\n3. [pending] Verify the result',
+  );
+});
 
 describe('tool display input boundaries', () => {
   it('identifies Read and LS targets while external directories stay private', () => {

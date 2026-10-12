@@ -334,7 +334,7 @@ function objectSteps(entries: readonly unknown[]): readonly TodoStep[] {
 }
 
 /**
- * CLI-equivalent line parser: "[status]" labels, "[x]"/"[ ]"
+ * Line parser: bracketed or bare status labels, "[x]"/"[ ]"
  * checkboxes (all with optional number or bullet prefixes), and bare
  * numbered/bulleted/plain lines as pending steps.
  */
@@ -348,7 +348,7 @@ function lineSteps(text: string): readonly TodoStep[] {
     const labeled =
       /^(?:(?:\d+[.)]\s*)|(?:[-*]\s+))?\[(completed|in_progress|pending)\]\s*(.*)$/u.exec(
         line,
-      );
+      ) ?? /^(?:(?:\d+[.)]\s*)|(?:[-*]\s+))?(completed|in_progress|pending)\s+(.+)$/u.exec(line);
     if (labeled !== null) {
       steps.push({
         status: labeled[1] as TodoStep['status'],

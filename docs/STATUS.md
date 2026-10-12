@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Plan 状态解析（2026-10-12）
+
+- TodoWrite 的裸状态行（`completed`、`in_progress`、`pending`，含序号／项目符号和字符串数组）在 Runtime 入口归一化；主聊天与恢复历史共用该路径，状态不再混进任务标题，完成计数和当前步骤按真实状态显示。
+- 用户授权的限定验证通过：三种裸状态输入和既有前端计划解析／锚点共 7 项通过。首次运行完整 `toolDetail.test.ts` 时，既有 MCP 工具目标隔离用例失败，随后仅运行本次许可范围内的用例；该无关问题未改动。
+- `typecheck`、`lint:budgets`、生产构建和 168 条 VSIX 静态校验通过，跳过运行时入口加载。已全局安装到 Microsoft VS Code 与 Cursor，两边 8 个主要文件与清单一致，需 Reload Window 后验收；安装包从 main 独立源码副本构建，排除了暂停的 Thinking 改动。
+
 ## 已发送消息的引用预览宽度（2026-10-12）
 
 - 主聊天与 BTW 已发送消息中的引用预览使用所属消息气泡作为锚点，宽度与气泡一致并默认放在气泡上方；输入区继续使用 Composer 宽度，长引用在弹层内换行／滚动。
