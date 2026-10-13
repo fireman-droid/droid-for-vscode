@@ -2,7 +2,7 @@
   :where(.management-page, .management-dialog) .dvx-control:where(:not([role='checkbox'], [role='radio'], [role='switch'])) { display: inline-flex; align-items: center; gap: 6px; background: transparent !important; color: var(--ink); font-size: 12px; }
   .management-page { --management-edge: color-mix(in srgb, var(--ink) 10%, var(--surface)); --management-sidebar-width: 160px; display: grid; grid-template-columns: var(--management-sidebar-width) minmax(0, 1fr); transition: grid-template-columns 200ms var(--motion-ease); height: 100%; min-height: 0; overflow: hidden; color: var(--ink); background: var(--surface); font-size: 13px; }
   .management-page[data-sidebar-collapsed='true'] { --management-sidebar-width: 48px; }
-  .management-sidebar, .management-heading, .management-pagination, .management-mission-status { user-select: none; }
+  .management-sidebar, .management-heading, .dvx-pagination, .management-mission-status { user-select: none; }
   .management-sidebar { display: flex; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; flex-direction: column; gap: 18px; padding: 40px 8px 20px; }
   .management-page .management-sidebar-toggle { align-self: flex-start; width: 32px; height: 28px; padding: 0; justify-content: center; color: var(--muted-ink); }
   .management-sidebar nav { display: flex; flex-direction: column; gap: 2px; isolation: isolate; --selection-indicator-radius: 10px; --selection-indicator-color: light-dark(color-mix(in srgb, var(--ink) 7%, var(--surface)), color-mix(in srgb, var(--surface) 78%, black)); }
@@ -58,7 +58,6 @@
   .management-page [role='tab'][aria-selected='true'] { border-bottom-color: var(--focus); background: transparent; }
   .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
   /* List reads temporarily lock scope changes without pulsing both labels. */
-  .management-page .management-session-scope [role='tab']:disabled { opacity: 1; }
   .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
   .management-menu[data-slot='select-content'] { width: var(--radix-select-trigger-width); min-width: 0; max-width: calc(100vw - 16px); border-radius: 8px; }
   .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }
@@ -68,8 +67,6 @@
   .management-search { display: flex; min-width: 120px; flex: 1; align-items: center; gap: 8px; }
   .management-search > svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-ink); }
   .management-search input { max-width: 300px; }
-  .management-session-search { margin: 16px 0; }
-  .management-session-search input { max-width: none; }
   .management-channel { padding: 20px 0 16px; border-bottom: 1px solid var(--management-edge); }
   .management-channel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .management-channel-heading > div:first-child { min-width: 0; }
@@ -96,13 +93,6 @@
   .management-session-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .management-session-title svg { width: 12px; height: 12px; flex-shrink: 0; }
   .management-session-title small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
-  .management-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 16px; color: var(--muted-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .management-page-range { margin-right: auto; }
-  .management-pagination-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
-  .management-page-numbers, .management-page-number { display: inline-flex; align-items: center; gap: 2px; }
-  .management-page-gap { min-width: 20px; text-align: center; }
-  .management-pagination .dvx-control[aria-current='page'] { border: 1px solid var(--management-edge); border-radius: 6px; color: var(--ink); }
-  .management-pagination .dvx-control { justify-content: center; }
   .management-mission-table { width: 100%; min-width: 740px; table-layout: fixed; border-collapse: collapse; text-align: left; }
   .management-mission-title-col { width: 27%; }
   .management-mission-repository-col { width: 18%; }

@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import type { ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
+import { SettingsModelPicker } from '../models/SettingsModelPicker';
+import { ModelSourceProvider } from '../models/ModelSourceControl';
+import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
+import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 import { applyTheme } from '../shell/theme';
 import { copyText } from '../bridge/clipboard';
-import { ModelsApp } from '../models/ModelsApp';
+import { ModelsPage } from '../models/ModelsApp';
 import { useManagement, type ManagementTransport } from './useManagement';
 import { ManagementChoice, ManagementRow } from './ManagementFields';
 import { CompletionSettings } from './CompletionSettings';
@@ -21,6 +25,11 @@ declare const __DVX_BUILD_ID__: string;
 const statusLabels: Record<string, string> = { connected: '已连接', connecting: '连接中', idle: '空闲', disconnected: '已断开', unavailable: '不可用', error: '连接失败', reconnecting: '重连中', preparing: '准备中', 'reconnect-required': '需要重连' };
 
 export function ManagementApp({ transport }: { transport: ManagementTransport }) {
+  const postSource = useCallback((message: ModelSourceRequest) => transport.postModelSourceMessage?.(message), [transport]);
+  return <ModelSourceProvider postMessage={postSource}><ManagementContent transport={transport} /></ModelSourceProvider>;
+}
+
+function ManagementContent({ transport }: { transport: ManagementTransport }) {
   const { t } = useI18n();
   const language = useWebviewLocale();
   const state = useManagement(transport);
@@ -47,14 +56,12 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
         </ManagementRow>
         <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></SettingsSection>
         <SettingsSection title={t("代码审阅问答")}><ManagementRow label={t("问答模型")} detail={t("用于 Review Changes 中的行内问答。")}>
-          <ManagementChoice label={t("代码审阅问答模型")} value={s.reviewQuestion.modelId ?? 'follow-main'} disabled={state.busy}
-            onChange={value => void state.run({ kind: 'reviewQuestion.model.set', modelId: value === 'follow-main' ? null : value })}
-            options={[
-              ['follow-main', t('跟随主聊天')],
-              ...(s.reviewQuestion.modelId && !s.reviewQuestion.models.some(model => model.id === s.reviewQuestion.modelId)
-                ? [[s.reviewQuestion.modelId, t('{name} (unavailable)', { name: s.reviewQuestion.modelId })] as const] : []),
-              ...s.reviewQuestion.models.map(model => [model.id, model.label] as const),
-            ]} />
+          <SettingsModelPicker label={t('代码审阅问答模型')} modelId={s.reviewQuestion.modelId} disabled={state.busy}
+            models={s.reviewQuestion.models}
+            inherit={{ label: t('跟随主聊天'), modelId: s.reviewQuestion.inheritedModelId }} defaultEffortLabel={s.reviewQuestion.modelId === null ? '跟随主聊天' : 'Model default'}
+            reasoningEffort={s.reviewQuestion.reasoningEffort} nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}
+            onModelChange={modelId => void state.run({ kind: 'reviewQuestion.model.set', modelId })}
+            onEffortChange={effort => void state.run({ kind: 'reviewQuestion.model.set', modelId: s.reviewQuestion.modelId, reasoningEffort: effort as SessionReasoningEffort | null })} />
         </ManagementRow></SettingsSection>
         <SettingsSection title={t("连接")}><ManagementRow label={t("Droid 会话")}><span className="select-none">{t(statusLabels[s.connection] ?? s.connection)}</span></ManagementRow><ManagementRow label="IDE"><span className="select-none">{t(statusLabels[s.ide] ?? s.ide)}</span></ManagementRow></SettingsSection>
         <SettingsSection title={t("版本")}><ManagementRow label={`Droid ${s.version}`} detail={typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}>
@@ -62,7 +69,7 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
         </ManagementRow></SettingsSection>
       </> : <p role="status" className="management-empty">{state.busy ? t("正在读取设置…") : t("设置尚未读取")}</p>}
     </div>
-    {visited.has('models') && <div hidden={state.page !== 'models'}><ModelsApp transport={transport} /></div>}
+    {visited.has('models') && <div hidden={state.page !== 'models'}><ModelsPage transport={transport} /></div>}
     {visited.has('completion') && s && <div hidden={state.page !== 'completion'}><CompletionSettings state={state} settings={s} /></div>}
     {(visited.has('sessions') || state.page === 'sessions') && <div className="management-list-page" hidden={state.page !== 'sessions'}><SessionManagement state={state} active={state.page === 'sessions'} /></div>}
     {(visited.has('missions') || state.page === 'missions') && <div className="management-list-page" hidden={state.page !== 'missions'}><MissionManagement state={state} active={state.page === 'missions'} /></div>}

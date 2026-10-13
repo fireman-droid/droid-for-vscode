@@ -5,7 +5,8 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ManagementRow } from './ManagementFields';
 import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
-import { DefaultsSelect, useDefaultsFields, type DefaultsFieldsProps } from './DefaultsFields';
+import { useDefaultsFields, type DefaultsFieldsProps } from './DefaultsFields';
+import { SettingsModelPicker } from '../models/SettingsModelPicker';
 
 export function CompactionDefaults(props: DefaultsFieldsProps) {
   const { t } = useI18n();
@@ -27,12 +28,15 @@ export function CompactionDefaults(props: DefaultsFieldsProps) {
           }}><Trash2 /></Button></div>
       </ManagementRow>)}
       {f.row('compactionTokenLimitPerModel', '添加模型上限', <div className="management-default-override management-default-override-add">
-        <DefaultsSelect label={t("覆盖上限的模型")} wide value={model} options={available} placeholder={t("选择模型")} disabled={locked || !available.length} onChange={setModel} />
+        <SettingsModelPicker label={t('覆盖上限的模型')} modelId={model} models={f.pickerModels.filter(item => !(item.id in overrides))} disabled={locked || !available.length}
+          nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce} onModelChange={id => setModel(id ?? undefined)} />
         <Input type="number" aria-label={t("模型 Token 上限")} placeholder={t("Tokens")} min={1} step={1} disabled={locked} value={limit} onChange={e => setLimit(e.target.value)} />
         <Button variant="outline" size="sm" aria-label={t("添加模型上限")} disabled={locked || !model || !available.some(o => o.value === model && !o.disabled) || !Number.isSafeInteger(count) || count <= 0}
           onClick={() => { if (model) { props.update({ compactionTokenLimitPerModel: { ...overrides, [model]: count } }); setModel(undefined); setLimit(''); } }}><Plus />{t("添加")}</Button>
       </div>)}
-      {f.choice('compactionModel', '压缩模型', [{ value: 'current-model', label: t('当前会话模型') }, ...f.modelOptions])}
+      {f.row('compactionModel', '压缩模型', <SettingsModelPicker label={t('压缩模型')} modelId={f.text('compactionModel')} disabled={f.disabled('compactionModel')}
+        models={[{ id: 'current-model', label: t('当前会话模型'), sourceIndependent: true }, ...f.pickerModels]}
+        nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce} onModelChange={id => { if (id) props.update({ compactionModel: id }); }} />)}
       {f.toggle('compactionThresholdCheckEnabled', '达到上限时自动压缩', '新会话达到配置的 Token 上限后自动压缩上下文。')}
   </SettingsSection>;
 }

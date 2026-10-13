@@ -1,4 +1,5 @@
 {
+  "droidvisx.reviewQuestion.reasoningEffort.description": "程式碼審閱行內問答的推理強度。留空使用所選模型預設值；未指定模型時跟隨主聊天。可用等級由 Droid 模型目錄提供。",
   "droidvisx.openManagement.title": "Droid：打開管理",
   "droidvisx.manageCapabilities.title": "Droid：管理功能",
   "droidvisx.openReview.title": "Droid：審閱改動",
@@ -30,7 +31,7 @@
   "droidvisx.theme.enum.1": "始終使用暖色淺色主題。",
   "droidvisx.theme.enum.2": "始終使用深色主題。",
   "droidvisx.reviewQuestion.modelId.description": "審閱改動中行內問答使用的模型。留空則跟隨主聊天。在 Droid 管理 > 常規 > 程式碼審閱問答中設定。",
-  "droidvisx.modelSource.description": "Droid 模型選擇器顯示的模型來源。立即生效，不改變當前模型。",
+  "droidvisx.modelSource.description": "Droid 聊天和設定頁模型選擇器顯示的模型來源。立即生效，保留已儲存的模型選擇。",
   "droidvisx.modelSource.enum.0": "顯示 Factory 管理的模型。",
   "droidvisx.modelSource.enum.1": "顯示使用自有 API Key 設定的自定義模型。",
   "droidvisx.modelSource.enum.2": "同時顯示 Factory 管理的模型和自定義模型（預設）。",

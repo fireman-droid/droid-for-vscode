@@ -1,6 +1,15 @@
 import type { MessageTranslations } from './translate';
 
 export const managementMessages: readonly MessageTranslations[] = [
+  ["Search tasks", "搜索任务", "搜尋任務"],
+  ["Search titles or repositories", "搜索标题或仓库", "搜尋標題或儲存庫"],
+  ["Task pagination", "任务分页", "任務分頁"],
+  ["The current model is outside this filter. Your selection is preserved.", "当前模型不在筛选范围内，已保留选择。", "目前模型不在篩選範圍內，已保留選擇。"],
+  ["{count} / page", "{count} 条 / 页", "{count} 筆 / 頁"],
+  ["More records have not been loaded", "还有记录尚未读取", "還有記錄尚未讀取"],
+  ["Loading records", "正在读取记录", "正在讀取記錄"],
+  ["This model does not support the selected reasoning effort. Choose another level.", "此模型不支持所选推理强度，请重新选择。", "此模型不支援所選推理強度，請重新選擇。"],
+
   ["Context compaction","上下文压缩","上下文壓縮"],
   ["Models with limit overrides","覆盖上限的模型","覆蓋上限的模型"],
   ["Choose model","选择模型","選擇模型"],

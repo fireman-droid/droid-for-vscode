@@ -9,6 +9,14 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 设置模型选择与目录筛选（2026-10-13）
+
+- 公共包新增 `ModelPicker`、`ListToolbar`、`Pagination`。常规问答、会话／Mission 默认模型、子任务模型与压缩模型使用共享选择器；主聊天暂不迁移。推理等级与默认值沿用 SDK 模型目录，未新增 Fast／Context 开关。
+- 会话搜索与范围／类型／归档筛选合并为一行；模型页“模型来源”工具栏下拉共用聊天的官方／BYOK／全部偏好，并应用到设置页模型菜单。分类依据 SDK 的 `isCustom`，筛选保留已存模型与继承选项。任务增加标题／仓库搜索和 10／20／50 条分页，筛选变化回到首页；10 条以内只显示记录数。
+- 问答设置新增 `reviewQuestion.reasoningEffort`，保存时验证模型支持情况；切换模型清除旧等级，发送时再按最新目录验证并传入既有只读 sidecar。继承与模型默认值保留，不修改主聊天模型。
+- 已授权的最小模拟回归 5 项通过，覆盖等级保存与实际 sidecar 参数、切换模型／目录变化及任务跨页搜索。真实浏览器已核对 SDK 等级、草稿更新与撤销、实际任务搜索、紧凑弹层和 520px 窄屏；来源偏好与窗口尺寸已恢复，未发起模型请求。当前浏览器的旧扩展尚未提供常规问答推理元数据及设置模型 `isCustom`，这两项完整真实联动待新包加载后验证，不把模拟回归记为真实验证。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、公共包构建与声明、生产构建均通过。从 main 加本任务源码生成 `dist/droidvisx.vsix`，通过 171 个归档条目、打包依赖及扩展入口校验；暂停的 Thinking 改动未进入包。SHA256 为 `71eeac962b32759b3d5e1b2ea9d012ea8cd0469e3fee67cb0fc426a28a998503`。未安装、推送或发布。
+
 ## 设置页共享组件与滚动条（2026-10-13）
 
 - 公共 UI 包新增 `SettingsSection`、`SettingsRow` 与基于 Radix 的 `ScrollArea`。常规、补全及会话／Mission 默认设置复用分组和设置行；管理正文与任务表格分别接入纵向／横向滚动。主聊天、Review 问答及模型菜单滚动行为未改动。

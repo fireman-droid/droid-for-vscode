@@ -1,0 +1,15 @@
+@layer utilities {
+  .dvx-list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 20px 0; }
+  .dvx-list-search { position: relative; flex: 1 1 220px; min-width: 160px; }
+  .dvx-list-search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted-ink); pointer-events: none; }
+  .dvx-list-search > input { width: 100%; height: 30px; padding-left: 30px; border-radius: 8px; font-size: 12px; }
+  .dvx-list-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
+  .dvx-list-filters > .dvx-control { height: 30px; border-radius: 8px; }
+  .dvx-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 16px; color: var(--muted-ink); font-size: 12px; font-variant-numeric: tabular-nums; user-select: none; }
+  .dvx-page-range { margin-right: auto; }
+  .dvx-pagination-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
+  .dvx-page-numbers, .dvx-page-number { display: inline-flex; align-items: center; gap: 2px; }
+  .dvx-page-gap { min-width: 20px; text-align: center; }
+  .dvx-pagination .dvx-control[aria-current='page'] { border: 1px solid var(--edge); border-radius: 6px; color: var(--ink); }
+  .dvx-pagination .dvx-control { justify-content: center; }
+}

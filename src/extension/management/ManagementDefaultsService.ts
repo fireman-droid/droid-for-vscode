@@ -91,7 +91,7 @@ export class ManagementDefaultsService {
     return {
       values, locked, autonomyLevels: defaults.availableAutonomyLevels,
       models: catalog.map(m => ({ id: m.id, label: m.displayName, reasoning: m.supportedReasoningEfforts,
-        defaultReasoning: m.defaultReasoningEffort, ...(m.disabledReason ? { disabledReason: m.disabledReason } : {}) })),
+        defaultReasoning: m.defaultReasoningEffort, isCustom: m.isCustom, ...(m.disabledReason ? { disabledReason: m.disabledReason } : {}) })),
       specDirectories: defaults.specSavePresets ? [
         { label: '用户目录', value: defaults.specSavePresets.userFactoryDir },
         ...(defaults.specSavePresets.projectFactoryDir ? [{ label: '项目目录', value: defaults.specSavePresets.projectFactoryDir }] : []),

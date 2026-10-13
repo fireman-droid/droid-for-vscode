@@ -4,7 +4,7 @@ import { createBtwSidecar } from '../../runtime/btw/BtwSidecar';
 import { ModelAvailabilityError } from '../models/DisabledModelsStore';
 import { parseReviewQuestionRequest, type ReviewQuestionResponse, type ReviewQuestionSelection } from '../../shared/protocol/reviewQuestionProtocol';
 import { EMPTY_SESSION_BTW_STATE } from '../../shared/protocol/btwProtocol';
-import { readReviewQuestionModel } from './reviewQuestionSettings';
+import { readReviewQuestionModel, resolveReviewQuestionSelection } from './reviewQuestionSettings';
 
 /** Independent, tool-disabled conversation belonging only to the Review panel. */
 export class ReviewQuestionHost {
@@ -57,7 +57,9 @@ export class ReviewQuestionHost {
           throw error;
         });
         return {
-          ask: (text, options) => sidecar.ask(`${context}\n\nQuestion:\n${text}`, options),
+          ask: (text, options) => sidecar.ask(`${context}\n\nQuestion:\n${text}`, {
+            ...options, ...resolveReviewQuestionSelection(this.controller.metadata.modelCatalog.items, this.controller.metadata.settings.value),
+          }),
           interrupt: () => sidecar.interrupt?.() ?? Promise.resolve(),
           dispose: () => sidecar.dispose(),
         };

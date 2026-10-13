@@ -1,4 +1,5 @@
 {
+  "droidvisx.reviewQuestion.reasoningEffort.description": "Reasoning effort for inline code-review questions. Leave empty to use the selected model default, or follow the main chat when no model is selected. Available levels come from the Droid model catalog.",
   "droidvisx.openManagement.title": "Droid: Open Management",
   "droidvisx.manageCapabilities.title": "Droid: Manage Droid Capabilities",
   "droidvisx.openReview.title": "Droid: Review Changes",
@@ -30,7 +31,7 @@
   "droidvisx.theme.enum.1": "Always use the warm light theme.",
   "droidvisx.theme.enum.2": "Always use the dark theme.",
   "droidvisx.reviewQuestion.modelId.description": "Model for inline questions in Review Changes. Leave empty to follow the main chat. Configure this in Droid Management > General > Code review questions.",
-  "droidvisx.modelSource.description": "Model sources shown in Droid model selectors. Takes effect immediately and does not change the active model.",
+  "droidvisx.modelSource.description": "Model sources shown in Droid chat and settings model selectors. Takes effect immediately and preserves saved model selections.",
   "droidvisx.modelSource.enum.0": "Show Factory-managed models.",
   "droidvisx.modelSource.enum.1": "Show custom models configured with your own API keys.",
   "droidvisx.modelSource.enum.2": "Show both Factory-managed and custom models (default).",

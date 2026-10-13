@@ -24,7 +24,9 @@ export function createManagementServices(options: {
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,
       sessionManagementAvailable: options.daemon,
-    }), () => controller.metadata.modelCatalog.items.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName }))),
+    }), () => controller.metadata.modelCatalog.items.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName,
+      reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom })),
+    () => controller.metadata.settings.value?.modelId ?? null),
     sessions: new ManagementSessionCatalog(getDroid, cwd, () => controller.sessionState.sessionId),
     sessionsAvailable: options.daemon,
     viewSession: row => viewer.open({ kind: 'daemon-session', mode: 'standard', sessionId: row.id, cwd: row.cwd, title: row.title }),

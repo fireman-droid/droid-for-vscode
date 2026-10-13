@@ -45,6 +45,7 @@ export interface DefaultsModel {
   readonly reasoning: readonly string[];
   readonly defaultReasoning: string;
   readonly disabledReason?: string;
+  readonly isCustom?: boolean;
 }
 export interface ManagementDefaults {
   readonly values: DefaultValues;
@@ -60,5 +61,6 @@ export function isManagementDefaults(v: unknown): v is ManagementDefaults {
     && Array.isArray(v.specDirectories) && v.specDirectories.every(d => isStrictRecord(d) && text(d.label) && text(d.value))
     && Array.isArray(v.models) && v.models.every(m => isStrictRecord(m) && text(m.id) && text(m.label)
       && Array.isArray(m.reasoning) && m.reasoning.every(reasoning) && reasoning(m.defaultReasoning)
+      && (m.isCustom === undefined || typeof m.isCustom === 'boolean')
       && (m.disabledReason === undefined || typeof m.disabledReason === 'string'));
 }

@@ -1,6 +1,6 @@
 import { useI18n, translate, type UiLocale } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ArchiveRestore, Download, Eye, Folder, MessageSquare, MoreHorizontal, Pencil, RefreshCw, Search, Star } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, Eye, Folder, MessageSquare, MoreHorizontal, Pencil, RefreshCw, Star } from 'lucide-react';
 import type { ManagedSession, ManagementAction } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, Tooltip } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ManagementChoice } from './ManagementFields';
-import { SessionPagination } from './SessionPagination';
+import { Pagination } from '@droidvisx/chat-ui/ui/pagination';
+import { ListToolbar } from '@droidvisx/chat-ui/ui/list-toolbar';
 import type { ManagementState } from './useManagement';
 import { DefaultsSettings } from './DefaultsSettings';
 import { SessionListLoading } from './ManagementListLoading';
@@ -93,11 +94,14 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       <TabsList animatedIndicator aria-label={t("会话页面")}><TabsTrigger value="history">{t("历史记录")}</TabsTrigger><TabsTrigger value="defaults">{t("默认设置")}</TabsTrigger></TabsList>
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
       <TabsContent value="history" forceMount hidden={section !== 'history'}>
-    <div className="management-toolbar"><Tabs value={scope} onValueChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}>
-      <TabsList animatedIndicator className="management-session-scope" aria-label={t("会话范围")} aria-busy={loading}><Tooltip content={state.settings?.cwd || t("未打开文件夹")}><TabsTrigger value="folder" disabled={disabled}>{t("当前文件夹")}</TabsTrigger></Tooltip><TabsTrigger value="all" disabled={disabled}>{t("全部文件夹")}</TabsTrigger></TabsList>
-    </Tabs><div className="management-actions"><ManagementChoice label={t("会话类型")} value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', t('聊天与 Exec') ], ['chat', t('聊天')], ['exec', 'Exec']]} />
-      <ManagementChoice label={t("收藏与归档")} value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', t('未归档') ], ['favorites', t('收藏')], ['archived', t('已归档')]]} /></div></div>
-    <div className="management-search management-session-search"><Search /><Input aria-label={t("筛选会话")} placeholder={t("搜索标题或文件夹")} value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>
+    <ListToolbar label={t('筛选会话')} placeholder={t('搜索标题或文件夹')} value={query} onChange={value => changeFilter(() => setQuery(value))}>
+      <ManagementChoice label={t('会话范围')} value={scope} disabled={disabled}
+        hint={scope === 'folder' ? state.settings?.cwd || t('未打开文件夹') : undefined}
+        onChange={value => changeFilter(() => { setScope(value as 'folder' | 'all'); setRows([]); setCursor(null); setLoaded(false); })}
+        options={[[ 'folder', t('当前文件夹') ], ['all', t('全部文件夹')]]} />
+      <ManagementChoice label={t('会话类型')} value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', t('聊天与 Exec') ], ['chat', t('聊天')], ['exec', 'Exec']]} />
+      <ManagementChoice label={t('收藏与归档')} value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', t('未归档') ], ['favorites', t('收藏')], ['archived', t('已归档')]]} />
+    </ListToolbar>
     {state.settings && !state.settings.sessionManagementAvailable ? <p className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
       {error && <p role="alert" className="management-caption text-destructive">{t(error)}</p>}
       {pending && <p role="status" className="sr-only">{t("正在读取会话")}</p>}
@@ -129,7 +133,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
         </div>)}
       </div>
       {loaded && !loading && visible.length === 0 && !error && <p className="management-empty">{t("没有匹配的会话")}</p>}
-      {loaded && (visible.length > 0 || cursor !== null) && <SessionPagination page={currentPage} pageSize={pageSize} count={visible.length}
+      {loaded && (visible.length > 0 || cursor !== null) && <Pagination label={t('会话分页')} page={currentPage} pageSize={pageSize} count={visible.length}
         complete={loaded && cursor === null} loading={loading} disabled={disabled} onPageSize={size => changeFilter(() => setPageSize(size))}
         onPage={target => {
           if (cursor !== null && visible.length <= (target + 1) * pageSize) void load(cursor, target);

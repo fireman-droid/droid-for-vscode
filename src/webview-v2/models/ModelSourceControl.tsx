@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { MODEL_SOURCE_VERSION, isModelSourceMode, matchesModelSource, parseModelSourceState,
   type ModelSourceMode, type ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 
 const LABELS: Record<ModelSourceMode, string> = { official: '官方', byok: 'BYOK', mixed: '全部' };
 const ModelSourceContext = createContext({ mode: 'mixed' as ModelSourceMode,
@@ -29,6 +30,19 @@ export function ModelSourceProvider({ children, postMessage }: {
 }
 
 export const useModelSource = () => useContext(ModelSourceContext);
+
+export function ModelSourceSelect({ disabled }: { disabled?: boolean }) {
+  const { t } = useI18n();
+  const { mode, setMode, error } = useModelSource();
+  return <div>
+    <Select value={mode} disabled={disabled} onValueChange={value => { if (isModelSourceMode(value)) setMode(value); }}>
+      <SelectTrigger aria-label={t('模型来源')}><span>{t('模型来源')}：<SelectValue /></span></SelectTrigger>
+      <SelectContent className="management-menu" align="end">{(['official', 'byok', 'mixed'] as const).map(value =>
+        <SelectItem value={value} key={value}>{t(LABELS[value])}</SelectItem>)}</SelectContent>
+    </Select>
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+  </div>;
+}
 
 export function ModelSourceControl({ models, className = '', compact = false }: {
   readonly models?: readonly { readonly id: string; readonly isCustom?: boolean }[];

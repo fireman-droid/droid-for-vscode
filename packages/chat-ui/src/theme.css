@@ -15,6 +15,8 @@
 @import './styles/floating-panel.css';
 @import './styles/settings.css';
 @import './styles/scroll-area.css';
+@import './styles/list-controls.css';
+@import './styles/model-picker.css';
 @source './**/*.{ts,tsx}';
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 

@@ -36,5 +36,8 @@ export { Button } from './ui/button';
 export { Input, Textarea } from './ui/input';
 export { SettingsSection, SettingsRow } from './ui/settings';
 export { ScrollArea } from './ui/scroll-area';
+export { ListToolbar } from './ui/list-toolbar';
+export { Pagination } from './ui/pagination';
+export { ModelPicker, type ModelPickerProps, type PickerModel } from './ui/model-picker';
 export { Message, MessageContent } from './ai-elements/message';
 export { Tool, ToolHeader, ToolContent } from './ai-elements/tool';

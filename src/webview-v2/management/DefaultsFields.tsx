@@ -5,6 +5,7 @@ import { Switch } from '../ui/controls';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 import { ManagementRow } from './ManagementFields';
+import { SettingsModelPicker } from '../models/SettingsModelPicker';
 
 const DEFAULT = '__droid_default__';
 export interface DefaultsFieldsProps {
@@ -45,25 +46,22 @@ export function useDefaultsFields(props: DefaultsFieldsProps) {
       value={typeof values[key] === 'number' && Number.isFinite(values[key]) ? values[key] as number : ''}
       onChange={e => update({ [key]: e.target.value === '' ? NaN : Number(e.target.value) })} />);
   const modelOptions = snapshot.models.map(m => ({ value: m.id, label: m.label, disabled: Boolean(m.disabledReason) }));
+  const pickerModels = snapshot.models;
   const modelPair = (modelKey: DefaultField, effortKey: DefaultField, modelLabel = '模型', effortLabel = '推理强度', nullable = false) => {
     const model = snapshot.models.find(m => m.id === text(modelKey));
-    const options = nullable ? [{ value: DEFAULT, label: t('Droid 默认') }, ...modelOptions] : modelOptions;
-    return <>
-      {row(modelKey, modelLabel, <DefaultsSelect label={modelLabel} wide value={text(modelKey) ?? (nullable ? DEFAULT : undefined)}
-        options={options} disabled={disabled(modelKey) || !modelOptions.length} onChange={id => {
+    return row(modelKey, modelLabel, <SettingsModelPicker label={t(modelLabel)} placeholder={t('Droid 默认')} models={pickerModels} modelId={text(modelKey)}
+        reasoningEffort={text(effortKey)} effortLabel={t(effortLabel)}
+        disabled={busy || !pickerModels.length} modelDisabled={disabled(modelKey)} effortDisabled={disabled(effortKey)}
+        inherit={nullable ? { label: t('Droid 默认') } : undefined} defaultEffortLabel={nullable ? 'Droid 默认' : undefined}
+        nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce} onModelChange={id => {
           const next = snapshot.models.find(m => m.id === id);
-          const changes: Partial<Record<DefaultField, DefaultValue>> = { [modelKey]: id === DEFAULT ? null : id };
+          const changes: Partial<Record<DefaultField, DefaultValue>> = { [modelKey]: id };
           if (!snapshot.locked[effortKey]) {
-            if (id === DEFAULT && nullable) changes[effortKey] = null;
+            if (id === null && nullable) changes[effortKey] = null;
             else if (next) changes[effortKey] = next.defaultReasoning;
           }
           update(changes);
-        }} />, model?.disabledReason)}
-      {row(effortKey, effortLabel, <DefaultsSelect label={effortLabel} value={text(effortKey) ?? (nullable ? DEFAULT : undefined)}
-        disabled={disabled(effortKey) || !model?.reasoning.length || Boolean(model.disabledReason)}
-        options={[...(nullable ? [{ value: DEFAULT, label: t('Droid 默认') }] : []), ...(model?.reasoning ?? []).map(value => ({ value, label: t(value.charAt(0).toUpperCase() + value.slice(1)) }))]}
-        onChange={value => update({ [effortKey]: value === DEFAULT ? null : value })} />)}
-    </>;
+        }} onEffortChange={value => update({ [effortKey]: value })} />, model?.disabledReason || snapshot.locked[effortKey]);
   };
-  return { text, disabled, row, choice, toggle, number, modelPair, modelOptions };
+  return { text, disabled, row, choice, toggle, number, modelPair, modelOptions, pickerModels };
 }

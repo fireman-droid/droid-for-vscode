@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useCallback, useEffect, useState } from 'react';
-import { MoreHorizontal, Pencil, Plus, RefreshCw, Search, Settings2, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelsTransport } from './useModels';
 import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
@@ -8,21 +8,21 @@ import { useModelsPage } from './useModelsPage';
 import { readBootThemePreference } from '../shell/themeController';
 import { applyTheme } from '../shell/theme';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { ListToolbar } from '@droidvisx/chat-ui/ui/list-toolbar';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/overlays';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 import { AliasForm, ConnectionForm, ModelForm } from './ModelForms';
 import { AddModels, type ModelsPageState } from './AddModels';
 import { ModelList } from './ModelList';
-import { ModelSourceControl, ModelSourceProvider } from './ModelSourceControl';
+import { ModelSourceSelect, ModelSourceProvider } from './ModelSourceControl';
 
 export function ModelsApp({ transport }: { readonly transport: ModelsTransport }) {
   const postSource = useCallback((message: ModelSourceRequest) => transport.postModelSourceMessage?.(message), [transport]);
   return <ModelSourceProvider postMessage={postSource}><ModelsPage transport={transport} /></ModelSourceProvider>;
 }
 
-function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
+export function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
   const { t } = useI18n();
   const page = useModelsPage(transport);
   const { manager, connection, busy } = page;
@@ -56,14 +56,14 @@ function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
           <Button variant="outline" size="sm" disabled={disabled || !snapshot} onClick={createChannel}><Plus />{t("创建渠道")}</Button>
         </div>
       </header>
-      <div className="management-group"><div className="management-row"><span>{t("聊天中显示")}</span><ModelSourceControl compact /></div></div>
       {!panelOpen && <ModelsFeedback page={page} />}
       {snapshot === null ? <div className="management-empty" role="status">{busy ? t("正在读取模型配置…") : <><p>{t("模型配置读取失败")}</p><Button variant="plain" onClick={() => void run({ kind: 'refresh' })}>{t("重新读取")}</Button></>}</div> : <>
-        <div className="management-toolbar"><div className="management-search"><Search /><Input aria-label={t("搜索已配置模型")} placeholder={t("搜索模型")} value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <ListToolbar label={t('搜索已配置模型')} placeholder={t('搜索模型')} value={search} onChange={setSearch}>
+          <ModelSourceSelect disabled={disabled} />
           <Select value={filter} onValueChange={setFilter} disabled={disabled}><SelectTrigger aria-label={t("渠道筛选")}><SelectValue /></SelectTrigger><SelectContent className="management-menu">
             <SelectItem value="all">{t("全部渠道")}</SelectItem>{snapshot.connections.map(c => <SelectItem value={c.id} key={c.id}>{c.name}</SelectItem>)}
           </SelectContent></Select>
-        </div>
+        </ListToolbar>
         {!snapshot.canApply && snapshot.applyMessage && <p id="models-apply-status" className="management-caption">{snapshot.applyMessage === 'Connect a chat before selecting a model here.' ? t("连接聊天后可切换当前模型。") : t("当前聊天暂时不能切换模型；仍可管理渠道和模型配置。")}</p>}
         {snapshot.connections.filter(c => filter === 'all' || filter === c.id).map(c => {
           const models = snapshot.models.filter(m => m.connectionId === c.id);

@@ -166,6 +166,8 @@ const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
 
 ## Droid 项目的接入方式
 
+设置界面可组合 `ModelPicker`（模型搜索、来源分组与可选推理等级）、`ListToolbar`（搜索与筛选插槽）、`Pagination`（已知总数或仍有后续数据的分页）。模型目录、等级、默认值、锁定状态与保存回调由消费者提供，公共组件不连接 SDK 或保存配置。
+
 设置界面可组合 `SettingsSection`（可选标题与分组）、`SettingsRow`（名称、说明与控件插槽）
 和 `ScrollArea`。滚动区域基于 Radix，支持纵向或横向、键盘滚动及 `viewportRef`；
 受 CSP 限制的宿主通过 `nonce` 允许其样式。组件不管理设置值、保存请求或聊天自动跟随。

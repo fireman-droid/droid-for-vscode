@@ -195,6 +195,12 @@
           "scope": "application",
           "description": "%droidvisx.reviewQuestion.modelId.description%"
         },
+        "droidvisx.reviewQuestion.reasoningEffort": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%droidvisx.reviewQuestion.reasoningEffort.description%"
+        },
         "droidvisx.modelSource": {
           "type": "string",
           "enum": [

@@ -5,12 +5,14 @@ import {
   readCompletionKey, readCompletionSettings, validateCompletionEndpoint,
 } from '../autocomplete/settings';
 import { readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
-import { readReviewQuestionModel, REVIEW_QUESTION_MODEL_SETTING } from '../review/reviewQuestionSettings';
+import { readReviewQuestionModel, readReviewQuestionEffort, REVIEW_QUESTION_MODEL_SETTING, REVIEW_QUESTION_EFFORT_SETTING } from '../review/reviewQuestionSettings';
+import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 
 export class ManagementSettingsService {
   constructor(private readonly secrets: vscode.SecretStorage, private readonly version: string,
     private readonly status: () => Pick<ManagementSettings, 'cwd' | 'connection' | 'ide' | 'sessionManagementAvailable'>,
-    private readonly questionModels: () => ManagementSettings['reviewQuestion']['models']) {}
+    private readonly questionModels: () => ManagementSettings['reviewQuestion']['models'],
+    private readonly mainModel: () => string | null = () => null) {}
 
   async read(): Promise<ManagementSettings> {
     const status = this.status();
@@ -20,7 +22,7 @@ export class ManagementSettingsService {
     return {
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey,
-      reviewQuestion: { modelId: readReviewQuestionModel(), models: this.questionModels() },
+      reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: this.questionModels() },
       completion: {
         enabled: settings.enabled, autoTrigger: settings.autoTrigger !== false, relatedFiles: settings.relatedFiles,
         adaptiveDebounce: settings.adaptiveDebounce !== false, debounceMs: settings.debounceMs,
@@ -29,10 +31,16 @@ export class ManagementSettingsService {
     };
   }
 
-  async saveQuestionModel(modelId: string | null): Promise<void> {
+  async saveQuestionModel(modelId: string | null, reasoningEffort: SessionReasoningEffort | null = null): Promise<void> {
     if (modelId !== null && !this.questionModels().some(model => model.id === modelId))
       throw new Error('此模型已不可用，请刷新设置后重新选择。');
+    const model = this.questionModels().find(item => item.id === (modelId ?? this.mainModel()));
+    if (reasoningEffort !== null && !model?.reasoning?.includes(reasoningEffort))
+      throw new Error('此模型不支持所选推理强度，请重新选择。');
+    // Clear the previous model's effort before changing models, then apply the validated selection.
+    await vscode.workspace.getConfiguration('droidvisx').update(REVIEW_QUESTION_EFFORT_SETTING, '', vscode.ConfigurationTarget.Global);
     await vscode.workspace.getConfiguration('droidvisx').update(REVIEW_QUESTION_MODEL_SETTING, modelId ?? '', vscode.ConfigurationTarget.Global);
+    if (reasoningEffort !== null) await vscode.workspace.getConfiguration('droidvisx').update(REVIEW_QUESTION_EFFORT_SETTING, reasoningEffort, vscode.ConfigurationTarget.Global);
   }
 
   async save(preferences: CompletionPreferences, setApiKey: boolean): Promise<void> {
