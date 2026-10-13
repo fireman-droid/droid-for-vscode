@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DiffView, findDiffChange } from '../../../packages/chat-ui/src/review/DiffView';
+import { CODE_REFERENCE_MIME } from '../../../packages/chat-ui/src/chat/codeReferences';
 
 const observers: ViewportObserver[] = [];
 class ViewportObserver {
@@ -20,6 +21,28 @@ class ViewportObserver {
 beforeEach(() => { observers.length = 0; vi.stubGlobal('IntersectionObserver', ViewportObserver); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); document.getSelection()?.removeAllRanges(); });
 const patch = (prefix: string, count = 300) => `@@ -0,0 +1,${count} @@\n${Array.from({ length: count }, (_, index) => `+${prefix}-${index}`).join('\n')}`;
+
+it.each([true, false])('copies one source side with exact lines and a code-reference payload (split=%s)', split => {
+  render(<DiffView path="src/file.ts" split={split} patch={'@@ -7,2 +7,2 @@\n-old value\n+new value\n same line'} />);
+  const code = [...document.querySelectorAll('code')].find(node => node.textContent === 'old value')!;
+  const range = document.createRange(); range.selectNodeContents(code);
+  document.getSelection()!.addRange(range);
+  const data = new Map<string, string>();
+  fireEvent.copy(code, { clipboardData: { setData: (type: string, text: string) => data.set(type, text) } });
+  expect(data.get('text/plain')).toBe('old value');
+  expect(JSON.parse(data.get(CODE_REFERENCE_MIME)!)).toEqual({ path: 'src/file.ts', startLine: 7, endLine: 7, text: 'old value', side: 'before' });
+});
+
+it('keeps excerpts without recorded line numbers as plain text', () => {
+  render(<DiffView path="src/file.ts" patch={'@@\n+new value'} />);
+  const code = document.querySelector('code')!;
+  const range = document.createRange(); range.selectNodeContents(code);
+  document.getSelection()!.addRange(range);
+  const data = new Map<string, string>();
+  fireEvent.copy(code, { clipboardData: { setData: (type: string, text: string) => data.set(type, text) } });
+  expect(data.get('text/plain')).toBe('new value');
+  expect(data.has(CODE_REFERENCE_MIME)).toBe(false);
+});
 
 it('defers long diff content until it approaches the viewport and preserves the final line', () => {
   render(<DiffView patch={patch('complete')} path="large.txt" />);

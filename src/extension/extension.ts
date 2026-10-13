@@ -1,5 +1,6 @@
 import type { DaemonApi } from '../runtime/daemon/api';
 import * as vscode from 'vscode';
+import { registerEditorCodeReferences } from './webview/editorCodeReferences';
 
 import { FactoryDroidRuntime } from '../runtime/FactoryDroidRuntime';
 import { createLocalDroidSession } from '../runtime/process/createLocalDroidSession';
@@ -136,6 +137,7 @@ function createSessionLeaseHooks(): SessionLeaseHooks {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(registerEditorCodeReferences());
   // globalStorage survives Cursor's per-boot log directory cleanup and
   // aggregates all windows into one per-day file set.
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;

@@ -55,7 +55,7 @@ function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestion
 }
 
 /** Extract from source rows, never the interleaved before/after DOM text. */
-function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[] | null, lines: readonly InlineDiffLine[]): Omit<DiffQuestionAnchor, 'key' | 'source'> | null {
+export function readDiffSelection(root: HTMLElement, path: string, rows: readonly DiffRow[] | null, lines: readonly InlineDiffLine[]): (Omit<DiffQuestionAnchor, 'key' | 'source'> & { contiguous: boolean }) | null {
   const selection = root.ownerDocument.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount ||
     !root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return null;
@@ -92,9 +92,13 @@ function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[]
   }
   if (!first || !last) return null;
   const text: string[] = [];
+  const numbers: number[] = [];
   for (let row = first.row; row <= last.row; row++) {
     const line = lineAt(row);
-    if (line) text.push(line.text.slice(row === first.row ? first.offset : 0, row === last.row ? last.offset : undefined));
+    if (line) {
+      text.push(line.text.slice(row === first.row ? first.offset : 0, row === last.row ? last.offset : undefined));
+      if (line[side] !== null && !(row === last.row && last.offset === 0 && row > first.row)) numbers.push(line[side]!);
+    }
   }
   if (!text.join('\n').trim()) return null;
   const nearby: string[] = [];
@@ -103,8 +107,9 @@ function readSelection(root: HTMLElement, path: string, rows: readonly DiffRow[]
     for (const line of source) if (line) nearby.push(`${line.kind === 'remove' ? '-' : line.kind === 'add' ? '+' : ' '} ${line.before ?? ''}:${line.after ?? ''} ${line.text}`);
   }
   const startLine = lineAt(first.row)![side];
-  const endLine = lineAt(last.row)![side];
-  return { startRow: first.row, row: last.row, range: selectedRange!, selection: { path, side, startLine: startLine === null || endLine === null ? null : startLine,
+  const endLine = lineAt(last.row)![side] === null ? null : numbers.at(-1) ?? null;
+  const contiguous = numbers.length > 0 && numbers.every((number, index) => number === numbers[0]! + index);
+  return { contiguous, startRow: first.row, row: last.row, range: selectedRange!, selection: { path, side, startLine: startLine === null || endLine === null ? null : startLine,
     endLine: startLine === null || endLine === null ? null : endLine, text: text.join('\n'), context: nearby.join('\n') } };
 }
 
@@ -129,7 +134,7 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
       if (event.target instanceof Node && !diff.contains(event.target)) { clearSelection?.(key); return; }
       frame = requestAnimationFrame(() => {
         if (!diff.ownerDocument.hasFocus()) { clearSelection?.(key); return; }
-        const selected = readSelection(diff, path, rows, lines);
+        const selected = readDiffSelection(diff, path, rows, lines);
         if (selected) select({ ...selected, key, source });
         else clearSelection?.(key);
       });

@@ -1,6 +1,8 @@
 import type { MessageTranslations } from './translate';
 
 export const reviewMessages: readonly MessageTranslations[] = [
+  ["Before","修改前","修改前"],
+  ["After","修改后","修改後"],
   ["Selected code actions","选中代码操作","選中程式碼操作"],
   ["Ask about selected code","询问选中的代码","詢問選中的程式碼"],
   ["Question about selected code","针对选中代码的问题","針對選中程式碼的問題"],

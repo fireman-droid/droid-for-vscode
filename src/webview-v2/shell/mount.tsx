@@ -1,5 +1,6 @@
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import { copyText } from '../bridge/clipboard';
+import { resolveCodeReference, openCodeReference } from '../bridge/codeReferences';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Button } from '../ui/button';
@@ -46,7 +47,7 @@ export function mountWebview(children: ReactNode, report: (message: string) => v
   createRoot(element).render(
     <WebviewLocaleProvider><RenderBoundary report={report}>
       <PortalContainerProvider container={element}>
-        <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText, createSyntaxWorker }}><TooltipProvider delayDuration={400}>{children}</TooltipProvider></UiEnvironmentProvider>
+        <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText, createSyntaxWorker, resolveCodeReference, openCodeReference }}><TooltipProvider delayDuration={400}>{children}</TooltipProvider></UiEnvironmentProvider>
       </PortalContainerProvider>
     </RenderBoundary></WebviewLocaleProvider>,
   );

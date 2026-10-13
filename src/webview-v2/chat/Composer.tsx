@@ -13,6 +13,8 @@ import { useAttachmentIngress } from './useAttachmentIngress';
 import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestions';
 import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
+import { useCodeReferenceDraft } from '@droidvisx/chat-ui/chat/useCodeReferenceDraft';
+import { CodeReferenceChips } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
 
 export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: AssistantWebviewState;
@@ -38,8 +40,12 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     actions: { image: attachments.handleAttachImage, pdf: attachments.handleAttachPdf, text: attachments.handleAttachTextFile, uris: attachments.handleAttachUris, remoteImage: attachments.handleAttachRemoteImage },
   });
   const quote = useMemo(() => parseSelectionQuotes(flow.draft), [flow.draft]);
-  const body = quote?.body ?? flow.draft;
-  const changeBody = (value: string) => flow.handleDraftChange(formatSelectionQuotes(quote?.quotes ?? [], value));
+  const quotePrefixLength = formatSelectionQuotes(quote?.quotes ?? [], '').length;
+  const references = useCodeReferenceDraft(quote?.body ?? flow.draft,
+    value => flow.handleDraftChange(formatSelectionQuotes(quote?.quotes ?? [], value)),
+    MAX_TURN_TEXT_LENGTH - quotePrefixLength, `${state.sessionId}:${flow.sendSignal}:${flow.queueEditingId ?? ''}`);
+  const body = references.body;
+  const changeBody = references.change;
   const suggestions = useComposerSuggestions({
     state, draft: body, disabled, onChange: changeBody,
     onFileSearch, onAttachPath: attachments.handleAttachPath,
@@ -56,18 +62,18 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
-  const quotePrefixLength = formatSelectionQuotes(quote?.quotes ?? [], '').length;
   const submit = () => { if (!flow.callbacks.isSendDisabled && !ingress.isPreparing()) void flow.callbacks.onSend(flow.draft); };
   return <ComposerView value={body} quotes={quote?.quotes}
-    onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), body)); } : undefined}
+    onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), quote.body)); } : undefined}
     onChange={suggestions.change}
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
-    placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={Math.max(0, MAX_TURN_TEXT_LENGTH - quotePrefixLength)}
+    placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={references.maxLength}
     focusSignal={flow.draftCommand.id} notice={ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t("Answer Droid’s request to continue.")}</p> : undefined}
-    attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
+    attachments={<><StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />
+      <CodeReferenceChips references={references.references} onRemove={references.remove} className={references.references.length ? 'px-3 pt-2' : undefined} /></>}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}
     suggestionsListId={suggestions.listId} activeSuggestionId={suggestions.activeId}
     suggestions={<ComposerSuggestions suggestions={suggestions} state={state} />}
@@ -75,5 +81,5 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
       if (suggestions.onKeyDown(event)) { event.preventDefault(); return; }
       if (event.key === 'Escape' && flow.queueEditingId !== null) { event.preventDefault(); flow.handleQueueEditCancel(); }
     }}
-    onPaste={ingress.onPaste} onDrop={ingress.onDrop} onDragOver={ingress.onDragOver} renderInputRow={renderInputRow} />;
+    onPaste={event => { if (!references.onPaste(event)) ingress.onPaste(event); }} onDrop={ingress.onDrop} onDragOver={ingress.onDragOver} renderInputRow={renderInputRow} />;
 }

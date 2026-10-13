@@ -25,6 +25,7 @@ export type ReviewPanelContext = {
   readonly operation: OperationDiff | null; readonly operationPath: string | null;
   readonly toolUseId?: string;
   readonly resetReview?: true;
+  readonly workspaceRoot?: string | null;
 };
 export interface ReviewSyntaxSource { readonly before: string; readonly after: string }
 export interface ReviewRecordedEntry {
@@ -91,7 +92,8 @@ export function parseReviewPanelRequest(value: unknown): ReviewPanelRequest | un
 }
 export function isReviewPanelContext(value: unknown): value is ReviewPanelContext {
   return isStrictRecord(value) && value.type === 'reviewPanel.context' &&
-    hasExactKeys(value, ['type', 'sessionId', 'latestTurnId', 'valid', 'operation', 'operationPath'], ['toolUseId', 'resetReview']) &&
+    hasExactKeys(value, ['type', 'sessionId', 'latestTurnId', 'valid', 'operation', 'operationPath'], ['toolUseId', 'resetReview', 'workspaceRoot']) &&
+    (value.workspaceRoot === undefined || value.workspaceRoot === null || typeof value.workspaceRoot === 'string' && value.workspaceRoot.length <= 4096) &&
     (value.resetReview === undefined || value.resetReview === true) &&
     (value.toolUseId === undefined || isId(value.toolUseId)) &&
     (value.sessionId === null || isId(value.sessionId)) && (value.latestTurnId === null || isId(value.latestTurnId)) &&

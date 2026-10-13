@@ -6,6 +6,7 @@ import type { ImageTranscriptItem } from '../../shared/protocol/attachments';
 import type { UserTranscriptItem } from '../../shared/protocol/transcript';
 import { parseDelegatedTask } from '../chat/transcript/delegatedTask';
 import { parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
+import { ReferencedText } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
 import { SentAttachments } from '../chat/EditAttachments';
 import { ImageContent } from '../content/MediaPreview';
 import { Markdown } from '../content/Markdown';
@@ -26,7 +27,7 @@ export const ReadOnlyQuestion = memo(function ReadOnlyQuestion({ item, images }:
       <Markdown text={delegated.task} />
     </div> : <>
       {quote ? <QuoteChips quotes={quote.quotes} /> : null}
-      <p className="select-text whitespace-pre-wrap break-words">{quote?.body ?? item.text}</p>
+      <div className="select-text whitespace-pre-wrap break-words"><ReferencedText text={quote?.body ?? item.text} /></div>
     </>}
   </UserMessageBubble>;
 });

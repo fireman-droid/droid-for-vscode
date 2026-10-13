@@ -6,6 +6,7 @@ import { parseWebviewMessage } from '../../../shared/validateMessage';
 import { parseReviewPanelRequest, type ReviewPanelOpen } from '../../../shared/protocol/reviewPanelProtocol';
 import { getWebviewHtml } from '../../webview/webviewHtml';
 import { handleWebviewClipboard } from '../../webview/webviewClipboard';
+import { handleCodeReference } from '../../webview/editorCodeReferences';
 import { readWebviewBootTheme } from '../../webview/webviewTheme';
 import { bindWebviewLocale, hostText, readWebviewLocale } from '../../webview/webviewLocale';
 import { isTurnActive } from '../../chat/internals';
@@ -220,6 +221,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const recorded = workspaceOperation?.status === 'ready' && workspaceOperation.files.length > 0;
     this.post({
       type: 'reviewPanel.context', sessionId: target?.sessionId ?? null, valid: this.current(),
+      workspaceRoot: target?.root ?? null,
       ...(resetReview ? { resetReview: true } : {}),
       latestTurnId:
         this.latestOperationTurn()?.turnId ??
@@ -235,6 +237,7 @@ export class ReviewPanelController implements vscode.Disposable {
     });
   }
   private async handle(value: unknown): Promise<void> {
+    if (this.browserPost && handleCodeReference(value, this.browserPost)) return;
     if (this.browserPost && isUiLocaleRead(value)) { this.browserPost(readWebviewLocale()); return; }
     if (this.panel && handleWebviewClipboard(value, this.panel.webview)) return;
     const message = parseReviewPanelRequest(value);

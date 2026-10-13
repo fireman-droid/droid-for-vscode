@@ -12,6 +12,7 @@ import {
 import { join } from 'node:path';
 
 import * as vscode from 'vscode';
+import { handleCodeReference } from '../webview/editorCodeReferences';
 
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import type { HostToWebviewMessage } from '../../shared/bridgeMessages';
@@ -472,6 +473,7 @@ export class BrowserDevBridge implements vscode.Disposable {
     if (request.method === 'POST' && request.url === '/message') {
       void readJson(request).then(
         (message) => {
+          if (handleCodeReference(message, result => this.send(run, result))) { respond(response, 204); return; }
           if (isUiLocaleRead(message)) {
             this.send(run, readWebviewLocale());
             respond(response, 204);

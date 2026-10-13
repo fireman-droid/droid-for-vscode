@@ -1,10 +1,14 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { SyntaxWorkerFactory } from './syntax/syntaxProtocol';
+import type { CodeReference } from './chat/codeReferences';
 
 export interface UiEnvironment {
   readonly assistantName: string;
   readonly copyText: (text: string) => Promise<void>;
   readonly createSyntaxWorker?: SyntaxWorkerFactory;
+  readonly resolveCodeReference?: (markers: readonly string[], text: string) => Promise<CodeReference | null>;
+  readonly openCodeReference?: (reference: CodeReference) => void;
+  readonly codeReferencePath?: (path: string) => string;
 }
 
 const Environment = createContext<UiEnvironment>({

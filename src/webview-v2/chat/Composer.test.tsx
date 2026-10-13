@@ -8,6 +8,7 @@ import { initialAssistantWebviewState } from '../state/initialState';
 import { useComposerFlow } from './composer/useComposerFlow';
 import { prepareAttachment, type PreparedAttachment } from './attachments/attachmentIngress';
 import { Composer } from './Composer';
+import { CODE_REFERENCE_MIME, parseCodeReferences } from '@droidvisx/chat-ui/chat/codeReferences';
 
 vi.mock('./attachments/attachmentIngress', async (original) => ({
   ...await original<typeof import('./attachments/attachmentIngress')>(),
@@ -23,6 +24,20 @@ const onFileSearch = vi.fn();
 const state: AssistantWebviewState = {
   ...initialAssistantWebviewState, sessionId: 'session-1', conversationId: 'conversation-1', connection: { status: 'connected' },
 };
+
+it.each([false, true])('keeps the full copied snapshot when sending or queueing from the main composer (queue=%s)', queued => {
+  render(<Harness current={queued ? { ...state, turn: { turnId: 'turn-1', status: 'streaming' } } : state} />);
+  const input = screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLTextAreaElement;
+  fireEvent.change(input, { target: { value: 'Explain this' } });
+  input.setSelectionRange(0, 0);
+  const reference = { path: 'C:/project/app.ts', startLine: 3, endLine: 4, text: 'const n = 1;\nrun(n);' };
+  fireEvent.paste(input, { clipboardData: { files: [], getData: (type: string) => type === CODE_REFERENCE_MIME ? JSON.stringify(reference) : type === 'text/plain' ? reference.text : '' } });
+  expect(input.value).toBe('Explain this');
+  expect(screen.getByRole('button', { name: 'Open app.ts (3–4)' })).toBeDefined();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  const message = intents().find(message => message.type === (queued ? 'queue.add' : 'turn.send'));
+  expect(parseCodeReferences(message.text)).toEqual({ references: [reference], body: 'Explain this' });
+});
 function Harness({ current = state }: { current?: AssistantWebviewState }) {
   const flow = useComposerFlow(port, current, vi.fn(), routes);
   // Match the environment supplied by the production Webview mount.

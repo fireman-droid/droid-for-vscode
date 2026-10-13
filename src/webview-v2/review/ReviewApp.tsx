@@ -15,11 +15,16 @@ import { useReviewFileNavigation } from './useReviewFileNavigation';
 import { VirtualReviewFiles } from './VirtualReviewFiles';
 import { ReviewQuestions } from './ReviewQuestions';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
+import { UiEnvironmentProvider, useUiEnvironment } from '@droidvisx/chat-ui/environment';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
   const { t } = useI18n();
   const flow = useReviewWorkbench(port);
   const { target, review, current, actions } = flow;
+  const environment = useUiEnvironment();
+  const referenceEnvironment = useMemo(() => ({ ...environment, codeReferencePath: (path: string) =>
+    /^(?:[a-z]:[\\/]|\/)/i.test(path) || !target?.workspaceRoot ? path : `${target.workspaceRoot.replace(/[\\/]$/, '')}/${path}`,
+  }), [environment, target?.workspaceRoot]);
   const [split, setSplit] = useState(true);
   const [showFiles, setShowFiles] = useState(false);
   const [commit, setCommit] = useState(false);
@@ -71,7 +76,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   };
   const hunk = useReviewHunkNavigation(scroll, filtered.map(file => file.path), selectFile, scopeKey);
   const allCollapsed = filtered.length > 0 && filtered.every(file => collapsed.has(file.path));
-  return <TooltipProvider><ReviewQuestions scopeKey={`${scopeKey}:${split}:${valid}`} port={port} sessionId={valid ? target.sessionId : null} enabled={valid && !flow.scopePending}><main ref={root} className="review-workbench">
+  return <UiEnvironmentProvider value={referenceEnvironment}><TooltipProvider><ReviewQuestions scopeKey={`${scopeKey}:${split}:${valid}`} port={port} sessionId={valid ? target.sessionId : null} enabled={valid && !flow.scopePending}><main ref={root} className="review-workbench">
     <ReviewToolbar flow={flow} split={split} onSplit={setSplit} showFiles={showFiles} onFiles={() => setShowFiles(value => !value)}
       onFind={() => { setShowFiles(true); setFindRequest(value => value + 1); }} onHunk={hunk} onCommit={() => setCommit(true)}
       allCollapsed={allCollapsed} onCollapse={() => setCollapsed(allCollapsed ? new Set() : new Set(filtered.map(file => file.path)))} />
@@ -123,5 +128,5 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
           </div></> : null}
       </DialogContent>
     </Dialog>
-  </main></ReviewQuestions></TooltipProvider>;
+  </main></ReviewQuestions></TooltipProvider></UiEnvironmentProvider>;
 }

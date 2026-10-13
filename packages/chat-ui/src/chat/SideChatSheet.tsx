@@ -11,6 +11,8 @@ import { Textarea } from '../ui/input';
 import { QuoteChips } from './QuoteChips';
 import { UserMessageBubble } from './UserMessageView';
 import { SideReply } from './SideReply';
+import { CodeReferenceChips, ReferencedText } from './CodeReferenceChips';
+import { useCodeReferenceDraft } from './useCodeReferenceDraft';
 
 export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
   attachments, composerActions, composerStatus, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
@@ -32,6 +34,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const quotePrefix = formatSelectionQuotes(quotedContext, '');
   const maxLength = Math.max(0, maxTextLength - quotePrefix.length);
+  const references = useCodeReferenceDraft(draft, onDraftChange, maxLength);
   const pendingQuote = state.pendingQuestion ? parseSelectionQuotes(state.pendingQuestion) : null;
   const pendingBody = pendingQuote?.body ?? state.pendingQuestion;
   const follow = useSmoothFollowScroll<HTMLDivElement>();
@@ -120,7 +123,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
                 <div role="region" aria-label={t("Your question")} tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
                   {entry.images?.length ? renderImages?.(entry.images) : null}
-                  <p className="select-text">{parsed?.body ?? entry.question}</p>
+                  <div className="select-text"><ReferencedText text={parsed?.body ?? entry.question} /></div>
                 </div>
               </UserMessageBubble>
             </div>
@@ -135,7 +138,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     <footer className="v2-btw-footer">
       {state.pendingQuestion !== null ? <div className="v2-btw-queued" role="status">
         <Clock3 aria-hidden="true" /><div className="min-w-0 flex-1 space-y-1">
-          <p title={pendingBody ?? undefined}><span>{t("Queued")}</span>{pendingBody}</p>
+          <div><span>{t("Queued")}</span><ReferencedText text={pendingBody ?? ''} /></div>
           {pendingQuote ? <QuoteChips quotes={pendingQuote.quotes} /> : null}
         </div>
       </div> : null}
@@ -145,10 +148,11 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
         {composerStatus ? <div className="v2-btw-composer-status">{composerStatus}</div> : null}
         <div className="v2-btw-compose-content">
         {attachments}
+        <CodeReferenceChips references={references.references} onRemove={references.remove} />
         <QuoteChips quotes={quotedContext} previewAnchor={composer} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
-        <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={draft} maxLength={maxLength} disabled={unavailable}
-          aria-label={t("By the Way question")} placeholder={state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")} onChange={(event) => onDraftChange(event.target.value)}
-          onPaste={onPaste}
+        <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={references.body} maxLength={references.maxLength} disabled={unavailable}
+          aria-label={t("By the Way question")} placeholder={state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")} onChange={(event) => references.change(event.target.value)}
+          onPaste={event => { if (!references.onPaste(event)) onPaste?.(event); }}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
         </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}

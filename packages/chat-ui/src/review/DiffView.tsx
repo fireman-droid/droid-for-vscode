@@ -6,6 +6,7 @@ import type { DiffSyntaxSource } from '../syntax/syntaxProtocol';
 import { DeferredDiffChunk, useDeferredDiff } from './deferredDiff';
 import { emphasizeWordRanges, escapeDiffText, wordDiffRanges, type WordRange } from './wordDiff';
 import { useSplitDiffSelection } from './splitDiffSelection';
+import { useDiffCodeCopy } from './useDiffCodeCopy';
 import { useSplitDiffDragScroll } from './splitDiffDragScroll';
 import { useDiffQuestion } from './diffQuestion';
 export { findDiffChange } from './diffNavigation';
@@ -133,6 +134,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const words = useMemo(() => wordDiffRanges(lines), [lines]);
   const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
   const selection = useSplitDiffSelection(root, rows, path);
+  const onCopy = useDiffCodeCopy(path, rows, lines);
   const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);
   const blocks = useMemo(() => rows
     ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
@@ -152,6 +154,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const syntax = useDiffSyntax(lines, path, source);
   return <div ref={root} className="review-diff markdown-content" data-layout={split ? 'split' : 'unified'}
     {...selection}
+    onCopy={onCopy}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
     role="region" aria-label={t("Diff for {p0}", { p0: path })} tabIndex={0}>
     {syntax.error ? <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
