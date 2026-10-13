@@ -10,6 +10,9 @@
   `docs/PLAN.md`、`docs/STATUS.md`、`docs/CAPABILITIES.md`、
   `docs/ARCHITECTURE.md` 和 `docs/DESIGN.md`，不创建临时调研、交接、
   验收或归档 Markdown。
+- 文档维护更新现有小节：STATUS 只保留当前状态与验证缺口，PLAN 只保留待办，
+  DESIGN 只保留有效设计约定。完成的过程记录归入提交历史，不连续追加每日流水。
+  Skill 只保留能复用的工作方法，不把短期状态、端口、模型名单或旧审计写成永久指令。
 
 ## 执行
 

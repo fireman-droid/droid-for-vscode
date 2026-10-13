@@ -51,6 +51,9 @@ pnpm install --frozen-lockfile
 
 ## 前端开发与预览
 
+功能联调默认使用下方的真实 Browser Dev Client；Studio 仅用于隔离的展示场景，
+不能用模拟结果替代真实 Host 验证。
+
 ```sh
 pnpm run dev:webview
 ```
@@ -201,7 +204,7 @@ export interface TurnSendMessage {
 - **文件操作**：读取失败不能伪装成空文件，保存失败不能确认已持久化。
 
 选择与本次故障直接相关的边界即可。新增回归前，说明最小触发顺序、预期结果和现有用例缺口；
-测试及浏览器自动化按 [AGENTS.md](../AGENTS.md) 获得许可后执行。
+执行当前任务所需的最窄本地回归；真实服务和外部写操作遵循 [AGENTS.md](../AGENTS.md) 的授权范围。
 
 <a id="verification"></a>
 
@@ -220,12 +223,13 @@ pnpm run lint:budgets
 | --- | --- |
 | `pnpm run build:chat-ui` | 公共 UI 包及类型声明 |
 | `pnpm run build:webview` | 独立前端资源，输出 `dist/webview-v2/` |
-| `pnpm run build` | 扩展、Worker 与五个生产 Webview，页面输出 `dist/webview/` |
+| `pnpm run build` | 扩展、Worker 与六个生产 Webview 入口，页面输出 `dist/webview/` |
 | `pnpm run package:vsix` | 串行执行打包前检查与构建，生成统一 VSIX |
 | `npm --prefix docs run build` | 文档静态站与站内文件链接检查 |
 
 打包已经包含 typecheck、预算检查、公共 UI 构建和生产构建，不要同时启动重复构建。
-测试不是默认执行步骤；当前项目规定测试、浏览器自动化和截图验证需要明确授权。
+当前任务所需的本地测试和同范围真实浏览器联调可直接执行，不逐项审批；
+纯视觉修改优先使用真实页面与构建检查，不新增 CSS 文本或类名断言。
 构建成功不代表真实会话与界面行为通过验收，交付时分别说明。
 
 一个 PR 应包含具体问题、改后行为、必要文档和实际运行的验证。提交前检查 `git diff` 与暂存区，
@@ -252,7 +256,8 @@ code --install-extension dist/droidvisx.vsix --force
 cursor --install-extension dist/droidvisx.vsix --force
 ```
 
-安装后执行 **Developer: Reload Window**。生产修改默认在 Microsoft VS Code 当前用户扩展目录安装和验收。
+安装后执行 **Developer: Reload Window**。生产修改先构建并校验包，收到本次明确安装指令后，
+默认安装到 Microsoft VS Code 当前用户扩展目录；功能联调优先使用连接真实 Host 的内置浏览器。
 `verify:vsix` 校验包内容及入口；它不启动真实模型会话。
 
 | 文件名 | 用途 |

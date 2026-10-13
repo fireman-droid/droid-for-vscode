@@ -700,14 +700,14 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
 - 公共 UI 包只接受 props、回调和插槽；ESM/声明构建拒绝父仓库、Node、VS Code 与
   Factory 依赖。宿主注入剪贴板、Mermaid 与 Auto 主题；纯展示层不拥有业务状态机。
 - `esbuild.mjs` 构建 Host/目录及历史 Worker，调用 `buildWebviewV2.mjs --production` 生成
-  Chat、Models、Mission、Viewer、Review 五个页面到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
+  Chat、Models、Management、Mission、Viewer、Review 六个入口到 `dist/webview/`。构建拒绝 UI 打入 SDK/Host/Runtime/assistant-ui，
   保留脚本 nonce、零网络、延迟 Mermaid；Markdown Worker 仅增加 `worker-src blob:`。
 - `packages/chat-ui/scripts/thirdPartyNotices.mjs` 按实际构建依赖收集许可证，
   包内固定版本副本不能自动沿用到升级版本；法律注释、MIT、第三方条款及图标随包。
   门禁不等于完成全部版权/秘密来源审查，剩余发布限制见 STATUS。
 - `package:vsix` 由 prepublish 进入类型、预算与生产构建，`verify:vsix` 校验清单、
-  manifest 与 bundled externals。生产代码按项目规则构建、校验并安装；行为测试仅在
-  用户授权范围内运行。准确命令见根 README，验证结果写 STATUS，不写成架构保证。
+  manifest 与 bundled externals。生产代码按项目规则构建、校验；安装等用户明确指令。
+  当前任务的最窄本地回归可直接执行，真实服务调用遵循授权范围；结果写 STATUS，不写成架构保证。
 - 开发浏览器 `/live` 通过 loopback Bridge 与同一 Host 联调，临时令牌/固定 Origin
   限制访问；模拟预览使用独立 transport。重载需新连接，失败不伪装成模拟成功。
   `/live?view=management` 渲染生产 `ManagementApp`，通过独立管理消息流复用

@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-const excluded = new Set(['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md', 'OPEN_SOURCE_POST.md', 'RUNTIME_CORRECTNESS_REVIEW.md']);
+const excluded = new Set(['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md']);
 
 // Keep one Markdown source readable both on GitHub and in the documentation site.
 // Source files and maintainer-only pages retain their repository destinations.

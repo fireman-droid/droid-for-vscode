@@ -12,7 +12,7 @@ export default defineConfig({
   lang: 'zh-CN',
   base: '/droid-for-vscode/',
   rewrites: { 'README.md': 'GUIDE.md' },
-  srcExclude: ['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md', 'OPEN_SOURCE_POST.md', 'RUNTIME_CORRECTNESS_REVIEW.md'],
+  srcExclude: ['PLAN.md', 'STATUS.md', 'DESIGN.md', 'FEEDBACK.md'],
   lastUpdated: true,
   // Keep original-image links valid in both GitHub Markdown and the built site.
   async buildEnd({ outDir }) {
