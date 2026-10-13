@@ -47,9 +47,8 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
   const actionLabel = pending ? 'Reconnecting…' : 'Reconnect';
   return <>
     <Tooltip content={t(detail)}><span role="status" aria-atomic="true" tabIndex={0} aria-label={`${t(label)}. ${t(detail)}`}
-      className="ml-1.5 mr-auto inline-flex h-6 min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      className="ml-1.5 mr-auto inline-flex h-6 items-center">
       <span className="grid size-3 shrink-0 place-items-center"><DroidConnectionDot state={status} working={working} /></span>
-      <span className="truncate">{t(label)}</span>
     </span></Tooltip>
     {retry ? <Button variant="plain" size="icon-sm" className="chat-header-control mr-1 text-muted-foreground"
       aria-label={t(actionLabel)} title={t(retry.disabled ? detail : actionLabel)} aria-busy={pending} disabled={retry.disabled} onClick={retry.run}>

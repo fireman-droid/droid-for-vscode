@@ -8,13 +8,13 @@ export function formatExactMessageTime(timestamp: number | null, locale?: string
   const date = timestamp === null ? null : new Date(timestamp);
   if (timestamp === null || timestamp <= 0 || date === null || Number.isNaN(date.getTime())) return 'Time unavailable';
   return date.toLocaleString(locale, {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
 }
 
 /**
- * Compact relative age with the recorded local date, time and timezone
+ * Compact relative age with the recorded local date and time
  * available on hover or keyboard focus. Missing source times stay unknown;
  * mounting or reloading a message never supplies its timestamp.
  */
