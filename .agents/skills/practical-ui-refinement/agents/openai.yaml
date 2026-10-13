@@ -1,0 +1,4 @@
+interface:
+  display_name: "实用界面整改"
+  short_description: "从真实页面的问题出发，收紧布局与信息层级，复用组件并验证真实交互"
+  default_prompt: "使用 $practical-ui-refinement 改善当前界面，沿用现有设计与真实能力，让它更简单、紧凑、实用。"

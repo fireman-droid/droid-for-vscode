@@ -1,4 +1,5 @@
 .factory/**
+.agents/**
 .cursor/**
 .superpowers/**
 .workflow/**

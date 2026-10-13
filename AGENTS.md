@@ -32,6 +32,9 @@
 
 ## Webview 组件
 
+- 整改已有界面的布局、信息层级或控件交互时，使用项目 skill
+  [practical-ui-refinement](.agents/skills/practical-ui-refinement/SKILL.md)。
+  模型选择器整改是参考案例，按当前问题选择结构，不要求所有控件使用同一种菜单。
 - 所有生产 Webview（Chat、Models、Mission、Viewer、Review）统一使用
   `packages/chat-ui/src/ui/` 的 shadcn/Radix 组件构建交互，AI 展示复用
   `packages/chat-ui/src/ai-elements/`；旧 `src/webview-v2` 对应路径仅为 re-export。
