@@ -98,6 +98,13 @@ export function SkillsPanel({
       {skills.status === 'ready' && skills.items.length === 0 ? (
         <p className="dvx-popover-message" role="status">{t("No skills found in this workspace.")}</p>
       ) : null}
+      <p className="dvx-popover-message dvx-capability-note">{t("Skill changes take effect in new sessions.")}{changed && onNewSession !== undefined ? (
+          <>
+            {' '}
+            <Button variant="plain" size="none" type="button" className="dvx-skills-apply-new" onClick={onNewSession}>{t("Start a new session")}</Button>
+          </>
+        ) : null}
+      </p>
       {skills.items.length > 0 ? (
         <ScrollArea className="dvx-skill-scroll" viewportClassName="dvx-skill-viewport" aria-label={t("Skills")}
           nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
@@ -118,13 +125,6 @@ export function SkillsPanel({
         </ul>
         </ScrollArea>
       ) : null}
-      <p className="dvx-popover-message dvx-skills-session-note">{t("Skill changes take effect in new sessions.")}{changed && onNewSession !== undefined ? (
-          <>
-            {' '}
-            <Button variant="plain" size="none" type="button" className="dvx-skills-apply-new" onClick={onNewSession}>{t("Start a new session")}</Button>
-          </>
-        ) : null}
-      </p>
     </div>
   );
 }
@@ -616,6 +616,10 @@ export function PluginsPanel({
       {plugins.status === 'ready' && plugins.items.length === 0 ? (
         <p className="dvx-popover-message" role="status">{t("No plugins installed.")}</p>
       ) : null}
+      <p className="dvx-popover-message dvx-capability-note">
+        {plugins.status === 'ready'
+          ? t('{count} marketplaces registered.', { count: plugins.marketplaceCount }) + ' '
+          : ''}{t("Manage plugins with the droid CLI.")}</p>
       {plugins.items.length > 0 ? (
         <ScrollArea className="dvx-skill-scroll" viewportClassName="dvx-skill-viewport" aria-label={t("Plugins")}
           nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
@@ -626,10 +630,6 @@ export function PluginsPanel({
         </ul>
         </ScrollArea>
       ) : null}
-      <p className="dvx-popover-message dvx-skills-session-note">
-        {plugins.status === 'ready'
-          ? t('{count} marketplaces registered.', { count: plugins.marketplaceCount }) + ' '
-          : ''}{t("Manage plugins with the droid CLI.")}</p>
     </div>
   );
 }

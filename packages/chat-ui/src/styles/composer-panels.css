@@ -168,7 +168,7 @@
   .v2-composer-panel .dvx-mcp-status-failed { @apply bg-destructive; }
   .v2-composer-panel .dvx-mcp-tools-toggle,
   .v2-composer-panel .dvx-skills-apply-new { @apply self-start text-[11px] hover:underline; }
-  .v2-composer-panel .dvx-skills-session-note { @apply relative z-[1] m-0 shrink-0 border-t border-[var(--panel-edge)] bg-popover px-0.5 pb-0.5 pt-1.5 text-[11px]; }
+  .v2-composer-panel .dvx-capability-note { @apply m-0 shrink-0 px-0.5 py-0.5 text-[11px]; }
   .v2-composer-panel .dvx-mcp-auth-button { @apply mt-0.5 self-start rounded-full border border-[var(--panel-edge)] bg-background px-2.5 py-[3px] text-[11px] font-medium disabled:opacity-50; }
   .v2-composer-panel .dvx-mcp-auth-status,
   .v2-composer-panel .dvx-mcp-remove { @apply text-[11px] text-muted-foreground; }
