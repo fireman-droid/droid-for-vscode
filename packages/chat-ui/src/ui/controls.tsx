@@ -1,4 +1,4 @@
-import { RadioGroup as RadioPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Toggle as ToggleButtonPrimitive, ToggleGroup as TogglePrimitive } from 'radix-ui';
+import { RadioGroup as RadioPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, ToggleGroup as TogglePrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
 import { cn } from './cn';
 import { buttonVariants } from './button';
@@ -21,10 +21,6 @@ export function ToggleGroup({ children, animatedIndicator = false, ...props }: C
 }
 export function ToggleGroupItem({ className, ...props }: ComponentProps<typeof TogglePrimitive.Item>) {
   return <TogglePrimitive.Item className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'data-[state=on]:bg-[var(--control-surface-active)] data-[state=on]:text-foreground', className)} {...props} />;
-}
-
-export function Toggle({ className, ...props }: ComponentProps<typeof ToggleButtonPrimitive.Root>) {
-  return <ToggleButtonPrimitive.Root className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'data-[state=on]:text-[var(--link-ink)]', className)} {...props} />;
 }
 
 export function Slider({ className, 'aria-label': label, ...props }: ComponentProps<typeof SliderPrimitive.Root>) {

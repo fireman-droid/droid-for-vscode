@@ -1,9 +1,9 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useMemo, useState } from 'react';
-import { Link2, RefreshCw, Search, Unlink2 } from 'lucide-react';
+import { Link2, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { RadioGroup, RadioGroupItem, Toggle } from '../../ui/controls';
+import { RadioGroup, RadioGroupItem } from '../../ui/controls';
 
 import {
   type ConfirmedSessionSettings,
@@ -58,7 +58,7 @@ export function ModelPopover({
   const confirmed = settings?.value;
   const isSpecView = settings !== undefined && view === 'spec';
   const specModelOverrideId = confirmed?.specModeModelId ?? null;
-  // Inheritance belongs to the footer toggle; the list marks the actual model.
+  // Inheritance belongs to the footer action; the list marks the actual model.
   const effectiveModelId = isSpecView
     ? (specModelOverrideId ?? confirmed?.modelId)
     : selection?.modelId ?? confirmed?.modelId;
@@ -67,8 +67,6 @@ export function ModelPopover({
     ? (confirmed?.specModeReasoningEffort ?? undefined)
     : selection?.reasoningEffort ?? confirmed?.reasoningEffort;
   const usesSessionModel = specModelOverrideId === null;
-  const sessionModelAvailable = modelCatalog.status === 'ready' && modelCatalog.items.some(
-    model => model.id === confirmed?.modelId && !model.disabled);
   const selected =
     modelCatalog.status !== 'ready'
       ? undefined
@@ -269,14 +267,15 @@ export function ModelPopover({
               </span>
             </Button>
           ) : null}
-        <Toggle className="size-6 shrink-0 p-0" aria-label={t('Spec follows main model')} pressed={usesSessionModel}
-          title={t(usesSessionModel ? 'Spec follows main model' : 'Spec uses an independent model')}
-          disabled={disabled || !confirmed || (usesSessionModel && !sessionModelAvailable)}
-          onPressedChange={follow => {
-            if (confirmed) onUpdate({ field: 'specModeModelId', value: follow ? null : confirmed.modelId });
+        <Button variant="plain" size="icon-sm" aria-label={t('Use main model for Spec')}
+          className={usesSessionModel ? 'text-[var(--link-ink)]' : 'text-muted-foreground'}
+          title={t(usesSessionModel ? 'Spec follows main model' : 'Use main model for Spec')}
+          disabled={disabled || !confirmed}
+          onClick={() => {
+            if (!usesSessionModel) onUpdate({ field: 'specModeModelId', value: null });
           }}>
-          {usesSessionModel ? <Link2 aria-hidden="true" /> : <Unlink2 aria-hidden="true" />}
-        </Toggle>
+          <Link2 aria-hidden="true" />
+        </Button>
       </div>}
       {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
       {disabled && settings?.status === 'ready' ? (
