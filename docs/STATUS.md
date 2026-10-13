@@ -10,6 +10,8 @@
   [GitHub v0.8.11](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.11) 已正式发布。
   [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38374358655) 已成功，
   注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录 latest 已确认返回 `0.8.11`。
+  Microsoft Marketplace 发布者 `droidvisx` 已创建，`0.8.11` 已上传，当前状态为 `Verifying`；
+  尚未确认验证通过或公开安装页可用。
   安装版不能仅凭版本号判断。
 - 当前源码包含行内代码引用、Mission 创建面板整改，以及主聊天模型弹层的计划跟随按钮：
   “计划”行右侧一键跟随主模型，重复点击不解除跟随、不切换聊天模式；推理强度仍独立设置。
@@ -32,10 +34,11 @@
   已核对安装入口与包内入口一致。`0.8.11` 正式包由干净标签 `v0.8.11` 构建，
   源码提交为 `981f9ea47c78de28612c41355c1998c5d0295826`，VSIX SHA256 为
   `65c3525b40dc1f1f2ba9ad316c621ab20b1174228bbdef1a07def46f447404bd`。
-  GitHub 与 Open VSX 使用同一 VSIX，来源和校验记录随 Release 附件发布。本次未更新本机扩展。
+  GitHub、Open VSX 与 Microsoft Marketplace 本次上传使用同一 VSIX，
+  来源和校验记录随 Release 附件发布。本次未更新本机扩展。
 - README、扩展简介、文档首页和使用指南已统一更新，采用 `docs/images/v0.8.10/` 的已审阅图集。
   保留采集版本与演示数据来源；没有重新截图或将旧图改标为 `0.8.11`。
-  本轮分发范围为 GitHub Releases 与 Open VSX，不新增 Microsoft Marketplace 渠道。
+  用户已追加授权首次发布 Microsoft Marketplace；安装入口待市场验证通过后更新。
 - 安装须获本次明确指令，默认目标 Microsoft VS Code。真实浏览器联调复用当前 Host，
   已安装 Host 与新前端之间可能存在能力差异；扩展升级重载后需重新获取浏览器连接。
 
