@@ -9,6 +9,7 @@ import { useSplitDiffSelection } from './splitDiffSelection';
 import { useDiffCodeCopy } from './useDiffCodeCopy';
 import { useSplitDiffDragScroll } from './splitDiffDragScroll';
 import { useDiffQuestion } from './diffQuestion';
+import { useDiffReference } from './diffReference';
 export { findDiffChange } from './diffNavigation';
 
 const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
@@ -136,6 +137,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const selection = useSplitDiffSelection(root, rows, path);
   const onCopy = useDiffCodeCopy(path, rows, lines);
   const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);
+  const reference = useDiffReference(root, path);
   const blocks = useMemo(() => rows
     ? diffBlocks(rows, (row) => row.header, (row) => row.left?.kind === 'remove' || row.right?.kind === 'add')
     : diffBlocks(lines, (line) => line.kind === 'hunk' || line.kind === 'note' ? line.text : undefined, (line) => line.kind === 'add' || line.kind === 'remove'), [lines, rows]);
@@ -162,7 +164,11 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}
-          pinned={!!question && question.row >= block.index && question.row < block.index + block.rows.length}>
+          pinned={!!question && question.row >= block.index && question.row < block.index + block.rows.length || !!reference && block.rows.some(row => {
+            const side = reference.side ?? 'after';
+            const line = split ? (row as DiffRow)[side === 'before' ? 'left' : 'right'] : row as InlineDiffLine;
+            return line?.[side] != null && line[side]! >= reference.startLine && line[side]! <= reference.endLine;
+          })}>
           {() => block.rows.map((row, index) => split
             ? <SplitRow key={index} row={row as DiffRow} index={block.index + index} syntax={syntax} words={words}
               questionSide={question && block.index + index >= question.startRow && block.index + index <= question.row ? question.side : undefined} />

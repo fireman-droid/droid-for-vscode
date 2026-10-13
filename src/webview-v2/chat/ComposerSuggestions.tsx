@@ -83,7 +83,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     dismiss();
   };
   const open = !disabled && (slash !== null || mention !== null);
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!open || event.nativeEvent.isComposing || event.keyCode === 229) return false;
     if (event.key === 'Escape') { event.preventDefault(); dismiss(); return true; }
     const count = slash !== null ? matches.entries.length : results.length;

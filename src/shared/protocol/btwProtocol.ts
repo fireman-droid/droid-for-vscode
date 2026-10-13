@@ -190,13 +190,13 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
   return { type: 'btw.stop', sessionId: value.sessionId };
 }
 
-function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
+function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: number): BtwEntry | null {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs']) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
-    !isBoundedString(value.question, MAX_BTW_TEXT_LENGTH) ||
+    !isBoundedString(value.question, maxQuestionLength) ||
     (value.images !== undefined && !isBtwImageSummaries(value.images)) ||
     (value.modelId !== undefined && !isSafeModelId(value.modelId)) ||
     (value.reasoningEffort !== undefined && !isEnumValue(value.reasoningEffort, SESSION_REASONING_EFFORTS)) ||
@@ -241,7 +241,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>): BtwEntry | null {
   };
 }
 
-export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null {
+export function parseSessionBtwMessage(value: unknown, maxQuestionLength = MAX_BTW_TEXT_LENGTH): SessionBtwMessage | null {
   if (
     !isRecord(value) ||
     value.type !== 'session.btw' ||
@@ -272,7 +272,7 @@ export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null
   const seenIds = new Set<string>();
   const entries: BtwEntry[] = [];
   for (const raw of btw.entries) {
-    const entry = parseBtwEntry(raw, seenIds);
+    const entry = parseBtwEntry(raw, seenIds, maxQuestionLength);
     if (entry === null) {
       return null;
     }
@@ -281,7 +281,7 @@ export function parseSessionBtwMessage(value: unknown): SessionBtwMessage | null
   if (
     btw.pendingQuestion !== undefined &&
     btw.pendingQuestion !== null &&
-    !isBoundedString(btw.pendingQuestion, MAX_BTW_TEXT_LENGTH)
+    !isBoundedString(btw.pendingQuestion, maxQuestionLength)
   ) {
     return null;
   }

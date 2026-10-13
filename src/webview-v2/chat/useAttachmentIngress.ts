@@ -61,7 +61,7 @@ export function useAttachmentIngress(options: IngressOptions) {
   return {
     preparing: preparation.scope === scope.current ? preparation.count : 0,
     isPreparing: () => scope.current.pending > 0,
-    onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    onPaste: (event: ClipboardEvent<HTMLElement>) => {
       const files = Array.from(event.clipboardData.files).filter((file) => isImageMediaType(file.type));
       if (files.length === 0 || disabled) return;
       if (event.clipboardData.getData('text/plain').length === 0) event.preventDefault();

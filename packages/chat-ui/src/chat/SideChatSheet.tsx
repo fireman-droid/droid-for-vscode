@@ -1,5 +1,5 @@
 import { useI18n } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, type PointerEvent } from 'react';
+import { useEffect, useRef, type PointerEvent } from 'react';
 import { ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
@@ -7,11 +7,12 @@ import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
 import { useSmoothFollowScroll } from '../navigation/useSmoothFollowScroll';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
-import { Textarea } from '../ui/input';
+import type { InlineInputHandle } from '../ui/inline-input';
 import { QuoteChips } from './QuoteChips';
 import { UserMessageBubble } from './UserMessageView';
 import { SideReply } from './SideReply';
-import { CodeReferenceChips, ReferencedText } from './CodeReferenceChips';
+import { ReferencedText } from './CodeReferenceChips';
+import { CodeReferenceInput } from './CodeReferenceInput';
 import { useCodeReferenceDraft } from './useCodeReferenceDraft';
 
 export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
@@ -19,7 +20,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const { t } = useI18n();
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
-  const input = useRef<HTMLTextAreaElement>(null);
+  const input = useRef<InlineInputHandle>(null);
   const composer = useRef<HTMLDivElement>(null);
   const opener = useRef(document.activeElement);
   const resize = useRef<{ id: number; x: number; width: number } | null>(null);
@@ -39,23 +40,6 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const pendingBody = pendingQuote?.body ?? state.pendingQuestion;
   const follow = useSmoothFollowScroll<HTMLDivElement>();
   useEffect(() => { follow.followNewest(); }, [follow.followNewest, state.entries, state.pendingQuestion]);
-  useLayoutEffect(() => {
-    const element = input.current;
-    if (!element) return;
-    const shadow = element.cloneNode(false) as HTMLTextAreaElement;
-    shadow.removeAttribute('id');
-    shadow.setAttribute('aria-hidden', 'true');
-    shadow.inert = true;
-    shadow.value = element.value;
-    Object.assign(shadow.style, {
-      position: 'fixed', top: '0', left: '0', width: `${element.getBoundingClientRect().width}px`,
-      height: '0', minHeight: '0', visibility: 'hidden', overflow: 'hidden', pointerEvents: 'none',
-    });
-    element.parentElement!.appendChild(shadow);
-    const height = Math.min(144, Math.max(44, shadow.scrollHeight));
-    shadow.remove();
-    if (element.style.height !== `${height}px`) element.style.height = `${height}px`;
-  }, [draft, width]);
   useEffect(() => {
     input.current?.focus({ preventScroll: true });
     return () => { if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus({ preventScroll: true }); };
@@ -148,11 +132,10 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
         {composerStatus ? <div className="v2-btw-composer-status">{composerStatus}</div> : null}
         <div className="v2-btw-compose-content">
         {attachments}
-        <CodeReferenceChips references={references.references} onRemove={references.remove} />
         <QuoteChips quotes={quotedContext} previewAnchor={composer} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
-        <Textarea variant="plain" ref={input} className="dvx-btw-input v2-btw-input" rows={2} value={references.body} maxLength={references.maxLength} disabled={unavailable}
-          aria-label={t("By the Way question")} placeholder={state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")} onChange={(event) => references.change(event.target.value)}
-          onPaste={event => { if (!references.onPaste(event)) onPaste?.(event); }}
+        <CodeReferenceInput ref={input} draft={references} className="dvx-btw-input v2-btw-input" disabled={unavailable}
+          aria-label={t("By the Way question")} placeholder={state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")}
+          onPaste={onPaste}
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
         </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}

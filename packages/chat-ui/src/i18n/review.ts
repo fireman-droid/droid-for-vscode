@@ -1,6 +1,8 @@
 import type { MessageTranslations } from './translate';
 
 export const reviewMessages: readonly MessageTranslations[] = [
+  ["Reveal {p0}","定位 {p0}","定位 {p0}"],
+  ["This file is not in the current comparison.","当前比较中没有这个文件。","目前比較中沒有這個檔案。"],
   ["Before","修改前","修改前"],
   ["After","修改后","修改後"],
   ["Selected code actions","选中代码操作","選中程式碼操作"],

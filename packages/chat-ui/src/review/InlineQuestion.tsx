@@ -1,13 +1,14 @@
 import { useI18n } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, type ComponentProps, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Textarea } from '../ui/input';
+import type { InlineInputHandle } from '../ui/inline-input';
 import { Message, MessageContent } from '../ai-elements/message';
 import { Markdown } from '../content/Markdown';
 import { useSmoothedAnswer } from './useSmoothedAnswer';
 import { ScrollArea } from '../ui/scroll-area';
-import { CodeReferenceChips, ReferencedText } from '../chat/CodeReferenceChips';
+import { ReferencedText } from '../chat/CodeReferenceChips';
+import { CodeReferenceInput } from '../chat/CodeReferenceInput';
 import { useCodeReferenceDraft } from '../chat/useCodeReferenceDraft';
 
 function QuestionAnswer({ answer, state }: Pick<InlineQuestionEntry, 'answer' | 'state'>) {
@@ -15,16 +16,6 @@ function QuestionAnswer({ answer, state }: Pick<InlineQuestionEntry, 'answer' | 
   return <Message from="assistant"><MessageContent>
     <Markdown text={displayed} streaming={state === 'streaming' || displayed !== answer} />
   </MessageContent></Message>;
-}
-
-function QuestionInput({ inputRef, ...props }: ComponentProps<typeof Textarea> & {
-  inputRef: RefObject<HTMLTextAreaElement | null>;
-}) {
-  useLayoutEffect(() => {
-    const node = inputRef.current;
-    if (node) { node.style.height = '0px'; node.style.height = `${Math.min(120, Math.max(27, node.scrollHeight))}px`; }
-  }, [inputRef, props.value]);
-  return <Textarea {...props} ref={inputRef} />;
 }
 
 export interface InlineQuestionEntry {
@@ -50,7 +41,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
   onFocused(): void;
 }) {
   const { t } = useI18n();
-  const input = useRef<HTMLTextAreaElement>(null);
+  const input = useRef<InlineInputHandle>(null);
   const references = useCodeReferenceDraft(draft, onDraft, maxLength);
   const history = useRef<HTMLDivElement>(null);
   const historyContent = useRef<HTMLDivElement>(null);
@@ -61,7 +52,10 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
     if (node && follow.current) { node.scrollTop = node.scrollHeight; followedOffset.current = node.scrollTop; }
   };
   useEffect(() => {
-    if (focusRequested && input.current) { input.current.focus({ preventScroll: true }); onFocused(); }
+    if (focusRequested && input.current) {
+      input.current.focus({ preventScroll: true });
+      input.current.setSelectionRange(input.current.value.length, input.current.value.length); onFocused();
+    }
   }, [focusRequested, onFocused]);
   useEffect(followBottom, [entries]);
   useEffect(() => {
@@ -86,10 +80,9 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></ScrollArea>
     <div className="review-question-composer">
-      <CodeReferenceChips references={references.references} onRemove={references.remove} />
-      <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label={t("Question about selected code")}
-        placeholder={entries.length ? t("Add a follow-up…") : t("Ask a quick question…")} value={references.body} maxLength={references.maxLength}
-        onPaste={references.onPaste} onChange={event => references.change(event.target.value)} onKeyDown={event => {
+      <CodeReferenceInput ref={input} draft={references} className="review-question-input" aria-label={t("Question about selected code")}
+        placeholder={entries.length ? t("Add a follow-up…") : t("Ask a quick question…")}
+        onKeyDown={event => {
           if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
         }} />

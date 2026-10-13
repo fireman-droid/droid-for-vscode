@@ -4,15 +4,18 @@ import { LoaderCircle, RotateCw } from 'lucide-react';
 import { DiffQuestionContext, DiffQuestionContentContext, type DiffQuestionAnchor } from '@droidvisx/chat-ui/review/diffQuestion';
 import { InlineQuestion } from '@droidvisx/chat-ui/review/InlineQuestion';
 import { Button } from '../ui/button';
-import { EMPTY_SESSION_BTW_STATE, MAX_BTW_TEXT_LENGTH, type SessionBtwState } from '../../shared/protocol/btwProtocol';
-import { MAX_REVIEW_QUESTION_CONTEXT, MAX_REVIEW_QUESTION_SELECTION, parseReviewQuestionResponse, type ReviewQuestionResponse } from '../../shared/protocol/reviewQuestionProtocol';
+import { EMPTY_SESSION_BTW_STATE, type SessionBtwState } from '../../shared/protocol/btwProtocol';
+import { MAX_REVIEW_QUESTION_CONTEXT, MAX_REVIEW_QUESTION_SELECTION, MAX_REVIEW_QUESTION_TEXT, parseReviewQuestionResponse, type ReviewQuestionResponse } from '../../shared/protocol/reviewQuestionProtocol';
 import type { ReviewPort } from './useReviewWorkbench';
+import { useUiEnvironment } from '@droidvisx/chat-ui/environment';
+import { formatCodeReferences } from '@droidvisx/chat-ui/chat/codeReferences';
 
 type Models = Extract<ReviewQuestionResponse, { type: 'reviewQuestion.models' }>;
 export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }: {
   port: ReviewPort; sessionId: string | null; scopeKey: string; enabled: boolean; children: ReactNode;
 }) {
   const { t } = useI18n();
+  const { codeReferencePath } = useUiEnvironment();
   const [anchor, setAnchor] = useState<DiffQuestionAnchor | null>(null);
   const [questionId, setQuestionId] = useState<string | null>(null);
   const activeId = useRef<string | null>(null);
@@ -72,6 +75,10 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
   const open = () => {
     if (!anchor || !sessionId) return;
     const id = crypto.randomUUID(); activeId.current = id; setQuestionId(id);
+    const { path, side, startLine, endLine, text } = anchor.selection;
+    setDraft(startLine !== null && endLine !== null ? formatCodeReferences([
+      { path: codeReferencePath?.(path) ?? path, side, startLine, endLine, text },
+    ], '') : text);
     setFocusRequested(true);
     window.getSelection()?.removeAllRanges();
   };
@@ -83,7 +90,7 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
     setDraft('');
   };
   const content = questionId ? <InlineQuestion entries={state.entries} draft={draft} onDraft={setDraft} busy={busy}
-    disabled={!available || !!selectionError || !enabled} message={selectionError ?? stateMessage ?? modelError} maxLength={MAX_BTW_TEXT_LENGTH}
+    disabled={!available || !!selectionError || !enabled} message={selectionError ?? stateMessage ?? modelError} maxLength={MAX_REVIEW_QUESTION_TEXT}
     focusRequested={focusRequested} onFocused={() => setFocusRequested(false)}
     onSend={send} onStop={() => port.postMessage({ type: 'reviewQuestion.stop', sessionId, questionId })} onClose={close}
     actions={<>

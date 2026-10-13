@@ -34,25 +34,36 @@ export function formatCodeReferences(references: readonly CodeReference[], body:
   }).join('') + body;
 }
 
-export function parseCodeReferences(value: string): { references: CodeReference[]; body: string } {
+export function parseCodeReferences(value: string): { references: CodeReference[]; body: string; inline: string; tokens: string[] } {
   const references: CodeReference[] = [];
-  let body = value;
-  while (body.startsWith('```')) {
-    const header = /^(`{3,})code-reference ([^\n]+)\n/.exec(body);
-    if (!header) break;
+  const tokens: string[] = [];
+  let body = '', inline = '', offset = 0, symbol = 0xe000;
+  const headers = /(`{3,})code-reference ([^\n]+)\n/g;
+  for (let header; (header = headers.exec(value));) {
     const closing = new RegExp(`\\n${header[1]}(?:\\n\\n|$)`, 'g');
-    closing.lastIndex = header[0].length;
-    const match = closing.exec(body);
-    const end = match?.index ?? -1;
-    if (end < 0) break;
-    let reference: CodeReference | null;
-    try { reference = readCodeReference({ ...JSON.parse(header[2]!), text: body.slice(header[0].length, end) }); }
-    catch { break; }
-    if (!reference) break;
-    references.push(reference);
-    body = body.slice(end + match![0].length);
+    closing.lastIndex = headers.lastIndex;
+    const match = closing.exec(value);
+    if (!match) continue;
+    let reference: CodeReference | null = null;
+    try { reference = readCodeReference({ ...JSON.parse(header[2]!), text: value.slice(headers.lastIndex, match.index) }); }
+    catch { continue; }
+    if (!reference) continue;
+    while (value.includes(String.fromCharCode(symbol))) symbol++;
+    if (symbol > 0xf8ff) break;
+    const token = String.fromCharCode(symbol++);
+    const text = value.slice(offset, header.index);
+    body += text; inline += text + token;
+    references.push(reference); tokens.push(token);
+    offset = match.index + match[0].length;
+    headers.lastIndex = offset;
   }
-  return { references, body };
+  return { references, tokens, body: body + value.slice(offset), inline: inline + value.slice(offset) };
+}
+
+/** Expand atoms in place; the saved/model-facing draft always contains the complete snapshots. */
+export function formatInlineCodeReferences(inline: string, references: readonly CodeReference[], tokens: readonly string[]): string {
+  const byToken = new Map(tokens.map((token, index) => [token, references[index]!]));
+  return Array.from(inline, character => byToken.has(character) ? formatCodeReferences([byToken.get(character)!], '') : character).join('');
 }
 
 export function editorCopyMarkers(data: string): string[] {

@@ -8,6 +8,7 @@ export interface UiEnvironment {
   readonly createSyntaxWorker?: SyntaxWorkerFactory;
   readonly resolveCodeReference?: (markers: readonly string[], text: string) => Promise<CodeReference | null>;
   readonly openCodeReference?: (reference: CodeReference) => void;
+  readonly codeReferenceAction?: 'open' | 'reveal';
   readonly codeReferencePath?: (path: string) => string;
 }
 

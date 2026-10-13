@@ -23,7 +23,7 @@ export interface QuestionEditing {
   readonly isPreparing: () => boolean;
   readonly impact: RewindFileInfo | null;
   readonly rejection: EditResendRejection | null;
-  readonly onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
+  readonly onPaste: ClipboardEventHandler<HTMLElement>;
   readonly onDrop: DragEventHandler;
   readonly onDragOver: DragEventHandler;
   readonly settings?: ReactNode;

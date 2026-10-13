@@ -7,9 +7,13 @@ import { Popover, PopoverAnchor } from '../ui/overlays';
 import { useUiEnvironment } from '../environment';
 import { measureComposerInput } from './measureComposerInput';
 import { QuoteChips } from './QuoteChips';
+import { CodeReferenceInput } from './CodeReferenceInput';
+import type { useCodeReferenceDraft } from './useCodeReferenceDraft';
+import type { InlineInputHandle } from '../ui/inline-input';
 
 export interface ComposerViewProps {
   readonly value: string;
+  readonly codeDraft?: ReturnType<typeof useCodeReferenceDraft>;
   readonly onChange: (value: string, cursor: number) => void;
   readonly onSend: () => void;
   readonly onStop?: () => void;
@@ -32,8 +36,8 @@ export interface ComposerViewProps {
   readonly onSuggestionsOpenChange?: (open: boolean) => void;
   readonly suggestionsListId?: string;
   readonly activeSuggestionId?: string;
-  readonly onKeyDown?: KeyboardEventHandler<HTMLTextAreaElement>;
-  readonly onPaste?: ClipboardEventHandler<HTMLTextAreaElement>;
+  readonly onKeyDown?: KeyboardEventHandler<HTMLElement>;
+  readonly onPaste?: ClipboardEventHandler<HTMLElement>;
   readonly onDrop?: DragEventHandler;
   readonly onDragOver?: DragEventHandler;
   readonly renderInputRow?: (input: ReactNode, action: ReactNode) => ReactNode;
@@ -49,7 +53,7 @@ export interface ComposerLayout {
 }
 
 export function ComposerView({
-  value, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder,
+  value, codeDraft, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder,
   maxLength, focusSignal = 0, quote, onQuoteClear, quotes, onQuoteRemove, notice, inputReplacement, attachments,
   suggestions, suggestionsOpen = false, onSuggestionsOpenChange, suggestionsListId, activeSuggestionId,
   onKeyDown, onPaste, onDrop, onDragOver, renderInputRow, onLayout,
@@ -59,22 +63,24 @@ export function ComposerView({
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
+  const richInput = useRef<InlineInputHandle>(null);
+  const focusInput = () => (richInput.current ?? input.current)?.focus({ preventScroll: true });
   const surface = useRef<HTMLFormElement>(null);
   const [expanded, setExpanded] = useState(false);
   useLayoutEffect(() => {
     if (value.length === 0) setExpanded(false);
   }, [value, focusSignal]);
   useEffect(() => {
-    if (focusSignal > 0) input.current?.focus({ preventScroll: true });
+    if (focusSignal > 0) focusInput();
   }, [focusSignal]);
   useLayoutEffect(() => {
-    const element = input.current;
+    const element = richInput.current?.element ?? input.current;
     if (element === null) return;
     const row = element.parentElement!;
     let rowWidth = 0;
     let inputWidth = 0;
     const resize = () => {
-      const { multiline, height, scrollable } = measureComposerInput(row, element, expanded);
+      const { multiline, height, scrollable } = measureComposerInput(row, element, expanded, value);
       const previousHeight = element.getBoundingClientRect().height;
       const previousMultiline = row.dataset.multiline === 'true';
       if (row.dataset.multiline !== String(multiline)) row.dataset.multiline = String(multiline);
@@ -95,23 +101,27 @@ export function ComposerView({
     return () => observer.disconnect();
   }, [value, expanded, inputReplacement, placeholder, assistantName, onLayout]);
   const submit = () => { if (!sendDisabled) onSend(); };
+  const keyDown: KeyboardEventHandler<HTMLElement> = event => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    onKeyDown?.(event);
+    if (event.defaultPrevented) return;
+    if (event.key === 'Enter' && event.shiftKey && !expanded && value.length === 0) {
+      event.preventDefault(); setExpanded(true); return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
+  };
   const editor = inputReplacement != null ? <div className="v2-composer-replacement">{inputReplacement}</div>
+    : codeDraft ? <CodeReferenceInput draft={codeDraft} ref={richInput} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
+      aria-autocomplete={suggestionsListId ? 'list' : undefined} aria-controls={suggestionsOpen ? suggestionsListId : undefined}
+      aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
+      placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} onChange={onChange} onKeyDown={keyDown} onPaste={onPaste}
+      className="min-h-[20px] max-h-42 rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px]" />
     : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
     aria-controls={suggestionsOpen ? suggestionsListId : undefined} aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
     placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} rows={1} maxLength={maxLength} value={value}
     onChange={(event) => onChange(event.target.value, event.target.selectionStart)}
-    onKeyDown={(event) => {
-      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-      onKeyDown?.(event);
-      if (event.defaultPrevented) return;
-      if (event.key === 'Enter' && event.shiftKey && !expanded && event.currentTarget.value.length === 0) {
-        event.preventDefault();
-        setExpanded(true);
-        return;
-      }
-      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
-    }}
+    onKeyDown={keyDown}
     onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px] focus-visible:ring-0" />;
   const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={t(stopLabel)} title={t(stopLabel)} onClick={onStop}><Square className="size-3 fill-current" /></Button>
     : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={t(sendLabel)} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
@@ -120,7 +130,7 @@ export function ComposerView({
       <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragEnter={onDragOver} onDragOver={onDragOver}
         onSubmit={(event) => { event.preventDefault(); submit(); }}>
         {inputReplacement == null ? <>
-          <QuoteChips quotes={quotedContext} previewAnchor={surface} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="px-3 pt-2" />
+          <QuoteChips quotes={quotedContext} previewAnchor={surface} onRemove={removeQuote ? (index) => { removeQuote(index); focusInput(); } : undefined} className="px-3 pt-2" />
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}

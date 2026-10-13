@@ -200,7 +200,7 @@ export function useTranscriptScroll(
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Element &&
         (navigation.current !== null || event.pointerType === 'touch' ||
-          event.target.closest('[data-transcript-selectable]') || !event.target.closest('button,input,textarea,select,a'))) {
+          event.target.closest('[data-transcript-selectable]') || !event.target.closest('button,input,textarea,select,a,[contenteditable="true"]'))) {
         stopFollowing();
         userScrolling.current = event.pointerType === 'touch' || event.target === element;
       }

@@ -41,7 +41,7 @@ export interface SideChatProps {
   readonly composerStatus?: ReactNode;
   readonly hasAttachments?: boolean;
   readonly sendDisabled?: boolean;
-  readonly onPaste?: ClipboardEventHandler<HTMLTextAreaElement>;
+  readonly onPaste?: ClipboardEventHandler<HTMLElement>;
   readonly onDrop?: DragEventHandler;
   readonly onDragOver?: DragEventHandler;
   readonly renderImages?: (images: readonly SideChatImage[]) => ReactNode;

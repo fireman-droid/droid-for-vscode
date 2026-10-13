@@ -68,8 +68,8 @@
     gap: 8px;
     padding: 8px;
   }
-  .v2-composer-input-row textarea { flex: 1 1 0; min-width: 60px; }
-  .v2-composer-input-row textarea:focus-visible { box-shadow: none; }
+  .v2-composer-input-row [data-composer-input] { flex: 1 1 0; min-width: 60px; }
+  .v2-composer-input-row [data-composer-input]:focus-visible { box-shadow: none; }
   .v2-composer-input-row .v2-composer-add { border-radius: 50%; background: var(--soft-surface); }
   .v2-composer-input-row .v2-composer-add:hover:not(:disabled),
   .v2-composer-input-row .v2-composer-add[data-state='open'] { background: var(--soft-surface); }
@@ -77,7 +77,7 @@
   .v2-composer-input-row .v2-composer-mode { display: none; }
   .v2-composer-input-row .v2-composer-context svg { width: 18px; height: 18px; }
   .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) { flex-wrap: wrap; align-items: flex-end; }
-  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) > :is(textarea, .v2-composer-replacement) {
+  .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) > :is([data-composer-input], .v2-composer-replacement) {
     order: -1;
     flex: 1 0 100%;
     width: 100%;
@@ -88,7 +88,7 @@
   .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-model { max-width: 45%; }
   @container (max-width: 520px) {
     .v2-composer-input-row { flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
-    .v2-composer-input-row > :is(textarea, .v2-composer-replacement) {
+    .v2-composer-input-row > :is([data-composer-input], .v2-composer-replacement) {
       order: -1;
       flex: 1 0 100%;
       width: 100%;

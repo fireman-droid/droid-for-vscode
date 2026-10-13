@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { inlineText, setInlineSelection, inputText } from './inlineInput.testHelpers';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -28,15 +29,15 @@ const state: AssistantWebviewState = {
 it.each([false, true])('keeps the full copied snapshot when sending or queueing from the main composer (queue=%s)', queued => {
   render(<Harness current={queued ? { ...state, turn: { turnId: 'turn-1', status: 'streaming' } } : state} />);
   const input = screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLTextAreaElement;
-  fireEvent.change(input, { target: { value: 'Explain this' } });
-  input.setSelectionRange(0, 0);
+  inputText(input, 'Explain this');
+  setInlineSelection(input, 0, 0);
   const reference = { path: 'C:/project/app.ts', startLine: 3, endLine: 4, text: 'const n = 1;\nrun(n);' };
   fireEvent.paste(input, { clipboardData: { files: [], getData: (type: string) => type === CODE_REFERENCE_MIME ? JSON.stringify(reference) : type === 'text/plain' ? reference.text : '' } });
-  expect(input.value).toBe('Explain this');
+  expect(inlineText(input)).toBe('\ue000Explain this');
   expect(screen.getByRole('button', { name: 'Open app.ts (3–4)' })).toBeDefined();
   fireEvent.keyDown(input, { key: 'Enter' });
   const message = intents().find(message => message.type === (queued ? 'queue.add' : 'turn.send'));
-  expect(parseCodeReferences(message.text)).toEqual({ references: [reference], body: 'Explain this' });
+  expect(parseCodeReferences(message.text)).toMatchObject({ references: [reference], body: 'Explain this' });
 });
 function Harness({ current = state }: { current?: AssistantWebviewState }) {
   const flow = useComposerFlow(port, current, vi.fn(), routes);
@@ -61,21 +62,21 @@ it('keeps Slash choices local, filters unsupported entries, and does not select 
   expect(screen.queryByRole('option', { name: /^\/shell-command/ })).toBeNull();
   expect(screen.queryByRole('option', { name: /^\/btw/ })).toBeNull();
   expect(screen.getByRole('option', { name: /^\/inspect/ })).toBeDefined();
-  fireEvent.change(input, { target: { value: '/front' } });
+  inputText(input, '/front');
   fireEvent.keyDown(input, { key: 'Enter', isComposing: true, keyCode: 229 });
-  expect((input as HTMLTextAreaElement).value).toBe('/front');
+  expect(inlineText(input)).toBe('/front');
   expect(intents()).toEqual([]);
   await user.keyboard('{Enter}');
-  expect((input as HTMLTextAreaElement).value).toBe('Use the "frontend-design" skill: ');
+  expect(inlineText(input)).toBe('Use the "frontend-design" skill: ');
   expect(intents()).toEqual([]);
-  fireEvent.change(input, { target: { value: '/model' } });
+  inputText(input, '/model');
   await user.keyboard('{Tab}');
   expect(routes.navigate).toHaveBeenCalledExactlyOnceWith('model');
-  expect((input as HTMLTextAreaElement).value).toBe('');
-  fireEvent.change(input, { target: { value: '/compact' } });
+  expect(inlineText(input)).toBe('');
+  inputText(input, '/compact');
   await user.keyboard('{Enter}');
   expect(routes.compact).not.toHaveBeenCalled();
-  expect((input as HTMLTextAreaElement).value).toBe('/compact ');
+  expect(inlineText(input)).toBe('/compact ');
   await user.keyboard('{Enter}');
   expect(routes.compact).toHaveBeenCalledOnce();
   expect(intents()).toEqual([]);
@@ -97,7 +98,7 @@ it('correlates mention results and attaches the selected path without sending th
   view.rerender(<Harness current={{ ...state, fileSearch: { requestId: second, status: 'ok', files: ['docs/notes.md', 'docs/notes-2.md'] } }} />);
   await user.keyboard('{ArrowDown}{Enter}');
   expect(intents()).toEqual([{ type: 'attachment.addPath', sessionId: 'session-1', path: 'docs/notes-2.md' }]);
-  expect((input as HTMLTextAreaElement).value).toBe('');
+  expect(inlineText(input)).toBe('');
   expect(screen.queryByRole('listbox')).toBeNull();
 });
 
@@ -109,14 +110,14 @@ it('stages each paste once and drops unfinished reads without blocking the next 
   const input = screen.getByRole('textbox', { name: 'Message Droid' });
   const file = new File(['image'], 'shot.png', { type: 'image/png' });
   const paste = { clipboardData: { files: [file], getData: () => 'keep native text' } };
-  expect(fireEvent.paste(input, paste)).toBe(true);
+  expect(fireEvent.paste(input, paste)).toBe(false);
   await waitFor(() => expect(intents()).toEqual([{
     type: 'attachment.addImage', sessionId: 'session-1', name: 'shot.png', mediaType: 'image/png', dataBase64: 'aW1hZ2U=',
   }]));
   fireEvent.drop(input, { dataTransfer: { files: [file], getData: () => '' } });
   view.rerender(<Harness current={{ ...state, sessionId: 'session-2', conversationId: 'conversation-2' }} />);
   const nextInput = screen.getByRole('textbox', { name: 'Message Droid' });
-  fireEvent.change(nextInput, { target: { value: 'Send from the next conversation' } });
+  inputText(nextInput, 'Send from the next conversation');
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.send', sessionId: 'session-2', turnId: expect.any(String), text: 'Send from the next conversation' });
   await act(async () => finish({ kind: 'text', name: 'late.txt', text: 'Must not enter the next prompt', truncated: false }));
@@ -128,14 +129,14 @@ it.each(['send', 'queue'])('holds %s during attachment preparation, including En
   vi.mocked(prepareAttachment).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   render(<Harness current={route === 'queue' ? { ...state, turn: { turnId: 'turn-1', status: 'streaming' } } : state} />);
   const input = screen.getByRole('textbox', { name: 'Message Droid' });
-  fireEvent.change(input, { target: { value: 'Use this image' } });
+  inputText(input, 'Use this image');
   act(() => {
     fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     fireEvent.submit(input.closest('form')!);
   });
   expect(intents()).toEqual([]);
-  expect((input as HTMLTextAreaElement).value).toBe('Use this image');
+  expect(inlineText(input)).toBe('Use this image');
   expect(screen.getByText('Preparing attachments…')).toBeDefined();
   if (route === 'send') expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
   else {
@@ -159,11 +160,11 @@ it.each(['notice', 'rejection'])('releases the send gate and preserves the draft
   else vi.mocked(prepareAttachment).mockRejectedValueOnce(new Error('File read failed'));
   render(<Harness />);
   const input = screen.getByRole('textbox', { name: 'Message Droid' });
-  fireEvent.change(input, { target: { value: 'Keep this draft' } });
+  inputText(input, 'Keep this draft');
   fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
   await screen.findByText(failure === 'notice' ? 'shot.png could not be read.' : 'shot.png could not be attached.');
   await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false));
-  expect((input as HTMLTextAreaElement).value).toBe('Keep this draft');
+  expect(inlineText(input)).toBe('Keep this draft');
   expect(intents()).toEqual([]);
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(intents()).toEqual([{ type: 'turn.send', sessionId: 'session-1', turnId: expect.any(String), text: 'Keep this draft' }]);
@@ -185,9 +186,9 @@ it('removes quoted context without changing the message body', async () => {
   const user = userEvent.setup();
   render(<Harness />);
   const input = screen.getByRole('textbox', { name: 'Message Droid' });
-  fireEvent.change(input, { target: { value: '> Existing context\n> Second line\n\nMy follow-up question' } });
+  inputText(input, '> Existing context\n> Second line\n\nMy follow-up question');
   await user.click(screen.getByRole('button', { name: 'Remove quoted context' }));
-  expect((input as HTMLTextAreaElement).value).toBe('My follow-up question');
+  expect(inlineText(input)).toBe('My follow-up question');
   await user.click(screen.getByRole('button', { name: 'Send' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'turn.send', sessionId: 'session-1', turnId: expect.any(String), text: 'My follow-up question' });
 });

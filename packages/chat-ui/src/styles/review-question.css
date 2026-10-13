@@ -26,7 +26,7 @@
   .review-question-progress { display: flex; margin-right: auto; color: var(--muted-ink); }
   .review-question-progress svg { width: 12px; height: 12px; animation: review-question-spin 1s linear infinite; }
   .review-question-error { margin: 4px 0; color: var(--error-ink, var(--ink)); font: 11px/1.5 var(--font-sans); overflow-wrap: anywhere; }
-  .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 8px; border-radius: 4px; background: var(--code-surface); color: var(--secondary-ink); font: 12px/1 var(--font-sans); }
+  .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 28px; min-width: 52px; padding: 0 12px; border-radius: 5px; background: var(--overlay-surface); color: var(--ink); font: 12px/1 var(--font-sans); }
   .review-question-start:hover { background: var(--soft-surface); color: var(--ink); }
   @keyframes review-question-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .review-question-progress svg { animation: none; } }

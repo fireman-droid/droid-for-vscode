@@ -14,7 +14,6 @@ import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestio
 import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
 import { useCodeReferenceDraft } from '@droidvisx/chat-ui/chat/useCodeReferenceDraft';
-import { CodeReferenceChips } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
 
 export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: AssistantWebviewState;
@@ -63,7 +62,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   const submit = () => { if (!flow.callbacks.isSendDisabled && !ingress.isPreparing()) void flow.callbacks.onSend(flow.draft); };
-  return <ComposerView value={body} quotes={quote?.quotes}
+  return <ComposerView value={body} codeDraft={references} quotes={quote?.quotes}
     onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), quote.body)); } : undefined}
     onChange={suggestions.change}
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
@@ -72,8 +71,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={references.maxLength}
     focusSignal={flow.draftCommand.id} notice={ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t("Answer Droid’s request to continue.")}</p> : undefined}
-    attachments={<><StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />
-      <CodeReferenceChips references={references.references} onRemove={references.remove} className={references.references.length ? 'px-3 pt-2' : undefined} /></>}
+    attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}
     suggestionsListId={suggestions.listId} activeSuggestionId={suggestions.activeId}
     suggestions={<ComposerSuggestions suggestions={suggestions} state={state} />}
@@ -81,5 +79,5 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
       if (suggestions.onKeyDown(event)) { event.preventDefault(); return; }
       if (event.key === 'Escape' && flow.queueEditingId !== null) { event.preventDefault(); flow.handleQueueEditCancel(); }
     }}
-    onPaste={event => { if (!references.onPaste(event)) ingress.onPaste(event); }} onDrop={ingress.onDrop} onDragOver={ingress.onDragOver} renderInputRow={renderInputRow} />;
+    onPaste={ingress.onPaste} onDrop={ingress.onDrop} onDragOver={ingress.onDragOver} renderInputRow={renderInputRow} />;
 }

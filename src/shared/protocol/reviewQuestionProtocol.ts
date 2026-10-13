@@ -4,6 +4,8 @@ import { MAX_BTW_TEXT_LENGTH, parseSessionBtwMessage, type SessionBtwState } fro
 
 export const MAX_REVIEW_QUESTION_SELECTION = 8_000;
 export const MAX_REVIEW_QUESTION_CONTEXT = 16_000;
+// Include the attached selection snapshot without taking away the existing question allowance.
+export const MAX_REVIEW_QUESTION_TEXT = MAX_BTW_TEXT_LENGTH + MAX_REVIEW_QUESTION_SELECTION + 1_024;
 export interface ReviewQuestionSelection {
   readonly path: string;
   readonly side: 'before' | 'after';
@@ -40,13 +42,13 @@ export function parseReviewQuestionRequest(value: unknown): ReviewQuestionReques
   if (value.type === 'reviewQuestion.close' || value.type === 'reviewQuestion.stop')
     return hasExactKeys(value, ['type', 'sessionId', 'questionId']) ? value as ReviewQuestionRequest : null;
   return value.type === 'reviewQuestion.ask' && hasExactKeys(value, ['type', 'sessionId', 'questionId', 'selection', 'text']) &&
-    isSelection(value.selection) && bounded(value.text, MAX_BTW_TEXT_LENGTH) && value.text.trim().length > 0
+    isSelection(value.selection) && bounded(value.text, MAX_REVIEW_QUESTION_TEXT) && value.text.trim().length > 0
     ? value as ReviewQuestionRequest : null;
 }
 export function parseReviewQuestionResponse(value: unknown): ReviewQuestionResponse | null {
   if (!isStrictRecord(value) || !isId(value.sessionId)) return null;
   if (value.type === 'reviewQuestion.state' && hasExactKeys(value, ['type', 'sessionId', 'questionId', 'state']) && isId(value.questionId)) {
-    const message = parseSessionBtwMessage({ type: 'session.btw', sequence: 0, sessionId: value.sessionId, btw: value.state });
+    const message = parseSessionBtwMessage({ type: 'session.btw', sequence: 0, sessionId: value.sessionId, btw: value.state }, MAX_REVIEW_QUESTION_TEXT);
     return message ? { type: value.type, sessionId: value.sessionId, questionId: value.questionId, state: message.btw } : null;
   }
   return value.type === 'reviewQuestion.models' && hasExactKeys(value, ['type', 'sessionId', 'status', 'items', 'selectedId', 'error']) &&

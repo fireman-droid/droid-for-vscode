@@ -6,7 +6,7 @@ import { MAX_QUEUED_MESSAGES, type QueuePausedReason, type SessionQueueState } f
 import type { useComposerFlow } from './composer/useComposerFlow';
 import { parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { parseCodeReferences } from '@droidvisx/chat-ui/chat/codeReferences';
-import { CodeReferenceChips } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
+import { ReferencedText } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
@@ -55,16 +55,15 @@ export function QueueBar({ queue, flow }: {
         <div className="v2-queue-list" role="list">
           {queue.items.map((item) => {
             const parsed = parseSelectionQuotes(item.text);
-            const { body, references } = parseCodeReferences(parsed?.body ?? item.text);
+            const { body } = parseCodeReferences(parsed?.body ?? item.text);
             return <div key={item.queueId} role="listitem" className="v2-queue-item" data-editing={flow.queueEditingId === item.queueId || undefined}>
               <Circle aria-hidden="true" className="v2-queue-marker" />
               <div className="v2-queue-message">
                 <div className="v2-queue-preview" title={body}>
                   {item.attachments.map((attachment, index) => <span key={index} title={attachment.name} className="v2-queue-attachment">{markers[attachment.kind]}</span>)}
-                  {body}
+                  <ReferencedText text={parsed?.body ?? item.text} />
                 </div>
                 {parsed ? <QuoteChips quotes={parsed.quotes} /> : null}
-                <CodeReferenceChips references={references} />
               </div>
               {flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">{t("Editing")}</span> : <div className="v2-queue-actions">
                 <Button variant="ghost" size="sm" className="v2-queue-send" aria-label={t("Send queued message now")} onClick={() => flow.handleQueuePromote(item.queueId)}><span>{t("Send Now")}</span><CornerDownLeft aria-hidden="true" /></Button>

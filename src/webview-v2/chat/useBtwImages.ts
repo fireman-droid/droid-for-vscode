@@ -80,7 +80,7 @@ export function useBtwImages(sessionId: string | null, disabled: boolean) {
       trimPreviews();
       setNotice(null);
     },
-    onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    onPaste: (event: ClipboardEvent<HTMLElement>) => {
       const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith('image/'));
       if (!files.length || disabled) return;
       if (!event.clipboardData.getData('text/plain')) event.preventDefault();

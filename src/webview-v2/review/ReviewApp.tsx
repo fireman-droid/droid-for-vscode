@@ -16,15 +16,18 @@ import { VirtualReviewFiles } from './VirtualReviewFiles';
 import { ReviewQuestions } from './ReviewQuestions';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { UiEnvironmentProvider, useUiEnvironment } from '@droidvisx/chat-ui/environment';
+import { DiffReferenceContext } from '@droidvisx/chat-ui/review/diffReference';
+import type { CodeReference } from '@droidvisx/chat-ui/chat/codeReferences';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
   const { t } = useI18n();
   const flow = useReviewWorkbench(port);
   const { target, review, current, actions } = flow;
   const environment = useUiEnvironment();
-  const referenceEnvironment = useMemo(() => ({ ...environment, codeReferencePath: (path: string) =>
-    /^(?:[a-z]:[\\/]|\/)/i.test(path) || !target?.workspaceRoot ? path : `${target.workspaceRoot.replace(/[\\/]$/, '')}/${path}`,
-  }), [environment, target?.workspaceRoot]);
+  const [reference, setReference] = useState<(CodeReference & { request: number }) | null>(null);
+  const [referenceNotice, setReferenceNotice] = useState<string | null>(null);
+  const codeReferencePath = useCallback((path: string) => /^(?:[a-z]:[\\/]|\/)/i.test(path) || !target?.workspaceRoot
+    ? path : `${target.workspaceRoot.replace(/[\\/]$/, '')}/${path}`, [target?.workspaceRoot]);
   const [split, setSplit] = useState(true);
   const [showFiles, setShowFiles] = useState(false);
   const [commit, setCommit] = useState(false);
@@ -49,7 +52,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     setCollapsed(previous => { const next = new Set(previous); next.delete(path); return next; });
     setJump({ path });
   }, []);
-  useEffect(() => { setCollapsed(new Set()); setFilters({ query: '', unreviewed: false }); }, [scopeKey]);
+  useEffect(() => { setCollapsed(new Set()); setFilters({ query: '', unreviewed: false }); setReference(null); setReferenceNotice(null); }, [scopeKey]);
   const hostPath = operation ? target?.operationPath ?? files[0]?.path : current?.path;
   useEffect(() => { if (hostPath) reveal(hostPath); }, [scopeKey, hostPath, flow.context, reveal]);
   useEffect(() => {
@@ -69,6 +72,17 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     if (window.innerWidth <= 700) setShowFiles(false);
   };
   const navigation = useReviewFileNavigation(review, filtered.map(file => file.path), selectedPath, selectFile, actions);
+  const referenceEnvironment = { ...environment, codeReferencePath, codeReferenceAction: 'reveal' as const, openCodeReference: (next: CodeReference) => {
+    const normalize = (path: string) => {
+      const slashes = path.replace(/\\/g, '/');
+      return /^[a-z]:/i.test(slashes) ? slashes.toLowerCase() : slashes;
+    };
+    const file = files.find(file => normalize(file.path) === normalize(next.path) || normalize(codeReferencePath(file.path)) === normalize(next.path));
+    if (!file) { setReferenceNotice(t('This file is not in the current comparison.')); return; }
+    setReferenceNotice(null); setFilters({ query: '', unreviewed: false });
+    reveal(file.path); flow.fileReads.prioritize(file.path);
+    setReference({ ...next, path: file.path, request: Date.now() });
+  } };
   const navigate = (path: string, direction: number) => {
     const index = filtered.findIndex(file => file.path === path);
     const next = filtered[index + direction];
@@ -76,7 +90,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   };
   const hunk = useReviewHunkNavigation(scroll, filtered.map(file => file.path), selectFile, scopeKey);
   const allCollapsed = filtered.length > 0 && filtered.every(file => collapsed.has(file.path));
-  return <UiEnvironmentProvider value={referenceEnvironment}><TooltipProvider><ReviewQuestions scopeKey={`${scopeKey}:${split}:${valid}`} port={port} sessionId={valid ? target.sessionId : null} enabled={valid && !flow.scopePending}><main ref={root} className="review-workbench">
+  return <UiEnvironmentProvider value={referenceEnvironment}><DiffReferenceContext.Provider value={reference}><TooltipProvider><ReviewQuestions scopeKey={`${scopeKey}:${split}:${valid}`} port={port} sessionId={valid ? target.sessionId : null} enabled={valid && !flow.scopePending}><main ref={root} className="review-workbench">
     <ReviewToolbar flow={flow} split={split} onSplit={setSplit} showFiles={showFiles} onFiles={() => setShowFiles(value => !value)}
       onFind={() => { setShowFiles(true); setFindRequest(value => value + 1); }} onHunk={hunk} onCommit={() => setCommit(true)}
       allCollapsed={allCollapsed} onCollapse={() => setCollapsed(allCollapsed ? new Set() : new Set(filtered.map(file => file.path)))} />
@@ -84,6 +98,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       : flow.error ? <div className="review-empty" role="alert">{flow.error}</div>
         : <DroidLoading label={t("Connecting to the workspace…")} /> : <>
       {flow.error ? <p className="review-error review-notice" role="alert">{flow.error}</p> : null}
+      {referenceNotice ? <p className="review-notice" role="status">{referenceNotice}</p> : null}
       {flow.scopePending ? <p className="review-notice" role="status">{t("Loading comparison…")}{review ? t("The previous comparison remains visible.") : ''}</p> : null}
       {flow.choosingBranch && !flow.scopePending && flow.branches && review?.scopeKind !== 'branch' ? <p className="review-notice" role="status">{flow.branches.refs.length ? t("Choose a base branch to compare local changes.") : t("No local branch references are available.")}</p> : null}
       {flow.operation?.ok && flow.operation.reviewScopeId === review?.reviewScopeId ? <p className="review-notice" role="status">{flow.operation.message}</p> : null}
@@ -128,5 +143,5 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
           </div></> : null}
       </DialogContent>
     </Dialog>
-  </main></ReviewQuestions></TooltipProvider></UiEnvironmentProvider>;
+  </main></ReviewQuestions></TooltipProvider></DiffReferenceContext.Provider></UiEnvironmentProvider>;
 }

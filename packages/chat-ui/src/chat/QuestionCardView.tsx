@@ -4,14 +4,14 @@ import { RotateCcw } from 'lucide-react';
 import { cn } from '../ui/cn';
 import { Button } from '../ui/button';
 import { Tooltip } from '../ui/overlays';
-import { Textarea } from '../ui/input';
+import type { InlineInputHandle } from '../ui/inline-input';
 import { DroidActivity } from '../ui/droid-motion';
 import { UserMessageBubble } from './UserMessageView';
 import { QuoteChips } from './QuoteChips';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
-import { CodeReferenceChips } from './CodeReferenceChips';
+import { ReferencedText } from './CodeReferenceChips';
+import { CodeReferenceInput } from './CodeReferenceInput';
 import { useCodeReferenceDraft } from './useCodeReferenceDraft';
-import { parseCodeReferences } from './codeReferences';
 export interface QuestionEditor {
   readonly draft: { readonly messageId: string; readonly text: string; readonly phase: 'editing' | 'resending'; readonly notice: string | null; readonly restoreFiles?: boolean; readonly resumeOnly?: boolean } | null;
   readonly selection: RefObject<{ messageId: string; start: number; end: number; direction: 'forward' | 'backward' | 'none'; scrollTop: number; focused: boolean } | null>;
@@ -38,7 +38,7 @@ export interface QuestionCardViewProps {
   readonly editDisabled?: boolean;
   readonly rejection?: string | null;
   readonly maxLength?: number;
-  readonly onPaste?: ClipboardEventHandler<HTMLTextAreaElement>;
+  readonly onPaste?: ClipboardEventHandler<HTMLElement>;
   readonly onDrop?: DragEventHandler;
   readonly onDragOver?: DragEventHandler;
 }
@@ -50,24 +50,23 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
   const references = useCodeReferenceDraft(draftQuote?.body ?? draft?.text ?? '', value => {
     if (draft) editor.update(draft.messageId, { text: formatSelectionQuotes(draftQuote?.quotes ?? [], value) });
   }, maxLength === undefined ? undefined : maxLength - draftPrefixLength, draft?.messageId);
-  const draftBody = references.body;
 
   const editing = draft?.phase === 'editing' && !placeholder;
   const editable = editAvailable && item.messageId !== undefined && editor.draft?.phase !== 'resending';
-  const input = useRef<HTMLTextAreaElement>(null);
+  const input = useRef<InlineInputHandle>(null);
   const composer = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const messageId = item.messageId;
-  const remember = (element: HTMLTextAreaElement, focused = document.activeElement === element) => {
-    if (messageId === undefined) return;
+  const remember = (element = input.current, focused = document.activeElement === element?.element) => {
+    if (messageId === undefined || !element) return;
     editor.selection.current = {
       messageId, start: element.selectionStart, end: element.selectionEnd,
-      direction: element.selectionDirection, scrollTop: element.scrollTop, focused,
+      direction: element.selectionDirection, scrollTop: element.element.scrollTop, focused,
     };
   };
   useLayoutEffect(() => {
-    const element = input.current;
-    if (!editing || element === null) return;
+    const element = input.current?.element;
+    if (!editing || !element) return;
     element.style.height = 'auto';
     element.style.height = `${Math.min(168, Math.max(27, element.scrollHeight))}px`;
   }, [editing, draft?.text]);
@@ -77,7 +76,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
     if (!editing || element === null || selection === null || selection.messageId !== messageId) return;
     if (selection.focused) element.focus({ preventScroll: true });
     element.setSelectionRange(selection.start, selection.end, selection.direction);
-    element.scrollTop = selection.scrollTop;
+    element.element.scrollTop = selection.scrollTop;
     editor.selection.current = selection;
   }, [editing, editor.selection, messageId]);
   useLayoutEffect(() => {
@@ -100,8 +99,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
   const submit = () => { if (canResend && draft?.text.trim()) onResend(); };
   const shownQuote = draft?.phase === 'resending' ? draftQuote : quote;
   const shownQuotes = shownQuote?.quotes ?? (draft?.phase !== 'resending' && quote?.quote ? [quote.quote] : []);
-  const shownCode = parseCodeReferences(draft?.phase === 'resending' ? draftQuote?.body ?? draft.text : quote?.body ?? item.text);
-  const messageCopy = <span className="block max-h-[4lh] overflow-hidden">{shownCode.body}</span>;
+  const messageCopy = <span className="block max-h-[4lh] overflow-hidden"><ReferencedText text={draft?.phase === 'resending' ? draftQuote?.body ?? draft.text : quote?.body ?? item.text} /></span>;
   return (
     <div
       ref={card}
@@ -119,27 +117,23 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       {editing && draft !== null ? (
         <div ref={composer} data-composer-surface="" className="v2-user-edit-card">
           {stagedAttachments}
-          <CodeReferenceChips references={references.references} onRemove={references.remove} />
           <QuoteChips quotes={draftQuote?.quotes ?? []} previewAnchor={composer} onRemove={(index) => {
             editor.update(draft.messageId, { text: formatSelectionQuotes(draftQuote?.quotes.filter((_, position) => position !== index) ?? [], draftQuote?.body ?? draft.text) });
             input.current?.focus({ preventScroll: true });
           }} className="mb-1" />
-          <Textarea variant="plain"
+          <CodeReferenceInput draft={references}
             ref={input}
             aria-label={t("Edit message and resend")}
-            rows={1}
-            value={draftBody}
-            maxLength={maxLength === undefined ? undefined : references.maxLength}
             className="v2-user-edit-input"
-            onChange={(event) => {
-              references.change(event.currentTarget.value);
-              remember(event.currentTarget);
+            onChange={(value) => {
+              references.change(value);
+              remember();
             }}
-            onSelect={(event) => remember(event.currentTarget)}
-            onScroll={(event) => remember(event.currentTarget)}
-            onFocus={(event) => remember(event.currentTarget, true)}
-            onBlur={(event) => { if (event.relatedTarget !== null) remember(event.currentTarget, false); }}
-            onPaste={event => { if (!references.onPaste(event)) onPaste?.(event); }}
+            onSelect={() => remember()}
+            onScroll={() => remember()}
+            onFocus={() => remember(input.current, true)}
+            onBlur={(event) => { if (event.relatedTarget !== null) remember(input.current, false); }}
+            onPaste={onPaste}
             onKeyDown={(event) => {
               if (event.key === 'Escape') editor.cancel();
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
@@ -165,7 +159,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
       ) : (
         <UserMessageBubble pending={draft?.phase === 'resending'} placeholder={placeholder} timestamp={item.timestamp ?? null}
           attachments={draft?.phase !== 'resending' ? originalAttachments : null}
-          context={<><QuoteChips quotes={shownQuotes} className="mb-1" /><CodeReferenceChips references={shownCode.references} className="mb-1" /></>}
+          context={<QuoteChips quotes={shownQuotes} className="mb-1" />}
           onEdit={editable ? () => { if (messageId !== undefined) editor.begin(messageId, item.text); } : undefined}>
           {messageCopy}
         </UserMessageBubble>
