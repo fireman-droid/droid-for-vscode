@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { evaluateCase } from './evaluate.mjs';
+import pythonSyntaxModule from './pythonSyntax.cjs';
 
 // Runner calibration only: these are not model-quality questions and never count in a score.
 const output = mkdtempSync(path.join(tmpdir(), 'droid-quality-runner-'));
-const sample = { id: 'calibration', category: 'runner-only', entryFile: 'main.ts',
+const sample = { id: 'calibration', category: 'runner-only', language: 'typescript', entryFile: 'main.ts',
   prefix: 'export function read() {', suffix: '}', references: [], tests: [{ name: 'result', body: 'assert.equal(subject.read(), 42);' }] };
 
 test('executes assertions and reports correct and incorrect outputs separately', async () => {
@@ -17,6 +18,44 @@ test('executes assertions and reports correct and incorrect outputs separately',
   assert.equal(failing.compiled, true);
   assert.equal(failing.passed, false);
   assert.equal(failing.tests[0].passed, false);
+});
+
+const python = { ...sample, language: 'python', entryFile: 'main.py',
+  prefix: 'from domain import answer\ndef read():\n    ', suffix: '\n',
+  references: [{ path: 'domain.py', content: 'answer = 42\n' }],
+  tests: [{ name: 'result', body: 'check.assertEqual(subject.read(), 42)' }] };
+
+test('native Python syntax gate preserves UTF-8 and CRLF without executing source', () => {
+  const result = pythonSyntaxModule.pythonSyntax('# 中文注释\r\nraise RuntimeError("must not execute")\r\n', 'main.py');
+  assert.equal(result.compiled, true, JSON.stringify(result));
+  assert.equal(pythonSyntaxModule.pythonSyntax('def missing(:\n', 'main.py').compiled, false);
+});
+
+test('Python evaluates imported behavior separately from syntax and counts assertions', async () => {
+  const passing = await evaluateCase(python, 'return answer', path.join(output, 'python-pass'));
+  assert.equal(passing.passed, true, JSON.stringify(passing));
+  assert.equal(passing.validation, 'syntax-and-behavior');
+  const wrong = await evaluateCase(python, 'return 7', path.join(output, 'python-wrong'));
+  assert.equal(wrong.compiled, true);
+  assert.equal(wrong.tests[0].passed, false);
+  const invalid = await evaluateCase(python, 'return (', path.join(output, 'python-syntax'));
+  assert.equal(invalid.compiled, false);
+  assert.equal(invalid.tests.length, 0);
+  const vacuous = await evaluateCase({ ...python, tests: [{ name: 'vacuous', body: 'subject.read()' }] },
+    'return answer', path.join(output, 'python-vacuous'));
+  assert.equal(vacuous.passed, false);
+  assert.match(vacuous.tests[0].error, /no assertions/);
+});
+
+test('Python async tests have fresh modules and cannot write, connect or spawn', async () => {
+  const item = { ...python, prefix: 'import asyncio\nstate = []\nasync def read():\n    ',
+    tests: [
+      { name: 'async first', body: 'check.assertEqual(asyncio.run(subject.read()), [1])' },
+      { name: 'async fresh', body: 'check.assertEqual(asyncio.run(subject.read()), [1])' },
+      { name: 'guard', body: 'import socket, subprocess\nwith check.assertRaises(PermissionError):\n    open("forbidden.txt", "w")\nwith check.assertRaises(PermissionError):\n    socket.create_connection(("127.0.0.1", 9))\nwith check.assertRaises(PermissionError):\n    subprocess.run(["forbidden-command"])' },
+    ] };
+  const result = await evaluateCase(item, 'state.append(1)\n    return state', path.join(output, 'python-async'));
+  assert.equal(result.passed, true, JSON.stringify(result));
 });
 test('reports TypeScript errors without executing the program', async () => {
   const result = await evaluateCase(sample, 'const n: number = "wrong"; return n;', path.join(output, 'type'));

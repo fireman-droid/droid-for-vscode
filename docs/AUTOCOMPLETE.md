@@ -113,16 +113,20 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 设置 `DROID_AUTOCOMPLETE_BRIDGE_URL` 为当前开发连接后，传入 `--corpus <题库.json>` 和
 `--output <结果.json>` 即可逐题记录首次响应、过滤结果与耗时；这一步会实际调用模型服务。
 
-审阅生成程序后，运行下列命令执行类型检查与行为断言：
+题库支持 TypeScript 与 Python 3.11。审阅生成程序后，运行下列命令检查源码并执行行为断言：
 
 ```sh
 node src/integration/runAutocompleteQuality.mjs --corpus <题库.json> --responses <结果.json> --output <报告目录> --reviewed
 ```
 
 使用 `--reference` 替代
-`--responses` 可先校验独立作者的参考答案，不能将这类通过计入模型分数。执行进程需要 Node 26+，
-仅允许读取本题目录与运行器，禁用网络、写入和子进程并限制时间；这些权限用于限制误操作，
-不能代替对未知程序的审阅，也不宣称是恶意代码安全沙箱。
+`--responses` 可先校验独立作者的参考答案，不能将这类通过计入模型分数。运行器需要 Node 26+；
+TypeScript 使用 strict 类型检查，执行进程只允许读取本题目录与运行器，禁用网络、写入和子进程。
+Python 使用语法检查与独立进程中的行为测试，不做静态类型检查；可设置 `DROID_AUTOCOMPLETE_PYTHON`
+为 Python 3.11+ 可执行文件，默认使用 `python`。Python 固定 UTF-8，忽略用户环境与 site 配置，
+禁写字节码；审计钩子限制文件、网络和子进程操作，允许标准 asyncio 初始化内部唤醒通道。
+两种执行均限制时间与输出，逐个隐藏测试重置题目模块；Python 没有 Node 的堆内存上限。
+这些限制不能代替对未知程序的审阅，也不宣称是恶意代码安全沙箱。
 
 首次局部续写和整个函数完成应分别统计；不能将尚未补完的函数全部标成语义错误。
 题库导入脚本 `src/integration/autocomplete-quality/importDroidCorpus.mjs` 接受 Droid JSON 响应与目标路径，
@@ -135,7 +139,8 @@ node src/integration/runAutocompleteQuality.mjs --corpus <题库.json> --respons
 真实模型的原生编辑器评估可给该运行器加 `--quality`，并设置
 `DROID_AUTOCOMPLETE_QUALITY_CORPUS` 和 `DROID_AUTOCOMPLETE_QUALITY_OUTPUT`。
 运行器加载指定的新 VSIX 到临时用户目录，在隐藏测试桌面通过 VS Code 命令输入、触发和接受建议，
-使用真实 TypeScript 语言服务寻找参考文件；每题最多接受 12 次，源码结构完成后只接受已缓存的后续
+TypeScript 使用内置语言服务寻找参考文件；Python 将题目参考文件打开后使用生产上下文检索，
+隔离配置没有 Python 语言服务，报告明确记录此差异。每题最多接受 12 次，源码结构完成后只接受已缓存的后续
 内容，不再调用模型，缓存耗尽或无建议后停止。停止条件不读取隐藏测试，不能证明函数已实现全部需求。
 临时测试配置关闭自动补括号、引号与缩进，并逐字核对原生输入后的前后文，避免编辑器改变题目。
 报告记录 VSIX 哈希、自动请求、每次原始返回、接受轨迹与最终源码，再用上述运行器判分。

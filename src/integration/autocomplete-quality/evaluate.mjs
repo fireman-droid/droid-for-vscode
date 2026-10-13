@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const runner = fileURLToPath(new URL('./runCase.cjs', import.meta.url));
+const pythonRunner = fileURLToPath(new URL('./runCase.py', import.meta.url));
 const digest = value => createHash('sha256').update(value).digest('hex');
 
 export function readCorpus(file) {
@@ -16,17 +17,18 @@ export function readCorpus(file) {
   for (const item of corpus.cases) {
     if (!/^[a-z0-9-]+$/.test(item.id) || ids.has(item.id)) throw new Error('Invalid or duplicate case ID');
     ids.add(item.id);
-    if (item.language !== 'typescript' || typeof item.prefix !== 'string' || typeof item.suffix !== 'string'
+    if (!['typescript', 'python'].includes(item.language) || typeof item.prefix !== 'string' || typeof item.suffix !== 'string'
       || !Array.isArray(item.references) || !Array.isArray(item.tests) || item.tests.length < 3
       || item.tests.some(test => typeof test.name !== 'string' || typeof test.body !== 'string' || !test.body.trim())) {
-      throw new Error(`Incomplete TypeScript case: ${item.id}`);
+      throw new Error(`Incomplete evaluation case: ${item.id}`);
     }
   }
   return { ...corpus, sha256: digest(content) };
 }
 
-function sourcePath(root, relative) {
-  if (typeof relative !== 'string' || !/^[a-zA-Z0-9_./-]+\.ts$/.test(relative)
+function sourcePath(root, relative, language) {
+  const extension = language === 'python' ? '.py' : '.ts';
+  if (typeof relative !== 'string' || !/^[a-zA-Z0-9_./-]+$/.test(relative) || !relative.endsWith(extension)
     || relative.split('/').some(part => part === '..' || !part)) throw new Error('Invalid fixture source path');
   const resolved = path.resolve(root, relative);
   if (!resolved.startsWith(root + path.sep)) throw new Error('Fixture source escaped its case directory');
@@ -37,12 +39,13 @@ function compileCase(item, code, root) {
   const inputs = [{ path: item.entryFile, content: code }, ...item.references];
   const files = new Set();
   for (const input of inputs) {
-    const target = sourcePath(root, input.path);
+    const target = sourcePath(root, input.path, item.language);
     if (files.has(target)) throw new Error('Duplicate fixture source path');
     files.add(target);
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, input.content);
   }
+  if (item.language === 'python') return { sourceFiles: [...files] };
   const program = ts.createProgram([...files], {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
     moduleResolution: ts.ModuleResolutionKind.Node10, strict: true,
@@ -60,12 +63,15 @@ function compileCase(item, code, root) {
   return { compiled: true, diagnostics: [] };
 }
 
-async function executeCase(file, timeoutMs = 15_000) {
+async function executeCase(file, language, timeoutMs = 15_000) {
   if (Number(process.versions.node.split('.')[0]) < 26) throw new Error('Quality execution requires Node 26+ network permissions');
   const root = path.dirname(file);
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--permission', `--allow-fs-read=${root}`, `--allow-fs-read=${runner}`,
-      '--max-old-space-size=128', runner, file], {
+    const python = language === 'python';
+    const executable = python ? process.env.DROID_AUTOCOMPLETE_PYTHON ?? 'python' : process.execPath;
+    const args = python ? ['-X', 'utf8', '-I', '-S', '-B', pythonRunner, file]
+      : ['--permission', `--allow-fs-read=${root}`, `--allow-fs-read=${runner}`, '--max-old-space-size=128', runner, file];
+    const child = spawn(executable, args, {
       cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: { SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP },
     });
@@ -79,9 +85,13 @@ async function executeCase(file, timeoutMs = 15_000) {
     child.once('error', error => { clearTimeout(timer); reject(error); });
     child.once('close', exitCode => {
       clearTimeout(timer);
-      const tests = stdout.split(/\r?\n/).filter(line => line.startsWith('DROID_QUALITY_RESULT '))
+      const lines = stdout.split(/\r?\n/);
+      const tests = lines.filter(line => line.startsWith('DROID_QUALITY_RESULT '))
         .map(line => JSON.parse(line.slice('DROID_QUALITY_RESULT '.length)));
-      resolve({ tests, exitCode, timedOut, tooMuchOutput, stderr });
+      const syntax = lines.find(line => line.startsWith('DROID_QUALITY_SYNTAX '));
+      resolve({ tests, exitCode, timedOut, tooMuchOutput, stderr,
+        ...(python ? syntax ? JSON.parse(syntax.slice('DROID_QUALITY_SYNTAX '.length))
+          : { compiled: false, diagnostics: [{ message: 'Python worker did not report syntax validation' }] } : {}) });
     });
   });
 }
@@ -90,13 +100,15 @@ export async function evaluateCase(item, insertion, directory) {
   const root = path.resolve(directory, item.id);
   mkdirSync(root, { recursive: true });
   const code = item.prefix + insertion + item.suffix;
-  const result = { id: item.id, category: item.category, sourceSha256: digest(code), ...compileCase(item, code, root) };
-  if (!result.compiled) return { ...result, passed: false, tests: [], expectedTests: item.tests.length };
-  const entry = path.join('compiled', item.entryFile.replace(/\.ts$/, '.js'));
+  const result = { id: item.id, category: item.category, language: item.language,
+    validation: item.language === 'python' ? 'syntax-and-behavior' : 'strict-types-and-behavior',
+    sourceSha256: digest(code), ...compileCase(item, code, root) };
+  if (result.compiled === false) return { ...result, passed: false, tests: [], expectedTests: item.tests.length };
+  const entry = item.language === 'python' ? item.entryFile : path.join('compiled', item.entryFile.replace(/\.ts$/, '.js'));
   const input = path.join(root, 'execution.json');
-  writeFileSync(input, JSON.stringify({ entry, tests: item.tests }));
+  writeFileSync(input, JSON.stringify({ entry, tests: item.tests, sourceFiles: result.sourceFiles }));
   writeFileSync(path.join(root, 'package.json'), '{"type":"commonjs"}');
-  const execution = await executeCase(input);
+  const execution = await executeCase(input, item.language);
   return { ...result, ...execution, expectedTests: item.tests.length, passed: execution.exitCode === 0
     && !execution.timedOut && !execution.tooMuchOutput && execution.tests.length === item.tests.length
     && execution.tests.every(test => test.passed) };

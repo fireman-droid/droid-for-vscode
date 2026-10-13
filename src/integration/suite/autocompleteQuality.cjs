@@ -7,6 +7,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const vscode = require('vscode');
 const ts = require('../../../node_modules/typescript');
 const { createHostClient } = require('../autocomplete-quality/hostClient.cjs');
+const { pythonSyntax } = require('../autocomplete-quality/pythonSyntax.cjs');
 
 // Actual editor commands and the packaged Provider, with raw model output relayed by
 // the credential-owning Host. Hidden tests/solutions are never passed to the model.
@@ -21,7 +22,7 @@ async function run() {
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), ...settings,
     packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256,
-    contextMode: 'native-lsp', acceptanceMode: 'automatic-then-explicit', records: [] };
+    contextMode: 'native-context', acceptanceMode: 'automatic-then-explicit', records: [] };
   let current;
   const server = createServer(async (request, response) => {
     const record = current;
@@ -42,7 +43,7 @@ async function run() {
       // to preserve the already constructed native prompt, without duplication.
       const prefix = settings.model.toLowerCase().includes('mercury') && payload.suffix
         && payload.prompt.startsWith('<|fim_prefix|>') ? payload.prompt.slice('<|fim_prefix|>'.length) : payload.prompt;
-      const result = await requestModel({ prefix, suffix: payload.suffix ?? '', language: 'typescript',
+      const result = await requestModel({ prefix, suffix: payload.suffix ?? '', language: record.language,
         filepath: record.entryFile, references: [] });
       if (result.error) throw new Error(`Model failed: ${result.code ?? result.error}`);
       attempt.raw = result.raw; attempt.elapsedMs = Date.now() - attempt.startedAt;
@@ -70,7 +71,9 @@ async function run() {
       model: settings.model, maxTokens: settings.maxTokens, maxContextCharacters: settings.maxContextCharacters,
       relatedFiles: true, autoTrigger: true })) await config.update(key, value, true);
     for (const item of corpus.cases) {
-      const record = { id: item.id, category: item.category, entryFile: item.entryFile, requests: [], accepts: [], diagnostics: [] };
+      const record = { id: item.id, category: item.category, language: item.language, entryFile: item.entryFile,
+        contextMode: item.language === 'python' ? 'open-files-without-python-lsp' : 'typescript-lsp',
+        requests: [], accepts: [], diagnostics: [] };
       current = record; report.records.push(record);
       try {
         await config.update('enabled', false, true);
@@ -81,15 +84,20 @@ async function run() {
           assert.ok(target.startsWith(directory + path.sep), 'Fixture path escaped its directory');
           mkdirSync(path.dirname(target), { recursive: true }); writeFileSync(target, file.content);
         }
-        writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
+        if (item.language === 'typescript') writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
           target: 'ES2022', module: 'commonjs', strict: true, types: [], lib: ['ES2022', 'DOM'] },
           files: [item.entryFile, ...item.references.map(file => file.path)] }));
+        // No Python language extension is installed in this isolated profile.
+        // Exercise the production opened-file context path and label it honestly.
+        if (item.language === 'python') for (const reference of item.references) {
+          await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(directory, reference.path)));
+        }
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(directory, item.entryFile)));
         const editor = await vscode.window.showTextDocument(document, { preview: false });
         const cursor = document.positionAt(item.prefix.length - lastInputLength);
         editor.selection = new vscode.Selection(cursor, cursor);
         // Start the real built-in TypeScript language service before timing edits.
-        const language = vscode.extensions.getExtension('vscode.typescript-language-features');
+        const language = item.language === 'typescript' && vscode.extensions.getExtension('vscode.typescript-language-features');
         if (language) await language.activate();
         await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document.uri);
         await config.update('enabled', true, true); await delay(200);
@@ -120,7 +128,8 @@ async function run() {
           record.diagnostics = diagnose(document, item, directory);
           // A first-line preview can compile while its cached next lines remain.
           // Drain those lines before stopping; hidden tests never guide acceptance.
-          record.probeCacheOnly = !record.diagnostics.some(issue => [1005, 1109, 1128, 2355, 2366].includes(issue.code));
+          record.probeCacheOnly = item.language === 'python' ? record.diagnostics.length === 0
+            : !record.diagnostics.some(issue => [1005, 1109, 1128, 2355, 2366].includes(issue.code));
           if (step === 11) record.stop = 'acceptance-limit';
         }
         record.elapsedMs = Date.now() - started;
@@ -139,6 +148,7 @@ async function run() {
 }
 
 function diagnose(document, item, directory) {
+  if (item.language === 'python') return pythonSyntax(document.getText(), item.entryFile).diagnostics;
   const host = ts.createCompilerHost({});
   const read = host.readFile;
   host.readFile = file => path.resolve(file).toLowerCase() === path.resolve(document.uri.fsPath).toLowerCase() ? document.getText() : read(file);
