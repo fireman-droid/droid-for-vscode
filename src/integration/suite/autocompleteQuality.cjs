@@ -43,8 +43,8 @@ async function run() {
       // to preserve the already constructed native prompt, without duplication.
       const prefix = settings.model.toLowerCase().includes('mercury') && payload.suffix
         && payload.prompt.startsWith('<|fim_prefix|>') ? payload.prompt.slice('<|fim_prefix|>'.length) : payload.prompt;
-      const result = await requestModel({ prefix, suffix: payload.suffix ?? '', language: record.language,
-        filepath: record.entryFile, references: [] });
+      const result = await requestModel(settings.rawTransport ? { kind: 'raw-fim', body: payload }
+        : { prefix, suffix: payload.suffix ?? '', language: record.language, filepath: record.entryFile, references: [] });
       if (result.error) throw new Error(`Model failed: ${result.code ?? result.error}`);
       attempt.raw = result.raw; attempt.elapsedMs = Date.now() - attempt.startedAt;
       if (response.destroyed) { attempt.cancelled = true; return; }

@@ -42,7 +42,8 @@ exports.activate = context => context.subscriptions.push(vscode.workspace.regist
 const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
 const quality = process.argv.includes('--quality');
 if (quality) {
-  assert.ok(process.env.DROID_AUTOCOMPLETE_BRIDGE_URL, 'Quality mode requires the live model gateway');
+  assert.ok(process.env.DROID_AUTOCOMPLETE_BRIDGE_URL || process.env.DROID_AUTOCOMPLETE_GATEWAY_FILE,
+    'Quality mode requires a model gateway');
   assert.ok(process.env.DROID_AUTOCOMPLETE_QUALITY_CORPUS && process.env.DROID_AUTOCOMPLETE_QUALITY_OUTPUT,
     'Quality mode requires reviewed corpus and response output paths');
 }

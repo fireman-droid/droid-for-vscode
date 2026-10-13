@@ -108,10 +108,16 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 ## 自动质量评估（开发用途）
 
 真实模型评估由独立题库提供前文、后文、参考文件和隐藏行为测试；题库作者的参考答案与测试
-不发送给补全模型。`src/integration/generateAutocompleteQuality.mjs` 通过已启动的 Browser Dev
-桥接调用当前 VS Code 配置的 FIM 服务，密钥始终由 Host 的 SecretStorage 读取，不导出。
-设置 `DROID_AUTOCOMPLETE_BRIDGE_URL` 为当前开发连接后，传入 `--corpus <题库.json>` 和
-`--output <结果.json>` 即可逐题记录首次响应、过滤结果与耗时；这一步会实际调用模型服务。
+不发送给补全模型。临时开发 Host 使用 VS Code 正常配置及 SecretStorage 调用 FIM 服务，
+无需用户重载窗口、启动 Browser Dev Client 或提供连接；密钥不导出、不复制到测试配置。
+
+```sh
+node src/integration/withAutocompleteGateway.mjs "<Microsoft VS Code/Code.exe>" -- node src/integration/generateAutocompleteQuality.mjs --corpus <题库.json> --output <结果.json>
+```
+
+运行期间打开一个临时开发窗口，命令结束后自动关闭；原窗口不重载。运行器编译当前网关源码，
+使用临时连接描述文件传给子进程，结束后移除该文件。结果记录首次响应、过滤与耗时；生成步骤
+会调用真实模型服务。也可继续用 `DROID_AUTOCOMPLETE_BRIDGE_URL` 接入已有 Browser Dev Host。
 
 题库支持 TypeScript 与 Python 3.11。审阅生成程序后，运行下列命令检查源码并执行行为断言：
 
@@ -146,6 +152,8 @@ TypeScript 使用内置语言服务寻找参考文件；Python 将题目参考�
 报告记录 VSIX 哈希、自动请求、每次原始返回、接受轨迹与最终源码，再用上述运行器判分。
 审阅题库后再运行；该模式会调用真实模型，并不执行模型代码，代码行为仍在后续受限进程中测试。
 
-当前已连接 Host 只负责使用其保存的密钥调用服务；新 VSIX 的上下文、过滤和编辑器行为都在独立
-测试进程中加载，不要求每次改动都重载用户窗口。普通批量生成也会用当前源码重新处理原始返回，
-记录处理器哈希和旧 Host 的结果。连接所属 VS Code 进程须保持运行；关闭后不能凭空恢复其临时连接。
+将同一网关命令的子命令替换为 `node src/integration/runAutocompleteTest.mjs <Code.exe> <VSIX> --quality`
+即可验证新包。新 VSIX 的上下文、请求体、过滤与编辑器行为均来自隔离测试进程；网关只转发
+已配置的服务及模型，避免旧 Host 重建请求而掩盖新代码变化。普通批量生成也使用当前后处理源码。
+可用子命令 `node src/integration/autocomplete-quality/gatewayCheck.cjs` 检查真实 Host 的访问与请求边界，
+此检查不调用模型。以上方式依赖本机已有 VS Code 配置与可用模型凭据，不依赖旧浏览器连接。
