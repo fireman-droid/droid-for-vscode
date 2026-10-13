@@ -90,11 +90,11 @@
 - 不为 CSS 文本、类名、静态渲染、Getter、Wrapper、实现细节或覆盖率目标添加测试。
 - 统一从 `main` 构建 `dist/droidvisx.vsix`，聊天、模型管理、智能补全与 Next Edit
   使用同一个安装包，不再分别交付补全分支包。
-- 修改生产 Webview 或扩展代码时，默认依次构建、生成并校验 VSIX、全局安装到
-  Microsoft VS Code 的当前用户扩展目录，然后告知用户 Reload Window；只有用户
-  明确要求只改源码或不安装时才跳过。安装前核对 CLI 所属产品，避免 PATH 中由
-  Cursor 提供的 `code` 别名；后续仅安装或更新 Microsoft VS Code，不沿用历史双端
-  安装授权。只有用户再次明确要求时才处理 Cursor，不默认使用隔离的测试配置目录。
+- 修改生产 Webview 或扩展代码时，默认依次构建、生成并校验 VSIX，不自动安装或
+  更新编辑器扩展。只有用户对本次安装明确授权后才安装，不沿用历史安装授权。
+  获准后默认安装到 Microsoft VS Code 的当前用户扩展目录，并告知用户 Reload Window。
+  安装前核对 CLI 所属产品，避免 PATH 中由 Cursor 提供的 `code` 别名；只有用户明确
+  要求时才处理 Cursor，不默认使用隔离的测试配置目录。
 - 产品事实变化时同步更新 `docs/STATUS.md`；如实报告运行的命令、失败、跳过项和风险。
 - 跨层功能须接通 Runtime、Host、Bridge 和 UI 并通过构建；生产代码交付默认完成
-  VSIX 校验和 VS Code 全局安装。真实行为和视觉由用户在 VS Code 中验收。
+  VSIX 校验，安装等待用户明确指令。真实行为和视觉按上述内置浏览器联调规则验证。
