@@ -515,6 +515,11 @@ Host／Bridge 安全动作。组件使用项目共享 shadcn/Radix，不移植 C
 
 ## 统一组件库
 
+- 设置分组与设置行复用公共 `SettingsSection`／`SettingsRow`，统一 12px 分组圆角、
+  单层细边框、标题／说明层级及窄屏换行。设置数据与保存行为仍由 Droid 适配层负责。
+- 管理页正文与任务表格分别接入公共 `ScrollArea` 的纵向／横向模式。滑块默认中性灰、
+  悬停加深、拖动使用品牌强调色；覆盖式轨道不挤动正文，保留原生滚动及键盘操作。
+  此轮仅用于设置页，不改变主聊天的自动跟随、虚拟列表或问题导航。
 - 生产 CSS 扫描统一前端目录，包含已归位的 SettingsPopover、ModelPopover、
   ContextPopover；公共组件样式由 `packages/chat-ui` 提供。
 - 五个生产入口的交互使用共享 `ui/` shadcn/Radix 组件；具体执行规则见 AGENTS.md。

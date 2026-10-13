@@ -10,6 +10,7 @@ import { ManagementChoice } from './ManagementFields';
 import type { ManagementState } from './useManagement';
 import { DefaultsSettings } from './DefaultsSettings';
 import { MissionListLoading } from './ManagementListLoading';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 
 const createdTime = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -43,7 +44,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
     <div className="management-toolbar"><ManagementChoice label={t("Mission 状态")} value={filter} onChange={v => setFilter(v as MissionControlCatalogFilter)} options={[[ 'all', t('全部任务') ], ['running', t('进行中')], ['paused', t('已暂停')], ['completed', t('已完成')]]} /></div>
     {error && <p role="alert" className="management-caption text-destructive">{t(error)}</p>}
     {pending && <p role="status" className="sr-only">{t("正在读取任务…")}</p>}
-    <div className="management-mission-scroll" role="region" aria-label={t("任务列表")} tabIndex={0}>
+    <ScrollArea className="management-mission-scroll" orientation="horizontal" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce} role="region" aria-label={t("任务列表")}>
       <table className="management-mission-table" aria-busy={pending}>
         <colgroup><col className="management-mission-title-col" /><col className="management-mission-repository-col" /><col className="management-mission-computer-col" /><col className="management-mission-progress-col" /><col className="management-mission-created-col" /></colgroup>
         <thead><tr><th scope="col">{t("标题")}</th><th scope="col">{t("仓库")}</th><th scope="col">{t("电脑")}</th><th scope="col">{t("进度")}</th><th scope="col">{t("创建时间")}</th></tr></thead>
@@ -62,7 +63,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
             : <span className="management-mission-unknown" aria-label={t("创建时间未知")}>—</span>}</td>
         </tr>)}</tbody>
       </table>
-    </div>
+    </ScrollArea>
     {!pending && !error && visible.length === 0 && <p className="management-empty">{t("没有匹配的任务")}</p>}
       </TabsContent>
     </Tabs>

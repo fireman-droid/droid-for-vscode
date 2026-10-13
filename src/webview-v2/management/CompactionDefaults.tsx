@@ -4,6 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ManagementRow } from './ManagementFields';
+import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { DefaultsSelect, useDefaultsFields, type DefaultsFieldsProps } from './DefaultsFields';
 
 export function CompactionDefaults(props: DefaultsFieldsProps) {
@@ -16,9 +17,7 @@ export function CompactionDefaults(props: DefaultsFieldsProps) {
   const locked = f.disabled('compactionTokenLimitPerModel');
   const available = f.modelOptions.filter(o => !(o.value in overrides));
   const count = Number(limit);
-  return <>
-    <h2 className="management-section-title">{t("上下文压缩")}</h2>
-    <div className="management-group">
+  return <SettingsSection title={t("上下文压缩")}>
       {f.number('compactionTokenLimit', '默认 Token 上限')}
       {Object.entries(overrides).map(([id, tokens]) => <ManagementRow key={id} label={props.snapshot.models.find(m => m.id === id)?.label ?? id}>
         <div className="management-default-override"><Input type="number" aria-label={t("{p0} 的 Token 上限", { p0: id })} min={1} step={1} disabled={locked}
@@ -35,6 +34,5 @@ export function CompactionDefaults(props: DefaultsFieldsProps) {
       </div>)}
       {f.choice('compactionModel', '压缩模型', [{ value: 'current-model', label: t('当前会话模型') }, ...f.modelOptions])}
       {f.toggle('compactionThresholdCheckEnabled', '达到上限时自动压缩', '新会话达到配置的 Token 上限后自动压缩上下文。')}
-    </div>
-  </>;
+  </SettingsSection>;
 }

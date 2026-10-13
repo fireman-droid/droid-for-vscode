@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/selection';
 import { Switch } from '../ui/controls';
+import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { ManagementChoice, ManagementRow } from './ManagementFields';
 import type { ManagementState } from './useManagement';
@@ -28,7 +29,7 @@ export function CompletionSettings({ state, settings }: { state: ManagementState
         if (result.ok && result.settings) { setDraft(result.settings.completion); setDirty(false); setSetApiKey(false); }
       });
     }}>
-      <div className="management-group">
+      <SettingsSection>
         <ManagementRow label={t("启用智能补全")} detail={t("启用后，将编辑上下文发送到下方服务。")}>{toggle('enabled', t('启用智能补全'))}</ManagementRow>
         <ManagementRow label={t("协议")}><ManagementChoice label={t("补全协议")} className="management-choice-wide" value={draft.protocol} disabled={state.busy} onChange={v => update('protocol', v as CompletionPreferences['protocol'])}
           options={[[ 'fim', t('FIM · 代码续写') ], ['mercury-edit', t('Next Edit · 编辑预测')], ['ollama', 'Ollama FIM'], ['siliconflow-fim', 'SiliconFlow FIM']]} /></ManagementRow>
@@ -37,16 +38,15 @@ export function CompletionSettings({ state, settings }: { state: ManagementState
         <ManagementRow label="API Key" detail={draft.endpoint === settings.completion.endpoint && settings.completionHasKey ? t("已配置") : t("未确认配置")}>
           <label className="management-check"><Checkbox checked={setApiKey} disabled={state.busy} onCheckedChange={v => { setSetApiKey(v === true); }} />{t("保存时设置密钥")}</label>
         </ManagementRow>
-      </div>
-      <h2 className="management-section-title">{t("触发与上下文")}</h2>
-      <div className="management-group">
+      </SettingsSection>
+      <SettingsSection title={t("触发与上下文")}>
         <ManagementRow label={t("输入时自动触发")}>{toggle('autoTrigger', t('输入时自动触发'))}</ManagementRow>
         <ManagementRow label={t("关联文件上下文")}>{toggle('relatedFiles', t('关联文件上下文'))}</ManagementRow>
-      </div>
+      </SettingsSection>
       <Collapsible><CollapsibleTrigger asChild><Button variant="plain" size="sm" className="management-advanced">{t("高级")} <ChevronDown /></Button></CollapsibleTrigger><CollapsibleContent>
-        <div className="management-group"><ManagementRow label={t("自适应延迟")}>{toggle('adaptiveDebounce', t('自适应延迟'))}</ManagementRow>
+        <SettingsSection><ManagementRow label={t("自适应延迟")}>{toggle('adaptiveDebounce', t('自适应延迟'))}</ManagementRow>
           <ManagementRow label={t("基础延迟（ms）")}><Input type="number" aria-label={t("基础延迟（ms）")} min={100} max={2000} step={50} value={draft.debounceMs} disabled={state.busy} onChange={e => update('debounceMs', Number(e.target.value))} /></ManagementRow>
-        </div>
+        </SettingsSection>
       </CollapsibleContent></Collapsible>
       <footer className="management-form-actions"><Button variant="outline" size="sm" type="submit" disabled={state.busy || !dirty && !setApiKey}>{state.busy ? t("保存中…") : t("保存")}</Button></footer>
     </form>

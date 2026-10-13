@@ -1,5 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import type { ReactNode } from 'react';
+import { SettingsRow } from '@droidvisx/chat-ui/ui/settings';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 
 export function ManagementChoice({ label, value, onChange, options, disabled = false, className }: {
@@ -12,5 +13,5 @@ export function ManagementChoice({ label, value, onChange, options, disabled = f
 }
 export function ManagementRow({ label, detail, children }: { label: string; detail?: string; children: ReactNode }) {
   const { t } = useI18n();
-  return <div className="management-row"><div>{t(label)}{detail && <small>{t(detail)}</small>}</div><div className="management-row-control">{children}</div></div>;
+  return <SettingsRow label={t(label)} detail={detail ? t(detail) : undefined} controlClassName="management-row-control">{children}</SettingsRow>;
 }

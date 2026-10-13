@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import type { ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
+import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { applyTheme } from '../shell/theme';
 import { copyText } from '../bridge/clipboard';
 import { ModelsApp } from '../models/ModelsApp';
@@ -33,18 +35,18 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
     <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} version={s?.version}
       onToggle={() => setSidebarCollapsed(value => !value)}
       onNavigate={page => { state.setPage(page); state.setNotice(null); }} />
-    <main className="management-main">
+    <ScrollArea className="management-scroll" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}><main className="management-main">
     <div hidden={state.page !== 'general'}><header className="management-heading"><div><h1>{t("常规")}</h1><p>{t("外观、问答、连接与版本")}</p></div>
       <Button variant="plain" size="icon-sm" aria-label={t("刷新信息")} title={t("刷新信息")} disabled={state.busy} onClick={() => void state.run({ kind: 'settings.read' })}><RefreshCw className={state.busy ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>
     </header>
       {s ? <>
-        <div className="management-group"><ManagementRow label={t('Language')} detail={t('Interface language. Messages and code stay in their original language.')}>
+        <SettingsSection><ManagementRow label={t('Language')} detail={t('Interface language. Messages and code stay in their original language.')}>
           <ManagementChoice label={t('Language')} value={language.preference} disabled={state.busy}
             onChange={value => { if (isLanguagePreference(value)) void state.run({ kind: 'language.set', language: value }); }}
             options={[['auto', t('Follow editor')], ['en', 'English'], ['zh-CN', '简体中文'], ['zh-TW', '繁體中文']]} />
         </ManagementRow>
-        <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></div>
-        <h2 className="management-section-title">{t("代码审阅问答")}</h2><div className="management-group"><ManagementRow label={t("问答模型")} detail={t("用于 Review Changes 中的行内问答。")}>
+        <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></SettingsSection>
+        <SettingsSection title={t("代码审阅问答")}><ManagementRow label={t("问答模型")} detail={t("用于 Review Changes 中的行内问答。")}>
           <ManagementChoice label={t("代码审阅问答模型")} value={s.reviewQuestion.modelId ?? 'follow-main'} disabled={state.busy}
             onChange={value => void state.run({ kind: 'reviewQuestion.model.set', modelId: value === 'follow-main' ? null : value })}
             options={[
@@ -53,11 +55,11 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
                 ? [[s.reviewQuestion.modelId, t('{name} (unavailable)', { name: s.reviewQuestion.modelId })] as const] : []),
               ...s.reviewQuestion.models.map(model => [model.id, model.label] as const),
             ]} />
-        </ManagementRow></div>
-        <h2 className="management-section-title">{t("连接")}</h2><div className="management-group"><ManagementRow label={t("Droid 会话")}><span className="select-none">{t(statusLabels[s.connection] ?? s.connection)}</span></ManagementRow><ManagementRow label="IDE"><span className="select-none">{t(statusLabels[s.ide] ?? s.ide)}</span></ManagementRow></div>
-        <h2 className="management-section-title">{t("版本")}</h2><div className="management-group"><ManagementRow label={`Droid ${s.version}`} detail={typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}>
+        </ManagementRow></SettingsSection>
+        <SettingsSection title={t("连接")}><ManagementRow label={t("Droid 会话")}><span className="select-none">{t(statusLabels[s.connection] ?? s.connection)}</span></ManagementRow><ManagementRow label="IDE"><span className="select-none">{t(statusLabels[s.ide] ?? s.ide)}</span></ManagementRow></SettingsSection>
+        <SettingsSection title={t("版本")}><ManagementRow label={`Droid ${s.version}`} detail={typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}>
           <Button variant="plain" size="icon-sm" aria-label={t("复制版本信息")} onClick={() => { void copyText(`Droid ${s.version}\n${typeof __DVX_BUILD_ID__ === 'undefined' ? 'development' : __DVX_BUILD_ID__}`).then(() => setCopied(true), () => state.setNotice({ ok: false, message: '复制失败，可手动复制版本信息。' })); }}>{copied ? <Check /> : <Copy />}</Button>
-        </ManagementRow></div>
+        </ManagementRow></SettingsSection>
       </> : <p role="status" className="management-empty">{state.busy ? t("正在读取设置…") : t("设置尚未读取")}</p>}
     </div>
     {visited.has('models') && <div hidden={state.page !== 'models'}><ModelsApp transport={transport} /></div>}
@@ -65,5 +67,5 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
     {(visited.has('sessions') || state.page === 'sessions') && <div className="management-list-page" hidden={state.page !== 'sessions'}><SessionManagement state={state} active={state.page === 'sessions'} /></div>}
     {(visited.has('missions') || state.page === 'missions') && <div className="management-list-page" hidden={state.page !== 'missions'}><MissionManagement state={state} active={state.page === 'missions'} /></div>}
     {state.notice && <p role={state.notice.ok ? 'status' : 'alert'} className={`management-caption ${state.notice.ok ? '' : 'text-destructive'}`}>{t(state.notice.message)}</p>}
-  </main></div>;
+  </main></ScrollArea></div>;
 }

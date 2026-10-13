@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/selection';
 import { useDefaultSettings } from './useDefaultSettings';
 import { DefaultsSelect, useDefaultsFields, type DefaultsFieldsProps } from './DefaultsFields';
 import { CompactionDefaults } from './CompactionDefaults';
+import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import type { ManagementState } from './useManagement';
 
 export function DefaultsSettings({ state, scope, active }: { state: ManagementState; scope: DefaultsScope; active: boolean }) {
@@ -38,18 +39,18 @@ function SessionDefaults(props: DefaultsFieldsProps) {
   const levels = props.snapshot.autonomyLevels ?? [];
   const levelNames: Record<string, string> = { off: '关闭', low: '低', medium: '中', high: '高', inherit: '跟随主会话' };
   return <>
-    <div className="management-group">
+    <SettingsSection>
       {f.modelPair('modelId', 'reasoningEffort', '默认模型', '默认推理强度')}
       {f.choice('interactionMode', '默认交互模式', SESSION_INTERACTION_MODES.map(value => ({ value, label: { auto: 'Auto', spec: 'Spec', mission: 'Mission' }[value] })))}
       {f.choice('autonomyLevel', '默认自主等级', levels.map(value => ({ value, label: levelNames[value] ?? value })))}
-    </div>
-    <h2 className="management-section-title">{t("Spec 模式")}</h2><div className="management-group">
+    </SettingsSection>
+    <SettingsSection title={t("Spec 模式")}>
       {f.modelPair('specModeModelId', 'specModeReasoningEffort', 'Spec 模型', 'Spec 推理强度', true)}
       {f.row('specSaveDir', '计划保存目录', <SpecDirectoryField value={f.text('specSaveDir')} options={props.snapshot.specDirectories}
         disabled={f.disabled('specSaveDir')} onChange={value => props.update({ specSaveDir: value })} />)}
-    </div>
+    </SettingsSection>
     <CompactionDefaults {...props} />
-    <h2 className="management-section-title">{t("子任务模型")}</h2><div className="management-group">
+    <SettingsSection title={t("子任务模型")}>
       {f.choice('subagentAutonomyLevel', '子任务自主等级', [...levels, 'inherit'].map(value => ({ value, label: levelNames[value] ?? value })), true)}
       <Tabs value={tier} onValueChange={setTier} className="management-default-tier">
         <TabsList animatedIndicator aria-label={t("子任务复杂度")}><TabsTrigger value="light">{t("轻量")}</TabsTrigger><TabsTrigger value="medium">{t("中等")}</TabsTrigger><TabsTrigger value="heavy">{t("复杂")}</TabsTrigger></TabsList>
@@ -57,7 +58,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
           {f.modelPair(`subagentModelSettings.${t}Model`, `subagentModelSettings.${t}ReasoningEffort`)}
         </TabsContent>)}
       </Tabs>
-    </div>
+    </SettingsSection>
   </>;
 }
 
@@ -90,14 +91,14 @@ function MissionDefaults(props: DefaultsFieldsProps) {
   const { t } = useI18n();
   const f = useDefaultsFields(props);
   return <>
-    <div className="management-group">{f.modelPair('missionOrchestratorModel', 'missionOrchestratorReasoningEffort', '编排者模型', '编排者推理强度', true)}</div>
-    <h2 className="management-section-title">{t("执行与验证")}</h2><div className="management-group">
+    <SettingsSection>{f.modelPair('missionOrchestratorModel', 'missionOrchestratorReasoningEffort', '编排者模型', '编排者推理强度', true)}</SettingsSection>
+    <SettingsSection title={t("执行与验证")}>
       {f.modelPair('missionModelSettings.workerModel', 'missionModelSettings.workerReasoningEffort', '执行者模型', '执行者推理强度')}
       {f.modelPair('missionModelSettings.validationWorkerModel', 'missionModelSettings.validationWorkerReasoningEffort', '验证者模型', '验证者推理强度')}
-    </div>
-    <h2 className="management-section-title">{t("里程碑验证")}</h2><div className="management-group">
+    </SettingsSection>
+    <SettingsSection title={t("里程碑验证")}>
       {f.toggle('missionModelSettings.skipScrutiny', '跳过审查', '跳过里程碑结束时的审查验证。')}
       {f.toggle('missionModelSettings.skipUserTesting', '跳过用户测试', '跳过里程碑结束时的用户测试验证。')}
-    </div>
+    </SettingsSection>
   </>;
 }

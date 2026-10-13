@@ -166,6 +166,11 @@ const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
 
 ## Droid 项目的接入方式
 
+设置界面可组合 `SettingsSection`（可选标题与分组）、`SettingsRow`（名称、说明与控件插槽）
+和 `ScrollArea`。滚动区域基于 Radix，支持纵向或横向、键盘滚动及 `viewportRef`；
+受 CSP 限制的宿主通过 `nonce` 允许其样式。组件不管理设置值、保存请求或聊天自动跟随。
+边框、间距、滚动滑块沿用主题变量；当前 Droid 只在管理设置页接入，主聊天保持原实现。
+
 Droid 的五个生产入口使用本包。旧组件路径保留薄 re-export，业务包装层只做
 Droid 状态投影、Bridge 回调和专属页面组合；没有第二份公共组件实现。
 当前 Droid 构建从包源码生成单文件 IIFE，保留脚本 nonce／宿主主题，

@@ -34,5 +34,7 @@ export { DiffView } from './review/DiffView';
 export { ReviewFiles } from './review/ReviewFiles';
 export { Button } from './ui/button';
 export { Input, Textarea } from './ui/input';
+export { SettingsSection, SettingsRow } from './ui/settings';
+export { ScrollArea } from './ui/scroll-area';
 export { Message, MessageContent } from './ai-elements/message';
 export { Tool, ToolHeader, ToolContent } from './ai-elements/tool';

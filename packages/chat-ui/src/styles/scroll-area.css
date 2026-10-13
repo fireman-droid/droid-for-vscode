@@ -1,0 +1,21 @@
+@layer components {
+  .dvx-scroll-area {
+    --scroll-thumb: color-mix(in srgb, var(--ink) 24%, transparent);
+    --scroll-thumb-hover: color-mix(in srgb, var(--ink) 42%, transparent);
+    --scroll-thumb-active: color-mix(in srgb, var(--action) 72%, var(--ink));
+    position: relative; min-width: 0; min-height: 0; overflow: hidden;
+  }
+  .dvx-scroll-viewport { width: 100%; height: 100%; border-radius: inherit; overscroll-behavior: contain; }
+  /* Radix's measurement wrapper must not make wide tables expand the page. */
+  .dvx-scroll-viewport > div { display: block !important; min-width: 0 !important; }
+  .dvx-scroll-viewport:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .dvx-scroll-area[data-orientation='horizontal'] > .dvx-scroll-viewport { padding-bottom: 10px; }
+  .dvx-scrollbar { display: flex; padding: 2px; touch-action: none; user-select: none; }
+  .dvx-scrollbar[data-orientation='vertical'] { width: 10px; }
+  .dvx-scrollbar[data-orientation='horizontal'] { height: 10px; flex-direction: column; }
+  .dvx-scroll-thumb { flex: 1; position: relative; border-radius: 999px; background: var(--scroll-thumb); transition: background-color 140ms ease; }
+  .dvx-scrollbar:hover .dvx-scroll-thumb { background: var(--scroll-thumb-hover); }
+  .dvx-scrollbar:active .dvx-scroll-thumb { background: var(--scroll-thumb-active); }
+  @media (prefers-reduced-motion: reduce) { .dvx-scroll-thumb { transition: none; } }
+  @media (forced-colors: active) { .dvx-scroll-thumb { background: ButtonText; } }
+}

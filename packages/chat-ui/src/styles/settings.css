@@ -1,0 +1,20 @@
+@layer components {
+  .dvx-settings-section {
+    --settings-border: color-mix(in srgb, var(--ink) 11%, var(--surface));
+    --settings-divider: color-mix(in srgb, var(--ink) 7%, var(--surface));
+    --settings-radius: 12px;
+    --settings-inset: 16px;
+  }
+  .dvx-settings-section + .dvx-settings-section { margin-top: 32px; }
+  .dvx-settings-title { margin: 0 0 12px; color: var(--muted-ink); font-size: 12px; font-weight: 500; line-height: 20px; }
+  .dvx-settings-group { padding-inline: var(--settings-inset); border: 1px solid var(--settings-border); border-radius: var(--settings-radius); }
+  .dvx-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 58px; padding-block: 14px; }
+  .dvx-settings-row + .dvx-settings-row { border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
+  .dvx-settings-label { min-width: 0; color: var(--ink); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+  .dvx-settings-detail { display: block; margin-top: 4px; color: var(--muted-ink); font-size: 12px; font-weight: 400; line-height: 18px; }
+  .dvx-settings-control { display: flex; align-items: center; justify-content: flex-end; min-width: 0; max-width: 65%; margin-left: auto; font-size: 12px; }
+  @media (max-width: 640px) {
+    .dvx-settings-row { flex-wrap: wrap; gap: 12px; }
+    .dvx-settings-control { max-width: 100%; }
+  }
+}
