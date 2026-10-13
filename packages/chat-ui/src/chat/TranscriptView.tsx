@@ -254,7 +254,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
       <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
-        <div ref={content} className="v2-chat-rail min-h-full pb-3 pt-5">
+        <div ref={content} className={`v2-chat-rail min-h-full pt-5 ${statusContent ? 'pb-0' : 'pb-3'}`}>
           <div ref={leading} className="flow-root">
             {leadingContent}
             {hiddenMessageCount > 0 ? <Button variant="ghost" size="sm" className="mb-3 w-full text-xs text-muted-foreground" onClick={revealEarlier}>{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</Button> : null}
@@ -275,7 +275,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           </div>
           </ProcessPresentationProvider>
           {trailingContent}
-          {statusContent ? <div className={scrolling.followingBottom ? 'sticky bottom-3 z-[1] bg-background' : undefined}>
+          {statusContent ? <div className={`bg-background pb-1 pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
             {statusContent}
           </div> : null}
         </div>
