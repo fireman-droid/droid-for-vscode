@@ -14,6 +14,8 @@
   [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 已可用。
   Microsoft 自动发布工作流已实现，复用并校验 GitHub Release 原始附件；
   目前仍待配置 `VSCE_PAT` 并校验发布权限，`MARKETPLACE_AUTO_PUBLISH` 保持关闭。
+  首次创建 Azure DevOps 组织的页面要求绑定 Azure 订阅；当前账号没有可选订阅或既有组织，
+  尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
 - 当前源码包含行内代码引用、Mission 创建面板整改，以及主聊天模型弹层的计划跟随按钮：

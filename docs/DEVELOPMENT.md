@@ -339,6 +339,9 @@ Open VSX 发布完成后，Cursor 的同步与审核可能稍后才显示更新�
 
 PAT 由发布者本人在 Azure DevOps 的 **User settings → Personal access tokens** 创建，
 Organization 选择 **All accessible organizations**，权限选择 **Custom defined → Marketplace → Manage**。
+若账号尚无 Azure DevOps 组织，微软目前要求
+[创建组织前具有可用 Azure 订阅](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/create-organization?view=azure-devops)。
+订阅与账单开通由账号持有人完成；不能仅凭已登录 Marketplace 就认为已满足自动发布条件。
 将值直接保存到 GitHub Secret，不粘贴到聊天、工作流、命令参数或仓库文件中。
 凭据的有效期必须自行记录，到期前更新同名 Secret。
 
