@@ -20,7 +20,7 @@ export class ContextRetrievalService {
     this.staticContextService = new StaticContextService(this.ide)
   }
 
-  public async getSnippetsFromImportDefinitions(helper: HelperVars): Promise<AutocompleteCodeSnippet[]> {
+  public async getSnippetsFromImportDefinitions(helper: HelperVars, related: AutocompleteCodeSnippet[] = []): Promise<AutocompleteCodeSnippet[]> {
     if (helper.options.useImports === false) {
       return []
     }
@@ -30,12 +30,21 @@ export class ContextRetrievalService {
     if (fileInfo) {
       const { imports } = fileInfo
       // Look for imports of any symbols around the current range
-      const textAroundCursor =
-        helper.fullPrefix.split("\n").slice(-5).join("\n") + helper.fullSuffix.split("\n").slice(0, 3).join("\n")
+      // A body can be far below its parameter/return types. Keep the enclosing
+      // signatures in scope even when those imports are absent from nearby lines.
+      const signatures = (helper.treePath ?? []).map(node => {
+        const body = node.childForFieldName("body")
+        return body ? node.text.slice(0, body.startIndex - node.startIndex).slice(0, 2000) : ""
+      }).join("\n")
+      const textAroundCursor = signatures + "\n" + related.map(snippet => snippet.content).join("\n") + "\n" +
+        helper.fullPrefix.split("\n").slice(-20).join("\n") + helper.fullSuffix.split("\n").slice(0, 5).join("\n")
       const symbols = Array.from(getSymbolsForSnippet(textAroundCursor)).filter(
         (symbol) => !helper.lang.topLevelKeywords.includes(symbol),
       )
+      const visited = new Set<string>()
       for (const symbol of symbols) {
+        if (visited.has(symbol)) continue
+        visited.add(symbol)
         const rifs = imports[symbol]
         if (Array.isArray(rifs)) {
           const snippets: AutocompleteCodeSnippet[] = rifs.map((rif) => {
@@ -47,6 +56,13 @@ export class ContextRetrievalService {
           })
 
           importSnippets.push(...snippets)
+          // Resolve dependencies already present in the current file's import
+          // cache (e.g. User -> Role), without extra language-server requests.
+          for (const snippet of snippets) {
+            for (const dependency of getSymbolsForSnippet(snippet.content)) {
+              if (imports[dependency] && !visited.has(dependency)) symbols.push(dependency)
+            }
+          }
         }
       }
     }

@@ -64,15 +64,19 @@ export class KiloContextService implements vscode.Disposable {
         experimental_enableStaticContextualization: settings.relatedFiles && settings.staticContext === true,
         experimental_includeClipboard: settings.includeClipboard === true }, settings.model, this.ide);
       const payload = await getAllSnippetsWithoutRace({ helper, ide: this.ide, contextRetrievalService: this.retrieval });
+      // The current buffer already supplies these edits. Stale snapshots of it
+      // waste reference space and can disagree with the actual cursor context.
+      payload.recentlyEditedRangeSnippets = payload.recentlyEditedRangeSnippets.filter(s => s.filepath !== filepath);
+      payload.recentlyVisitedRangesSnippets = payload.recentlyVisitedRangesSnippets.filter(s => s.filepath !== filepath);
       const supplemental = settings.relatedFiles ? input.snippets : [];
       const asKilo = (snippet: ContextSnippet): AutocompleteSnippet => ({
         filepath: snippet.uri, content: snippet.content, type: AutocompleteSnippetType.Code,
       });
       // Keep direct definitions and recent edits ahead of general opened-file context.
       const candidates = [
-        ...supplemental.filter(s => s.source !== 'openFile').map(asKilo),
+        ...supplemental.filter(s => s.source === 'definition').map(asKilo),
         ...getSnippets(helper, payload),
-        ...supplemental.filter(s => s.source === 'openFile').map(asKilo),
+        ...supplemental.filter(s => s.source !== 'definition').map(asKilo),
       ];
       const access = await Promise.all(candidates.map(s => 'filepath' in s && s.filepath ? this.ide.allowed(s.filepath) : Promise.resolve(settings.includeClipboard === true)));
       const snippets: AutocompleteSnippet[] = [];
@@ -80,6 +84,7 @@ export class KiloContextService implements vscode.Disposable {
         const content = candidate.content.trim();
         if (!access[index] || !content) continue;
         const filepath = 'filepath' in candidate ? candidate.filepath : undefined;
+        if (filepath === helper.filepath && helper.prunedCaretWindow.includes(content)) continue;
         const duplicate = snippets.some(existing => ('filepath' in existing ? existing.filepath : undefined) === filepath
           && (existing.content.trim().includes(content) || content.includes(existing.content.trim())));
         if (!duplicate) snippets.push(candidate);

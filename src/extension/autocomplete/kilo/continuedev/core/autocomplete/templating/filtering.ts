@@ -20,19 +20,6 @@ const getRemainingTokenCount = (helper: HelperVars): number => {
 
 const TOKEN_BUFFER = 10 // We may need extra tokens for snippet description etc.
 
-/**
- * Shuffles an array in place using the Fisher-Yates algorithm.
- * @param array The array to shuffle.
- * @returns The shuffled array.
- */
-const shuffleArray = <T>(array: T[]): T[] => {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[array[i], array[j]] = [array[j], array[i]]
-  }
-  return array
-}
-
 function filterSnippetsAlreadyInCaretWindow(
   snippets: (AutocompleteCodeSnippet | AutocompleteStaticSnippet)[],
   caretWindow: string,
@@ -46,11 +33,9 @@ export const getSnippets = (helper: HelperVars, payload: SnippetPayload): Autoco
     recentlyVisitedRanges: payload.recentlyVisitedRangesSnippets,
     recentlyEditedRanges: payload.recentlyEditedRangeSnippets,
     recentlyOpenedFiles: payload.recentlyOpenedFileSnippets,
-    base: shuffleArray(
-      filterSnippetsAlreadyInCaretWindow(
-        [...payload.rootPathSnippets, ...payload.importDefinitionSnippets, ...payload.staticSnippet],
-        helper.prunedCaretWindow,
-      ),
+    base: filterSnippetsAlreadyInCaretWindow(
+      [...payload.importDefinitionSnippets, ...payload.rootPathSnippets, ...payload.staticSnippet],
+      helper.prunedCaretWindow,
     ),
   }
 
@@ -91,15 +76,8 @@ export const getSnippets = (helper: HelperVars, payload: SnippetPayload): Autoco
     {
       key: "base",
       enabledOrPriority: true,
-      defaultPriority: 99, // make sure it's the last one to be processed, but still possible to override
-      snippets: shuffleArray(
-        filterSnippetsAlreadyInCaretWindow(
-          [...payload.rootPathSnippets, ...payload.importDefinitionSnippets, ...payload.staticSnippet],
-          helper.prunedCaretWindow,
-        ),
-      ),
-      // TODO: Add this too to experimental config, maybe move upper in the order, since it's almost
-      // always not inlucded due to diff being commonly large
+      defaultPriority: 0, // Direct imported contracts must survive a crowded opened-file budget
+      snippets: snippets.base,
     },
   ]
 
