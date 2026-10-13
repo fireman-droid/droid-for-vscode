@@ -9,11 +9,18 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 设置模型与强度子菜单（2026-10-13）
+
+- 共享 `ModelPicker` 改为“推理强度／模型”两行主菜单及 Radix 子菜单；选择模型后留在主菜单，继续选择 SDK 返回的等级。保留来源过滤、搜索、继承、模型默认值与不可用状态；仅模型选择的场景直接显示列表。模型名称与等级在按钮中连续排列，移除固定最小宽度和中间弹性空白。
+- 子菜单按可用空间收缩。已在连接真实 Host 的内置浏览器核对 Opus 5.5 与 Fable 5.1 的实际等级、草稿回显与撤销、重选当前模型保留已有等级、搜索输入的方向键、Tab 与 Escape、空搜索提示及 520px 边界；未保存模型配置、调用模型或新增／运行模拟测试。
+- 项目使用 `@factory/droid-sdk@0.9.1`。其导出的压缩默认配置支持 `compactionModel`，没有独立压缩推理强度；`CompactSessionRequestParams` 仅有 `customInstructions`。压缩模型继续只提供模型选择，不推断后台内部使用的推理等级。
+- 已从 main 加本次菜单源码完成 `pnpm run typecheck`、`pnpm run lint:budgets`、公共包构建与声明、生产构建及 171 条 VSIX 校验。包 SHA256：`5d7e0aad894b8d85be8e118faa8658517846096c71111110518f1f38d41b7987`。工作区直接类型检查被已暂停的 `createManagementServices.ts:29` 可空类型错误阻断；该目录改动与 Thinking 改动均未进入本包。未安装、推送或发布。
+
 ## 模型菜单空状态收紧（2026-10-13）
 
 - 移除“当前模型不在筛选范围内，已保留选择”说明；存在继承选项时不显示空结果提示，完全没有选项时只保留一条提示。没有 SDK 推理能力数据时隐藏等级行和触发器等级文字，列表高度随选项收紧，空列表不再生成多余滚动条。
 - 已在连接真实后台的内置浏览器核对继承单选项与空搜索状态；未更改模型配置、未新增或运行模拟测试。BYOK 仍为空的现场原因已核对：已安装后台缺少设置模型来源投影，新源码已包含修复，完整联动必须更新后台后验收；不以隐藏空提示代表功能恢复。
-- `pnpm run typecheck`、`pnpm run lint:budgets`、公共包构建与声明、生产构建及 171 条 VSIX 校验通过。`dist/droidvisx.vsix` SHA256 为 `4d0f11b2bed9f44a3fdde444978161dcf309a603891b4c10eaf049d26c2b8286`，排除暂停的 Thinking 改动。遵守用户要求尚未安装、推送或发布。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、公共包构建与声明、生产构建及 171 条 VSIX 校验通过。`dist/droidvisx.vsix` SHA256 为 `4d0f11b2bed9f44a3fdde444978161dcf309a603891b4c10eaf049d26c2b8286`，排除暂停的 Thinking 改动。随后获用户明确许可，仅使用核对为 Microsoft VS Code 的 CLI 全局更新扩展；安装清单及 168 个文件均与包一致。未更新 Cursor、推送或发布。用户重载并提供新连接后，真实会话默认设置已显示 6 个 BYOK 模型。常规问答仍受目录缓存未加载影响，进一步修复按用户要求暂停；相关未完成源码不进入后续菜单包。
 
 ## 设置模型选择与目录筛选（2026-10-13）
 

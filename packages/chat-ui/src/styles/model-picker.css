@@ -1,23 +1,29 @@
 @layer utilities {
-  .dvx-model-picker-trigger { min-width: 136px; max-width: 300px; justify-content: flex-end; gap: 6px; height: 30px; border-radius: 8px; font-size: 12px; }
-  .dvx-model-picker-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+  .dvx-model-picker-trigger { min-width: 0; max-width: 300px; justify-content: flex-start; gap: 6px; height: 30px; border-radius: 8px; font-size: 12px; }
+  .dvx-model-picker-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dvx-model-picker-trigger > small { color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
   .dvx-model-picker-trigger > svg { width: 12px; height: 12px; flex-shrink: 0; }
-  .dvx-model-picker { width: 320px; display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 10px; color: var(--ink); }
+  .dvx-model-picker { width: 280px; max-width: min(calc(100vw - 16px), var(--radix-dropdown-menu-content-available-width)); display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 10px; color: var(--ink); }
   .dvx-picker-search { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); }
   .dvx-picker-search > svg { width: 14px; height: 14px; color: var(--muted-ink); }
   .dvx-picker-search > input { min-width: 0; width: 100%; height: 28px; padding: 0; border: 0; background: transparent; font-size: 12px; }
-  .dvx-picker-models { max-height: calc(var(--radix-popover-content-available-height) - 116px); min-height: 44px; }
-  .dvx-picker-models [role='radiogroup'] { gap: 0; padding: 5px; }
+  .dvx-picker-models { max-height: calc(var(--radix-dropdown-menu-content-available-height) - 54px); min-height: 44px; }
+  .dvx-picker-models [role='group'] { gap: 0; padding: 5px; }
   .dvx-picker-group + .dvx-picker-group { margin-top: 6px; }
   .dvx-picker-group-label { padding: 7px 8px 5px; font-size: 11px; color: var(--muted-ink); }
-  .dvx-model-picker .dvx-picker-option { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 32px; gap: 8px; padding: 6px 8px; border: 0; border-radius: 5px; font-size: 12px; text-align: left; }
+  .dvx-picker-option { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 32px; gap: 8px; padding: 6px 8px; border: 0; border-radius: 5px; font-size: 12px; text-align: left; }
   .dvx-picker-option > span { min-width: 0; overflow-wrap: anywhere; }
   .dvx-picker-option small { display: block; color: var(--muted-ink); font-size: 10px; }
   .dvx-picker-option > svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--action); }
-  .dvx-picker-option:where(:hover, :focus-visible) { background: var(--control-surface-hover); }
+  .dvx-picker-option:where(:hover, :focus-visible, [data-highlighted]) { background: var(--control-surface-hover); }
   .dvx-picker-option[data-state='checked'] { background: color-mix(in srgb, var(--action) 8%, transparent); }
-  .dvx-picker-effort { display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--edge); font-size: 12px; }
-  .dvx-picker-effort > .dvx-control { min-width: 110px; max-width: 190px; font-size: 12px; }
+  .dvx-model-controls { width: 200px; }
+  .dvx-picker-setting { min-height: 34px; gap: 14px; }
+  .dvx-picker-setting > span { flex-shrink: 0; }
+  .dvx-picker-setting > small { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
+  .dvx-picker-setting > svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--muted-ink); }
+  .dvx-picker-setting[data-state='open'] { background: var(--control-surface-hover); }
+  .dvx-picker-levels { width: 156px; max-width: min(calc(100vw - 16px), var(--radix-dropdown-menu-content-available-width)); }
+  .dvx-picker-levels small { display: inline; margin-left: 6px; }
   .dvx-picker-empty { padding: 12px; font-size: 12px; color: var(--muted-ink); }
 }

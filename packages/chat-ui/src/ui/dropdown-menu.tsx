@@ -10,6 +10,17 @@ export function DropdownMenuRadioItem({ className, ...props }: ComponentProps<ty
   return <MenuPrimitive.RadioItem className={cn('dvx-menu-item flex select-none items-center gap-1.5 rounded px-2 py-1.5 text-xs data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props} />;
 }
 export const DropdownMenuItemIndicator = MenuPrimitive.ItemIndicator;
+export const DropdownMenuSub = MenuPrimitive.Sub;
+export function DropdownMenuSubTrigger({ className, ...props }: ComponentProps<typeof MenuPrimitive.SubTrigger>) {
+  return <MenuPrimitive.SubTrigger className={cn('dvx-menu-item flex select-none items-center gap-1.5 rounded px-2 py-1.5 text-xs data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props} />;
+}
+export function DropdownMenuSubContent({ className, sideOffset = 4, ...props }: ComponentProps<typeof MenuPrimitive.SubContent>) {
+  const container = usePortalContainer();
+  return <MenuPrimitive.Portal container={container}>
+    <MenuPrimitive.SubContent data-webview-overlay="" data-slot="dropdown-menu-content" data-motion="anchored" sideOffset={sideOffset} collisionPadding={8}
+      className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)} {...props} />
+  </MenuPrimitive.Portal>;
+}
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof MenuPrimitive.Separator>) {
   return <MenuPrimitive.Separator className={cn('my-1 h-px bg-border', className)} {...props} />;
 }
