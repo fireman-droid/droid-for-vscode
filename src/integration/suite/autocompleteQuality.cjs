@@ -9,6 +9,7 @@ const ts = require('../../../node_modules/typescript');
 const { createHostClient } = require('../autocomplete-quality/hostClient.cjs');
 const { pythonSyntax } = require('../autocomplete-quality/pythonSyntax.cjs');
 const { goSyntax } = require('../autocomplete-quality/goSyntax.cjs');
+const { assertFixtureContext } = require('../autocomplete-quality/fixtureContext.cjs');
 
 // Actual editor commands and the packaged Provider, with raw model output relayed by
 // the credential-owning Host. Hidden tests/solutions are never passed to the model.
@@ -25,7 +26,7 @@ async function run() {
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), ...settings,
     packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256,
-    contextMode: 'native-context', acceptanceMode: 'automatic-then-explicit', typing, records: [] };
+    contextMode: 'native-context-case-isolated', acceptanceMode: 'automatic-then-explicit', typing, records: [] };
   let current;
   const server = createServer(async (request, response) => {
     const record = current;
@@ -34,13 +35,14 @@ async function run() {
       assert.ok(record, 'No active case');
       let body = ''; for await (const chunk of request) body += chunk;
       const payload = JSON.parse(body);
+      const contextFiles = assertFixtureContext(payload.prompt, record.allowedContextFiles);
       if (record.probeCacheOnly) {
         record.cacheProbeMiss = true;
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ choices: [{ text: '' }] }));
         return; // Drain an existing multiline suggestion without buying another generation.
       }
-      const attempt = { prompt: payload.prompt, suffix: payload.suffix, startedAt: Date.now() };
+      const attempt = { prompt: payload.prompt, suffix: payload.suffix, contextFiles, startedAt: Date.now() };
       record.requests.push(attempt);
       // The live Host adds its Mercury prefix marker; strip exactly that marker
       // to preserve the already constructed native prompt, without duplication.
@@ -76,10 +78,15 @@ async function run() {
     for (const item of corpus.cases) {
       const record = { id: item.id, category: item.category, language: item.language, entryFile: item.entryFile,
         contextMode: item.language === 'typescript' ? 'typescript-lsp' : `open-files-without-${item.language}-lsp`,
+        allowedContextFiles: [item.entryFile, ...item.references.map(file => file.path)].map(file => `${item.id}/${file}`),
         requests: [], accepts: [], userEdits: [], diagnostics: [] };
       current = record; report.records.push(record);
       try {
         await config.update('enabled', false, true);
+        // Each authored task is independent. Do not let production's legitimate
+        // recent/open-file memory leak previous exam questions into this one.
+        await config.update('excludePatterns', corpus.cases.filter(other => other.id !== item.id)
+          .map(other => `**/${other.id}/**`), true);
         const directory = path.join(root, item.id); mkdirSync(directory, { recursive: true });
         const lastInputLength = item.prefix.endsWith('\r\n') ? 2 : 1;
         for (const file of [{ path: item.entryFile, content: item.prefix.slice(0, -lastInputLength) + item.suffix }, ...item.references]) {
