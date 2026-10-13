@@ -5,7 +5,7 @@
   .management-sidebar, .management-heading, .dvx-pagination, .management-mission-status { user-select: none; }
   .management-sidebar { display: flex; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; flex-direction: column; gap: 18px; padding: 40px 8px 20px; }
   .management-page .management-sidebar-toggle { align-self: flex-start; width: 32px; height: 28px; padding: 0; justify-content: center; color: var(--muted-ink); }
-  .management-sidebar nav { display: flex; flex-direction: column; gap: 2px; isolation: isolate; --selection-indicator-radius: 10px; --selection-indicator-color: light-dark(color-mix(in srgb, var(--ink) 7%, var(--surface)), color-mix(in srgb, var(--surface) 78%, black)); }
+  .management-sidebar nav { display: flex; flex-direction: column; gap: 2px; isolation: isolate; --selection-indicator-radius: 10px; }
   .management-sidebar nav > .dvx-selection-indicator { z-index: -1; }
   .management-page .management-nav { justify-content: flex-start; gap: 10px; width: 100%; min-height: 34px; padding: 7px 8px; border-radius: 10px; color: var(--muted-ink); font-size: 13px; white-space: nowrap; transition: gap 200ms var(--motion-ease), color 140ms var(--motion-ease), background-color 140ms var(--motion-ease); }
   .management-nav-label { min-width: 0; max-width: 116px; overflow: hidden; opacity: 1; transform: translateX(0); transition: max-width 200ms var(--motion-ease), opacity 140ms ease, transform 200ms var(--motion-ease); }

@@ -4,6 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Droid V2 development</title>
+    <script>
+      // Restore the live page's last appearance before CSS, modules or the Host arrive.
+      // This is only a first-frame hint; the connected Host remains authoritative.
+      if (location.pathname === '/live') {
+        const root = document.documentElement;
+        const key = 'dvx.browser-dev.theme';
+        try {
+          const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+          if (saved && ['auto', 'light', 'dark'].includes(saved.preference)
+            && ['light', 'dark'].includes(saved.resolved)) {
+            root.dataset.dvxTheme = saved.resolved;
+            root.dataset.dvxThemePreference = saved.preference;
+          }
+        } catch { /* Storage can be unavailable; use the boot theme until the Host responds. */ }
+        root.dataset.theme = root.dataset.dvxTheme;
+        root.dataset.themePreference = root.dataset.dvxThemePreference;
+        new MutationObserver(() => {
+          try {
+            sessionStorage.setItem(key, JSON.stringify({
+              preference: root.dataset.themePreference, resolved: root.dataset.theme,
+            }));
+          } catch { /* A cache write must not interrupt a theme change. */ }
+        }).observe(root, { attributes: true, attributeFilter: ['data-theme', 'data-theme-preference'] });
+      }
+    </script>
+    <style>
+      html { color-scheme: dark; background: var(--surface, #121212); }
+      html[data-dvx-theme='light'] { color-scheme: light; background: var(--surface, #ffffff); }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -77,7 +77,7 @@
   [data-animated-indicator] { position: relative; }
   .dvx-tabs-list[data-animated-indicator] .dvx-tab { border-bottom-color: transparent; }
   .dvx-selection-indicator { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--selection-indicator-color, var(--focus)); transition: transform 220ms var(--motion-ease), width 220ms var(--motion-ease), height 220ms var(--motion-ease); }
-  .dvx-selection-indicator[data-variant='surface'] { border-radius: var(--selection-indicator-radius, var(--control-radius)); }
+  .dvx-selection-indicator[data-variant='surface'] { border-radius: var(--selection-indicator-radius, var(--control-radius)); background: var(--selection-indicator-color, var(--control-surface-active)); }
   .dvx-selection-indicator[hidden] { display: none; }
   @media (prefers-reduced-motion: reduce) {
     .dvx-selection-indicator { transition: none; }
