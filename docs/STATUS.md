@@ -9,7 +9,7 @@
 - 源码版本 `0.8.11`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
   [GitHub v0.8.11](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.11) 已正式发布。
   [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38374358655) 已成功，
-  注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录暂仍显示 `0.8.10`，新版可见性尚未确认。
+  注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录 latest 已确认返回 `0.8.11`。
   安装版不能仅凭版本号判断。
 - 当前源码包含行内代码引用、Mission 创建面板整改，以及主聊天模型弹层的计划跟随按钮：
   “计划”行右侧一键跟随主模型，重复点击不解除跟随、不切换聊天模式；推理强度仍独立设置。
@@ -117,4 +117,8 @@
   参考取证包含 HTML 双抓、527 个资产的哈希账本、运行时补录与源码模块定位；
   403 个源站 404 和 1 个基址 400 逐 URL 登记后镜像校验通过，抽样回源 3/3 一致。
   未完成 skill 的整站断网、像素等价和 Next/RSC 重构门，不宣称全流程或整站 1:1 验收。
-  当前仅本地预览，首页设置 noindex，未部署或再次发布扩展。
+  [官网](https://fireman-droid.github.io/droid-for-vscode/) 与
+  [文档站](https://fireman-droid.github.io/droid-for-vscode/GUIDE.html) 已部署至 GitHub Pages；
+  [部署流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38380860041) 构建及发布通过。
+  线上首页与文档页均返回 200，新文案已生效，首页已移除 noindex；README 和仓库主页已接入正式地址。
+  本次部署仅更新网站，没有重复发布扩展。
