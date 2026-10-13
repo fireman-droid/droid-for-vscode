@@ -91,6 +91,7 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
       {modelError ? <Button variant="plain" size="icon-sm" aria-label={t("Refresh models")} onClick={refresh}><RotateCw /></Button> : null}
     </>} /> : <Button variant="plain" size="none" className="review-question-start" aria-label={t("Ask about selected code")}
       onPointerDown={event => event.preventDefault()} onClick={open}>{t("Ask")}</Button>;
-  const context = useMemo(() => ({ enabled, active: questionId !== null, anchor, select, close, clearSelection }), [enabled, questionId, anchor, select, close, clearSelection]);
+  const expanded = busy || state.entries.length > 0;
+  const context = useMemo(() => ({ enabled, active: questionId !== null, expanded, anchor, select, close, clearSelection }), [enabled, questionId, expanded, anchor, select, close, clearSelection]);
   return <DiffQuestionContext.Provider value={context}><DiffQuestionContentContext.Provider value={content}>{children}</DiffQuestionContentContext.Provider></DiffQuestionContext.Provider>;
 }

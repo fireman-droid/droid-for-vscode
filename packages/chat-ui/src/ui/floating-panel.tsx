@@ -1,7 +1,7 @@
 import { useI18n } from '../i18n';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { MoveDiagonal2, RotateCcw, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button } from './button';
 import { Tooltip, usePortalContainer } from './overlays';
 import { cn } from './cn';
@@ -12,8 +12,8 @@ interface Anchor { getBoundingClientRect(): DOMRect }
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** A non-modal Radix surface with a stable viewport position and shared movement controls. */
-export function FloatingPanel({ anchor, boundary, title, children, onClose, className, ...props }: {
-  anchor: Anchor; boundary?: Element | null; title: string; children: ReactNode; onClose(): void;
+export function FloatingPanel({ anchor, boundary, title, children, onClose, className, preferredHeight = 300, ...props }: {
+  anchor: Anchor; boundary?: Element | null; title: string; children: ReactNode; onClose(): void; preferredHeight?: number;
 } & Omit<ComponentProps<typeof DialogPrimitive.Content>, 'title' | 'children'>) {
   const { t } = useI18n();
   const container = usePortalContainer();
@@ -26,15 +26,20 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
   const constrain = (frame: Frame): Frame => {
     const box = bounds();
     const width = clamp(frame.width, Math.min(300, box.right - box.left), box.right - box.left);
-    const height = clamp(frame.height, Math.min(160, box.bottom - box.top), box.bottom - box.top);
+    const height = clamp(frame.height, Math.min(120, box.bottom - box.top), box.bottom - box.top);
     return { width, height, left: clamp(frame.left, box.left, box.right - width), top: clamp(frame.top, box.top, box.bottom - height) };
   };
   const initial = () => {
     const box = anchor.getBoundingClientRect();
-    return constrain({ left: box.left, top: box.top - 304, width: 500, height: 300 });
+    return constrain({ left: box.left, top: box.top - preferredHeight - 4, width: 500, height: preferredHeight });
   };
   const [frame, setFrame] = useState(initial);
-  const drag = useRef<{ pointer: number; x: number; y: number; frame: Frame } | null>(null);
+  const resized = useRef(false);
+  const drag = useRef<{ pointer: number; x: number; y: number; frame: Frame; resized: boolean } | null>(null);
+  useLayoutEffect(() => {
+    if (!resized.current) setFrame(current => constrain({ ...current,
+      top: current.top + current.height - preferredHeight, height: preferredHeight }));
+  }, [preferredHeight]);
   useEffect(() => {
     const fit = () => setFrame(current => constrain(current));
     const observer = new ResizeObserver(fit);
@@ -42,16 +47,19 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
     window.addEventListener('resize', fit);
     return () => { observer.disconnect(); window.removeEventListener('resize', fit); };
   }, [boundary]);
-  const change = (mode: 'move' | 'resize', start: Frame, x: number, y: number) => setFrame(constrain(mode === 'move'
-    ? { ...start, left: start.left + x, top: start.top + y }
-    : { ...start, width: start.width + x, height: start.height + y }));
+  const change = (mode: 'move' | 'resize', start: Frame, x: number, y: number) => {
+    if (mode === 'resize' && (x || y)) resized.current = true;
+    setFrame(constrain(mode === 'move'
+      ? { ...start, left: start.left + x, top: start.top + y }
+      : { ...start, width: start.width + x, height: start.height + y }));
+  };
   const handle = (mode: 'move' | 'resize'): Pick<ComponentProps<typeof Button>,
     'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onLostPointerCapture' | 'onKeyDown'> => ({
     onPointerDown(event) {
       if (!event.isPrimary || event.button !== 0) return;
       event.preventDefault(); event.currentTarget.focus({ preventScroll: true });
       event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, frame };
+      drag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, frame, resized: resized.current };
     },
     onPointerMove(event) {
       const start = drag.current;
@@ -65,6 +73,7 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
       if (x || y) { event.preventDefault(); change(mode, frame, x, y); }
       if (event.key === 'Escape' && drag.current) {
         event.preventDefault(); event.stopPropagation(); setFrame(drag.current.frame);
+        resized.current = drag.current.resized;
         event.currentTarget.releasePointerCapture(drag.current.pointer); drag.current = null;
       }
     },

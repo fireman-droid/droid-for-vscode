@@ -24,6 +24,7 @@ export interface DiffQuestionAnchor {
 interface DiffQuestionContextValue {
   enabled: boolean;
   active: boolean;
+  expanded?: boolean;
   anchor: DiffQuestionAnchor | null;
   select(anchor: DiffQuestionAnchor): void;
   close(): void;
@@ -35,11 +36,13 @@ export const DiffQuestionContentContext = createContext<ReactNode>(null);
 function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestionAnchor; active: boolean; onDismiss(): void }) {
   const { t } = useI18n();
   const content = useContext(DiffQuestionContentContext);
+  const question = useContext(DiffQuestionContext);
   const reference = useMemo(() => ({ current: {
     getBoundingClientRect: () => anchor.range.getBoundingClientRect(),
     contextElement: anchor.range.startContainer.parentElement ?? undefined,
   } }), [anchor]);
   if (active) return <FloatingPanel anchor={reference.current} title={t("Code question")} onClose={onDismiss}
+    preferredHeight={question?.expanded ? 300 : 132}
     boundary={reference.current.contextElement?.closest('.review-workbench')} className="review-question-menu"
     data-diff-question-control="">{content}</FloatingPanel>;
   return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
