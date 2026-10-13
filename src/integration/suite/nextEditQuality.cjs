@@ -31,6 +31,18 @@ async function run() {
       for (const match of payload.messages[0].content.matchAll(/(?:code_snippet_file_path|current_file_path): ([^\r\n]+)/g)) {
         assert.ok(match[1].startsWith(record.id + '/'), 'Another fixture entered the native model context');
       }
+      if (record.requests.length === 0) {
+        const history = /<\|edit_diff_history\|>([\s\S]*?)<\|\/edit_diff_history\|>/.exec(payload.messages[0].content)?.[1] ?? '';
+        const latestFiles = new Set();
+        for (const edit of record.edits) { latestFiles.delete(edit.path); latestFiles.add(edit.path); }
+        let previous = -1;
+        for (const file of latestFiles) {
+          const index = history.indexOf(`--- ${record.id}/${file}\n`);
+          assert.ok(index > previous, 'The first request must include every edited file in edit order');
+          previous = index;
+        }
+        record.historyVerified = true;
+      }
       if (record.requests.length >= report.requestLimit) {
         record.limitReached = true;
         response.writeHead(200, { 'content-type': 'application/json' });
