@@ -34,7 +34,9 @@ export class ReviewWatcherRefresh {
   noteWorkspacePath(root: string | undefined, fsPath: string): void {
     if (root === undefined) return;
     const path = toWorkspaceRelativePath(root, fsPath);
-    if (path !== undefined) this.note(path);
+    // Git reads may create index.lock and change the .git directory itself.
+    // Watching those writes makes a refresh schedule itself indefinitely.
+    if (path !== undefined && !/^\.git(?:$|\/.*\.lock$)/i.test(path)) this.note(path);
   }
 
   dispose(): void {

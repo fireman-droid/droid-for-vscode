@@ -8,6 +8,37 @@ afterEach(() => {
 });
 
 describe('ReviewWatcherRefresh', () => {
+  it('ignores Git read lock churn while preserving real index and workspace refreshes', async () => {
+    vi.useFakeTimers();
+    let active = scope('unstaged', ['a.txt']);
+    const publish = vi.fn();
+    let reads = 0;
+    const loadScope = vi.fn(async (source: ActiveScope) => {
+      if (++reads < 3) {
+        refresh.noteWorkspacePath('C:/work', 'C:/work/.git/index.lock');
+        refresh.noteWorkspacePath('C:/work', 'C:/work/.git');
+      }
+      return cloneScope(source);
+    });
+    const refresh = new ReviewWatcherRefresh({
+      getActive: () => active, setActive: next => { active = next; }, loadScope,
+      refreshVersions: async () => {}, publish, enqueue: async task => task(),
+    });
+    refresh.noteWorkspacePath('C:/work', 'C:/work/.git/index.lock');
+    refresh.noteWorkspacePath('C:/work', 'C:/work/.git/refs/heads/main.lock');
+    refresh.noteWorkspacePath('C:/work', 'C:/work/.git');
+    await vi.advanceTimersByTimeAsync(120);
+    expect(loadScope).not.toHaveBeenCalled();
+    refresh.noteWorkspacePath('C:/work', 'C:/work/.git/index');
+    await vi.advanceTimersByTimeAsync(120);
+    expect(loadScope).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledOnce();
+    refresh.noteWorkspacePath('C:/work', 'C:/work/a.txt');
+    await vi.advanceTimersByTimeAsync(120);
+    expect(loadScope).toHaveBeenCalledTimes(2);
+    refresh.dispose();
+  });
+
   it('retains events through supplemental refreshes without overlapping runs', async () => {
     vi.useFakeTimers();
     let active = scope('workspace', ['a.txt', 'b.txt']);
