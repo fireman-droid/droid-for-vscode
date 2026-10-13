@@ -4,7 +4,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('vscode', () => ({}));
+vi.mock('vscode', () => ({ workspace: { onDidChangeConfiguration: () => ({ dispose() {} }) } }));
 
 import type { RuntimeDiagnosticEvent } from '../../runtime/runtimeDiagnostics';
 import type { ChatController } from '../chat/ChatController';

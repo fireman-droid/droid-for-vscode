@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
 import { ResizeHandle } from '../ui/resize-handle';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useVirtualList } from '../ui/useVirtualList';
+import { ScrollArea } from '../ui/scroll-area';
 import { ChangeFileIcon } from '../chat/ChangeFileIcon';
 type FileRow = { readonly key: string; readonly directory: string; readonly file?: ReviewFile };
 type VisibleRow = { readonly key: Key; readonly index: number; readonly start: number };
@@ -90,10 +91,12 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
   useLayoutEffect(() => {
     const previous = previousFilter.current;
     if (previous.query !== query || previous.unreviewed !== unreviewed || previous.tree !== tree) {
-      if (list.viewport.current) list.viewport.current.scrollTop = 0;
+      // Replace pending selected-row reconciliation when filters reset the list.
+      if (virtual) list.virtualizer.scrollToOffset(0);
+      else if (list.viewport.current) list.viewport.current.scrollTop = 0;
       previousFilter.current = { query, unreviewed, tree };
     }
-  }, [query, unreviewed, tree, list.viewport]);
+  }, [query, unreviewed, tree, virtual, list.viewport, list.virtualizer]);
   const visible: VisibleRow[] = virtual ? list.virtualizer.getVirtualItems() : rows.map((row, index) => ({ key: row.key, index, start: 0 }));
   const visibleGroups = new Map<string, VisibleRow[]>();
   for (const item of visible) {
@@ -122,7 +125,8 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
       </ToggleGroup>
     </div>
     <div className="review-files-title"><strong>{unreviewed ? t("Unreviewed files") : t("Changed files")}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
-    <div className="review-file-list" ref={list.viewport} onKeyDown={list.onKeyDown} onFocusCapture={list.onFocusCapture} onBlurCapture={list.onBlurCapture}>
+    <ScrollArea className="review-file-scroll" viewportClassName="review-file-list" viewportRef={list.viewport}
+      aria-label={t("Changed files")} viewportProps={{ onKeyDown: list.onKeyDown, onFocusCapture: list.onFocusCapture, onBlurCapture: list.onBlurCapture }}>
       <div style={virtual ? { position: 'relative', height: list.virtualizer.getTotalSize() } : undefined}>
       {[...visibleGroups].map(([directory, items]) => <Collapsible key={directory} open={!directory || !collapsed.has(directory)} onOpenChange={(open) => setCollapsed((old) => {
         const next = new Set(old); if (open) next.delete(directory); else next.add(directory); return next;
@@ -155,7 +159,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
       {!filtered.length ? <p className="review-empty">{files.length === 0 ? t("No changed files in this scope.") : t("No matching files.")}
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button> : null}
       </p> : null}
-    </div>
+    </ScrollArea>
     <ResizeHandle edge={side === 'right' ? 'left' : 'right'} value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label={t("Resize file sidebar")} onValueChange={setWidth} />
   </aside>;
 });

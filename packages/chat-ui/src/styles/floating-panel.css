@@ -1,9 +1,11 @@
 @layer components {
-  .dvx-floating-panel { position: fixed; z-index: 40; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 6px; background: var(--code-surface); color: var(--ink); box-shadow: 0 6px 22px #0002; outline: none; }
-  .dvx-floating-panel-header { display: flex; align-items: center; flex: 0 0 24px; gap: 2px; padding: 0 4px 0 10px; color: var(--muted-ink); }
+  .dvx-floating-panel { position: fixed; z-index: 40; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--panel-edge); border-radius: var(--overlay-radius, 10px); background: var(--overlay-surface); color: var(--ink); box-shadow: var(--overlay-shadow); outline: none; }
+  .dvx-floating-panel-header { display: flex; align-items: center; flex: 0 0 30px; gap: 2px; padding: 3px 6px; color: var(--muted-ink); }
   .dvx-floating-panel-header button, .dvx-floating-panel-resize { border: 0; background: transparent; box-shadow: none; padding: 0; color: inherit; }
-  .dvx-floating-panel-header button:hover { color: var(--ink); }
-  .dvx-floating-panel-move { display: flex; align-items: center; justify-content: center; flex: 0 0 22px; width: 22px; height: 22px; margin-right: auto; border-radius: var(--control-radius); cursor: grab; touch-action: none; }
+  .dvx-floating-panel-header button:hover { color: var(--ink); background: var(--control-surface-hover); }
+  .dvx-floating-panel-header .dvx-floating-panel-move { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; height: 24px; padding-inline: 4px; border-radius: var(--control-radius); cursor: grab; touch-action: none; }
+  .dvx-floating-panel-move span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; font-weight: 400; }
+  .dvx-floating-panel-header > button:not(.dvx-floating-panel-move) { width: 24px; height: 24px; min-height: 24px; }
   .dvx-floating-panel-move:active { cursor: grabbing; }
   .dvx-floating-panel-move svg { width: 14px; height: 14px; flex-shrink: 0; }
   .dvx-floating-panel-body { flex: 1; min-height: 0; overflow: hidden; }

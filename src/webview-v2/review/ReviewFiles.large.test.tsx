@@ -18,7 +18,9 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(240);
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return isViewport(this) ? 330 : 0; });
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
-    return isViewport(this) ? Number.parseFloat((this.firstElementChild as HTMLElement)?.style.height) || this.querySelectorAll('[data-virtual-row]').length * 33 : 0;
+    // The Radix viewport adds a measurement wrapper around the virtual content.
+    const content = this.querySelector<HTMLElement>('[style*="position: relative"]');
+    return isViewport(this) ? Number.parseFloat(content?.style.height ?? '') || this.querySelectorAll('[data-virtual-row]').length * 33 : 0;
   });
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value(this: HTMLElement, { top }: ScrollToOptions) {
     const previous = this.scrollTop;
@@ -75,6 +77,7 @@ it('reveals externally selected files and recovers the viewport after filtering 
   view.rerender(<ReviewFiles side="right" files={files} selected={files[0]!.path} onSelect={onSelect} />);
   expect((await screen.findByRole('button', { name: /file-0000.ts/ })).getAttribute('aria-current')).toBe('true');
   fireEvent.change(screen.getByRole('searchbox', { name: 'Filter files' }), { target: { value: '' } });
-  expect(await screen.findByRole('button', { name: /file-0000.ts/ })).toBeDefined();
-  expect(viewport.scrollTop).toBe(0);
+  // The first row was already present before the deferred filter update.
+  await waitFor(() => expect(screen.getByText('1000')).toBeDefined());
+  await waitFor(() => expect(viewport.scrollTop).toBe(0));
 });

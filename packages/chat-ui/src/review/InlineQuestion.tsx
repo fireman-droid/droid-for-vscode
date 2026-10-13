@@ -6,6 +6,7 @@ import { Textarea } from '../ui/input';
 import { Message, MessageContent } from '../ai-elements/message';
 import { Markdown } from '../content/Markdown';
 import { useSmoothedAnswer } from './useSmoothedAnswer';
+import { ScrollArea } from '../ui/scroll-area';
 
 function QuestionAnswer({ answer, state }: Pick<InlineQuestionEntry, 'answer' | 'state'>) {
   const displayed = useSmoothedAnswer(answer, state === 'streaming');
@@ -69,17 +70,18 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
     return () => observer.disconnect();
   }, []);
   const send = () => { if (!disabled && !busy && draft.trim()) { follow.current = true; onSend(); } };
-  return <section className="review-inline-question" aria-label={t("Ask about selected code")}>
-    <div ref={history} className="review-question-history" onScroll={event => {
+  return <section className="review-inline-question" data-empty={entries.length === 0 || undefined} aria-label={t("Ask about selected code")}>
+    <ScrollArea className="review-question-history" viewportClassName="review-question-history-viewport" viewportRef={history}
+      viewportProps={{ onScroll: event => {
       const node = event.currentTarget;
       if (followedOffset.current !== null && Math.abs(node.scrollTop - followedOffset.current) < 1) return;
       followedOffset.current = null;
       follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
-    }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
+    } }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
       <Message from="user"><MessageContent className="review-question-prompt text-[var(--review-question-ink,var(--link-ink))]">{entry.question}</MessageContent></Message>
       {entry.answer ? <QuestionAnswer answer={entry.answer} state={entry.state} /> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
-    </div>)}</div></div>
+    </div>)}</div></ScrollArea>
     <div className="review-question-composer">
       <QuestionInput inputRef={input} variant="plain" className="review-question-input" aria-label={t("Question about selected code")}
         placeholder={entries.length ? t("Add a follow-up…") : t("Ask a quick question…")} value={draft} maxLength={maxLength}
@@ -92,6 +94,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
         {busy ? <span className="review-question-progress" role="status" aria-label={t("Answering")}><LoaderCircle /></span> : null}
         {actions}
         <Button variant="plain" size="none" className="review-question-send" disabled={!busy && (disabled || !draft.trim())}
+          data-busy={busy || undefined}
           aria-label={busy ? t("Stop answer") : t("Send question")} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { ReviewToolbar } from './ReviewToolbar';
 import { useReviewFileNavigation } from './useReviewFileNavigation';
 import { VirtualReviewFiles } from './VirtualReviewFiles';
 import { ReviewQuestions } from './ReviewQuestions';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 
 export function ReviewApp({ port }: { port: ReviewPort }) {
   const { t } = useI18n();
@@ -84,7 +85,8 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
       {review?.message && !target?.operation ? <p className="review-notice" role="status">{review.message}</p> : null}
       <div className={`review-body ${showFiles ? '' : 'files-hidden'}`}>
         <section className="review-code" aria-label={t("File comparisons")}>
-          <div className="review-code-scroll review-stream" ref={scroll} onWheelCapture={() => { pendingReveal.current = null; }}>
+          <ScrollArea className="review-code-area" viewportClassName="review-code-scroll review-stream" viewportRef={scroll}
+            aria-label={t("File comparisons")} onWheelCapture={() => { pendingReveal.current = null; }}>
             {target?.operation?.status === 'unavailable' ? <p className="review-empty">{OPERATION_UNAVAILABLE[target.operation.reason]}</p>
               : !files.length ? <p className="review-empty">{flow.scopePending ? t("Reading comparison…") : t("No changes in this comparison.")}</p>
               : !filtered.length ? <p className="review-empty">{t("No matching files.")} <Button variant="link" size="sm" onClick={() => setFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button></p>
@@ -92,7 +94,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                 open={!collapsed.has(entry.path)} onOpenChange={open => setCollapsed(previous => {
                   const next = new Set(previous); if (open) next.delete(entry.path); else next.add(entry.path); return next;
                 })} onNavigate={navigate} onMarkAndNext={navigation.markAndNext} hasPrevious={index > 0} hasNext={index < filtered.length - 1} />} />}
-          </div>
+          </ScrollArea>
         </section>
         {showFiles ? <ReviewFiles side="right" files={files} selected={selectedPath} onSelect={selectFile} filters={filters} onFiltersChange={setFilters} /> : null}
       </div>

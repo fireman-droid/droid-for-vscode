@@ -37,7 +37,8 @@
   .review-file-options { width: 200px; }
   .review-unreviewed { display: flex; align-items: center; gap: 8px; padding: 8px; color: var(--muted-ink); font-size: 12px; }
   .review-unreviewed:has([data-state='checked']) { color: var(--ink); }
-  .review-file-list { flex: 1; min-width: 0; min-height: 0; padding-bottom: 12px; overflow: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  .review-file-scroll, .review-code-area { flex: 1; min-height: 0; }
+  .review-file-list { padding-bottom: 12px; }
   .review-directory { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 32px; padding: 6px 10px; color: var(--muted-ink); text-align: left; font-size: 11px; }
   .review-directory svg { width: 13px; height: 13px; flex-shrink: 0; }
   .review-directory span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -72,7 +73,7 @@
   .review-mode svg { width: 14px; height: 14px; }
   .review-viewed { gap: 4px; padding-inline: 6px; color: var(--muted-ink); white-space: nowrap; }
   .review-viewed[data-reviewed='true'] { color: var(--diff-add-ink); opacity: 1; }
-  .review-code-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .review-code-scroll { min-width: 0; min-height: 0; }
   .review-diff:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .review-undo-menu { max-width: 280px; }
   .review-undo-hint { margin: 4px 0; padding: 4px 8px 8px; color: var(--muted-ink); font-size: 11px; line-height: 1.5; }

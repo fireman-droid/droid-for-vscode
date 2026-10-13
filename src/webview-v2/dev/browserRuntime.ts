@@ -14,9 +14,9 @@ interface BrowserConnection {
 const CONNECTION_KEY = 'dvx.browser-dev.connection';
 const RECONNECT_DELAY_MS = 500;
 
-export function createBrowserRuntime(surface: 'chat' | 'management' = 'chat'): BrowserVsCodeApi {
+export function createBrowserRuntime(surface: 'chat' | 'management' | 'review' = 'chat'): BrowserVsCodeApi {
   const connection = readConnection();
-  const bridgeUrl = `http://127.0.0.1:${connection.bridgePort}${surface === 'management' ? '/management' : ''}`;
+  const bridgeUrl = `http://127.0.0.1:${connection.bridgePort}${surface === 'chat' ? '' : `/${surface}`}`;
   let persistedState: unknown = {};
   let readyMessage: BrowserMessage | null = null;
   let stopped = false;
@@ -42,7 +42,7 @@ export function createBrowserRuntime(surface: 'chat' | 'management' = 'chat'): B
     }).catch(() => undefined);
   };
   const send = (message: BrowserMessage): void => {
-    if (message.type === 'webview.ready') {
+    if (message.type === 'webview.ready' || message.type === 'reviewPanel.ready') {
       readyMessage = message;
       if (!streamConnected) {
         return;
@@ -61,6 +61,16 @@ export function createBrowserRuntime(surface: 'chat' | 'management' = 'chat'): B
           },
           cache: 'no-store',
         });
+        if (surface === 'review' && [401, 403, 404].includes(response.status)) {
+          stopped = true;
+          window.dispatchEvent(new MessageEvent('message', { data: {
+            type: 'reviewPanel.error',
+            message: response.status === 404
+              ? 'This VS Code host does not support browser Review yet. Update Droid, reload the window, and restart Browser Dev Client.'
+              : 'The browser connection has expired. Restart Browser Dev Client in VS Code and open its new link.',
+          } }));
+          return;
+        }
         if (!response.ok || response.body === null) {
           throw new Error(
             `Browser dev bridge connection failed (${response.status}).`,

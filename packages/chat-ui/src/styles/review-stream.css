@@ -1,11 +1,15 @@
 @layer components {
-  .review-workbench .review-topbar { min-height: 35px; gap: 4px; padding: 3px 8px; background: var(--review-canvas); }
+  .review-workbench .review-topbar { min-height: 38px; gap: 6px; padding: 4px 8px; background: var(--review-canvas); }
+  .review-layout-control, .review-change-navigation { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .review-layout-control { padding: 2px; border: 1px solid var(--panel-edge); border-radius: var(--control-radius); }
+  .review-layout-control button { width: 26px; height: 24px; min-height: 24px; padding: 0; border-radius: calc(var(--control-radius) - 2px); }
+  .review-change-navigation button { width: 26px; height: 28px; min-height: 28px; }
   .review-scope-button { min-width: 0; gap: 6px; padding-inline: 2px; font-weight: 400; }
   .review-scope-button > span:first-of-type { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .review-scope-button > svg:last-child { width: 12px; color: var(--muted-ink); }
   .review-workbench .review-range-counts { gap: 5px; font-size: 11px; }
   .review-workbench .review-scope-trigger { width: auto; max-width: 190px; border: 0; box-shadow: none; }
-  .review-workbench .review-commit-button { min-height: 24px; height: 24px; border-radius: 5px; padding-inline: 10px; font-weight: 400; }
+  .review-workbench .review-commit-button { min-height: 28px; height: 28px; border-radius: var(--control-radius); padding-inline: 10px; font-weight: 400; }
   .review-options-menu { min-width: 224px; }
   .review-menu-label { margin: 4px 8px; font-size: 10px; color: var(--muted-ink); }
   .review-menu-check { margin-left: auto; }
@@ -30,7 +34,7 @@
   .review-file-placeholder { margin: 0; min-height: 96px; padding: 28px 12px; color: var(--muted-ink); font-size: 11px; }
   .review-workbench .review-files[data-side='right'] { border-right: 0; border-left: 1px solid var(--panel-edge); }
   .review-workbench .review-files-title { min-height: 28px; padding: 4px 10px; text-transform: none; font-size: 12px; letter-spacing: normal; }
-  .review-workbench .review-file[aria-current='true'] { background: color-mix(in srgb, var(--ink) 8%, var(--review-sidebar)); box-shadow: none; }
+  .review-workbench .review-file[aria-current='true'] { background: var(--control-surface-active); box-shadow: none; }
   .review-workbench .review-directory { min-height: 28px; padding-block: 3px; font-size: 12px; }
   .review-workbench .review-file { min-height: 28px; padding-block: 3px; gap: 6px; }
   .review-workbench .review-file-basename { font-weight: 400; }

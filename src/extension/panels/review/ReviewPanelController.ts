@@ -18,6 +18,7 @@ import { isId } from '../../../shared/validation/guards';
 import { reviewWorkspaceRoot } from '../../review/reviewWorkspaceRoot';
 import { ReviewQuestionHost } from '../../review/ReviewQuestionHost';
 import { REVIEW_QUESTION_MODEL_SETTING } from '../../review/reviewQuestionSettings';
+import { isUiLocaleRead } from '../../../shared/protocol/localeProtocol';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
@@ -37,6 +38,7 @@ export class ReviewPanelController implements vscode.Disposable {
     private readonly review: ReviewCoordinator,
     private readonly git: GitWorkflow,
     private readonly viewer: SessionViewerPanelController,
+    private readonly browserPost?: (message: unknown) => void,
   ) {
     this.questions = new ReviewQuestionHost(controller, message => this.post(message));
     this.subscriptions = [
@@ -60,6 +62,7 @@ export class ReviewPanelController implements vscode.Disposable {
       vscode.window.onDidChangeActiveColorTheme(() => this.postTheme()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('droidvisx.theme')) this.postTheme();
+        if (this.browserPost && event.affectsConfiguration('droidvisx.language')) this.post(readWebviewLocale());
         if (event.affectsConfiguration(`droidvisx.${REVIEW_QUESTION_MODEL_SETTING}`) && this.current()) this.questions.models(this.target!.sessionId);
       }),
     ];
@@ -87,6 +90,7 @@ export class ReviewPanelController implements vscode.Disposable {
       : latest
       ? { type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId: latest.turnId }
       : { type: 'review.panel.open', sessionId, scopeKind: 'workspace' });
+    if (this.browserPost) { this.initialize(); return; }
     if (this.panel) {
       this.panel.reveal(undefined, false);
       this.initialize();
@@ -98,12 +102,7 @@ export class ReviewPanelController implements vscode.Disposable {
     });
     this.panel = panel;
     const locale = bindWebviewLocale(panel.webview);
-    const receive = panel.webview.onDidReceiveMessage((value) => {
-      const request = parseReviewPanelRequest(value) ?? parseWebviewMessage(value);
-      const requestId = request && 'requestId' in request && isId(request.requestId) ? request.requestId : undefined;
-      const sessionId = request && 'sessionId' in request && isId(request.sessionId) ? request.sessionId : this.target?.sessionId;
-      void this.handle(value).catch((error) => this.postError(error, requestId, sessionId));
-    });
+    const receive = panel.webview.onDidReceiveMessage(value => this.handleMessage(value));
     const dispose = panel.onDidDispose(() => {
       receive.dispose(); locale.dispose(); dispose.dispose();
       if (this.panel === panel) { this.questions.reset(); this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
@@ -118,6 +117,14 @@ export class ReviewPanelController implements vscode.Disposable {
     this.cancelPendingOpen();
     this.panel?.dispose();
     this.subscriptions.forEach((subscription) => subscription.dispose());
+    this.ready = false;
+    this.target = null;
+  }
+  handleMessage(value: unknown): void {
+    const request = parseReviewPanelRequest(value) ?? parseWebviewMessage(value);
+    const requestId = request && 'requestId' in request && isId(request.requestId) ? request.requestId : undefined;
+    const sessionId = request && 'sessionId' in request && isId(request.sessionId) ? request.sessionId : this.target?.sessionId;
+    void this.handle(value).catch(error => this.postError(error, requestId, sessionId));
   }
   private current(): boolean {
     return !this.invalidated && !!this.target && this.target.sessionId === this.controller.sessionState.sessionId &&
@@ -228,9 +235,16 @@ export class ReviewPanelController implements vscode.Disposable {
     });
   }
   private async handle(value: unknown): Promise<void> {
+    if (this.browserPost && isUiLocaleRead(value)) { this.browserPost(readWebviewLocale()); return; }
     if (this.panel && handleWebviewClipboard(value, this.panel.webview)) return;
     const message = parseReviewPanelRequest(value);
-    if (message?.type === 'reviewPanel.ready') { this.ready = true; this.initialize(); return; }
+    if (this.browserPost && message?.type === 'review.panel.open') { this.open(message); return; }
+    if (message?.type === 'reviewPanel.ready') {
+      this.ready = true;
+      this.initialize();
+      if (!this.target) this.postContext();
+      return;
+    }
     if (!this.current()) { this.postContext(); return; }
     const target = this.target!;
     if (this.questions.handle(value, target)) return;
@@ -320,6 +334,8 @@ export class ReviewPanelController implements vscode.Disposable {
       ...(requestId ? { requestId } : {}), ...(sessionId ? { sessionId } : {}) });
   }
   private post(message: unknown): void {
-    if (this.ready) void this.panel?.webview.postMessage(message);
+    if (!this.ready) return;
+    if (this.browserPost) this.browserPost(message);
+    else void this.panel?.webview.postMessage(message);
   }
 }

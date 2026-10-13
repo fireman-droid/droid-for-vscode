@@ -25,6 +25,7 @@ import { MODEL_SOURCE_VERSION } from '../../shared/protocol/modelSourceProtocol'
 import { isUiLocaleRead } from '../../shared/protocol/localeProtocol';
 import { readWebviewLocale } from '../webview/webviewLocale';
 import type { BrowserManagementChannel } from './BrowserManagementChannel';
+import type { BrowserReviewChannel } from './BrowserReviewChannel';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -49,6 +50,7 @@ interface BrowserDevRun {
   delivery: ReturnType<typeof createWebviewStateDelivery> | null;
   modelSourcePreference: ReturnType<typeof createModelSourcePreference> | null;
   management: BrowserManagementChannel | null;
+  review: BrowserReviewChannel | null;
 }
 
 interface BrowserDevGeneration {
@@ -132,6 +134,7 @@ export class BrowserDevBridge implements vscode.Disposable {
     dependencies?: Partial<BrowserDevBridgeDependencies>,
     private readonly openModels?: () => void,
     private readonly createManagement?: () => BrowserManagementChannel,
+    private readonly createReview?: () => BrowserReviewChannel,
   ) {
     this.dependencies = {
       ...browserDevDependencies,
@@ -244,10 +247,13 @@ export class BrowserDevBridge implements vscode.Disposable {
         delivery: null,
         modelSourcePreference: null,
         management: null,
+        review: null,
       };
       owner.run = run;
       run.management = this.createManagement?.() ?? null;
       if (run.management) subscriptions.push(run.management);
+      run.review = this.createReview?.() ?? null;
+      if (run.review) subscriptions.push(run.review);
       run.modelSourcePreference = createModelSourcePreference({
         postMessage: async (message) => this.send(run, message),
       });
@@ -262,6 +268,7 @@ export class BrowserDevBridge implements vscode.Disposable {
       run.keepAlive = this.dependencies.setInterval(() => {
         run.eventResponse?.write(': keepalive\n\n');
         run.management?.keepAlive();
+        run.review?.keepAlive();
       }, 15_000);
       bridge.on('request', (request, response) => {
         this.handleRequest(run, token, request, response);
@@ -431,13 +438,15 @@ export class BrowserDevBridge implements vscode.Disposable {
       respond(response, 401);
       return;
     }
-    if (request.method === 'GET' && request.url === '/management/events' && run.management) {
-      run.management.connect(response);
+    const channel = request.url?.startsWith('/review/') ? run.review
+      : request.url?.startsWith('/management/') ? run.management : null;
+    if (request.method === 'GET' && (request.url === '/management/events' || request.url === '/review/events') && channel) {
+      channel.connect(response);
       return;
     }
-    if (request.method === 'POST' && request.url === '/management/message' && run.management) {
+    if (request.method === 'POST' && (request.url === '/management/message' || request.url === '/review/message') && channel) {
       void readJson(request).then(message => {
-        run.management?.handleMessage(message);
+        channel.handleMessage(message);
         respond(response, 204);
       }, () => respond(response, 400));
       return;

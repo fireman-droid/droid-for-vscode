@@ -148,15 +148,13 @@ it('shows historical excerpts with working change navigation instead of inapplic
   for (const name of ['Native Diff', 'Undo file operations…', 'Undo turn operations…', 'Mark & next'])
     expect(screen.queryByRole('button', { name })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Context lines' })).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Review options' }));
-  await user.click(screen.getByRole('menuitemradio', { name: 'Split', exact: true }));
+  await user.click(screen.getByRole('radio', { name: 'Split', exact: true }));
   const hunk = document.querySelector<HTMLElement>('[data-diff-changes]')!;
   hunk.getBoundingClientRect = () => ({ top: 100, height: 22 } as DOMRect);
   const scroller = hunk.closest<HTMLElement>('.review-code-scroll')!;
   scroller.getBoundingClientRect = () => ({ top: 10 } as DOMRect);
   scroller.scrollBy = vi.fn();
-  await user.click(screen.getByRole('button', { name: 'Review options' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Next change' }));
+  await user.click(screen.getByRole('button', { name: 'Next change' }));
   expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 54, behavior: 'smooth' });
   fireEvent.click(screen.getByRole('button', { name: 'Open a.ts' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'reviewPanel.openPath', path: 'a.ts' });

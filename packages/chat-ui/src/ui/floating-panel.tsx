@@ -1,10 +1,9 @@
 import { useI18n } from '../i18n';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { MoveDiagonal2, MoreHorizontal, X } from 'lucide-react';
+import { MoveDiagonal2, RotateCcw, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button } from './button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
-import { usePortalContainer } from './overlays';
+import { Tooltip, usePortalContainer } from './overlays';
 import { cn } from './cn';
 import { PinwheelIcon } from './pinwheel-icon';
 
@@ -79,16 +78,13 @@ export function FloatingPanel({ anchor, boundary, title, children, onClose, clas
         <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
         <div className="dvx-floating-panel-header">
           <Button variant="plain" size="none" className="dvx-floating-panel-move" aria-label={t("Move question panel")}
-            title={t("Drag to move · Arrow keys to adjust")} {...handle('move')}><PinwheelIcon /></Button>
-          <DropdownMenu modal={false}><DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={t("Panel position and size")}><MoreHorizontal /></Button>
-          </DropdownMenuTrigger><DropdownMenuContent>
-            <DropdownMenuItem onSelect={() => setFrame(initial())}>{t("Return to selection")}</DropdownMenuItem>
-            {([['Move left', -40, 0], ['Move right', 40, 0], ['Move up', 0, -40], ['Move down', 0, 40]] as const).map(([label, x, y]) =>
-              <DropdownMenuItem key={label} onSelect={() => change('move', frame, x, y)}>{t(label)}</DropdownMenuItem>)}
-            <DropdownMenuItem onSelect={() => change('resize', frame, 60, 40)}>{t("Larger")}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => change('resize', frame, -60, -40)}>{t("Smaller")}</DropdownMenuItem>
-          </DropdownMenuContent></DropdownMenu>
+            title={t("Drag to move · Arrow keys to adjust")} {...handle('move')}><PinwheelIcon /><span>{title}</span></Button>
+          <Tooltip content={t("Reset position")}>
+            <Button variant="ghost" size="icon-sm" aria-label={t("Reset position")} onClick={() => setFrame(current => {
+              const box = anchor.getBoundingClientRect();
+              return constrain({ ...current, left: box.left, top: box.top - current.height - 4 });
+            })}><RotateCcw /></Button>
+          </Tooltip>
           <Button variant="ghost" size="icon-sm" aria-label={t("Close question")} onClick={onClose}><X /></Button>
         </div>
         <div className="dvx-floating-panel-body">{children}</div>

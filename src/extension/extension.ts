@@ -59,6 +59,7 @@ import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
 import { createManagementServices } from './management/createManagementServices';
 import { BrowserManagementChannel } from './dev/BrowserManagementChannel';
+import { BrowserReviewChannel } from './dev/BrowserReviewChannel';
 import { isManagementPage } from '../shared/protocol/managementPageProtocol';
 import { applyModelToChat, readModelApplyState } from './models/modelChatApply';
 import { MissionGateway } from './chat/mission/MissionGateway';
@@ -534,6 +535,9 @@ export function activate(context: vscode.ExtensionContext): void {
     undefined,
     () => modelsPanel.open(),
     () => new BrowserManagementChannel(managementServices, modelManager),
+    () => new BrowserReviewChannel(post => new ReviewPanelController(
+      context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer, post,
+    )),
   );
   activeBrowserDevBridge = browserDevBridge;
   const reviewPanel = new ReviewPanelController(context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer);

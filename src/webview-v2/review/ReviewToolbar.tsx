@@ -1,12 +1,14 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useRef } from 'react';
-import { ArrowDown, ArrowUp, Check, ChevronDown, GitCompare, MoreHorizontal, PanelRight, RefreshCw, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, Columns2, GitCompare, MoreHorizontal, PanelRight, RefreshCw, Rows2, Search } from 'lucide-react';
 import { REVIEW_SCOPE_KINDS, type ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import { Button } from '../ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/selection';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItemIndicator, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { ReviewIconButton } from './ReviewIconButton';
+import { ToggleGroup, ToggleGroupItem } from '../ui/controls';
+import { Tooltip } from '../ui/overlays';
 import type { ReviewWorkbench } from './ReviewFileSection';
 const labels: Record<ReviewScopeKind, string> = {
   operations: 'Recorded Edits', turn: 'Agent Turn', workspace: 'Uncommitted', branch: 'Branch Comparison', unstaged: 'Unstaged', staged: 'Staged',
@@ -24,7 +26,7 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
   const agentRunning = flow.agent?.status === 'running' || flow.agent?.status === 'starting';
   return <header className="review-topbar">
     <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="review-scope-button" disabled={!valid || scopePending} title={review?.baselineLabel}>
-      <GitCompare aria-hidden /><span>{target?.operation ? t("This Operation") : review ? labels[review.scopeKind] : t("Review Changes")}</span>
+      <GitCompare aria-hidden /><span>{target?.operation ? t("This Operation") : review ? t(labels[review.scopeKind]) : t("Review Changes")}</span>
       {counts && !target?.operation ? <span className="review-range-counts"><i>+{files.reduce((total, file) => total + (file.additions ?? 0), 0)}</i><b>−{files.reduce((total, file) => total + (file.deletions ?? 0), 0)}</b></span> : null}<ChevronDown aria-hidden />
     </Button></DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="review-menu review-scope-menu">
@@ -43,6 +45,15 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
       <SelectContent className="review-menu" align="start">{flow.branches?.refs.map(ref => <SelectItem key={ref} value={ref}>{ref.replace(/^refs\/(heads|remotes)\//, '')}</SelectItem>)}</SelectContent>
     </Select> : null}
     <span className="review-top-spacer" />
+    <ToggleGroup type="single" className="review-layout-control" aria-label={t("Layout")} value={split ? 'split' : 'unified'}
+      onValueChange={value => { if (value) onSplit(value === 'split'); }}>
+      <Tooltip content={t("Unified")}><ToggleGroupItem value="unified" aria-label={t("Unified")}><Rows2 /></ToggleGroupItem></Tooltip>
+      <Tooltip content={t("Split")}><ToggleGroupItem value="split" aria-label={t("Split")}><Columns2 /></ToggleGroupItem></Tooltip>
+    </ToggleGroup>
+    <div className="review-change-navigation">
+      <ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Previous change")} disabled={!valid || scopePending || !files.length} onClick={() => onHunk(-1)}><ArrowUp /></ReviewIconButton>
+      <ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Next change")} disabled={!valid || scopePending || !files.length} onClick={() => onHunk(1)}><ArrowDown /></ReviewIconButton>
+    </div>
     <DropdownMenu><DropdownMenuTrigger asChild><ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Review options")}><MoreHorizontal /></ReviewIconButton></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="review-menu review-options-menu" onCloseAutoFocus={event => {
         if (!findOnClose.current) return;
@@ -50,15 +61,8 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
         event.preventDefault();
         onFind();
       }}>
-        <p className="review-menu-label">{t("Layout")}</p>
-        <DropdownMenuRadioGroup value={split ? 'split' : 'unified'} onValueChange={value => onSplit(value === 'split')}>
-          {['unified', 'split'].map(value => <DropdownMenuRadioItem key={value} value={value}>{value === 'split' ? t("Split") : t("Unified")}<DropdownMenuItemIndicator className="review-menu-check"><Check /></DropdownMenuItemIndicator></DropdownMenuRadioItem>)}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => { findOnClose.current = true; }}><Search />{t("Find file…")}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onCollapse}>{allCollapsed ? t("Expand all files") : t("Collapse all files")}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onHunk(-1)}><ArrowUp />{t("Previous change")}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onHunk(1)}><ArrowDown />{t("Next change")}</DropdownMenuItem>
         <DropdownMenuItem disabled={!valid || scopePending} onSelect={flow.refresh}><RefreshCw />{t("Refresh changes")}</DropdownMenuItem>
         {!target?.operation && review?.scopeKind !== 'operations' && !review?.recordedOnly ? <>
           <DropdownMenuSeparator /><p className="review-menu-label">{t("Context")}</p>

@@ -9,9 +9,11 @@ const fake = vi.hoisted(() => {
   return { panel, receive: (message: unknown) => receive(message), create: vi.fn(() => panel) };
 });
 vi.mock('vscode', () => ({
+  Disposable: class { constructor(public dispose: () => void) {} },
+  env: { language: 'en' },
   Uri: { joinPath: (_base: unknown, ...parts: string[]) => parts.join('/') }, ViewColumn: { Active: -1 },
   window: { createWebviewPanel: fake.create, onDidChangeActiveColorTheme: () => ({ dispose() {} }) },
-  workspace: { onDidChangeConfiguration: () => ({ dispose() {} }) },
+  workspace: { onDidChangeConfiguration: () => ({ dispose() {} }), getConfiguration: () => ({ get: (_key: string, fallback?: unknown) => fallback }) },
 }));
 vi.mock('../../webview/webviewHtml', () => ({ getWebviewHtml: () => '<html>Review</html>' }));
 vi.mock('../../webview/webviewTheme', () => ({ readWebviewBootTheme: () => ({ preference: 'dark', resolved: 'dark' }) }));
@@ -22,10 +24,36 @@ import type { SessionViewerPanelController } from '../sessionViewer/SessionViewe
 import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 import type { WebviewToHostMessage } from '../../../shared/bridgeMessages';
 beforeEach(() => vi.clearAllMocks());
+it('uses the same scoped file reader for a browser without opening an editor panel', async () => {
+  const post = vi.fn();
+  const handleMessage = vi.fn();
+  const state = { sessionId: 's1', conversationId: null, activeRuntimeCwd: 'C:/work', connection: { status: 'connected' }, disposed: false };
+  const chat = { sessionState: state, subscribe: () => ({ dispose() {} }), handleMessage,
+    getWorkspaceContext: () => ({ cwd: 'C:/work', trusted: true }),
+    metadata: { modelCatalog: { status: 'ready', items: [] }, settings: { value: null } },
+    effects: { readLatestConversationChanges: () => undefined },
+    recoveryState: { transcript: { transcript: [] } }, turnState: { turn: null } } as unknown as ChatController;
+  const readFile = vi.fn(async () => ({ version: 'v1', patch: '@@ -1 +1 @@\n-a\n+b', truncated: false }));
+  const review = new ReviewPanelController({} as never, chat, { readFile } as unknown as ReviewCoordinator,
+    { status: vi.fn(), commit: vi.fn() }, {} as SessionViewerPanelController, post);
+  review.open();
+  review.handleMessage({ type: 'reviewPanel.ready' });
+  expect(fake.create).not.toHaveBeenCalled();
+  expect(handleMessage).toHaveBeenCalledWith({ type: 'review.open', sessionId: 's1', scopeKind: 'workspace' });
+  expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.context', valid: true, sessionId: 's1' }));
+  review.handleMessage({ type: 'reviewPanel.readFile', requestId: 'r1', reviewScopeId: 'scope1', baseline: 'head:index', path: 'a.ts', context: 3 });
+  await vi.waitFor(() => expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.file', requestId: 'r1', patch: '@@ -1 +1 @@\n-a\n+b' })));
+  state.sessionId = 's2';
+  review.handleMessage({ type: 'reviewPanel.readFile', requestId: 'r2', reviewScopeId: 'scope1', baseline: 'head:index', path: 'a.ts', context: 3 });
+  expect(readFile).toHaveBeenCalledOnce();
+  review.dispose();
+});
 it('reuses its editor tab, scopes messages to Chat and never stops Chat when closed', async () => {
   const handleMessage = vi.fn();
   const state = { sessionId: 's1', conversationId: null, activeRuntimeCwd: 'C:/work', connection: { status: 'connected' }, disposed: false };
   const chat = { sessionState: state, subscribe: () => ({ dispose() {} }), handleMessage,
+    getWorkspaceContext: () => ({ cwd: 'C:/work', trusted: true }),
+    metadata: { modelCatalog: { status: 'ready', items: [] }, settings: { value: null } },
     effects: { readLatestConversationChanges: () => ({ turnId: 't1', files: [] }) },
     recoveryState: { transcript: { transcript: [] } }, turnState: { turn: null } } as unknown as ChatController;
   const readFile = vi.fn(async () => ({ version: 'v1', patch: '@@ -1 +1 @@\n-a\n+b', truncated: false }));
@@ -66,6 +94,8 @@ function intentFixture(transcript: ChatController['recoveryState']['transcript']
   const handleMessage = vi.fn((_message: WebviewToHostMessage) => {});
   const replayTo = vi.fn((_sessionId: string, publish: Publish) => new Promise<void>((resolve) => replays.push({ publish, resolve })));
   const chat = { sessionState: state, handleMessage,
+    getWorkspaceContext: () => ({ cwd: 'C:/work', trusted: true }),
+    metadata: { modelCatalog: { status: 'ready', items: [] }, settings: { value: null } },
     subscribe: (next: Listener) => { listener = next; return { dispose() {} }; },
     effects: { readLatestConversationChanges: () => undefined },
     recoveryState: { transcript: { transcript } }, turnState: { turn: null } } as unknown as ChatController;

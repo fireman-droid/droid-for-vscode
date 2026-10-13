@@ -9,22 +9,36 @@ import { createPanelPreview } from './panelPreview';
 import { BtwPreview } from './BtwPreview';
 import { ManagementApp } from '../management/ManagementApp';
 import type { ManagementTransport } from '../management/useManagement';
+import { ReviewApp } from '../review/ReviewApp';
+import { parseReviewPanelRequest } from '../../shared/protocol/reviewPanelProtocol';
 import '../theme.css';
 
 function mountLiveChat(): void {
-  const management = new URLSearchParams(window.location.search).get('view') === 'management';
+  const view = new URLSearchParams(window.location.search).get('view');
+  const management = view === 'management';
+  const review = view === 'review';
   let runtime: ReturnType<typeof createBrowserRuntime>;
   try {
-    runtime = createBrowserRuntime(management ? 'management' : 'chat');
+    runtime = createBrowserRuntime(management ? 'management' : review ? 'review' : 'chat');
   } catch {
     mountWebview(<main className="space-y-2 p-4">
       <h1 className="text-sm font-medium">Browser connection unavailable</h1>
-      <p className="text-xs text-muted-foreground">Run Droid: Start Browser Dev Client in Cursor, then open the newly copied URL.</p>
+      <p className="text-xs text-muted-foreground">Run Droid: Start Browser Dev Client in VS Code, then open the newly copied URL.</p>
     </main>, (detail) => console.error(detail));
     return;
   }
   (globalThis as { __dvxApi?: typeof runtime }).__dvxApi = runtime;
-  document.title = management ? 'Droid · Management' : 'Droid · Chat';
+  document.title = management ? 'Droid · Management' : review ? 'Droid · Review' : 'Droid · Chat';
+  if (review) {
+    const target = sessionStorage.getItem('dvx.browser-dev.reviewTarget');
+    sessionStorage.removeItem('dvx.browser-dev.reviewTarget');
+    if (target) {
+      const request = parseReviewPanelRequest(JSON.parse(target));
+      if (request?.type === 'review.panel.open') runtime.postMessage(request);
+    }
+    mountWebview(<ReviewApp port={runtime} />, detail => console.error(detail));
+    return;
+  }
   if (management) {
     const transport: ManagementTransport = {
       postMessage: message => runtime.postMessage(message),
@@ -39,7 +53,13 @@ function mountLiveChat(): void {
     mountWebview(<ManagementApp transport={transport} />, detail => console.error(detail));
     return;
   }
-  mountWebview(<ChatApp port={runtime} />, (detail) =>
+  const chatPort = { ...runtime, postMessage: (message: Parameters<typeof runtime.postMessage>[0]) => {
+    if (message.type === 'review.panel.open') {
+      sessionStorage.setItem('dvx.browser-dev.reviewTarget', JSON.stringify(message));
+      window.location.assign('/live?view=review');
+    } else runtime.postMessage(message);
+  } };
+  mountWebview(<ChatApp port={chatPort} />, (detail) =>
     runtime.postMessage({ type: 'webview.diagnostic', kind: 'error', detail }));
 }
 
