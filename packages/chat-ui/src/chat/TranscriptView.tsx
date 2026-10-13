@@ -35,6 +35,7 @@ export interface TranscriptViewProps {
   readonly renderMessage: (id: string, presentation: MessagePresentation) => ReactNode;
   readonly leadingContent?: ReactNode;
   readonly trailingContent?: ReactNode;
+  readonly statusContent?: ReactNode;
   readonly onQuote?: (text: string) => void;
   readonly onBtwQuote?: (text: string) => void;
   readonly reportLayout?: (detail: string) => void;
@@ -50,7 +51,7 @@ const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, re
 }) {
   return renderMessage(id, { placeholder, placeholderHeight });
 });
-export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, onQuote, onBtwQuote, reportLayout, ref }: TranscriptViewProps) {
+export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, statusContent, onQuote, onBtwQuote, reportLayout, ref }: TranscriptViewProps) {
   const { t } = useI18n();
   const selectionRoot = useRef<HTMLDivElement>(null);
   const selecting = useTranscriptSelection(selectionRoot);
@@ -274,6 +275,9 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           </div>
           </ProcessPresentationProvider>
           {trailingContent}
+          {statusContent ? <div className={scrolling.followingBottom ? 'sticky bottom-3 z-[1] bg-background' : undefined}>
+            {statusContent}
+          </div> : null}
         </div>
       </div>
       {pinned === null ? null : <>

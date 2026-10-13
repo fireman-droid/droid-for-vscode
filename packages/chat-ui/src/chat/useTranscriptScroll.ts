@@ -21,6 +21,7 @@ export function useTranscriptScroll(
   const follow = useRef(createFollowState());
   const userScrolling = useRef(false);
   const [away, setAway] = useState(false);
+  const [followingBottom, setFollowingBottom] = useState(false);
   const navigation = useRef<(() => number | undefined) | null>(null);
   const navigationTop = useRef<number | null>(null);
   const bottomNavigation = useRef(false);
@@ -42,6 +43,7 @@ export function useTranscriptScroll(
   const stopFollowing = useCallback(() => {
     cancelAnimation();
     follow.current.following = false;
+    setFollowingBottom(false);
     follow.current.pendingProgrammaticTop = null;
     userScrolling.current = false;
   }, [cancelAnimation]);
@@ -95,8 +97,12 @@ export function useTranscriptScroll(
     const element = viewport.current;
     readTranscriptSelection(element?.parentElement ?? null)?.removeAllRanges();
     follow.current.following = true;
-    bottomNavigation.current = behavior === 'smooth';
+    bottomNavigation.current = behavior === 'smooth' && element !== null &&
+      element.scrollHeight - element.clientHeight - element.scrollTop > FOLLOW_REJOIN_PX;
     if (element !== null && behavior !== 'smooth') writeTop(Math.max(0, element.scrollHeight - element.clientHeight));
+    // A follow request from history is not yet a settled bottom viewport.
+    // Keep trailing UI in the transcript until the navigation reaches it.
+    setFollowingBottom(element !== null && !bottomNavigation.current);
     setAway(false);
     scheduleUpdate.current();
   }, [viewport, writeTop, cancelAnimation]);
@@ -172,6 +178,7 @@ export function useTranscriptScroll(
         settledFrames = 0;
       }
       lastFrame.current = frame.current === null ? 0 : time;
+      setFollowingBottom(follow.current.following && navigation.current === null && !bottomNavigation.current);
       setAway(bottom - element.scrollTop > 48);
       if (navigation.current === null && bottom - element.scrollTop <= FOLLOW_REJOIN_PX)
         onReachedBottom?.();
@@ -212,6 +219,7 @@ export function useTranscriptScroll(
       const wasFollowing = follow.current.following;
       cancelAnimation();
       applyFollowWheelIntent(follow.current, event.deltaY, sample());
+      setFollowingBottom(follow.current.following);
       userScrolling.current = event.deltaY > 0;
       if (wasFollowing && !follow.current.following) {
         reportLayout?.(JSON.stringify({ source: 'transcript.follow', input: 'wheel',
@@ -294,5 +302,5 @@ export function useTranscriptScroll(
       cancelAnimation();
     };
   }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom]);
-  return { follow, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
+  return { follow, followingBottom, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }

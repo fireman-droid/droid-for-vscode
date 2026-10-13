@@ -132,6 +132,9 @@ const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
   `sendSignal` 用于输入／导航身份，不会因消息仍在队列中而滚动旧内容。
   普通发送在清空输入和追加消息前调用 `TranscriptHandle.prepareForSend()`，
   按发送前距底部 80px 的容差选择即时保持底部或平滑回底；排队时不调用。
+  运行提示通过 `statusContent` 传入，实际回到底部后才固定位置，避免提示先出现在历史视口再随页面跳转；
+  稳定跟随后不受正文增长影响，短对话仍紧接正文。查看历史、选择文字或导航时随列表滚走。
+  交互卡片等继续使用 `trailingContent`。
   需要暂停跟随时调用其 `TranscriptHandle.stopFollowing()`。
   明确的用户操作需要恢复跟随时调用 `TranscriptHandle.scrollToBottom()`，
   同时退出问题导航；业务确认时机由接入层决定，不把普通回复结束当作恢复条件。

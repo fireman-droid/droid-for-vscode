@@ -149,12 +149,13 @@ export function Transcript({
     </>}
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
-      {interaction}{running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
+      {interaction}</>}
+    statusContent={running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
       <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
       <span>{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
         ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
         : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
-    </div> : null}</>}
+    </div> : null}
     renderMessage={(id, presentation) => {
       const message = byId.get(id)!;
       if (message.kind === 'user') {
