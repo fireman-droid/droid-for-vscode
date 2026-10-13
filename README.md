@@ -6,7 +6,7 @@
 
 Droid 基于 Factory Droid CLI，支持 BYOK 模型、Mission 任务、独立侧问答与代码补全。项目由社区独立维护，是 Factory Droid CLI 的非官方扩展。
 
-[安装扩展 · Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx) · [下载 VSIX](https://github.com/fireman-droid/droid-for-vscode/releases/latest) · [使用文档](docs/README.md) · [版本记录](CHANGELOG.md)
+[项目官网](https://fireman-droid.github.io/droid-for-vscode/) · [使用文档](https://fireman-droid.github.io/droid-for-vscode/GUIDE.html) · [安装扩展 · Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx) · [下载 VSIX](https://github.com/fireman-droid/droid-for-vscode/releases/latest) · [版本记录](CHANGELOG.md)
 
 ![Droid 功能示例：任务计划、对话与多文件代码审阅](https://raw.githubusercontent.com/fireman-droid/droid-for-vscode/main/docs/images/v0.8.10/final/01-overview.webp)
 
