@@ -34,19 +34,19 @@ const modelRows = [
 ];
 const pillars = [
   [
-    'CONTEXT',
-    '带着上下文开始',
-    '把文件、选区和诊断交给 Droid，在当前项目里理解问题、讨论方案。',
+    'PLAN',
+    '先想清楚，再开始写',
+    '结合项目文件和选中的代码讨论方案，把复杂需求拆成可执行的步骤。',
   ],
   [
-    'CONTROL',
-    '按自己的方式推进',
-    '选择模型与推理强度，在自动、计划与任务模式之间掌握执行节奏。',
+    'BUILD',
+    '让 Droid 动手实现',
+    '编写功能、重构代码、修复问题。在编辑器里跟进执行，处理需要你确认的操作。',
   ],
   [
-    'CLARITY',
-    '看清每一处改动',
-    '从工具记录到文件 Diff，随时检查过程，逐项审阅结果。',
+    'REVIEW',
+    '提交之前，看清改动',
+    '逐文件查看 Diff，选中代码直接提问，理解修改的原因和影响。',
   ],
 ];
 const features = [
@@ -54,7 +54,7 @@ const features = [
     name: '对话与计划',
     image: chatImage,
     page: 'CHAT',
-    text: '讨论实现方案，追踪任务步骤，按需展开工具执行记录。',
+    text: '先讨论方案，再执行任务。计划、工具调用与结果都在对话中。',
     position: 'top left',
   },
   {
@@ -68,35 +68,35 @@ const features = [
     name: 'BTW 旁问',
     image: btwImage,
     page: 'CHAT',
-    text: '在主对话旁单独提问，让临时问题有自己的上下文。',
+    text: '随手问一个相关问题，保留主对话的任务与上下文。',
     position: 'top right',
   },
   {
     name: 'Mission',
     image: missionImage,
     page: 'MISSIONS',
-    text: '设定交付目标，查看 Worker 进度与 Validator 检查结果。',
+    text: '描述任务目标，由 Droid 规划、执行并检查结果，随时查看进度。',
     position: 'top left',
   },
   {
     name: 'BYOK 模型',
     image: modelImage,
     page: 'MODELS',
-    text: '接入自己的服务渠道，管理模型、别名和推理强度。',
+    text: '接入自己的 API Key，按任务选择模型与推理强度。',
     position: 'top left',
   },
   {
     name: '代码补全',
     image: completionImage,
     page: 'AUTOCOMPLETE',
-    text: '在原生编辑器中获得灰字补全与 Next Edit 修改提示。',
+    text: '边写边补全，并通过 Next Edit 获取下一处修改建议。',
     position: 'top right',
   },
   {
     name: '文件与选区',
     image: contextImage,
     page: 'CHAT',
-    text: '用紧凑的行内引用携带代码，点击即可回到对应位置。',
+    text: '把文件与选区带进问题，点击行内引用即可定位代码。',
     position: 'bottom left',
   },
   {
@@ -122,9 +122,9 @@ const workflows = [
   ],
   [
     '03',
-    '推进一项任务',
-    '明确 Mission 的目标，按功能查看执行与验证进度。',
-    'MISSIONS',
+    '定位并修复问题',
+    '把报错和诊断带进对话，追踪原因，再检查修复后的改动。',
+    'CHAT',
   ],
 ];
 const steps = [
@@ -296,18 +296,19 @@ useHomeMotion(root);
         </div>
         <h1 id="hero-title">
           <HomeMotionText
-            text="BUILD WITH DROID."
+            text="YOUR AI CODING AGENT."
             mode="scramble"
             :delay="180"
           />
           <HomeMotionText
-            text="RIGHT IN YOUR EDITOR."
+            text="IN YOUR EDITOR."
             mode="scramble"
             :delay="340"
           />
         </h1>
         <p class="hero-description">
-          从想法到代码，在 VS Code 与 Cursor 中完成。
+          VS Code 与 Cursor 中的开源 AI 编码助手。<br />
+          规划功能、编写代码、修复问题，直到完成审阅。
         </p>
         <div class="hero-access">
           <div class="home-actions">
@@ -359,7 +360,7 @@ useHomeMotion(root);
         class="home-environments home-container"
         aria-label="支持的开发环境与扩展方式"
       >
-        <p class="home-eyebrow">融入现有的开发方式</p>
+        <p class="home-eyebrow">在熟悉的编辑器里，用你已有的工具</p>
         <div class="environment-grid">
           <span>Visual Studio Code</span><span>Cursor</span
           ><span>Factory CLI</span><span>Open VSX</span><span>BYOK</span
@@ -373,9 +374,9 @@ useHomeMotion(root);
       >
         <div class="section-heading centered">
           <h2 id="foundation-title">
-            <HomeMotionText text="你的编辑器，也是 AI 工作台。" />
+            <HomeMotionText text="规划、编码、审阅，一起完成。" />
           </h2>
-          <p data-reveal>在熟悉的项目与代码之间，完成讨论、执行和审阅。</p>
+          <p data-reveal>从理解需求到检查代码，让 Droid 参与实际开发。</p>
         </div>
         <ol class="pillar-grid">
           <li
@@ -401,9 +402,9 @@ useHomeMotion(root);
         <p class="home-eyebrow">MODELS / 模型与渠道</p>
         <div class="models-layout">
           <div class="section-heading">
-            <h2 id="models-title">模型，<br />由你来选择。</h2>
+            <h2 id="models-title">你的任务，<br />你选模型。</h2>
             <p>
-              使用官方模型，或接入自己的服务渠道。按任务选择模型与推理强度，在同一个界面里管理。
+              使用官方模型，或带上自己的 API Key。为聊天、计划与代码补全分别配置模型，按需调整推理强度。
             </p>
             <a class="home-text-link" :href="docs('MODELS')"
               >了解模型配置 <span aria-hidden="true">→</span></a
@@ -452,9 +453,9 @@ useHomeMotion(root);
       >
         <div class="section-heading">
           <h2 id="features-title">
-            <HomeMotionText text="让每一步开发衔接起来。" />
+            <HomeMotionText text="从对话开始，把代码写出来。" />
           </h2>
-          <p>从正在讨论的问题，到即将提交的代码。需要的工具，都在工作流里。</p>
+          <p>引用项目代码，交给 Droid 实现，再逐项审阅结果。</p>
         </div>
         <ul class="feature-grid">
           <li
@@ -490,8 +491,8 @@ useHomeMotion(root);
           <div class="section-heading">
             <h2 id="integrations-title">连接你已有的工具。</h2>
             <p>
-              用 Skills 组织可复用的方法，通过 MCP
-              扩展工具能力，在统一入口管理插件。
+              用 Skills 复用团队的工作方法，通过 MCP
+              连接外部工具，按需启用插件。
             </p>
             <a class="home-text-link" :href="docs('CAPABILITIES')"
               >查看支持范围 <span aria-hidden="true">→</span></a
@@ -524,10 +525,10 @@ useHomeMotion(root);
           </div>
           <div class="spotlight-copy">
             <p class="home-eyebrow">MISSION CONTROL</p>
-            <h2 id="mission-title">目标明确，<br />过程可见。</h2>
+            <h2 id="mission-title">交代目标，<br />跟进交付。</h2>
             <p>
-              为复杂任务设定目标。查看功能进度、Worker
-              对话与验证结果，在需要时暂停或继续。
+              把复杂任务交给 Mission。Droid 负责规划、执行与验证，你可以查看各项进度、Worker
+              对话和检查结果，随时暂停或继续。
             </p>
             <a class="home-text-link" :href="docs('MISSIONS')"
               >了解 Mission <span aria-hidden="true">→</span></a
@@ -542,9 +543,9 @@ useHomeMotion(root);
       >
         <div class="section-heading">
           <h2 id="workflow-title">
-            <HomeMotionText text="从一个具体问题开始。" />
+            <HomeMotionText text="从今天要做的事开始。" />
           </h2>
-          <p>让每次对话都有清楚的下一步。</p>
+          <p>读懂代码、实现需求，或解决一个卡住你的问题。</p>
         </div>
         <div class="workflow-grid">
           <a
@@ -563,8 +564,8 @@ useHomeMotion(root);
       <section class="home-process home-wide" aria-labelledby="process-title">
         <div class="section-heading">
           <p class="home-eyebrow">BUILT AROUND YOUR CODE</p>
-          <h2 id="process-title">工作在继续，<br />上下文也在。</h2>
-          <p>在编辑器里完成一轮开发，让讨论、文件与执行记录彼此相连。</p>
+          <h2 id="process-title">先计划，再实现。<br />每一步都能跟进。</h2>
+          <p>方案、执行记录和文件改动留在项目对话中，方便检查，也方便继续。</p>
         </div>
         <div class="process-grid">
           <div>
@@ -596,9 +597,9 @@ useHomeMotion(root);
       >
         <div class="section-heading centered">
           <h2 id="transparency-title">
-            <HomeMotionText text="检查过程，再确认结果。" />
+            <HomeMotionText text="改了哪里，随时看清。" />
           </h2>
-          <p>工具调用、权限请求和代码改动都有各自的入口。</p>
+          <p>查看工具做了什么，确认操作权限，逐项审阅文件修改。</p>
         </div>
         <ul>
           <li>工具记录</li>
@@ -619,7 +620,7 @@ useHomeMotion(root);
       >
         <div class="section-heading">
           <h2 id="install-title">
-            <HomeMotionText text="下一次开发，从这里开始。" />
+            <HomeMotionText text="安装 Droid，开始编码。" />
           </h2>
         </div>
         <div class="install-layout">
@@ -727,7 +728,7 @@ useHomeMotion(root);
         </div>
         <div class="closing-note">
           <span class="home-eyebrow">OPEN SOURCE / COMMUNITY BUILT</span>
-          <p>社区维护，持续改进。</p>
+          <p>扩展源码公开，欢迎查看与贡献。</p>
           <a class="home-text-link" :href="repository"
             >在 GitHub 查看项目 <span aria-hidden="true">↗</span></a
           >

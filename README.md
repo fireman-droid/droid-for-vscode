@@ -1,8 +1,10 @@
 # Droid
 
-**面向 VS Code 与 Cursor 的 AI 编码工作台。**
+**面向 VS Code 与 Cursor 的开源 AI 编码助手。**
 
-Droid 将 Factory Droid CLI 的对话、任务执行和代码审阅接入编辑器，支持 BYOK 模型、独立侧问答与代码补全。项目由社区独立维护，是 Factory Droid CLI 的非官方扩展。
+用 Droid 规划功能、编写代码、修复问题并审阅改动。在熟悉的编辑器中引用项目文件、跟进任务执行，选择适合自己的模型与服务渠道。
+
+Droid 基于 Factory Droid CLI，支持 BYOK 模型、Mission 任务、独立侧问答与代码补全。项目由社区独立维护，是 Factory Droid CLI 的非官方扩展。
 
 [安装扩展 · Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx) · [下载 VSIX](https://github.com/fireman-droid/droid-for-vscode/releases/latest) · [使用文档](docs/README.md) · [版本记录](CHANGELOG.md)
 
