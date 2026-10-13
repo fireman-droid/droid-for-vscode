@@ -17,9 +17,9 @@ Review 用来查看一次编辑、整轮任务或 Git 中的文件变化。新�
 
 <figure class="droid-screenshot">
 
-[![左侧 Review 对照新增天气卡片文件，Before 为空，After 显示新增代码；右侧保留聊天](images/review-split.png)](images/review-split.png)
+[![Review 中的多文件分栏 Diff 与文件导航](images/v0.8.10/final/04-review-split.webp)](images/v0.8.10/final/04-review-split.webp)
 
-<figcaption>新增文件的分栏比较：Before 为空，After 为新增的 183 行内容，右侧保留任务对话。点击图片查看原图。</figcaption>
+<figcaption>按文件对照修改前后的代码，并跟踪审阅进度。v0.8.10 界面示例，使用演示数据。点击查看原图。</figcaption>
 </figure>
 
 ## 选择比较范围
@@ -63,7 +63,7 @@ Uncommitted 等 Git 范围查看。
 
 ## 就选中代码提问
 
-在分栏或合并 Diff 中选中代码，点击 **Ask**，问答框会悬浮在选区附近，不占用代码行或挤动下方代码。
+在分栏或合并 Diff 中选中代码，点击 **提问（Ask）**，紧凑问答框会在选区附近打开并直接带入代码引用，不挤动下方代码。
 模型在管理页“常规 → 代码审阅问答”配置，默认跟随主聊天。Enter 发送，Shift+Enter 换行；
 回答会流式显示，可继续追问或停止。
 拖动顶部标题栏移动问答框，拖动右下角调整大小；顶部“恢复原位”按钮回到选区旁，保留已调尺寸和草稿。
@@ -75,10 +75,18 @@ Uncommitted 等 Git 范围查看。
 问答只有解释能力，工具在独立隐藏会话中禁用，不提供 Edit，也不改变主聊天或 BTW。
 选区最多 8,000 字符，问题最多 4,000 字符。一次保留一个问答；关闭后可选择其他片段。
 复制连续、有绝对行号的 Diff 代码后，粘贴到主聊天、BTW 或代码问答会显示文件／行号标签；
-发送保留复制时的代码与修改前／后标记，标签点击打开当前文件的记录行范围。引用快照也计入问题长度限制。
+发送保留复制时的代码与修改前／后标记。主聊天和 BTW 中点击标签定位编辑器文件；
+Review 问答中点击标签回到当前比较的对应行，并短暂高亮，不跳转外部文件。引用快照也计入问题长度限制。
 没有行号或跨越未展示行的选区仍粘贴为普通文本，不伪造完整文件范围。
 切换比较范围、布局、会话、历史编辑／File 视图或原补丁发生变化会关闭问答；滚动离屏保留当前问答和草稿。
 当前入口用于 Diff，已保存全文的 File 视图和 VS Code Native Diff 不显示该入口。
+
+<figure class="droid-screenshot">
+
+[![在 Diff 旁通过行内问答解释代码](images/v0.8.10/final/09-review-question.webp)](images/v0.8.10/final/09-review-question.webp)
+
+<figcaption>v0.8.10 行内问答示例，使用演示数据。当前版本已收紧初始输入区，并支持行内代码引用。点击查看原图。</figcaption>
+</figure>
 
 ## 编辑正文与完整版本
 

@@ -2,7 +2,7 @@
 
 [返回项目首页](../README.md) · [全部文档](README.md)
 
-功能已合入 `main`，随统一安装包提供，默认关闭，无需先打开 Droid 聊天。
+代码补全与 Next Edit 随 Droid 安装包提供，默认关闭，使用独立模型服务，无需先打开聊天。
 
 ## 配置与使用
 
@@ -19,9 +19,9 @@
 
 <figure class="droid-screenshot">
 
-[![SQL 编辑器中的灰字代码建议，悬浮工具栏提示使用 Tab 接受](images/inline-completion.png)](images/inline-completion.png)
+[![VS Code 中在光标处显示的 TypeScript 灰字补全](images/v0.8.10/final/22-inline-completion.webp)](images/v0.8.10/final/22-inline-completion.webp)
 
-<figcaption>普通代码补全：建议直接显示在光标处，按 Tab 接受。点击图片查看原图。</figcaption>
+<figcaption>建议显示在光标处，按 Tab 接受。截图来自安装 v0.8.10 的 VS Code，使用本地演示响应。点击查看原图。</figcaption>
 </figure>
 
 ## 上下文与数据读取

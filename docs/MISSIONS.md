@@ -8,27 +8,27 @@
 主对话派出子任务后，会出现对应卡片，展示标题、状态和最近活动。
 点击卡片打开子会话，查看消息和工具记录；输入区上方的 Agents 列表用于在相关子任务之间切换。
 
-默认 daemon 模式下，子会话复用聊天界面，可以跟进、附加上下文、回答权限请求和停止任务。
-显式使用 process 模式时，子任务查看保留只读路径。
+普通 Task 子任务通过只读 Viewer 查看消息和工具记录。Mission Worker 的子会话按运行模式提供交互入口，
+可用操作以界面和当前 SDK 状态为准。
 子会话暂不开放会改变会话身份的 Fork、Compact 和历史编辑重发。
 
 关闭子会话标签不等于取消任务。停止时以后台确认的状态为准。
 
 ## 使用 Mission
 
-聊天输入区的模式菜单提供 **Auto**、**Spec** 和 **Mission** 入口。
+聊天输入区的模式菜单提供 **自动（Auto）**、**计划（Spec）** 和 **任务（Mission）** 入口。
 
 <figure class="droid-screenshot">
 
-[![聊天输入区展开模式菜单，可选择 Auto、Spec 和 Mission](images/chat-modes.png)](images/chat-modes.png)
+[![Mission 创建页中的目标、调度代理、Worker 与验证配置](images/v0.8.10/final/31-mission-setup.webp)](images/v0.8.10/final/31-mission-setup.webp)
 
-<figcaption>输入区的模式选择菜单。点击图片查看原图。</figcaption>
+<figcaption>Mission 角色模型与验证配置。v0.8.10 界面示例，使用演示数据；当前版本支持模型搜索并收紧控件。点击查看原图。</figcaption>
 </figure>
 
 运行 **Droid: Open Mission Control** 打开任务列表。查看已有 Mission，或点击 **New Mission** 创建任务：
 
 1. 在 **Mission goal** 中填写要交付的目标和约束。
-2. 确认负责规划的 **Orchestrator** 模型与推理强度。
+2. 确认负责规划的 **Orchestrator** 模型与推理强度；模型列表支持输入文字搜索。
 3. 按需展开 **Execution settings**，配置 Worker／Validator 模型，以及 Scrutiny／User Testing 开关。
 4. 点击 **Start Mission**，在主会话中完成后续提问与计划确认。
 

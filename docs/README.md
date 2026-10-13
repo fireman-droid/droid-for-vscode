@@ -1,11 +1,14 @@
 # Droid 文档
 
-**从第一次对话，到读懂一次请求如何执行。**
+安装、配置和使用 Droid，以及参与项目开发的参考文档。
 
 Droid 是 Factory Droid CLI 的非官方 VS Code / Cursor 扩展。
-这个文档入口按使用和开发两条路径组织：前者帮助你完成任务，后者帮助你找到代码、理解边界并提交修改。
+扩展将对话、任务执行、模型配置与代码审阅集中到编辑器中。以下按使用与开发两条路径组织。
 
 [安装并开始使用](GETTING_STARTED.md) · [搭建开发环境](DEVELOPMENT.md) · [阅读系统架构](ARCHITECTURE.md)
+
+配图来自 [v0.8.10 产品图集](https://github.com/fireman-droid/droid-for-vscode/tree/main/docs/images/v0.8.10)，保留采集版本与演示数据说明；
+当前使用方法以正文和安装版本为准。
 
 ## 使用 Droid
 

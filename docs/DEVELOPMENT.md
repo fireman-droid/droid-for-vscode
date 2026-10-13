@@ -321,7 +321,7 @@ pnpm run release:assets
 绑定完成后，正式 Release 的 `published` 事件会下载该 Release 的原始 VSIX、摘要和构建信息，
 核对标签、源码提交、版本、扩展 ID 与 SHA-256 后上架；不重新构建或替换附件。
 普通 push、草稿和预发布不会上架。首次使用须创建包含该工作流的新版本标签；旧 Release 不会补发。
-版本号必须高于市场已有版本（配置时 Open VSX 已有 `0.8.5`），同时更新根版本与 CHANGELOG。
+版本号必须高于市场已有版本，同时更新根版本与 CHANGELOG。
 缺少绑定、附件或校验失败会使 Actions 明确失败；修正配置后可在原运行点击 **Re-run failed jobs**。
 同版本已发布时会拒绝重复上架，不能借重跑覆盖原包。
 Open VSX 发布完成后，Cursor 的同步与审核可能稍后才显示更新，详见

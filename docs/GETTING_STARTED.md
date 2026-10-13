@@ -24,7 +24,7 @@ droid --version
 ## 2. 下载并安装扩展
 
 **Cursor 市场安装**：在扩展面板搜索 `droidvisx.droidvisx`，核对扩展名 **Droid**、
-发布者 **droidvisx** 后安装。市场详情见 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx)。
+发布者 **droidvisx** 后安装（完整显示名为 **Droid - AI Coding Agent**）。市场详情见 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx)。
 Cursor 的扩展目录使用 Open VSX，新版本显示还受其市场同步与审核影响，见 [Cursor 扩展说明](https://prod.cursor.com/help/customization/extensions)。
 
 **VS Code 或手动安装**：
@@ -50,9 +50,9 @@ Cursor 的扩展目录使用 Open VSX，新版本显示还受其市场同步与�
 
 <figure class="droid-screenshot">
 
-[![Droid 正在制作 HTML 天气卡片，任务计划和展开的 Activity 显示执行进展](images/chat-task.png)](images/chat-task.png)
+[![Droid 对话中的任务计划、工具调用和本轮文件改动](images/v0.8.10/final/02-chat-plan.webp)](images/v0.8.10/final/02-chat-plan.webp)
 
-<figcaption>一次制作天气卡片的任务：顶部查看计划，Activity 中查看工具细节。点击图片查看原图。</figcaption>
+<figcaption>任务计划、回复与文件改动集中在同一轮对话。v0.8.10 生产界面，使用演示数据；当前版本的布局与文字已有调整。点击查看原图。</figcaption>
 </figure>
 
 想使用自己的模型渠道，继续阅读 [模型与服务渠道](MODELS.md)。

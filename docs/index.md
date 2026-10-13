@@ -1,6 +1,6 @@
 ---
 layout: landing
-title: 在编辑器里，更舒服地使用 Droid
+title: Droid · VS Code 与 Cursor 的 AI 编码工作台
 titleTemplate: false
-description: Droid 是 Factory Droid CLI 的非官方开源 VS Code / Cursor 扩展。支持 BYOK、BTW 旁问、改动审阅与代码补全。
+description: Droid 是 Factory Droid CLI 的非官方开源编辑器扩展，在 VS Code 与 Cursor 中提供编码对话、任务执行、代码审阅、BYOK 模型与独立代码补全。
 ---

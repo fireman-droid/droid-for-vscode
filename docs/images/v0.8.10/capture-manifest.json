@@ -3,7 +3,7 @@
   "capturedOn": "2026-10-12",
   "sourceCommit": "eab11b41e357a29b36564e66de9e482c2c13ba8a",
   "installedVsixSha256": "b96905c12e814b45156e6139911b1cefade9db3e67f86d473029d7c1dc582b18",
-  "publication": "Local review assets only. No README, marketplace listing, release page or website was replaced or published.",
+  "publication": "Selected assets are used in the v0.8.11 README, Open VSX presentation and documentation. Capture version and demo-data provenance remain v0.8.10; assets are not relabeled as newer captures.",
   "method": {
     "browser": "Exact release production components and styles rendered with an isolated local demo transport. No generated interface images.",
     "native": "22 and 26 captured from Microsoft VS Code with the existing v0.8.10 VSIX installed into an isolated profile. Local deterministic completion responses; no real model inference.",

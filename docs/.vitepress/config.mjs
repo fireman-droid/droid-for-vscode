@@ -8,7 +8,7 @@ const repository = 'https://github.com/fireman-droid/droid-for-vscode';
 export default defineConfig({
   title: 'Droid',
   titleTemplate: ':title · Droid 文档',
-  description: 'Factory Droid CLI 的非官方开源编辑器界面：BYOK、BTW 旁问、改动审阅与代码补全。',
+  description: 'Factory Droid CLI 的非官方开源编辑器扩展，在 VS Code 与 Cursor 中提供编码对话、任务执行、代码审阅、BYOK 模型与独立代码补全。',
   lang: 'zh-CN',
   base: '/droid-for-vscode/',
   rewrites: { 'README.md': 'GUIDE.md' },

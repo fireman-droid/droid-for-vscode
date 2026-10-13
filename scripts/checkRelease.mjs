@@ -37,13 +37,14 @@ if (prepareAssets) {
   writeFileSync(`${directory}/build-info.json`, JSON.stringify({ ...metadata, sourceDirty, assetName, sha256 }, null, 2) + '\n');
   const highlights = entry.split(/^### /mu).find((section) => section.startsWith('Highlights\n'));
   const notes = [
-    '在 VS Code / Cursor 中使用 Droid：聊天、审阅代码改动、继续编写代码。Factory Droid CLI 的非官方图形界面。',
+    'Droid 是面向 VS Code 与 Cursor 的 AI 编码工作台，集成 Factory Droid CLI 的对话、任务执行与代码审阅。项目由社区独立维护，支持 BYOK 模型与独立代码补全。',
     ...(highlights ? ['## 版本亮点', highlights.slice('Highlights\n'.length).trim()] : []),
     '## 安装',
+    'Cursor / Open VSX 兼容编辑器可从 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx) 安装或更新 `droidvisx.droidvisx`。市场同步可能稍晚于 GitHub 发布。VS Code 用户可安装下方的 VSIX。',
     `1. 在下方 **Assets** 下载 **\`${assetName}\`**。\n2. 打开编辑器扩展面板的 **… → Install from VSIX…**，选择下载的文件。\n3. 执行 **Developer: Reload Window**，再运行 **Droid: Open Chat**。`,
     `需要支持 VS Code API \`${manifest.engines.vscode}\` 的编辑器，以及已安装并认证的 [Droid CLI](https://docs.factory.ai/droid-cli/quickstart.md)。模型服务单独配置和计费；代码补全需另行启用。`,
     '更新时直接安装新版 VSIX，无需卸载旧版。Source code 压缩包用于查看源码，不能作为扩展安装。',
-    '[使用文档](https://github.com/fireman-droid/droid-for-vscode#readme) · [问题反馈](https://github.com/fireman-droid/droid-for-vscode/issues)',
+    '[项目介绍](https://github.com/fireman-droid/droid-for-vscode#readme) · [使用文档](https://github.com/fireman-droid/droid-for-vscode/blob/main/docs/README.md) · [问题反馈](https://github.com/fireman-droid/droid-for-vscode/issues)',
     '<details>\n<summary>完整更新记录</summary>\n',
     entry.slice(manifest.version.length).trim(),
     '</details>',
