@@ -27,6 +27,7 @@ import { isUiLocaleRead } from '../../shared/protocol/localeProtocol';
 import { readWebviewLocale } from '../webview/webviewLocale';
 import type { BrowserManagementChannel } from './BrowserManagementChannel';
 import type { BrowserReviewChannel } from './BrowserReviewChannel';
+import type { AutocompleteEvaluation } from './AutocompleteEvaluation';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -136,6 +137,7 @@ export class BrowserDevBridge implements vscode.Disposable {
     private readonly openModels?: () => void,
     private readonly createManagement?: () => BrowserManagementChannel,
     private readonly createReview?: () => BrowserReviewChannel,
+    private readonly evaluateAutocomplete?: AutocompleteEvaluation,
   ) {
     this.dependencies = {
       ...browserDevDependencies,
@@ -437,6 +439,23 @@ export class BrowserDevBridge implements vscode.Disposable {
     }
     if (request.headers.authorization !== `Bearer ${token}`) {
       respond(response, 401);
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/autocomplete/evaluate' && this.evaluateAutocomplete) {
+      const abort = new AbortController();
+      const cancel = () => abort.abort(new Error('Evaluation connection closed.'));
+      run.owner.abort.signal.addEventListener('abort', cancel, { once: true });
+      response.on('close', cancel);
+      void readJson(request).then(input => this.evaluateAutocomplete!(input, abort.signal)).then(result => {
+        if (response.destroyed) return;
+        response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        response.end(JSON.stringify(result));
+      }, () => {
+        if (!response.destroyed) respond(response, 400);
+      }).finally(() => {
+        run.owner.abort.signal.removeEventListener('abort', cancel);
+        response.off('close', cancel);
+      });
       return;
     }
     const channel = request.url?.startsWith('/review/') ? run.review

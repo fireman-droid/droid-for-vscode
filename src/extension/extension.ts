@@ -24,6 +24,7 @@ import {
 import { ChatController } from './chat/ChatController';
 import type { ChatSharedServices } from './chat/chatSharedServices';
 import { registerAutocomplete } from './autocomplete/registerAutocomplete';
+import { createAutocompleteEvaluation } from './dev/AutocompleteEvaluation';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
@@ -540,6 +541,7 @@ export function activate(context: vscode.ExtensionContext): void {
     () => new BrowserReviewChannel(post => new ReviewPanelController(
       context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer, post,
     )),
+    createAutocompleteEvaluation(context.secrets),
   );
   activeBrowserDevBridge = browserDevBridge;
   const reviewPanel = new ReviewPanelController(context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer);

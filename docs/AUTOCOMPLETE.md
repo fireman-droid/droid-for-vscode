@@ -101,3 +101,30 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 借鉴待办任务共享、生成结果独立缓存和建议关联，保留 Droid 的取消与文件读取边界。
 上游同样存在词长跳过和完整响应后展示的策略，未整体照搬；当前仍等待完整 FIM 响应，
 没有宣称具备 Cursor 自有 Tab 模型的延迟或命中率。
+
+## 自动质量评估（开发用途）
+
+真实模型评估由独立题库提供前文、后文、参考文件和隐藏行为测试；题库作者的参考答案与测试
+不发送给补全模型。`src/integration/generateAutocompleteQuality.mjs` 通过已启动的 Browser Dev
+桥接调用当前 VS Code 配置的 FIM 服务，密钥始终由 Host 的 SecretStorage 读取，不导出。
+设置 `DROID_AUTOCOMPLETE_BRIDGE_URL` 为当前开发连接后，传入 `--corpus <题库.json>` 和
+`--output <结果.json>` 即可逐题记录首次响应、过滤结果与耗时；这一步会实际调用模型服务。
+
+审阅生成程序后，运行下列命令执行类型检查与行为断言：
+
+```sh
+node src/integration/runAutocompleteQuality.mjs --corpus <题库.json> --responses <结果.json> --output <报告目录> --reviewed
+```
+
+使用 `--reference` 替代
+`--responses` 可先校验独立作者的参考答案，不能将这类通过计入模型分数。执行进程需要 Node 26+，
+仅允许读取本题目录与运行器，禁用网络、写入和子进程并限制时间；这些权限用于限制误操作，
+不能代替对未知程序的审阅，也不宣称是恶意代码安全沙箱。
+
+首次局部续写和整个函数完成应分别统计；不能将尚未补完的函数全部标成语义错误。
+题库导入脚本 `src/integration/autocomplete-quality/importDroidCorpus.mjs` 接受 Droid JSON 响应与目标路径，
+保留作者会话和原始响应哈希；原始响应、参考实现验证与模型作答分开保存。
+
+该入口的多文件内容由题库明确提供，单独评估提示构造与模型使用上下文的能力，不代表 LSP
+检索或编辑器灰字已验证。真实输入、接受、取消、Notebook 和检索走已有
+`src/integration/runAutocompleteTest.mjs` 的隔离 Extension Host 命令测试，无需鼠标自动化。
