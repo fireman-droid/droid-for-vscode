@@ -31,6 +31,17 @@ async function main() {
     ['rejects nonnumeric sampling', { temperature: 'invalid' }],
   ]) await check(name, 400, '/autocomplete/evaluate', {
     method: 'POST', headers, body: JSON.stringify({ kind: 'raw-fim', body: { ...body, ...changes } }) });
+  const context = { currentFilePath: 'main.ts', currentFileContent: 'const x = 1;', cursorLine: 0,
+    cursorCharacter: 12, editableRegionStartLine: 0, editableRegionEndLine: 0,
+    recentlyViewedSnippets: [], editDiffHistory: [] };
+  for (const [name, input] of [
+    ['Next Edit rejects endpoint substitution', { kind: 'next-edit', context, endpoint: 'https://example.invalid' }],
+    ['Next Edit rejects another model', { kind: 'next-edit', context, model: 'not-the-configured-model' }],
+    ['Next Edit rejects out-of-source positions', { kind: 'next-edit', context: { ...context, cursorLine: 1 } }],
+    ['Next Edit rejects invalid snippets', { kind: 'next-edit', context: { ...context, recentlyViewedSnippets: [{}] } }],
+  ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers, body: JSON.stringify(input) });
+  await assert.rejects(createHostClient()({ kind: 'next-edit', context: null }), /HTTP 400 \(invalid-request\)/);
+  console.log('PASS preserves classified errors without exposing response bodies');
   console.log('Model gateway checks passed; no model calls made.');
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

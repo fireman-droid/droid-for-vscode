@@ -7,6 +7,7 @@ import { createAutocompleteEvaluation } from '../../extension/dev/AutocompleteEv
 import { readCompletionKey, readCompletionSettings, validateCompletionEndpoint } from '../../extension/autocomplete/settings';
 import { FimCompletionError, readFimResponse } from '../../runtime/autocomplete/FimClient';
 import { requestCompletionTransport } from '../../runtime/autocomplete/completionTransport';
+import { evaluateNextEdit, nextEditAvailable } from './nextEditEvaluation';
 
 // Loaded only as Droid's temporary development entry. Normal SecretStorage owns
 // credentials; the runner receives a local capability, never the provider key.
@@ -49,9 +50,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const kind = input && typeof input === 'object' && 'kind' in input ? input.kind : undefined;
       let result: unknown;
       if (kind === 'raw-fim') result = await rawFim(context.secrets, input, signal);
+      else if (kind === 'next-edit') result = await evaluateNextEdit(context.secrets, input, signal);
       else {
         result = await evaluation(input, signal);
-        if (kind === 'settings') result = { ...(result as object), rawTransport: true };
+        if (kind === 'settings') result = { ...(result as object), rawTransport: true, nextEditAvailable: nextEditAvailable() };
       }
       if (!response.destroyed) {
         response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
