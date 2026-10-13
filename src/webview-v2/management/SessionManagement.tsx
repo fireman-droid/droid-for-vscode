@@ -11,6 +11,7 @@ import { ManagementChoice } from './ManagementFields';
 import { SessionPagination } from './SessionPagination';
 import type { ManagementState } from './useManagement';
 import { DefaultsSettings } from './DefaultsSettings';
+import { SessionListLoading } from './ManagementListLoading';
 
 function updatedLabel(value: string, locale: UiLocale): string {
   const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
@@ -46,12 +47,11 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
   const visible = matching(rows);
   const currentPage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
   const pageRows = visible.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const load = async (next?: number, targetPage = 0) => {
+  const load = async (next?: number, targetPage = currentPage) => {
     const revision = ++generation.current;
     let collected = next === undefined ? [] : rows;
     let nextCursor: number | null | undefined = next;
     setLoading(true); setError(null);
-    if (next === undefined) { setRows([]); setCursor(null); setPage(0); setLoaded(false); }
     try {
       do {
         const result = await state.run({ kind: 'sessions.list', scope, ...(nextCursor === undefined ? {} : { cursor: nextCursor }) });
@@ -59,9 +59,9 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
         if (!result.ok || !result.sessions) { setError(result.message || '会话目录读取失败'); return; }
         collected = [...new Map([...collected, ...result.sessions].map(row => [row.id, row])).values()];
         nextCursor = result.nextCursor ?? null;
-        setRows(collected); setCursor(nextCursor); setLoaded(true);
         // One matching row beyond the page establishes whether Next is available.
       } while (nextCursor !== null && matching(collected).length <= (targetPage + 1) * pageSize);
+      setRows(collected); setCursor(nextCursor); setLoaded(true);
       setPage(Math.min(targetPage, Math.max(0, Math.ceil(matching(collected).length / pageSize) - 1)));
     } finally { if (generation.current === revision) setLoading(false); }
   };
@@ -85,9 +85,10 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       if (result.ok && update && 'id' in action) updateRow(action.id, update);
     });
   };
-  const disabled = state.busy || loading;
+  const pending = loading || (!loaded && !error && (state.settings === null || state.settings.sessionManagementAvailable));
+  const disabled = state.busy || pending;
   return <section aria-label={t("会话管理")}>
-    <header className="management-heading"><h1>{t("会话")}</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label={t("刷新会话")} disabled={disabled} onClick={() => void load()}><RefreshCw /></Button>}</header>
+    <header className="management-heading"><h1>{t("会话")}</h1>{section === 'history' && <Button variant="plain" size="icon-sm" aria-label={t("刷新会话")} disabled={disabled} onClick={() => void load()}><RefreshCw className={pending ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>}</header>
     <Tabs value={section} onValueChange={value => { setSection(value); state.setNotice(null); }} className="management-page-tabs">
       <TabsList animatedIndicator aria-label={t("会话页面")}><TabsTrigger value="history">{t("历史记录")}</TabsTrigger><TabsTrigger value="defaults">{t("默认设置")}</TabsTrigger></TabsList>
       <TabsContent value="defaults" forceMount hidden={section !== 'defaults'}><DefaultsSettings state={state} scope="sessions" active={active && section === 'defaults'} /></TabsContent>
@@ -97,10 +98,12 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
     </Tabs><div className="management-actions"><ManagementChoice label={t("会话类型")} value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', t('聊天与 Exec') ], ['chat', t('聊天')], ['exec', 'Exec']]} />
       <ManagementChoice label={t("收藏与归档")} value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', t('未归档') ], ['favorites', t('收藏')], ['archived', t('已归档')]]} /></div></div>
     <div className="management-search management-session-search"><Search /><Input aria-label={t("筛选会话")} placeholder={t("搜索标题或文件夹")} value={query} onChange={e => changeFilter(() => setQuery(e.target.value))} /></div>
-    {!state.settings?.sessionManagementAvailable ? <p className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
+    {state.settings && !state.settings.sessionManagementAvailable ? <p className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
       {error && <p role="alert" className="management-caption text-destructive">{t(error)}</p>}
-      <div className="management-session-table" aria-busy={loading}>
+      {pending && <p role="status" className="sr-only">{t("正在读取会话")}</p>}
+      <div className="management-session-table" aria-busy={pending}>
         <div className="management-session-head"><span>{t("标题")}</span><span>{t("消息数")}</span><span>{t("更新时间")}</span><span /></div>
+        {!loaded && pending && <SessionListLoading />}
         {pageRows.map(row => <div className="management-session-row" key={row.id}>
           <Button variant="plain" size="none" className="management-session-title"
             title={row.kind === 'exec' ? t("查看执行记录") : row.archived ? t("恢复归档后可继续对话") : t("在主聊天中打开")}
@@ -125,8 +128,8 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
           </DropdownMenu>
         </div>)}
       </div>
-      {!loading && visible.length === 0 && !error && <p className="management-empty">{t("没有匹配的会话")}</p>}
-      {(loading || visible.length > 0 || cursor !== null) && <SessionPagination page={currentPage} pageSize={pageSize} count={visible.length}
+      {loaded && !loading && visible.length === 0 && !error && <p className="management-empty">{t("没有匹配的会话")}</p>}
+      {loaded && (visible.length > 0 || cursor !== null) && <SessionPagination page={currentPage} pageSize={pageSize} count={visible.length}
         complete={loaded && cursor === null} loading={loading} disabled={disabled} onPageSize={size => changeFilter(() => setPageSize(size))}
         onPage={target => {
           if (cursor !== null && visible.length <= (target + 1) * pageSize) void load(cursor, target);

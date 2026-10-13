@@ -19,6 +19,7 @@
   .management-main > [hidden] { display: none !important; }
   .management-main > div:not([hidden]), :where(.management-page, .management-dialog) [role='tabpanel'][data-state='active']:not([hidden]) { animation: management-content-in 200ms var(--motion-ease); }
   @keyframes management-content-in { from { opacity: .55; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .management-main > .management-list-page:not([hidden]), .management-list-page [role='tabpanel'][data-state='active']:not([hidden]) { animation: none; }
   .management-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 32px; }
   .management-heading h1 { font-size: 24px; font-weight: 500; line-height: 1.3; }
   .management-heading p { margin-top: 6px; font-size: 12px; color: var(--muted-ink); }
@@ -90,6 +91,10 @@
   .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 112px 28px; align-items: center; gap: 16px; border-bottom: 1px solid var(--management-edge); }
   .management-session-head { padding: 10px 0; color: var(--muted-ink); font-size: 12px; }
   .management-session-row { min-height: 60px; padding: 10px 0; }
+  .management-page [aria-busy='true'] :is(.management-session-title, .management-mission-title):disabled { opacity: 1; }
+  .management-loading-title { display: flex; flex-direction: column; gap: 8px; padding-block: 4px; }
+  .management-loading-line { display: block; width: 72%; max-width: 220px; height: 12px; border-radius: 3px; background: var(--management-edge); }
+  .management-loading-detail { width: 40%; height: 10px; }
   .management-session-row time, .management-count { color: var(--muted-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
   .management-page .management-session-title { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: 13px; text-align: left; }
   .management-session-title > span { display: flex; align-items: center; gap: 6px; max-width: 100%; }

@@ -9,6 +9,13 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## Session 与 Missions 列表加载（2026-10-13）
+
+- 首次进入这两个管理页时立即挂载页面，读取期间显示与表格对齐的静态占位行，成功读取后才显示空结果；移除页面与页签叠加的淡入效果，避免列表区域短暂清空或发白。
+- Session 刷新期间保留已显示的行、计数和当前页，等目标页所需数据读取完成后统一替换；失败保留旧列表并显示错误。两页刷新期间保留标题文字亮度，以刷新图标和无障碍加载状态提示进度。
+- 已在连接真实 Extension Host 的内置浏览器确认 Session 首次加载的占位行、刷新期间保留原有 7 行和计数，以及 Missions 页面重新载入和刷新后保持 6 条真实任务。浏览器无警告或错误；没有调用模型、修改会话或新增模拟测试。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、生产构建与完整 171 条 VSIX 校验通过。仅更新 Microsoft VS Code，清单与 13 个主要文件均与包一致，需 Reload Window；SHA256 为 `0f9ed5c5dbb04233b5be6a926b603dd433bcfc036921aa2f345fcfee2cb1bd02`。未更新 Cursor、未推送或发布；暂停的 Thinking 改动未进入包。
+
 ## 常规设置分组样式（2026-10-13）
 
 - 语言与主题放入同一设置分组，沿用现有设置行的单条细分隔线，消除两张圆角卡片边框相贴的问题；没有改变选项、当前设置或保存行为。

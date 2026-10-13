@@ -62,8 +62,8 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
     </div>
     {visited.has('models') && <div hidden={state.page !== 'models'}><ModelsApp transport={transport} /></div>}
     {visited.has('completion') && s && <div hidden={state.page !== 'completion'}><CompletionSettings state={state} settings={s} /></div>}
-    {visited.has('sessions') && <div hidden={state.page !== 'sessions'}><SessionManagement state={state} active={state.page === 'sessions'} /></div>}
-    {visited.has('missions') && <div hidden={state.page !== 'missions'}><MissionManagement state={state} active={state.page === 'missions'} /></div>}
+    {(visited.has('sessions') || state.page === 'sessions') && <div className="management-list-page" hidden={state.page !== 'sessions'}><SessionManagement state={state} active={state.page === 'sessions'} /></div>}
+    {(visited.has('missions') || state.page === 'missions') && <div className="management-list-page" hidden={state.page !== 'missions'}><MissionManagement state={state} active={state.page === 'missions'} /></div>}
     {state.notice && <p role={state.notice.ok ? 'status' : 'alert'} className={`management-caption ${state.notice.ok ? '' : 'text-destructive'}`}>{t(state.notice.message)}</p>}
   </main></div>;
 }
