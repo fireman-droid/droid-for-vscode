@@ -101,6 +101,7 @@ async function run() {
           const target = path.resolve(directory, file.path);
           assert.ok(target.startsWith(directory + path.sep), 'Fixture path escaped its directory');
           mkdirSync(path.dirname(target), { recursive: true }); writeFileSync(target, file.content);
+          if (item.closedFiles?.includes(file.path)) continue;
           const document = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
           documents.set(file.path, document);
           await vscode.window.showTextDocument(document, { preview: false });
@@ -127,8 +128,10 @@ async function run() {
         }
         record.inputStartedAt = started;
         record.beforeSource = document.getText();
-        record.references = [...documents].filter(([name]) => name !== item.entryFile)
-          .map(([name, doc]) => ({ path: name, content: doc.getText() }));
+        record.references = item.initialFiles.filter(file => file.path !== item.entryFile).map(file => ({
+          path: file.path, content: documents.get(file.path)?.getText() ?? readFileSync(path.join(directory, file.path), 'utf8'),
+        }));
+        record.closedFiles = item.closedFiles ?? [];
         await until(() => record.requests.length > 0 || record.transportError, 3500);
         record.automaticRequested = record.requests.length > 0;
         let pending = record.automaticRequested;

@@ -266,9 +266,16 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       }
       if (isNextEdit) {
         pending.phase = 'context';
-        const snippets = settings.relatedFiles ? await this.context.collectRecentlyViewed(document, {
-          maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal,
-        }) : [];
+        const [viewed, definitions] = settings.relatedFiles ? await Promise.all([
+          this.context.collectRecentlyViewed(document, {
+            maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal,
+          }),
+          this.kiloContext!.collectDefinitions({ document, text, offset: originalOffset, settings, signal }),
+        ]) : [[], []];
+        // Fresh definitions take priority over older views of the same code. The
+        // prompt builder bounds the combined context and retains the newest five.
+        const snippets = [...viewed.filter(s => !definitions.some(d => d.uri === s.uri && d.content.includes(s.content.trim()))),
+          ...definitions].slice(-5);
         if (!this.isCurrent(pending, token)) return [];
         const support = this.nextEdit!;
         const editContext = await support.capture(document, position, text, snippets, settings);

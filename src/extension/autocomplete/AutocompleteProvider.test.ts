@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   request: vi.fn(),
   nextRequest: vi.fn(),
+  definitions: vi.fn(),
+  capture: vi.fn(),
   secretGet: vi.fn(),
   record: vi.fn(),
   contextRevision: 0,
@@ -74,7 +76,7 @@ vi.mock('../../runtime/autocomplete/nextEdit', () => ({ requestNextEdit: mocks.n
 vi.mock('./NextEditSupport', () => ({ NextEditSupport: class {
   manager = { isPending: () => false };
   presenter = { toCompletionItems: () => [] };
-  async capture() { return {}; }
+  capture = mocks.capture;
   clear() {} dispose() {}
 } }));
 vi.mock('./context/CompletionContextService', () => ({
@@ -94,6 +96,7 @@ vi.mock('./context/KiloContextService', async () => {
   const { buildCompletionPrompt } = await import('./context/CompletionPrompt');
   return { KiloContextService: class {
     invalidate() {} dispose() {}
+    collectDefinitions = mocks.definitions;
     async build(input: any) { return { ...buildCompletionPrompt({ ...input, model: input.settings.model,
       maxCharacters: input.settings.maxContextCharacters }), relatedFiles: input.snippets.length }; }
   } };
@@ -174,6 +177,8 @@ beforeEach(() => {
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
   mocks.nextRequest.mockReset().mockResolvedValue('const answer = 42;');
+  mocks.definitions.mockReset().mockResolvedValue([]);
+  mocks.capture.mockReset().mockResolvedValue({});
   mocks.record.mockReset();
   mocks.secretGet.mockReset().mockResolvedValue('synthetic-provider-key');
   provider = new AutocompleteProvider({
@@ -200,6 +205,18 @@ async function requesting(
 }
 
 describe('AutocompleteProvider', () => {
+
+  it.each([true, false])('sends closed-file definitions to Next Edit only with relatedFiles=%s', async relatedFiles => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', relatedFiles,
+      endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
+    const definition = { uri: 'file:///types.ts', filepath: 'types.ts', content: 'export type Value = { size: number };', source: 'definition' };
+    mocks.definitions.mockResolvedValue([definition]);
+    const file = document();
+    await (await requesting(file)).pending;
+    expect(mocks.capture.mock.calls[0][3]).toEqual(relatedFiles ? [definition] : []);
+    expect(mocks.definitions).toHaveBeenCalledTimes(relatedFiles ? 1 : 0);
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+  });
 
   it('starts Next Edit immediately after idle, but coalesces further automatic input', async () => {
     Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
