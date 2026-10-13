@@ -1,9 +1,9 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useMemo, useState } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { Link2, RefreshCw, Search, Unlink2 } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
-import { RadioGroup, RadioGroupItem } from '../../ui/controls';
+import { RadioGroup, RadioGroupItem, Toggle } from '../../ui/controls';
 
 import {
   type ConfirmedSessionSettings,
@@ -58,17 +58,17 @@ export function ModelPopover({
   const confirmed = settings?.value;
   const isSpecView = settings !== undefined && view === 'spec';
   const specModelOverrideId = confirmed?.specModeModelId ?? null;
-  // An unset drafting model inherits the session model; "Same as
-  // session" carries that state on its own row, so a model row only
-  // checks when specModeModelId names it explicitly (no double tick).
+  // Inheritance belongs to the footer toggle; the list marks the actual model.
   const effectiveModelId = isSpecView
     ? (specModelOverrideId ?? confirmed?.modelId)
     : selection?.modelId ?? confirmed?.modelId;
-  const rowMatchId = isSpecView ? (specModelOverrideId ?? undefined) : effectiveModelId;
+  const rowMatchId = effectiveModelId;
   const scopedReasoning = isSpecView
     ? (confirmed?.specModeReasoningEffort ?? undefined)
     : selection?.reasoningEffort ?? confirmed?.reasoningEffort;
-  const usesSessionModel = isSpecView && specModelOverrideId === null;
+  const usesSessionModel = specModelOverrideId === null;
+  const sessionModelAvailable = modelCatalog.status === 'ready' && modelCatalog.items.some(
+    model => model.id === confirmed?.modelId && !model.disabled);
   const selected =
     modelCatalog.status !== 'ready'
       ? undefined
@@ -153,6 +153,10 @@ export function ModelPopover({
                   <ChevronLeftIcon />
                   <span className="dvx-panel-title">{t("Spec drafting")}</span>
                 </Button>
+                {selected && !filtered.some(model => model.id === selected.id) ? <Button variant="plain" size="none"
+                  className="dvx-model-edit" aria-label={t('Edit reasoning for {p0}', { p0: selected.displayName })}
+                  title={selected.displayName} disabled={disabled || selected.disabled || selected.supportedReasoningEfforts.length === 0}
+                  onClick={() => setEditingReasoning(true)}><PencilIcon /></Button> : null}
               </div>
             ) : null}
             <label className="dvx-visually-hidden" htmlFor={`${id}-search`}>{t("Search models")}</label>
@@ -174,57 +178,6 @@ export function ModelPopover({
               role="list"
               aria-label={isSpecView ? t("Spec drafting models") : t("Available models")}
             >
-              {isSpecView ? (
-                <>
-                  <div
-                    className="dvx-model-row"
-                    role="listitem"
-                    aria-current={usesSessionModel ? 'true' : undefined}
-                  >
-                    <Button variant="plain" size="none"
-                      type="button"
-                      className="dvx-model-choice"
-                      aria-label={t("Same as session")}
-                      disabled={disabled}
-                      onClick={() => {
-                        if (usesSessionModel) {
-                          return;
-                        }
-                        onUpdate({ field: 'specModeModelId', value: null });
-                      }}
-                    >
-                      <span className="dvx-model-name">{t("Same as session")}</span>
-                      {usesSessionModel ? (
-                        <span className="dvx-model-effort-suffix">
-                          {scopedReasoning === undefined
-                            ? t("Default")
-                            : t(formatReasoningLabel(scopedReasoning))}
-                        </span>
-                      ) : null}
-                    </Button>
-                    {usesSessionModel ? (
-                      <>
-                        <Button variant="plain" size="none"
-                          type="button"
-                          className="dvx-model-edit"
-                          aria-label={t("Edit reasoning for the session model")}
-                          disabled={
-                            disabled ||
-                            selected === undefined ||
-                            selected.disabled ||
-                            selected.supportedReasoningEfforts.length === 0
-                          }
-                          onClick={() => setEditingReasoning(true)}
-                        >
-                          <PencilIcon />
-                        </Button>
-                        <CheckIcon className="dvx-model-check" />
-                      </>
-                    ) : null}
-                  </div>
-                  <div className="dvx-settings-divider" />
-                </>
-              ) : null}
               {filtered.map((model) => {
                 const isSelected = model.id === rowMatchId;
                 const modelLabel = model.displayName;
@@ -316,6 +269,14 @@ export function ModelPopover({
               </span>
             </Button>
           ) : null}
+        <Toggle className="size-6 shrink-0 p-0" aria-label={t('Spec follows main model')} pressed={usesSessionModel}
+          title={t(usesSessionModel ? 'Spec follows main model' : 'Spec uses an independent model')}
+          disabled={disabled || !confirmed || (usesSessionModel && !sessionModelAvailable)}
+          onPressedChange={follow => {
+            if (confirmed) onUpdate({ field: 'specModeModelId', value: follow ? null : confirmed.modelId });
+          }}>
+          {usesSessionModel ? <Link2 aria-hidden="true" /> : <Unlink2 aria-hidden="true" />}
+        </Toggle>
       </div>}
       {settings !== undefined ? <SettingsStatus settings={settings} /> : null}
       {disabled && settings?.status === 'ready' ? (

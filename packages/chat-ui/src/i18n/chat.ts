@@ -106,6 +106,8 @@ export const chatMessages: readonly MessageTranslations[] = [
   ["Back to model","返回模型","返回模型"],
   ["Spec drafting","计划起草","計劃起草"],
   ["Same as session","与当前会话相同","與當前會話相同"],
+  ["Spec follows main model","计划跟随主模型","計劃跟隨主模型"],
+  ["Spec uses an independent model","计划使用独立模型","計劃使用獨立模型"],
   ["Edit reasoning for the session model","调整会话模型的推理强度","調整會話模型的推理強度"],
   ["Model settings can be changed after the current turn.","本轮结束后可以修改模型设置。","本輪結束后可以修改模型設置。"],
   ["Retry models","重新加载模型","重新載入模型"],
