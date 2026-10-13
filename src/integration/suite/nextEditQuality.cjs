@@ -15,12 +15,14 @@ async function run() {
   const corpusText = readFileSync(process.env.DROID_AUTOCOMPLETE_QUALITY_CORPUS, 'utf8');
   const corpus = JSON.parse(corpusText);
   assert.equal(corpus.mode, 'next-edit');
+  const promptVariant = process.env.DROID_NEXT_EDIT_PROMPT_VARIANT ?? 'production';
+  assert.ok(['production', 'without-sentinel'].includes(promptVariant), 'Unknown prompt experiment');
   const resultFile = process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT;
   const root = path.join(path.dirname(resultFile), 'workspace');
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), model: settings.model,
     protocol: 'mercury-edit', maxTokens: Math.max(512, settings.maxTokens), contextMode: 'native-edit-history-case-isolated',
-    packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256, requestLimit: 3, records: [] };
+    packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256, promptVariant, requestLimit: 3, records: [] };
   let current;
   const server = createServer(async (request, response) => {
     const record = current;
@@ -49,7 +51,14 @@ async function run() {
         response.end(JSON.stringify({ choices: [{ finish_reason: 'length', message: { content: '' } }] }));
         return; // A labelled local limit, never scored as a model failure/response.
       }
-      const attempt = { prompt: payload.messages[0].content, startedAt: Date.now() };
+      const providerPrompt = payload.messages[0].content;
+      if (promptVariant === 'without-sentinel') {
+        const suffix = '\n\n<|!@#IS_NEXT_EDIT!@#|>';
+        assert.ok(providerPrompt.endsWith(suffix));
+        payload.messages[0].content = providerPrompt.slice(0, -suffix.length);
+      }
+      const attempt = { prompt: payload.messages[0].content, startedAt: Date.now(),
+        ...(promptVariant === 'production' ? {} : { providerPrompt }) };
       record.requests.push(attempt);
       Object.assign(attempt, await requestModel({ kind: 'raw-next-edit', body: payload }));
       if (response.destroyed) { attempt.cancelled = true; return; }

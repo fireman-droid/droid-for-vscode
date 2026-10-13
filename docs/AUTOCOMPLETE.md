@@ -182,6 +182,24 @@ TypeScript 使用内置语言服务寻找参考文件；Python、Go 将题目参
 报告中的 `source` 是完整源码，后续用原题最终参考文件和隐藏行为测试判分，不能当作 FIM 插入片段。
 连续接受可能引入后续错误，应同时审阅逐次 `accepts` 与最终源码，不能挑选最好的一次作为最终得分。
 
+原生 Next Edit 结果使用独立判分命令：
+
+```powershell
+node src/integration/gradeNextEditQuality.mjs <corpus.json> --reference <oracle-output>
+node src/integration/gradeNextEditQuality.mjs <corpus.json> <responses.json> <score-output>
+```
+
+题目可声明 `expectedChange: false`，表示用户编辑已经完成；参考答案必须与编辑后的输入逐字一致。
+这类题同时检查隐藏行为和是否产生多余接受，语义等价的无必要改写单独标记。正题声明
+`expectedChange: true` 时，参考校准还确认编辑后的未补全代码确实不能通过全部断言。
+判分核对题库哈希、真实输入、依赖及最终接受；使用生产解析器检查响应，服务失败、截断或格式错误
+不能因保留了正确原代码就计为成功。逐次接受的语义成绩保留，最终得分始终使用最后状态。
+测试断言中的 `const mod = require(entry);` 仅适配为评分进程提供的 `subject`，不改写断言。
+
+仅在提示格式对照实验中，可设置 `DROID_NEXT_EDIT_PROMPT_VARIANT=without-sentinel`，从实际请求末尾
+移除旧结尾标记。报告记录 `promptVariant` 和原始 `providerPrompt`；这种请求经过实验修改，
+不得作为未改动生产请求的证据。默认 `production` 逐字转发，不改变用户设置。
+
 临时模型网关还支持 `{ kind: 'next-edit', context }`，其中 `context` 使用生产
 `MercuryEditContext` 结构（当前文件、光标、可编辑区域、参考片段与编辑历史）。仅当前配置为官方
 Mercury 服务时提供此能力，固定使用同一模型及配对的官方 Edit API，不更改用户配置，不接受外部
