@@ -44,6 +44,15 @@ async function main() {
     ['production evaluation rejects token overrides', { kind: 'next-edit', context, maxTokens: 1024 }],
   ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers, body: JSON.stringify(input) });
   await assert.rejects(createHostClient()({ kind: 'next-edit', context: null }), /HTTP 400 \(invalid-request\)/);
+  const nativeEdit = { model: settings.model, messages: [{ role: 'user', content: 'sample' }],
+    max_tokens: Math.max(512, settings.maxTokens), stream: false };
+  for (const [name, changes] of [
+    ['native Next Edit rejects another model', { model: 'not-the-configured-model' }],
+    ['native Next Edit rejects endpoint substitution', { endpoint: 'https://example.invalid' }],
+    ['native Next Edit rejects token overrides', { max_tokens: nativeEdit.max_tokens + 1 }],
+    ['native Next Edit rejects other message roles', { messages: [{ role: 'system', content: 'sample' }] }],
+  ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers,
+    body: JSON.stringify({ kind: 'raw-next-edit', body: { ...nativeEdit, ...changes } }) });
   console.log('PASS preserves classified errors without exposing response bodies');
   console.log('Model gateway checks passed; no model calls made.');
 }

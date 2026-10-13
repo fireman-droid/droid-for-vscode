@@ -8,6 +8,7 @@ import { readCompletionKey, readCompletionSettings, validateCompletionEndpoint }
 import { FimCompletionError, readFimResponse } from '../../runtime/autocomplete/FimClient';
 import { requestCompletionTransport } from '../../runtime/autocomplete/completionTransport';
 import { evaluateNextEdit, nextEditAvailable } from './nextEditEvaluation';
+import { relayNextEdit } from './nextEditRelay';
 
 // Loaded only as Droid's temporary development entry. Normal SecretStorage owns
 // credentials; the runner receives a local capability, never the provider key.
@@ -50,6 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const kind = input && typeof input === 'object' && 'kind' in input ? input.kind : undefined;
       let result: unknown;
       if (kind === 'raw-fim') result = await rawFim(context.secrets, input, signal);
+      else if (kind === 'raw-next-edit') result = await relayNextEdit(context.secrets, input, signal);
       else if (kind === 'next-edit' || kind === 'next-edit-inspect') result = await evaluateNextEdit(context.secrets, input, signal);
       else {
         result = await evaluation(input, signal);
