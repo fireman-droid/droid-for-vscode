@@ -201,25 +201,24 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   );
   const pin = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ id: '', height: 0 });
+  const measurePinned = useCallback(() => {
+    const element = pin.current;
+    if (element === null || pinned === null) return;
+    const height = element.querySelector('[data-question-card]')?.getBoundingClientRect().height ?? 0;
+    setSize((previous) => previous.id === pinned.id && Math.abs(previous.height - height) < 0.5 ? previous : { id: pinned.id, height });
+  }, [pinned?.id]);
+  // An edit must resize the original placeholder before the next paint.
+  useLayoutEffect(measurePinned);
   useLayoutEffect(() => {
     const element = pin.current;
     if (element === null || pinned === null) return;
-    const measure = () => {
-      const height = element.querySelector('[data-question-card]')?.getBoundingClientRect().height ?? 0;
-      setSize((previous) => previous.id === pinned.id && Math.abs(previous.height - height) < 0.5 ? previous : { id: pinned.id, height });
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(measurePinned);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [pinned?.id, conversationId]);
+  }, [measurePinned, conversationId]);
   const pinnedHeight = size.id === pinned?.id ? size.height : 0;
   const nextQuestion = candidate === undefined ? undefined : questions.find((question) => question.turnIndex > candidate.index);
   const nextTop = nextQuestion === undefined ? undefined : virtualizer.measurementsCache[nextQuestion.turnIndex]?.start;
-  const livePush = nextTop === undefined ? 0 : Math.min(0, nextTop - top - PINNED_QUESTION_GAP - pinnedHeight - 14);
-  const lastPush = useRef({ conversationId: conversationId, questionId: pinned?.id, value: livePush });
-  const push = selecting && lastPush.current.conversationId === conversationId && lastPush.current.questionId === pinned?.id
-    ? lastPush.current.value : livePush;
   const pinnedOverlay = useRef<HTMLDivElement>(null);
   const setPinnedOverlay = useCallback((element: HTMLDivElement | null) => {
     pinnedOverlay.current = element;
@@ -234,10 +233,14 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const update = () => {
       frame = null;
       if (hasTranscriptSelection(selectionRoot.current)) return;
-      const measuredNextTop = nextQuestion === undefined ? undefined : virtualizer.measurementsCache[nextQuestion.turnIndex]?.start;
-      const value = measuredNextTop === undefined ? 0 : Math.min(0, measuredNextTop - element.scrollTop - PINNED_QUESTION_GAP - pinnedHeight - 14);
+      // Editing grows the pinned card and its placeholder in one commit. The
+      // virtualizer can still hold the previous row height until ResizeObserver
+      // runs, so read the rendered boundary from the same layout as the card.
+      const nextRow = nextQuestion === undefined ? null : element.querySelector<HTMLElement>(`[data-index="${nextQuestion.turnIndex}"]`);
+      const nextOffset = nextRow ? nextRow.getBoundingClientRect().top - element.getBoundingClientRect().top
+        : nextTop === undefined ? undefined : nextTop - element.scrollTop;
+      const value = nextOffset === undefined ? 0 : Math.min(0, nextOffset - PINNED_QUESTION_GAP - pinnedHeight - 14);
       overlay.style.transform = `translateY(${value}px)`;
-      lastPush.current = { conversationId: conversationId, questionId: pinned?.id, value };
     };
     const schedule = () => { frame ??= requestAnimationFrame(update); };
     update();
@@ -274,7 +277,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         </div>
       </div>
       {pinned === null ? null : <>
-        <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, transform: `translateY(${push}px)`, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
+        <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
           <div ref={pin} data-pinned-question={pinned.id} data-selection-turn={candidate?.index} className="pointer-events-auto max-h-full overflow-y-auto bg-background">
             <TranscriptMessageContent id={pinned.id} renderMessage={renderMessage} placeholder={false} placeholderHeight={0} />
           </div>
