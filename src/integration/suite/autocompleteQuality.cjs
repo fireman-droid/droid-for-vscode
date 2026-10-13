@@ -8,6 +8,7 @@ const vscode = require('vscode');
 const ts = require('../../../node_modules/typescript');
 const { createHostClient } = require('../autocomplete-quality/hostClient.cjs');
 const { pythonSyntax } = require('../autocomplete-quality/pythonSyntax.cjs');
+const { goSyntax } = require('../autocomplete-quality/goSyntax.cjs');
 
 // Actual editor commands and the packaged Provider, with raw model output relayed by
 // the credential-owning Host. Hidden tests/solutions are never passed to the model.
@@ -72,7 +73,7 @@ async function run() {
       relatedFiles: true, autoTrigger: true })) await config.update(key, value, true);
     for (const item of corpus.cases) {
       const record = { id: item.id, category: item.category, language: item.language, entryFile: item.entryFile,
-        contextMode: item.language === 'python' ? 'open-files-without-python-lsp' : 'typescript-lsp',
+        contextMode: item.language === 'typescript' ? 'typescript-lsp' : `open-files-without-${item.language}-lsp`,
         requests: [], accepts: [], diagnostics: [] };
       current = record; report.records.push(record);
       try {
@@ -87,9 +88,9 @@ async function run() {
         if (item.language === 'typescript') writeFileSync(path.join(directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
           target: 'ES2022', module: 'commonjs', strict: true, types: [], lib: ['ES2022', 'DOM'] },
           files: [item.entryFile, ...item.references.map(file => file.path)] }));
-        // No Python language extension is installed in this isolated profile.
+        // No Python or Go language extension is installed in this isolated profile.
         // Exercise the production opened-file context path and label it honestly.
-        if (item.language === 'python') for (const reference of item.references) {
+        if (item.language !== 'typescript') for (const reference of item.references) {
           await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(directory, reference.path)));
         }
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(directory, item.entryFile)));
@@ -128,7 +129,7 @@ async function run() {
           record.diagnostics = diagnose(document, item, directory);
           // A first-line preview can compile while its cached next lines remain.
           // Drain those lines before stopping; hidden tests never guide acceptance.
-          record.probeCacheOnly = item.language === 'python' ? record.diagnostics.length === 0
+          record.probeCacheOnly = item.language !== 'typescript' ? record.diagnostics.length === 0
             : !record.diagnostics.some(issue => [1005, 1109, 1128, 2355, 2366].includes(issue.code));
           if (step === 11) record.stop = 'acceptance-limit';
         }
@@ -149,6 +150,7 @@ async function run() {
 
 function diagnose(document, item, directory) {
   if (item.language === 'python') return pythonSyntax(document.getText(), item.entryFile).diagnostics;
+  if (item.language === 'go') return goSyntax(document.getText()).diagnostics;
   const host = ts.createCompilerHost({});
   const read = host.readFile;
   host.readFile = file => path.resolve(file).toLowerCase() === path.resolve(document.uri.fsPath).toLowerCase() ? document.getText() : read(file);

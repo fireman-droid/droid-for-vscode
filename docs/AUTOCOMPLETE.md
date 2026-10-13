@@ -122,7 +122,7 @@ node src/integration/withAutocompleteGateway.mjs "<Microsoft VS Code/Code.exe>" 
 使用临时连接描述文件传给子进程，结束后移除该文件。结果记录首次响应、过滤与耗时；生成步骤
 会调用真实模型服务。也可继续用 `DROID_AUTOCOMPLETE_BRIDGE_URL` 接入已有 Browser Dev Host。
 
-题库支持 TypeScript 与 Python 3.11。审阅生成程序后，运行下列命令检查源码并执行行为断言：
+题库支持 TypeScript、Python 3.11 与 Go 1.23+。审阅生成程序后，运行下列命令检查源码并执行行为断言：
 
 ```sh
 node src/integration/runAutocompleteQuality.mjs --corpus <题库.json> --responses <结果.json> --output <报告目录> --reviewed
@@ -137,6 +137,14 @@ Python 使用语法检查与独立进程中的行为测试，不做静态类型�
 两种执行均限制时间与输出，逐个隐藏测试重置题目模块；Python 没有 Node 的堆内存上限。
 这些限制不能代替对未知程序的审阅，也不宣称是恶意代码安全沙箱。
 
+Go 使用真实编译器检查本地模块及跨包引用，再为每条隐藏测试启动独立测试进程。
+入口属于根目录的 `completion` 包，本地模块名为 `example.invalid/autocomplete-eval`；
+`references` 可包含本地子包，`testImports` 声明隐藏测试使用的标准库，默认导入 `testing` 和 `fmt`。
+测试需调用 `check(condition, message)`，没有断言、编译失败、运行失败或超时均不能通过；
+构建关闭模块下载、工具链下载和 cgo，仅使用标准库及题目文件。可通过 `DROID_AUTOCOMPLETE_GO`
+和 `DROID_AUTOCOMPLETE_GOFMT` 指定工具路径。Go 执行限制时间与输出，设置 128 MiB 软内存目标，
+没有 Node 的文件／网络权限隔离，必须先审阅候选程序；这也不是恶意代码沙箱。
+
 首次局部续写和整个函数完成应分别统计；不能将尚未补完的函数全部标成语义错误。
 题库导入脚本 `src/integration/autocomplete-quality/importDroidCorpus.mjs` 接受 Droid JSON 响应与目标路径，
 保留作者会话和原始响应哈希；原始响应、参考实现验证与模型作答分开保存。
@@ -148,8 +156,9 @@ Python 使用语法检查与独立进程中的行为测试，不做静态类型�
 真实模型的原生编辑器评估可给该运行器加 `--quality`，并设置
 `DROID_AUTOCOMPLETE_QUALITY_CORPUS` 和 `DROID_AUTOCOMPLETE_QUALITY_OUTPUT`。
 运行器加载指定的新 VSIX 到临时用户目录，在隐藏测试桌面通过 VS Code 命令输入、触发和接受建议，
-TypeScript 使用内置语言服务寻找参考文件；Python 将题目参考文件打开后使用生产上下文检索，
-隔离配置没有 Python 语言服务，报告明确记录此差异。每题最多接受 12 次，源码结构完成后只接受已缓存的后续
+TypeScript 使用内置语言服务寻找参考文件；Python、Go 将题目参考文件打开后使用生产上下文检索，
+隔离配置没有这两种语言的语言服务，报告明确记录此差异。Go 在编辑器中用 `gofmt` 只解析、不执行源码，
+完整编译与隐藏行为判分在后续步骤进行。每题最多接受 12 次，源码结构完成后只接受已缓存的后续
 内容，不再调用模型，缓存耗尽或无建议后停止。停止条件不读取隐藏测试，不能证明函数已实现全部需求。
 临时测试配置关闭自动补括号、引号与缩进，并逐字核对原生输入后的前后文，避免编辑器改变题目。
 报告记录 VSIX 哈希、自动请求、每次原始返回、接受轨迹与最终源码，再用上述运行器判分。

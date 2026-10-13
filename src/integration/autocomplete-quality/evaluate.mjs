@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { evaluateGo } from './goEvaluate.mjs';
 
 const runner = fileURLToPath(new URL('./runCase.cjs', import.meta.url));
 const pythonRunner = fileURLToPath(new URL('./runCase.py', import.meta.url));
@@ -17,7 +18,7 @@ export function readCorpus(file) {
   for (const item of corpus.cases) {
     if (!/^[a-z0-9-]+$/.test(item.id) || ids.has(item.id)) throw new Error('Invalid or duplicate case ID');
     ids.add(item.id);
-    if (!['typescript', 'python'].includes(item.language) || typeof item.prefix !== 'string' || typeof item.suffix !== 'string'
+    if (!['typescript', 'python', 'go'].includes(item.language) || typeof item.prefix !== 'string' || typeof item.suffix !== 'string'
       || !Array.isArray(item.references) || !Array.isArray(item.tests) || item.tests.length < 3
       || item.tests.some(test => typeof test.name !== 'string' || typeof test.body !== 'string' || !test.body.trim())) {
       throw new Error(`Incomplete evaluation case: ${item.id}`);
@@ -27,7 +28,7 @@ export function readCorpus(file) {
 }
 
 function sourcePath(root, relative, language) {
-  const extension = language === 'python' ? '.py' : '.ts';
+  const extension = language === 'python' ? '.py' : language === 'go' ? '.go' : '.ts';
   if (typeof relative !== 'string' || !/^[a-zA-Z0-9_./-]+$/.test(relative) || !relative.endsWith(extension)
     || relative.split('/').some(part => part === '..' || !part)) throw new Error('Invalid fixture source path');
   const resolved = path.resolve(root, relative);
@@ -45,7 +46,7 @@ function compileCase(item, code, root) {
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, input.content);
   }
-  if (item.language === 'python') return { sourceFiles: [...files] };
+  if (item.language === 'python' || item.language === 'go') return { sourceFiles: [...files] };
   const program = ts.createProgram([...files], {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
     moduleResolution: ts.ModuleResolutionKind.Node10, strict: true,
@@ -101,8 +102,9 @@ export async function evaluateCase(item, insertion, directory) {
   mkdirSync(root, { recursive: true });
   const code = item.prefix + insertion + item.suffix;
   const result = { id: item.id, category: item.category, language: item.language,
-    validation: item.language === 'python' ? 'syntax-and-behavior' : 'strict-types-and-behavior',
+    validation: item.language === 'python' ? 'syntax-and-behavior' : item.language === 'go' ? 'compile-and-behavior' : 'strict-types-and-behavior',
     sourceSha256: digest(code), ...compileCase(item, code, root) };
+  if (item.language === 'go') return { ...result, ...await evaluateGo(item, root), expectedTests: item.tests.length };
   if (result.compiled === false) return { ...result, passed: false, tests: [], expectedTests: item.tests.length };
   const entry = item.language === 'python' ? item.entryFile : path.join('compiled', item.entryFile.replace(/\.ts$/, '.js'));
   const input = path.join(root, 'execution.json');
