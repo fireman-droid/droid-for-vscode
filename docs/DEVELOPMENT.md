@@ -88,6 +88,8 @@ Chat、Models、Mission、Viewer、Review 共享公共 UI。
 3. 执行 **Droid: Start Browser Dev Client**，打开它新复制的链接。
 
 这会在 `4173/live` 使用同一套 `ChatApp` 连接当前 Extension Host，页面操作会作用于真实会话。
+管理页使用同一链接，在 `#` 前添加 `?view=management`；连接后打开 Missions，侧栏可切换常规、模型、补全和会话。页面复用生产 `ManagementApp`、管理服务和模型操作处理器，读取真实任务、设置和模型目录。管理页与聊天使用独立消息流，不会互相抢占连接。
+功能使用和联调统一在 Codex 内置浏览器中进行；不要用 Studio 模拟页代替真实页面。创建／打开 Mission、打开会话和模型操作的原生确认仍由当前 Extension Host 执行。
 扩展升级后先 Reload Window，再重新执行 Start；不要复用旧链接。
 结束联调使用 **Droid: Stop Browser Dev Client**。不要把带会话连接信息的链接贴进公开 Issue。
 

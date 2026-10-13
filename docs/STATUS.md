@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-12。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.10`。
+更新：2026-10-13。扩展显示名为 Droid - AI Coding Agent，扩展 ID 为 `droidvisx.droidvisx`；当前源码版本为 `0.8.10`。
 [GitHub 仓库](https://github.com/fireman-droid/droid-for-vscode) 已公开；正式版本与本地增量的交付状态分别记录如下。
 当前源码包含 Review 行内问答、Diff 改造与 BTW 模型／推理强度选择器；正式安装包以
 [最新 Release](https://github.com/fireman-droid/droid-for-vscode/releases/latest) 的版本与附件为准。
@@ -8,6 +8,13 @@
 本文只记录当前能力、限制和验证事实；待办见 [PLAN](PLAN.md)，能力总表见
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
+
+## 浏览器真实管理页（2026-10-13）
+
+- `/live?view=management` 复用生产管理页、当前 Extension Host 的管理服务与模型处理器，管理消息流独立于聊天；首批请求等待事件流建立，浏览器也接收实际语言设置。默认打开 Missions，可切换常规、模型、补全与会话。打开 Mission／会话和涉及原生确认的操作仍由编辑器执行。
+- 按用户授权在 Codex 内置浏览器连接真实后台，确认 Missions 显示原有 6 条任务，任务进度包括 6/27、0/3 和 4/4；刷新、Mission 默认设置读取与常规页切换正常，连接信息显示 Droid／IDE 已连接。未创建或修改任务、未发送模型请求；未新增或运行模拟回归。
+- `pnpm run typecheck`、`pnpm run lint:budgets`、生产构建与完整 171 条 VSIX 校验通过，包含扩展入口加载。安装至 Microsoft VS Code 和 Cursor，两边清单与各 13 个主要文件均与包一致；SHA256 为 `53f735633c2cc990821996ebb346c069f23a46c68f070ba26e784bc6c1d8a601`。包从 main 加本任务改动构建，暂停的 Thinking 改动未进入包。
+- 用户指定后续功能使用和联调统一在内置浏览器中进行，真实页面验证授权与该偏好已记录到 `AGENTS.md`。本次仅本地交付，未推送或发布新市场版本。
 
 ## 界面多语言（2026-10-12）
 

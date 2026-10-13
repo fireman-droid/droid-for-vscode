@@ -1,8 +1,8 @@
-import type { WebviewToHostMessage } from '../../shared/bridgeMessages';
+interface BrowserMessage { readonly type: string }
 
 interface BrowserVsCodeApi {
   getState(): unknown;
-  postMessage(message: WebviewToHostMessage): void;
+  postMessage<Message extends BrowserMessage>(message: Message): void;
   setState(state: unknown): void;
 }
 
@@ -14,17 +14,20 @@ interface BrowserConnection {
 const CONNECTION_KEY = 'dvx.browser-dev.connection';
 const RECONNECT_DELAY_MS = 500;
 
-export function createBrowserRuntime(): BrowserVsCodeApi {
+export function createBrowserRuntime(surface: 'chat' | 'management' = 'chat'): BrowserVsCodeApi {
   const connection = readConnection();
-  const bridgeUrl = `http://127.0.0.1:${connection.bridgePort}`;
+  const bridgeUrl = `http://127.0.0.1:${connection.bridgePort}${surface === 'management' ? '/management' : ''}`;
   let persistedState: unknown = {};
-  let readyMessage: WebviewToHostMessage | null = null;
+  let readyMessage: BrowserMessage | null = null;
   let stopped = false;
   let streamConnected = false;
   let outbound = Promise.resolve();
+  let releaseInitialMessages: () => void;
+  const firstConnection = new Promise<void>(resolve => { releaseInitialMessages = resolve; });
 
-  const enqueue = (message: WebviewToHostMessage): void => {
+  const enqueue = (message: BrowserMessage): void => {
     outbound = outbound.then(async () => {
+      await firstConnection;
       const response = await fetch(`${bridgeUrl}/message`, {
         method: 'POST',
         headers: {
@@ -38,7 +41,7 @@ export function createBrowserRuntime(): BrowserVsCodeApi {
       }
     }).catch(() => undefined);
   };
-  const send = (message: WebviewToHostMessage): void => {
+  const send = (message: BrowserMessage): void => {
     if (message.type === 'webview.ready') {
       readyMessage = message;
       if (!streamConnected) {
@@ -64,6 +67,7 @@ export function createBrowserRuntime(): BrowserVsCodeApi {
           );
         }
         streamConnected = true;
+        releaseInitialMessages!();
         if (readyMessage !== null) {
           enqueue(readyMessage);
         }

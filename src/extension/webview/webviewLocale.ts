@@ -14,7 +14,7 @@ export function hostText(message: string, params?: Readonly<Record<string, strin
 }
 
 /** Every surface has its own binding; hidden panels also receive preference changes. */
-export function bindWebviewLocale(webview: vscode.Webview): vscode.Disposable {
+export function bindWebviewLocale(webview: Pick<vscode.Webview, 'postMessage' | 'onDidReceiveMessage'>): vscode.Disposable {
   let disposed = false;
   const post = () => { if (!disposed) void webview.postMessage(readWebviewLocale()); };
   const receive = webview.onDidReceiveMessage((message: unknown) => { if (isUiLocaleRead(message)) post(); });

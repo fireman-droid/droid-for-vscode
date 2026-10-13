@@ -710,6 +710,9 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   用户授权范围内运行。准确命令见根 README，验证结果写 STATUS，不写成架构保证。
 - 开发浏览器 `/live` 通过 loopback Bridge 与同一 Host 联调，临时令牌/固定 Origin
   限制访问；模拟预览使用独立 transport。重载需新连接，失败不伪装成模拟成功。
+  `/live?view=management` 渲染生产 `ManagementApp`，通过独立管理消息流复用
+  `ManagementBinding` 与 `ModelsBinding`；服务来自当前 Extension Host，保留原生确认。
+  浏览器首批消息等待事件流建立后才发送，避免设置与语言回复早于接收端就绪。
 
 维护时先保持上述所有权和调用顺序，再考虑拆文件。文件变短、类型检查或局部回归
 通过，都不能单独证明真实交互、恢复正确性和长期稳定性已经完成验收。

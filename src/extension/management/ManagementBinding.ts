@@ -29,7 +29,7 @@ export class ManagementBinding implements vscode.Disposable {
   private busy = false;
   private ready = false;
   private readonly subscriptions: vscode.Disposable[];
-  constructor(private readonly webview: vscode.Webview, private readonly services: ManagementServices,
+  constructor(private readonly webview: Pick<vscode.Webview, 'postMessage' | 'onDidReceiveMessage'>, private readonly services: ManagementServices,
     private page: ManagementPage) {
     this.subscriptions = [
       webview.onDidReceiveMessage((value: unknown) => {

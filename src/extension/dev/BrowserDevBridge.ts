@@ -22,6 +22,9 @@ import { routeWebviewMessage } from '../webview/webviewMessageRouter';
 import { createWebviewStateDelivery } from '../webview/webviewStateDelivery';
 import { createModelSourcePreference } from '../webview/modelSourcePreference';
 import { MODEL_SOURCE_VERSION } from '../../shared/protocol/modelSourceProtocol';
+import { isUiLocaleRead } from '../../shared/protocol/localeProtocol';
+import { readWebviewLocale } from '../webview/webviewLocale';
+import type { BrowserManagementChannel } from './BrowserManagementChannel';
 import {
   readWebviewBootTheme,
   readWebviewThemePreference,
@@ -45,6 +48,7 @@ interface BrowserDevRun {
   keepAlive: ReturnType<typeof setInterval> | null;
   delivery: ReturnType<typeof createWebviewStateDelivery> | null;
   modelSourcePreference: ReturnType<typeof createModelSourcePreference> | null;
+  management: BrowserManagementChannel | null;
 }
 
 interface BrowserDevGeneration {
@@ -127,6 +131,7 @@ export class BrowserDevBridge implements vscode.Disposable {
     private readonly diagnostics?: RuntimeDiagnosticSink,
     dependencies?: Partial<BrowserDevBridgeDependencies>,
     private readonly openModels?: () => void,
+    private readonly createManagement?: () => BrowserManagementChannel,
   ) {
     this.dependencies = {
       ...browserDevDependencies,
@@ -238,7 +243,11 @@ export class BrowserDevBridge implements vscode.Disposable {
         keepAlive: null,
         delivery: null,
         modelSourcePreference: null,
+        management: null,
       };
+      owner.run = run;
+      run.management = this.createManagement?.() ?? null;
+      if (run.management) subscriptions.push(run.management);
       run.modelSourcePreference = createModelSourcePreference({
         postMessage: async (message) => this.send(run, message),
       });
@@ -252,8 +261,8 @@ export class BrowserDevBridge implements vscode.Disposable {
       });
       run.keepAlive = this.dependencies.setInterval(() => {
         run.eventResponse?.write(': keepalive\n\n');
+        run.management?.keepAlive();
       }, 15_000);
-      owner.run = run;
       bridge.on('request', (request, response) => {
         this.handleRequest(run, token, request, response);
       });
@@ -268,6 +277,7 @@ export class BrowserDevBridge implements vscode.Disposable {
           if (event.affectsConfiguration('droidvisx.theme')) {
             this.sendTheme(run);
           }
+          if (event.affectsConfiguration('droidvisx.language')) this.send(run, readWebviewLocale());
         }),
         this.dependencies.onDidChangeActiveColorTheme(() => {
           if (readWebviewThemePreference() === 'auto') {
@@ -421,6 +431,17 @@ export class BrowserDevBridge implements vscode.Disposable {
       respond(response, 401);
       return;
     }
+    if (request.method === 'GET' && request.url === '/management/events' && run.management) {
+      run.management.connect(response);
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/management/message' && run.management) {
+      void readJson(request).then(message => {
+        run.management?.handleMessage(message);
+        respond(response, 204);
+      }, () => respond(response, 400));
+      return;
+    }
     if (request.method === 'GET' && request.url === '/events') {
       run.eventResponse?.end();
       response.writeHead(200, {
@@ -442,6 +463,11 @@ export class BrowserDevBridge implements vscode.Disposable {
     if (request.method === 'POST' && request.url === '/message') {
       void readJson(request).then(
         (message) => {
+          if (isUiLocaleRead(message)) {
+            this.send(run, readWebviewLocale());
+            respond(response, 204);
+            return;
+          }
           if (run.modelSourcePreference?.handleMessage(message)) {
             respond(response, 204);
             return;

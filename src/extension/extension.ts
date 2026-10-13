@@ -58,6 +58,7 @@ import { ModelManager } from './models/ModelManager';
 import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
 import { createManagementServices } from './management/createManagementServices';
+import { BrowserManagementChannel } from './dev/BrowserManagementChannel';
 import { isManagementPage } from '../shared/protocol/managementPageProtocol';
 import { applyModelToChat, readModelApplyState } from './models/modelChatApply';
 import { MissionGateway } from './chat/mission/MissionGateway';
@@ -513,9 +514,7 @@ export function activate(context: vscode.ExtensionContext): void {
     {},
     diagnostics,
   );
-  const modelsPanel = new ModelsPanelController(
-    context.extensionUri,
-    new ModelManager({
+  const modelManager = new ModelManager({
       gateway: modelManagementGateway,
       availability: modelAvailability,
       registry: sharedChatServices.providerRegistry,
@@ -523,10 +522,10 @@ export function activate(context: vscode.ExtensionContext): void {
       promptKey: sharedChatServices.promptProviderApiKey,
       readApplyState: () => readModelApplyState(controller),
       apply: (runtimeId, signal) => applyModelToChat(controller, runtimeId, signal),
-    }),
-    createManagementServices({ context, controller, getDroid: getDaemonDroid, daemon: runtimeMode === 'daemon',
-      history: historyLoader, viewer: sessionViewer, mission: missionControl, gateway: missionGateway, diagnostics }),
-  );
+    });
+  const managementServices = createManagementServices({ context, controller, getDroid: getDaemonDroid, daemon: runtimeMode === 'daemon',
+    history: historyLoader, viewer: sessionViewer, mission: missionControl, gateway: missionGateway, diagnostics });
+  const modelsPanel = new ModelsPanelController(context.extensionUri, modelManager, managementServices);
   const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon', modelAvailability);
   const browserDevBridge = new BrowserDevBridge(
     controller,
@@ -534,6 +533,7 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
     undefined,
     () => modelsPanel.open(),
+    () => new BrowserManagementChannel(managementServices, modelManager),
   );
   activeBrowserDevBridge = browserDevBridge;
   const reviewPanel = new ReviewPanelController(context.extensionUri, controller, reviewCoordinator, gitWorkflow, sessionViewer);
