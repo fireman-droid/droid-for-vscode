@@ -10,6 +10,7 @@ const { createHostClient } = require('../autocomplete-quality/hostClient.cjs');
 const { pythonSyntax } = require('../autocomplete-quality/pythonSyntax.cjs');
 const { goSyntax } = require('../autocomplete-quality/goSyntax.cjs');
 const { assertFixtureContext } = require('../autocomplete-quality/fixtureContext.cjs');
+const { typingTrajectory, applyTypingAction } = require('../autocomplete-quality/typingTrajectory.cjs');
 
 // Actual editor commands and the packaged Provider, with raw model output relayed by
 // the credential-owning Host. Hidden tests/solutions are never passed to the model.
@@ -22,7 +23,7 @@ async function run() {
   const resultFile = process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT;
   const root = path.join(path.dirname(resultFile), 'workspace');
   const typing = process.env.DROID_AUTOCOMPLETE_QUALITY_TYPING ?? 'accept-only';
-  assert.ok(['accept-only', 'newline-after-empty'].includes(typing), 'Unknown quality typing trajectory');
+  assert.ok(['accept-only', 'newline-after-empty', 'continuous-input'].includes(typing), 'Unknown quality typing trajectory');
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), ...settings,
     packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256,
@@ -75,11 +76,13 @@ async function run() {
     for (const [key, value] of Object.entries({ protocol: 'fim', endpoint: `http://127.0.0.1:${server.address().port}/v1/fim/completions`,
       model: settings.model, maxTokens: settings.maxTokens, maxContextCharacters: settings.maxContextCharacters,
       relatedFiles: true, autoTrigger: true })) await config.update(key, value, true);
-    for (const item of corpus.cases) {
+    for (const [caseIndex, item] of corpus.cases.entries()) {
+      const trajectory = typing === 'continuous-input'
+        ? typingTrajectory(item.prefix, ['burst', 'resumed', 'corrected'][caseIndex % 3]) : undefined;
       const record = { id: item.id, category: item.category, language: item.language, entryFile: item.entryFile,
         contextMode: item.language === 'typescript' ? 'typescript-lsp' : `open-files-without-${item.language}-lsp`,
         allowedContextFiles: [item.entryFile, ...item.references.map(file => file.path)].map(file => `${item.id}/${file}`),
-        requests: [], accepts: [], userEdits: [], diagnostics: [] };
+        requests: [], accepts: [], userEdits: [], diagnostics: [], ...(trajectory ? { typingVariant: trajectory.variant, inputEvents: [] } : {}) };
       current = record; report.records.push(record);
       try {
         await config.update('enabled', false, true);
@@ -89,7 +92,8 @@ async function run() {
           .map(other => `**/${other.id}/**`), true);
         const directory = path.join(root, item.id); mkdirSync(directory, { recursive: true });
         const lastInputLength = item.prefix.endsWith('\r\n') ? 2 : 1;
-        for (const file of [{ path: item.entryFile, content: item.prefix.slice(0, -lastInputLength) + item.suffix }, ...item.references]) {
+        const initialPrefix = trajectory?.initialPrefix ?? item.prefix.slice(0, -lastInputLength);
+        for (const file of [{ path: item.entryFile, content: initialPrefix + item.suffix }, ...item.references]) {
           const target = path.resolve(directory, file.path);
           assert.ok(target.startsWith(directory + path.sep), 'Fixture path escaped its directory');
           mkdirSync(path.dirname(target), { recursive: true }); writeFileSync(target, file.content);
@@ -104,7 +108,7 @@ async function run() {
         }
         const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(directory, item.entryFile)));
         const editor = await vscode.window.showTextDocument(document, { preview: false });
-        const cursor = document.positionAt(item.prefix.length - lastInputLength);
+        const cursor = document.positionAt(initialPrefix.length);
         editor.selection = new vscode.Selection(cursor, cursor);
         // Start the real built-in TypeScript language service before timing edits.
         const language = item.language === 'typescript' && vscode.extensions.getExtension('vscode.typescript-language-features');
@@ -112,7 +116,27 @@ async function run() {
         await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document.uri);
         await config.update('enabled', true, true); await delay(200);
         const beforeType = record.requests.length;
-        await vscode.commands.executeCommand('type', { text: item.prefix.slice(-1) });
+        if (trajectory) {
+          let expected = initialPrefix;
+          const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+          for (const action of trajectory.actions) {
+            const event = { ...action, startedAt: Date.now() };
+            const listener = vscode.workspace.onDidChangeTextDocument(change => {
+              if (change.document === document && change.contentChanges.length) event.changedAt = Date.now();
+            });
+            try {
+              await vscode.commands.executeCommand(action.kind === 'type' ? 'type' : 'deleteLeft',
+                ...(action.kind === 'type' ? [{ text: action.text }] : []));
+            } finally { listener.dispose(); }
+            event.completedAt = Date.now();
+            expected = applyTypingAction(expected, action, eol);
+            assert.equal(document.getText(), expected + item.suffix, 'Native edit changed the authored typing trajectory');
+            record.inputEvents.push(event);
+            if (action.pauseMs) await delay(action.pauseMs);
+          }
+          record.inputStartedAt = record.inputEvents[0].startedAt;
+          record.finalInputAt = record.inputEvents.at(-1).changedAt;
+        } else await vscode.commands.executeCommand('type', { text: item.prefix.slice(-1) });
         assert.equal(document.getText(), item.prefix + item.suffix, 'Native typing changed the supplied fixture');
         const started = Date.now();
         await until(() => record.requests.length > beforeType || record.transportError, 3500);

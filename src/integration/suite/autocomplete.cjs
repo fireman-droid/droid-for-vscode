@@ -25,7 +25,8 @@ async function run() {
       const record = { responded: false };
       requests.push(record);
       const isCancelledReplacement = scenario.behavior === 'cancel' && payload.prefix.endsWith('x');
-      const completion = isCancelledReplacement ? '' : scenario.completion;
+      const completion = isCancelledReplacement ? '' : scenario.behavior === 'handoff' && payload.prefix.endsWith('v')
+        ? scenario.completion.slice(1) : scenario.completion;
       await delay(isCancelledReplacement ? 10 : scenario.delayMs);
       if (response.destroyed) return;
       response.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -78,10 +79,12 @@ async function run() {
     }
     scenarios.push({ name: 'Saved Python file with related context enabled', language: 'python', location: 'blank', saved: true, relatedFiles: true, eol: '\r\n', completion: 'values.sort()\n', expectedInsertion: 'values.sort()' });
     scenarios.push({ name: 'Typing a matching character reuses the visible completion', language: 'python', location: 'blank', completion: 'values.sort()\n', expectedInsertion: 'values.sort()', behavior: 'continue' });
+    scenarios.push({ name: 'Continuing to type reuses an in-flight completion', language: 'python', location: 'blank',
+      completion: 'values.sort()', expectedInsertion: 'values.sort()', behavior: 'handoff', delayMs: 1000 });
     scenarios.push({ name: 'Always Show Toolbar keeps the active suggestion acceptable', language: 'python', location: 'blank', completion: 'values.sort()', expectedInsertion: 'values.sort()', behavior: 'toolbar' });
     scenarios.push({ name: 'Hide dismisses suggestion without inserting', language: 'python', location: 'blank', completion: 'values.sort()', behavior: 'hide' });
     scenarios.push({ name: 'Typing cancels a delayed stale suggestion', language: 'python', location: 'blank', completion: 'values.sort()', behavior: 'cancel', delayMs: 800 });
-    for (const scenario of scenarios) {
+    for (const scenario of scenarios.filter(scenario => !process.env.DROID_AUTOCOMPLETE_HANDOFF_ONLY || scenario.behavior === 'handoff')) {
       activeCase = { eol: '\n', disableAI: false, delayMs: 100, ...scenario };
       try {
         if (supportsDisableAI) await vscode.workspace.getConfiguration('chat').update('disableAIFeatures', activeCase.disableAI, vscode.ConfigurationTarget.Global);
@@ -135,6 +138,10 @@ async function run() {
             await vscode.commands.executeCommand('editor.action.inlineSuggest.hide');
             await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
           }
+          if (activeCase.behavior === 'handoff') {
+            await vscode.commands.executeCommand('type', { text: 'v' });
+            unchanged = document.getText();
+          }
           if (activeCase.behavior === 'toolbar') {
             await until(() => requests[beforeRequests].responded, 5000, 'Synthetic response did not finish.');
             await delay(300);
@@ -148,7 +155,8 @@ async function run() {
             return document.getText() !== unchanged;
           }, 7000, 'Model response was not accepted by the native inline-suggestion action.');
           assert.equal(document.getText(), expected, 'Acceptance must preserve surrounding code and line endings.');
-          if (activeCase.behavior === 'continue') assert.equal(requests.length, beforeRequests + 1, 'Matching continuation should reuse the provider cache.');
+          if (['continue', 'handoff'].includes(activeCase.behavior)) assert.equal(requests.length, beforeRequests + 1,
+            'Matching continuation should reuse the existing completion.');
         }
         results.push({ name: activeCase.name, passed: true });
       } catch (error) {
@@ -159,9 +167,11 @@ async function run() {
         activeCase = undefined;
       }
     }
-    results.push(...await require('./autocompleteNotebook.cjs').runNotebook());
-    results.push(...await require('./nextEdit.cjs').runNextEdit());
-    results.push(...await require('./autocompleteContext.cjs').runContext());
+    if (!process.env.DROID_AUTOCOMPLETE_HANDOFF_ONLY) {
+      results.push(...await require('./autocompleteNotebook.cjs').runNotebook());
+      results.push(...await require('./nextEdit.cjs').runNextEdit());
+      results.push(...await require('./autocompleteContext.cjs').runContext());
+    }
   } catch (error) {
     results.push({ name: 'packaged extension setup', passed: false, error: error.message });
   } finally {
