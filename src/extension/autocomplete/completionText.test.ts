@@ -107,6 +107,24 @@ describe('completion text', () => {
   });
 
   it.each([
+    ['function total(items) {\n  if', ' (items.length === 0) {\n    return 0;\n  }', '\n}'],
+    ['function total(items) {\r\n  if', ' (items.length === 0) {\r\n    return 0;\r\n  }', '\r\n}'],
+    ['function total(items) {\n  for', ' (const item of items) {\n    total += item.price;\n  }', '\n}'],
+    ['outer(\n', '  inner(\n    value\n  )', '\n)'],
+    ['const groups = [\n', '  [\n    [1, 2, 3]\n  ],', '\n],\n];'],
+    ['function run() {\n  if (ready) {\n    if (valid) {\n      work();\n    }\n', '  }\n  return result;', '\n}'],
+  ])('preserves nested closing delimiters at a completion boundary (%#)', (prefix, suggestion, suffix) => {
+    expect(prepareCompletionWithOutcome(suggestion, prefix, suffix, 'typescript', 'codestral'))
+      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
+  });
+
+  it('still filters a repeated executable suffix line', () => {
+    expect(prepareCompletionWithOutcome('const total = sum(items);\nreturn total;',
+      'function total(items) {\n', '\nreturn total;\n}', 'typescript', 'codestral'))
+      .toEqual({ text: '', outcome: 'repetition-filtered' });
+  });
+
+  it.each([
     'consumeNextRecord();\n'.repeat(8),
     'const next = readValue();\nconsume(next);\n'.repeat(5),
   ])('still rejects an exactly repeating generated block (%#)', (suggestion) => {

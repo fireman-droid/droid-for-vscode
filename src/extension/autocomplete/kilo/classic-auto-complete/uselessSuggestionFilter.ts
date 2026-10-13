@@ -20,7 +20,7 @@ export function suggestionConsideredDuplication(params: AutocompleteSuggestion):
 
   // Multiline completions can be "partially duplicated": e.g. the first suggested line
   // repeats the last complete line in the prefix, or the last suggested line repeats
-  // the first line in the suffix. Those are still considered duplication.
+  // the first line in the suffix. Closing delimiters may belong to different nested blocks.
   if (DuplicatesFromEdgeLines(params)) {
     return true
   }
@@ -57,15 +57,21 @@ function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): boolean {
   const prefixLastLine = params.prefix.trimEnd().split("\n").pop()?.trim() ?? ""
   const suffixFirstLine = params.suffix.trimStart().split("\n")[0]?.trim() ?? ""
 
-  if (firstSuggestionLine.length > 0 && prefixLastLine.length > 0 && firstSuggestionLine === prefixLastLine) {
+  if (isRepeatedCodeLine(firstSuggestionLine, prefixLastLine)) {
     return true
   }
 
-  if (lastSuggestionLine.length > 0 && suffixFirstLine.length > 0 && lastSuggestionLine === suffixFirstLine) {
+  if (isRepeatedCodeLine(lastSuggestionLine, suffixFirstLine)) {
     return true
   }
 
   return false
+}
+
+function isRepeatedCodeLine(suggestionLine: string, contextLine: string): boolean {
+  // Equal closing punctuation cannot establish duplication: an inner if/loop/call may
+  // close immediately before its containing block. Preserve both and their indentation.
+  return suggestionLine.length > 0 && suggestionLine === contextLine && !/^[}\])]+[;,]?$/.test(suggestionLine)
 }
 
 /**

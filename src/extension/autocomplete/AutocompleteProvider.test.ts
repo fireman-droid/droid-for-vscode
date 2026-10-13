@@ -191,6 +191,16 @@ async function requesting(
 
 describe('AutocompleteProvider', () => {
 
+  it.each([0, 1])('offers an if body inside an existing function for trigger %i', async (triggerKind) => {
+    const prefix = 'function calculateCartTotal(items: CartItem[]): number {\n  // Empty cart\n  if';
+    const file = document(prefix + '\n}');
+    const response = ' (items.length === 0) {\n    return 0;\n  }';
+    mocks.request.mockResolvedValue(response);
+    const items = await (await requesting(file, prefix.length, { ...context, triggerKind })).pending;
+    expect(items).toHaveLength(1);
+    expect(items[0].insertText).toBe(' (items.length === 0) {');
+  });
+
   it.each([['LF', '\n', 1], ['CRLF', '\r\n', 2]] as const)(
     'keeps a multiline %s suggestion on the empty cursor line, including cache reuse', async (_name, eol, endOfLine) => {
       const file = document('# sort values' + eol + eol + 'print(values)', 'file:///sample.py', endOfLine);
