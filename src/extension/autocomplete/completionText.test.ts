@@ -132,6 +132,14 @@ describe('completion text', () => {
       .toEqual({ text: '', outcome: 'repetition-filtered' });
   });
 
+  it('preserves repeated guards in distinct state-machine branches, including a partial tail', () => {
+    const suggestion = ['progress', 'finish', 'fail', 'retry'].map(kind =>
+      `    case '${kind}':\n      if (state.kind !== 'uploading' || state.token !== event.token) {\n        return state;\n      }\n      return handle${kind}(state, event);`
+    ).join('\n') + "\n    case 'cancel':\n      if (state.kind !== 'uploading' || state.token !== event.token) {\n        ";
+    expect(prepareCompletionWithOutcome(suggestion, 'switch (event.kind) {\n', '\n}', 'typescript', 'mercury-edit-2'))
+      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
+  });
+
   it.each([
     { text: '\n  ', prefix: '', suffix: '', outcome: 'empty', result: '' },
     { text: 'return value;', prefix: '', suffix: 'return value;\n}', outcome: 'already-present', result: '' },

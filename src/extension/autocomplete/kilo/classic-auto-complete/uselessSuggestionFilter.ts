@@ -80,35 +80,17 @@ function isRepeatedCodeLine(suggestionLine: string, contextLine: string): boolea
  * The suggestion gets stuck in a loop repeating the same phrase.
  */
 function containsRepetitivePhraseFromPrefix(params: AutocompleteSuggestion): boolean {
-  const suggestion = params.suggestion
-  const phraseLength = 30 // Phrase length to check for repetition
-  const minRepetitions = 3 // Minimum number of repetitions to consider it repetitive
-
-  // Only check suggestions that are long enough to contain repetition
-  if (suggestion.length < phraseLength * minRepetitions) {
-    return false
+  // Repeated guards across distinct branches are valid code. A phrase occurring
+  // three times anywhere does not establish a generation loop; require three
+  // adjacent, identical tail blocks, including the code between occurrences.
+  const tail = params.suggestion.trimEnd()
+  for (let length = 30; length <= Math.min(512, Math.floor(tail.length / 3)); length++) {
+    const block = tail.slice(-length)
+    if (tail.slice(-2 * length, -length) === block && tail.slice(-3 * length, -2 * length) === block) {
+      return true
+    }
   }
-
-  // Strip non-word characters from the right before selecting the tail
-  // This handles cases like "...the beginning..." where trailing punctuation would break detection
-  const strippedSuggestion = suggestion.replace(/\W+$/, "")
-
-  if (strippedSuggestion.length < phraseLength) {
-    return false
-  }
-
-  // Extract a phrase from the end of the stripped suggestion
-  const phrase = strippedSuggestion.slice(-phraseLength)
-
-  // Count how many times this phrase appears in the original suggestion
-  let count = 0
-  let pos = 0
-  while ((pos = suggestion.indexOf(phrase, pos)) !== -1) {
-    count++
-    pos += phrase.length
-  }
-
-  return count >= minRepetitions
+  return false
 }
 
 /**
