@@ -5,10 +5,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { createAutocompleteEvaluation } from '../../extension/dev/AutocompleteEvaluation';
 import { readCompletionKey, readCompletionSettings, validateCompletionEndpoint } from '../../extension/autocomplete/settings';
-import { FimCompletionError, readFimResponse } from '../../runtime/autocomplete/FimClient';
+import { FimCompletionError } from '../../runtime/autocomplete/FimClient';
 import { requestCompletionTransport } from '../../runtime/autocomplete/completionTransport';
 import { evaluateNextEdit, nextEditAvailable } from './nextEditEvaluation';
 import { relayNextEdit } from './nextEditRelay';
+import { observeFimStream } from './fimStreamTiming';
 
 // Loaded only as Droid's temporary development entry. Normal SecretStorage owns
 // credentials; the runner receives a local capability, never the provider key.
@@ -102,7 +103,8 @@ async function rawFim(secrets: vscode.SecretStorage, value: unknown, signal: Abo
   const apiKey = await readCompletionKey(secrets, settings.endpoint);
   if (!apiKey) throw new Error('The configured FIM key is unavailable');
   const started = Date.now();
+  const observer = observeFimStream(started);
   const raw = await requestCompletionTransport({ endpoint: settings.endpoint, apiKey, signal }, body,
-    'text/event-stream, application/json', readFimResponse);
-  return { model: settings.model, protocol: settings.protocol, raw, elapsedMs: Date.now() - started };
+    'text/event-stream, application/json', observer.read);
+  return { model: settings.model, protocol: settings.protocol, raw, elapsedMs: Date.now() - started, streamTiming: observer.timing };
 }
