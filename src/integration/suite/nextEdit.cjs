@@ -34,9 +34,14 @@ async function runNextEdit() {
     await config.update('endpoint', 'http://127.0.0.1:'+server.address().port+'/v1/edit/completions', true);
     await config.update('model', 'synthetic-mercury-edit', true);
     await config.update('relatedFiles', false, true);
+    const boundarySource = ['export function label(value: string) {', "  const suffix = '}';", '  return value + suffix;', '}', '',
+      'export function format(value: string) {', '  return value;', '}', '',
+      'export function literal(value: string) {', '  return value;', '}'].join('\n');
     const cases = [
       {name:'Native same-line insertion and Undo', source:'const value = ', replacement:'const value = 42;', cursor:[0,14], inline:true},
       {name:'Off-cursor rename jumps before applying', source:'const name = 1;\nconsole.log(old);', replacement:'const name = 1;\nconsole.log(name);', cursor:[0,14], jump:1, saved:true},
+      {name:'Syntax-aligned region does not duplicate the adjacent closing brace', source:boundarySource,
+        replacement:boundarySource.replace('return value + suffix;', 'return value.toUpperCase() + suffix;'), cursor:[0,0], jump:2, saved:true},
       {name:'Multiline replacement and Undo', source:'// simplify\nconst a = 1;\nconst b = 2;\nconsole.log(a+b);', replacement:'// simplify\nconsole.log(3);', cursor:[1,0]},
       {name:'Deletion of a middle line', source:'// cleanup\nconst unused = 1;\nconsole.log(2);', replacement:'// cleanup\nconsole.log(2);', cursor:[1,0]},
       {name:'Deletion at end of file', source:'// cleanup\nconsole.log(2);\nconst unused = 1;', replacement:'// cleanup\nconsole.log(2);', cursor:[2,0]},
