@@ -13,7 +13,8 @@
   Microsoft Marketplace 的 `0.8.11` 已通过验证，管理页状态为 `Public`，
   [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 已可用。
   Microsoft 自动发布工作流已实现，复用并校验 GitHub Release 原始附件；
-  目前仍待配置 `VSCE_PAT` 并校验发布权限，`MARKETPLACE_AUTO_PUBLISH` 保持关闭。
+  用户选择暂时保留 Microsoft Marketplace 手动上传；自动工作流保留备用，
+  `VSCE_PAT` 未配置，`MARKETPLACE_AUTO_PUBLISH` 保持关闭，Open VSX 仍自动发布。
   首次创建 Azure DevOps 组织的页面要求绑定 Azure 订阅；当前账号没有可选订阅或既有组织，
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
