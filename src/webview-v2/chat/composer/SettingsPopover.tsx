@@ -211,7 +211,7 @@ export function SettingsPopover({
         <SearchIcon />
         <Input
           id={`${id}-action-search`}
-          className="dvx-settings-search h-9 rounded-none border-0 bg-transparent p-0 text-[13px] focus-visible:border-transparent"
+          className="dvx-settings-search h-8 rounded-none border-0 bg-transparent p-0 text-xs focus-visible:border-transparent"
           type="search"
           value={query}
           placeholder={t("Search actions, skills, MCP…")}

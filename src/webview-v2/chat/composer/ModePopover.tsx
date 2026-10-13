@@ -39,16 +39,18 @@ export function ModePopover({
       <RadioGroup className="dvx-option-list" aria-label={t("Mode options")} value={shownMode} disabled={disabled}
         onValueChange={(value) => onSelect(value as SessionInteractionMode)}>
         {MODE_OPTIONS.filter((option) => allowMission || option.value !== 'mission').map((option) => (
-          <label
+          <RadioGroupItem
             key={option.value}
             className="dvx-option-row dvx-mode-option"
+            value={option.value}
+            aria-label={t(option.label)}
             title={t(option.description)}
+            onClick={() => { if (option.value === 'mission' && shownMode === 'mission') onSelect('mission'); }}
           >
             <ModeIcon mode={option.value} />
             <span className="dvx-mode-option-label">{t(option.label)}</span>
-            <RadioGroupItem value={option.value} aria-label={t(option.label)}
-              onClick={() => { if (option.value === 'mission' && shownMode === 'mission') onSelect('mission'); }} />
-          </label>
+            <span className="dvx-radio-mark" aria-hidden="true" />
+          </RadioGroupItem>
         ))}
       </RadioGroup>
       <SettingsStatus settings={settings} />

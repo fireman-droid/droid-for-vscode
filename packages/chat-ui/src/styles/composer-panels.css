@@ -17,8 +17,8 @@
   }
   .v2-composer-panel .dvx-visually-hidden { @apply sr-only; }
   .v2-composer-panel .dvx-composer-popover { @apply min-w-0; }
-  .v2-composer-panel .dvx-settings-popover,
-  .v2-composer-panel .dvx-mode-popover { @apply p-1.5; }
+  .v2-composer-panel .dvx-settings-popover { @apply p-1.5; }
+  .v2-composer-panel .dvx-mode-popover { @apply p-1; }
   .v2-composer-panel .dvx-settings-view { @apply grid min-w-0 gap-px; }
   .v2-composer-panel button { @apply outline-none; }
   .v2-composer-panel button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
@@ -34,25 +34,24 @@
     transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-composer-panel .dvx-model-search-shell { @apply px-2.5; }
-  .v2-composer-panel .dvx-settings-search-shell:focus-within { border-color: var(--control-border-focus); }
   .v2-composer-panel .dvx-settings-search-shell .dvx-search-icon,
   .v2-composer-panel .dvx-model-search-shell > svg { @apply pointer-events-none size-3.5; }
   .v2-composer-panel .dvx-settings-search,
   .v2-composer-panel .dvx-model-search { @apply min-w-0 appearance-none outline-none; }
   .v2-composer-panel .dvx-settings-search:focus-visible,
   .v2-composer-panel .dvx-model-search:focus-visible { box-shadow: none; }
-  .v2-composer-panel .dvx-popover-row { @apply grid min-h-8 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_16px] items-center gap-1.5 rounded px-2.5 py-1.5 text-left; }
+  .v2-composer-panel .dvx-popover-row { @apply grid min-h-7 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_16px] items-center gap-1.5 rounded px-2 py-1 text-left; }
   .v2-composer-panel .dvx-popover-row-copy { @apply grid min-w-0; }
-  .v2-composer-panel .dvx-popover-row-copy strong { @apply truncate text-[13px] font-normal; }
+  .v2-composer-panel .dvx-popover-row-copy strong { @apply truncate text-xs font-normal; }
   .v2-composer-panel .dvx-popover-row-copy > span { @apply line-clamp-1 text-[11px] text-muted-foreground; }
   .v2-composer-panel .dvx-popover-row-copy small { @apply text-[11px] leading-[1.4] text-muted-foreground; }
-  .v2-composer-panel .dvx-popover-row-value { @apply max-w-[120px] truncate text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-popover-row-value { @apply max-w-[120px] truncate text-[11px] text-muted-foreground; }
   .v2-composer-panel .dvx-chevron-down {
     @apply block size-4 shrink-0 text-muted-foreground;
     transition: rotate var(--motion-normal) var(--motion-ease);
   }
   .v2-composer-panel .dvx-popover-row-icon { @apply hidden; }
-  .v2-composer-panel .dvx-attach-row { @apply min-h-8 grid-cols-[16px_minmax(0,1fr)] gap-2 px-2; }
+  .v2-composer-panel .dvx-attach-row { @apply grid-cols-[16px_minmax(0,1fr)] gap-2 px-2; }
   .v2-composer-panel .dvx-attach-row > svg { @apply size-3.5 text-muted-foreground; }
   .v2-composer-panel .dvx-attach-rows { @apply grid gap-px py-1; }
   .v2-composer-panel .dvx-settings-link-row { @apply grid-cols-[14px_minmax(0,1fr)_auto_16px] gap-2 px-2; }
@@ -72,8 +71,11 @@
   .v2-composer-panel .dvx-check-icon { @apply size-4; }
   .v2-composer-panel .dvx-option-list { @apply grid gap-px; }
   .v2-composer-panel .dvx-option-row { @apply flex min-h-8 w-full items-center justify-between gap-2 rounded px-2 text-left text-[13px]; }
+  .v2-composer-panel .dvx-mode-option,
+  .v2-composer-panel .dvx-settings-inline-option { @apply min-h-7 text-xs; }
+  .v2-composer-panel .dvx-mode-option:hover:not(:disabled) { background: var(--control-surface-hover); }
   .v2-composer-panel .dvx-mode-option-icon { @apply size-3.5 shrink-0 text-muted-foreground; }
-  .v2-composer-panel .dvx-mode-option-label { @apply min-w-0 flex-1 truncate font-medium; }
+  .v2-composer-panel .dvx-mode-option-label { @apply min-w-0 flex-1 truncate font-normal; }
   .v2-composer-panel .dvx-radio-mark { @apply relative size-3 shrink-0; }
   .v2-composer-panel [aria-checked='true'] .dvx-radio-mark::after {
     content: '';

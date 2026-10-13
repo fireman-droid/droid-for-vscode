@@ -75,6 +75,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
       else actions.handlePluginsRefresh();
     }
   }, [page, navigationId]);
+  const settingsWidth = view === 'skills' || view === 'mcp' || view === 'plugins' ? 'w-[360px]' : 'w-[280px]';
   const button = (kind: Panel, label: string, children: React.ReactNode, className = '') => {
     return <Popover open={panel === kind} onOpenChange={(value) => value ? open(kind) : close()}>
       {!editorOwner && kind !== 'model' ? <PopoverAnchor virtualRef={composer} /> : null}
@@ -84,7 +85,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
         {children}
       </Button></PopoverTrigger>
       <PopoverContent side="top" align={kind === 'model' ? 'end' : 'start'} sideOffset={8}
-        className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[160px]' : kind === 'model' ? 'w-[220px]' : 'w-[var(--radix-popover-trigger-width)]'}`}
+        className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[144px]' : kind === 'model' ? 'w-[220px]' : kind === 'settings' ? settingsWidth : 'w-[var(--radix-popover-trigger-width)]'}`}
         data-editor-popup-owner={editorOwner}>
         {kind === 'settings' ? <SettingsPopover id={`${id}-settings`} view={view} settings={state.settings} skills={state.skills} mcp={state.mcp} plugins={state.plugins} showModeControl={false}
           disabled={settingsDisabled} attachDisabled={disabled || state.interactions.length > 0} onViewChange={setView} onUpdate={pickSetting}
