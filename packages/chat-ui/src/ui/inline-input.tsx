@@ -78,9 +78,9 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
   };
   return <div {...props} ref={root} role="textbox" aria-multiline="true" aria-disabled={disabled || undefined}
     contentEditable={!disabled} suppressContentEditableWarning tabIndex={disabled ? -1 : 0}
-    data-slot="inline-input" data-placeholder={placeholder} data-empty={!value || undefined}
+    data-slot="inline-input" data-placeholder={placeholder} data-empty={(!value && !composing.current) || undefined}
     className={cn('dvx-inline-input', className)}
-    onCompositionStart={event => { composing.current = true; onCompositionStart?.(event); }}
+    onCompositionStart={event => { composing.current = true; setComposition(count => count + 1); onCompositionStart?.(event); }}
     onCompositionEnd={event => { composing.current = false; change(); setComposition(count => count + 1); onCompositionEnd?.(event); }}
     onInput={event => { change(); onInput?.(event); }}
     onPaste={event => {
