@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -68,7 +69,8 @@ console.log(`Native autocomplete artifacts: ${root}`);
 const exitCode = await new Promise((resolve, reject) => {
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', path.join(repository, 'src/integration/isolatedDesktop.ps1'), '-ConfigPath', configPath],
-  { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env,
+    DROID_AUTOCOMPLETE_PACKAGE_SHA256: createHash('sha256').update(readFileSync(vsix)).digest('hex') } });
   child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr);
   child.once('error', reject); child.once('exit', resolve);
 });

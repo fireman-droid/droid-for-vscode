@@ -20,6 +20,7 @@ async function run() {
   const root = path.join(path.dirname(resultFile), 'workspace');
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), ...settings,
+    packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256,
     contextMode: 'native-lsp', acceptanceMode: 'automatic-then-explicit', records: [] };
   let current;
   const server = createServer(async (request, response) => {
@@ -29,6 +30,12 @@ async function run() {
       assert.ok(record, 'No active case');
       let body = ''; for await (const chunk of request) body += chunk;
       const payload = JSON.parse(body);
+      if (record.probeCacheOnly) {
+        record.cacheProbeMiss = true;
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ choices: [{ text: '' }] }));
+        return; // Drain an existing multiline suggestion without buying another generation.
+      }
       const attempt = { prompt: payload.prompt, suffix: payload.suffix, startedAt: Date.now() };
       record.requests.push(attempt);
       // The live Host adds its Mercury prefix marker; strip exactly that marker
@@ -52,6 +59,12 @@ async function run() {
   const config = vscode.workspace.getConfiguration('droidvisx.autocomplete');
   try {
     await vscode.extensions.getExtension('droidvisx.droidvisx').activate();
+    // Fixtures already include their closing delimiters. Native typing must not
+    // add a second one and silently change the problem sent to the model.
+    const editorConfig = vscode.workspace.getConfiguration('editor');
+    await editorConfig.update('autoClosingBrackets', 'never', true);
+    await editorConfig.update('autoClosingQuotes', 'never', true);
+    await editorConfig.update('autoIndent', 'none', true);
     await config.update('enabled', false, true);
     for (const [key, value] of Object.entries({ protocol: 'fim', endpoint: `http://127.0.0.1:${server.address().port}/v1/fim/completions`,
       model: settings.model, maxTokens: settings.maxTokens, maxContextCharacters: settings.maxContextCharacters,
@@ -82,6 +95,7 @@ async function run() {
         await config.update('enabled', true, true); await delay(200);
         const beforeType = record.requests.length;
         await vscode.commands.executeCommand('type', { text: item.prefix.slice(-1) });
+        assert.equal(document.getText(), item.prefix + item.suffix, 'Native typing changed the supplied fixture');
         const started = Date.now();
         await until(() => record.requests.length > beforeType || record.transportError, 3500);
         record.automaticRequested = record.requests.length > beforeType;
@@ -90,22 +104,23 @@ async function run() {
           if (step > 0 || !record.automaticRequested) await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
           let changed = false;
           const deadline = Date.now() + 8000;
-          while (Date.now() < deadline && !record.transportError) {
+          while (Date.now() < deadline && !record.transportError && !record.cacheProbeMiss) {
             await vscode.commands.executeCommand('editor.action.inlineSuggest.commit');
             if (document.getText() !== before) { changed = true; break; }
             await delay(80);
           }
-          if (!changed) { record.stop = record.transportError ? 'transport-error' : 'no-acceptable-suggestion'; break; }
+          if (!changed) {
+            record.stop = record.transportError ? 'transport-error' : record.probeCacheOnly ? 'source-complete' : 'no-acceptable-suggestion';
+            break;
+          }
           record.accepts.push({ step, elapsedMs: Date.now() - started, addedCharacters: document.getText().length - before.length });
           const text = document.getText();
           assert.ok(text.startsWith(item.prefix) && text.endsWith(item.suffix), 'Completion changed existing surrounding code');
           record.insertion = text.slice(item.prefix.length, item.suffix ? -item.suffix.length : undefined);
           record.diagnostics = diagnose(document, item, directory);
-          // Stop when the source is structurally complete, including completed code
-          // with semantic type errors. Never query hidden tests to guide acceptance.
-          if (!record.diagnostics.some(issue => [1005, 1109, 1128, 2355, 2366].includes(issue.code))) {
-            record.stop = 'source-complete'; break;
-          }
+          // A first-line preview can compile while its cached next lines remain.
+          // Drain those lines before stopping; hidden tests never guide acceptance.
+          record.probeCacheOnly = !record.diagnostics.some(issue => [1005, 1109, 1128, 2355, 2366].includes(issue.code));
           if (step === 11) record.stop = 'acceptance-limit';
         }
         record.elapsedMs = Date.now() - started;
