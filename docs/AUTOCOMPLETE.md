@@ -128,3 +128,14 @@ node src/integration/runAutocompleteQuality.mjs --corpus <题库.json> --respons
 该入口的多文件内容由题库明确提供，单独评估提示构造与模型使用上下文的能力，不代表 LSP
 检索或编辑器灰字已验证。真实输入、接受、取消、Notebook 和检索走已有
 `src/integration/runAutocompleteTest.mjs` 的隔离 Extension Host 命令测试，无需鼠标自动化。
+
+真实模型的原生编辑器评估可给该运行器加 `--quality`，并设置
+`DROID_AUTOCOMPLETE_QUALITY_CORPUS` 和 `DROID_AUTOCOMPLETE_QUALITY_OUTPUT`。
+运行器加载指定的新 VSIX 到临时用户目录，在隐藏测试桌面通过 VS Code 命令输入、触发和接受建议，
+使用真实 TypeScript 语言服务寻找参考文件；每题最多接受 12 次，按源码结构完成或无建议停止，
+停止条件不读取隐藏测试。报告记录自动请求、每次原始返回、接受轨迹与最终源码，再用上述运行器判分。
+审阅题库后再运行；该模式会调用真实模型，并不执行模型代码，代码行为仍在后续受限进程中测试。
+
+当前已连接 Host 只负责使用其保存的密钥调用服务；新 VSIX 的上下文、过滤和编辑器行为都在独立
+测试进程中加载，不要求每次改动都重载用户窗口。普通批量生成也会用当前源码重新处理原始返回，
+记录处理器哈希和旧 Host 的结果。连接所属 VS Code 进程须保持运行；关闭后不能凭空恢复其临时连接。

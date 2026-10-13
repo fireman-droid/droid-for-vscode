@@ -1,6 +1,6 @@
 param([Parameter(Mandatory = $true)][string]$ConfigPath)
 $ErrorActionPreference = 'Stop'
-$launch = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+$launch = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $env:DROID_AUTOCOMPLETE_NATIVE_RESULT = $launch.resultPath
 $env:FACTORY_API_KEY = ''
 $env:ELECTRON_RUN_AS_NODE = ''

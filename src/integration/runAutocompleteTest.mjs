@@ -39,6 +39,12 @@ exports.activate = context => context.subscriptions.push(vscode.workspace.regist
   serializeNotebook: async () => new Uint8Array(), deserializeNotebook: async () => new vscode.NotebookData([]),
 }));`);
 const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
+const quality = process.argv.includes('--quality');
+if (quality) {
+  assert.ok(process.env.DROID_AUTOCOMPLETE_BRIDGE_URL, 'Quality mode requires the live model gateway');
+  assert.ok(process.env.DROID_AUTOCOMPLETE_QUALITY_CORPUS && process.env.DROID_AUTOCOMPLETE_QUALITY_OUTPUT,
+    'Quality mode requires reviewed corpus and response output paths');
+}
 const workspace = path.join(root, 'workspace');
 mkdirSync(workspace);
 const args = [
@@ -49,14 +55,15 @@ const args = [
   `--user-data-dir=${profile}`, `--extensions-dir=${extensions}`,
   `--extensionDevelopmentPath=${path.join(extracted, 'extension')}`,
   `--extensionDevelopmentPath=${notebookFixture}`,
-  `--extensionTestsPath=${path.join(repository, process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
+  `--extensionTestsPath=${path.join(repository, quality ? 'src/integration/suite/autocompleteQuality.cjs'
+    : process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
 ];
 function quote(argument) {
   return '"' + argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';
 }
 const configPath = path.join(root, 'launch.json');
 writeFileSync(configPath, JSON.stringify({ executable, commandLine: [executable, ...args].map(quote).join(' '),
-  directory: root, resultPath, timeoutMs: 180_000 }));
+  directory: root, resultPath, timeoutMs: quality ? 1_800_000 : 180_000 }));
 console.log(`Native autocomplete artifacts: ${root}`);
 const exitCode = await new Promise((resolve, reject) => {
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
