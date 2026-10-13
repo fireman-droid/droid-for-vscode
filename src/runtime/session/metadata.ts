@@ -92,6 +92,11 @@ export async function updateSessionSetting(
     throw new Error('Invalid session setting update.');
   }
   try {
+    // Choosing a drafting model configures the next Spec turn; it must not
+    // enter Spec mode. Send the current mode in the same settings transaction.
+    if (update.field === 'specModeModelId' || update.field === 'specModeReasoningEffort') {
+      params = { ...params, interactionMode: session.settings.interactionMode };
+    }
     await session.updateSettings(params);
     return projectSessionSettings(session.settings);
   } catch {
