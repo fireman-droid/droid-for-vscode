@@ -274,8 +274,8 @@ cursor --install-extension dist/droidvisx.vsix --force
 
 ## GitHub Releases 分发
 
-分发流程是 **准备源码 → 构建与校验 → 生成附件 → 草稿 → 人工公开发布 → 自动上架 Open VSX**。
-Cursor 从 Open VSX 获取第三方扩展；本流程不发布到 Microsoft Marketplace。
+分发流程是 **准备源码 → 构建与校验 → 生成附件 → 草稿 → 人工公开发布 → 自动分发到插件市场**。
+Cursor 使用 Open VSX，VS Code 使用 Microsoft Marketplace；两个渠道上传同一份 Release VSIX。
 
 ### 本地准备附件
 
@@ -297,7 +297,7 @@ pnpm run release:assets
 | --- | --- | --- |
 | 只获得构建产物 | Actions → **Build Droid release**，tag 留空，不勾选 draft | 构建 `main`，上传保留 30 天的 artifact |
 | 准备版本草稿 | 推送已合入 `main` 的版本标签，或填写已有 tag 并勾选 draft | 构建并创建 Draft Release |
-| 公开版本 | 维护者检查版本说明、附件与公开范围后点击 **Publish release** | 对外发布该版本，并触发 **Publish Droid to Open VSX** |
+| 公开版本 | 维护者检查版本说明、附件与公开范围后点击 **Publish release** | 对外发布该版本，并触发 Open VSX 和已启用的 Microsoft Marketplace 分发 |
 
 普通分支 push 不触发 Release 工作流。标签、`package.json` 版本与 CHANGELOG 必须一致。
 已有同标签 Release 时工作流拒绝覆盖；上传中断只从原构建补缺失附件，避免混用重新构建的产物。
@@ -327,8 +327,34 @@ pnpm run release:assets
 Open VSX 发布完成后，Cursor 的同步与审核可能稍后才显示更新，详见
 [Cursor 扩展说明](https://prod.cursor.com/help/customization/extensions)。
 
+### 配置 Microsoft Marketplace 自动发布
+
+工作流 **Publish Droid to VS Code Marketplace** 使用现有发布者 `droidvisx`。
+在 [仓库 Actions 设置](https://github.com/fireman-droid/droid-for-vscode/settings/secrets/actions) 中配置：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Repository secret | `VSCE_PAT` | 发布者账号的 Azure DevOps PAT，仅授予 Marketplace → Manage 权限 |
+| Repository variable | `MARKETPLACE_AUTO_PUBLISH` | 设为 `true` 后，正式 Release 公开时自动上传 |
+
+PAT 由发布者本人在 Azure DevOps 的 **User settings → Personal access tokens** 创建，
+Organization 选择 **All accessible organizations**，权限选择 **Custom defined → Marketplace → Manage**。
+将值直接保存到 GitHub Secret，不粘贴到聊天、工作流、命令参数或仓库文件中。
+凭据的有效期必须自行记录，到期前更新同名 Secret。
+
+配置后，从 `main` 手动运行工作流，填写已公开的版本标签（例如 `v0.8.11`），保持 `publish` 关闭。
+流程会校验 Release 附件与发布权限，不上传、不重打包；通过后再打开自动发布变量。
+需要补发已公开的 Release 时，手动运行并勾选 `publish`。已上架版本不能重复发布或覆盖。
+缺少凭据、权限不足、校验失败均使运行失败；普通 push、草稿和预发布不会自动上传。
+
+当前账号的 Entra 管理入口没有访问权限，因此此配置采用 PAT。
+微软已公告 **2026-12-01 停用全局 PAT**；该方案须在此之前迁移到获授权的
+[Microsoft Entra 身份发布](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#secure-automated-publishing-to-visual-studio-marketplace)。
+未完成凭据配置和权限校验时，不将工作流存在视为自动发布已接通。
+
 流程实现见 [release.yml](../.github/workflows/release.yml)、
-[publish-openvsx.yml](../.github/workflows/publish-openvsx.yml)
+[publish-openvsx.yml](../.github/workflows/publish-openvsx.yml)、
+[publish-marketplace.yml](../.github/workflows/publish-marketplace.yml)
 和 [checkRelease.mjs](../scripts/checkRelease.mjs)。公开发布仍由维护者点击确认。
 
 <a id="docs-site"></a>

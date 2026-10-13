@@ -1,0 +1,120 @@
+name: Publish Droid to VS Code Marketplace
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing public stable Release tag
+        required: true
+        type: string
+      publish:
+        description: Publish the verified VSIX (leave off to check package and credentials only)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || (vars.MARKETPLACE_AUTO_PUBLISH == 'true' && !github.event.release.draft && !github.event.release.prerelease) }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Require a public stable Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if ($env:EVENT_NAME -eq 'workflow_dispatch' -and $env:WORKFLOW_REF -ne 'refs/heads/main') { throw 'Dispatch this workflow from main.' }
+          if ($env:RELEASE_TAG -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw 'Use a stable version tag such as v0.8.11.' }
+          $releaseJson = gh release view $env:RELEASE_TAG --json tagName,isDraft,isPrerelease
+          if ($LASTEXITCODE -ne 0) { throw 'Release not found.' }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.isDraft -or $release.isPrerelease -or $release.tagName -ne $env:RELEASE_TAG) { throw 'Only a public stable Release can be distributed.' }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require release source on main
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release source must be committed on main.' }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Check release version and changelog
+        id: metadata
+        run: node scripts/checkRelease.mjs
+      - name: Download the published release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          gh release download $env:RELEASE_TAG --dir release --pattern "droid-$env:RELEASE_VERSION.vsix" --pattern SHA256SUMS.txt --pattern build-info.json
+          if ($LASTEXITCODE -ne 0) { throw 'The release must include its VSIX, SHA256SUMS.txt and build-info.json.' }
+      - name: Verify the published package
+        id: package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          EXTENSION_ID: ${{ steps.metadata.outputs.extensionId }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.sourceSha }}
+        run: |
+          $assetName = "droid-$env:RELEASE_VERSION.vsix"
+          $packagePath = Join-Path release $assetName
+          $info = Get-Content -Raw -LiteralPath release/build-info.json | ConvertFrom-Json
+          if ($info.sourceDirty -ne $false -or $info.sourceSha -ne $env:SOURCE_SHA) { throw 'Package source must match the clean release tag.' }
+          if ($info.tag -ne $env:RELEASE_TAG -or $info.version -ne $env:RELEASE_VERSION -or $info.extensionId -ne $env:EXTENSION_ID -or $info.assetName -ne $assetName) { throw 'Release metadata does not match the tag and extension.' }
+          $actual = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksum = (Get-Content -Raw -LiteralPath release/SHA256SUMS.txt).Trim()
+          if ($actual -ne $info.sha256 -or $checksum -ne "$actual  $assetName") { throw 'Release package checksum mismatch.' }
+          $manifestText = tar -xOf $packagePath extension/package.json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read the packaged extension manifest.' }
+          $manifest = $manifestText | ConvertFrom-Json
+          if ("$($manifest.publisher).$($manifest.name)" -ne $env:EXTENSION_ID -or $manifest.version -ne $env:RELEASE_VERSION) { throw 'Packaged extension identity or version mismatch.' }
+          "path=$packagePath" >> $env:GITHUB_OUTPUT
+          "publisher=$($manifest.publisher)" >> $env:GITHUB_OUTPUT
+          "Verified $env:EXTENSION_ID $env:RELEASE_TAG, SHA-256: $actual" >> $env:GITHUB_STEP_SUMMARY
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify Marketplace publishing access
+        shell: pwsh
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          PUBLISHER: ${{ steps.package.outputs.publisher }}
+        run: |
+          if (-not $env:VSCE_PAT) { throw 'Configure the VSCE_PAT Actions secret with Marketplace Manage permission; see docs/DEVELOPMENT.md.' }
+          node node_modules/@vscode/vsce/vsce verify-pat $env:PUBLISHER
+          if ($LASTEXITCODE -ne 0) { throw 'Marketplace credentials are invalid, expired, or lack publisher access.' }
+          'Marketplace publisher access verified.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Publish the verified VSIX
+        if: ${{ github.event_name == 'release' || inputs.publish }}
+        shell: pwsh
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSIX_PATH: ${{ steps.package.outputs.path }}
+        run: |
+          node node_modules/@vscode/vsce/vsce publish --packagePath $env:VSIX_PATH
+          if ($LASTEXITCODE -ne 0) { throw 'Marketplace publish failed. Check the version and publishing permissions.' }
+          "Submitted $env:RELEASE_TAG to Microsoft Marketplace. Availability depends on Marketplace validation." >> $env:GITHUB_STEP_SUMMARY
+      - name: Report check-only result
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
+        shell: pwsh
+        run: "'Package and publisher access checks passed. No package was uploaded.' >> $env:GITHUB_STEP_SUMMARY"
