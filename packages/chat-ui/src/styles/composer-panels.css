@@ -154,7 +154,9 @@
   .v2-composer-panel .dvx-panel-action { @apply rounded-md px-[9px] py-[3px] text-[11px] font-medium text-muted-foreground disabled:opacity-50; }
   .v2-composer-panel .dvx-skills-panel { @apply flex min-h-0 flex-col gap-1.5; }
   .v2-composer-panel .dvx-skills-panel .dvx-panel-head { @apply -mx-1.5 -mt-1.5; }
-  .v2-composer-panel .dvx-skill-list { @apply m-0 max-h-[260px] list-none overflow-auto p-0; }
+  .v2-composer-panel .dvx-skill-scroll { @apply isolate shrink-0; }
+  .v2-composer-panel .dvx-skill-viewport { @apply h-auto max-h-[260px] pr-2; }
+  .v2-composer-panel .dvx-skill-list { @apply m-0 list-none p-0; }
   .v2-composer-panel .dvx-skill-row { @apply flex items-center gap-2.5 border-b border-[var(--panel-edge)] px-0.5 py-[7px] last:border-b-0; }
   .v2-composer-panel .dvx-skill-copy { @apply flex min-w-0 flex-1 flex-col gap-0.5; }
   .v2-composer-panel .dvx-skill-name { @apply flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium; overflow-wrap: anywhere; }
@@ -166,7 +168,7 @@
   .v2-composer-panel .dvx-mcp-status-failed { @apply bg-destructive; }
   .v2-composer-panel .dvx-mcp-tools-toggle,
   .v2-composer-panel .dvx-skills-apply-new { @apply self-start text-[11px] hover:underline; }
-  .v2-composer-panel .dvx-skills-session-note { @apply border-t border-[var(--panel-edge)] pt-1 text-[11px]; }
+  .v2-composer-panel .dvx-skills-session-note { @apply relative z-[1] m-0 shrink-0 border-t border-[var(--panel-edge)] bg-popover px-0.5 pb-0.5 pt-1.5 text-[11px]; }
   .v2-composer-panel .dvx-mcp-auth-button { @apply mt-0.5 self-start rounded-full border border-[var(--panel-edge)] bg-background px-2.5 py-[3px] text-[11px] font-medium disabled:opacity-50; }
   .v2-composer-panel .dvx-mcp-auth-status,
   .v2-composer-panel .dvx-mcp-remove { @apply text-[11px] text-muted-foreground; }

@@ -6,6 +6,7 @@ import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { RadioGroup, RadioGroupItem, Switch } from '../../ui/controls';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { readMcpServerDraft } from './mcpServerDraft';
 
 import { MCP_SERVER_TYPES } from '../../../shared/protocol/bounds';
@@ -98,7 +99,9 @@ export function SkillsPanel({
         <p className="dvx-popover-message" role="status">{t("No skills found in this workspace.")}</p>
       ) : null}
       {skills.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label={t("Skills")}>
+        <ScrollArea className="dvx-skill-scroll" viewportClassName="dvx-skill-viewport" aria-label={t("Skills")}
+          nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
+        <ul className="dvx-skill-list">
           {skills.items.map((skill) => (
             <SkillRow
               key={skill.name}
@@ -113,6 +116,7 @@ export function SkillsPanel({
             />
           ))}
         </ul>
+        </ScrollArea>
       ) : null}
       <p className="dvx-popover-message dvx-skills-session-note">{t("Skill changes take effect in new sessions.")}{changed && onNewSession !== undefined ? (
           <>
@@ -265,7 +269,9 @@ export function McpPanel({
         <p className="dvx-popover-message" role="status">{t("No MCP servers configured.")}</p>
       ) : null}
       {mcp.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label={t("MCP servers")}>
+        <ScrollArea className="dvx-skill-scroll" viewportClassName="dvx-skill-viewport" aria-label={t("MCP servers")}
+          nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
+        <ul className="dvx-skill-list">
           {mcp.items.map((server) => (
             <McpServerRow
               key={server.name}
@@ -289,6 +295,7 @@ export function McpPanel({
             />
           ))}
         </ul>
+        </ScrollArea>
       ) : null}
     </div>
   );
@@ -610,11 +617,14 @@ export function PluginsPanel({
         <p className="dvx-popover-message" role="status">{t("No plugins installed.")}</p>
       ) : null}
       {plugins.items.length > 0 ? (
-        <ul className="dvx-skill-list" aria-label={t("Plugins")}>
+        <ScrollArea className="dvx-skill-scroll" viewportClassName="dvx-skill-viewport" aria-label={t("Plugins")}
+          nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
+        <ul className="dvx-skill-list">
           {plugins.items.map((plugin) => (
             <PluginRow key={plugin.id} plugin={plugin} />
           ))}
         </ul>
+        </ScrollArea>
       ) : null}
       <p className="dvx-popover-message dvx-skills-session-note">
         {plugins.status === 'ready'
