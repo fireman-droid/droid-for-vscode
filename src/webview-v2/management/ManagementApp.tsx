@@ -42,8 +42,8 @@ export function ManagementApp({ transport }: { transport: ManagementTransport })
           <ManagementChoice label={t('Language')} value={language.preference} disabled={state.busy}
             onChange={value => { if (isLanguagePreference(value)) void state.run({ kind: 'language.set', language: value }); }}
             options={[['auto', t('Follow editor')], ['en', 'English'], ['zh-CN', '简体中文'], ['zh-TW', '繁體中文']]} />
-        </ManagementRow></div>
-        <div className="management-group"><ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></div>
+        </ManagementRow>
+        <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></div>
         <h2 className="management-section-title">{t("代码审阅问答")}</h2><div className="management-group"><ManagementRow label={t("问答模型")} detail={t("用于 Review Changes 中的行内问答。")}>
           <ManagementChoice label={t("代码审阅问答模型")} value={s.reviewQuestion.modelId ?? 'follow-main'} disabled={state.busy}
             onChange={value => void state.run({ kind: 'reviewQuestion.model.set', modelId: value === 'follow-main' ? null : value })}

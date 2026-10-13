@@ -9,6 +9,12 @@
 [CAPABILITIES](CAPABILITIES.md)，结构与界面规则见 [ARCHITECTURE](ARCHITECTURE.md)
 和 [DESIGN](DESIGN.md)。历史施工、旧包尺寸及已被替代的方案从 Git 历史查阅。
 
+## 常规设置分组样式（2026-10-13）
+
+- 语言与主题放入同一设置分组，沿用现有设置行的单条细分隔线，消除两张圆角卡片边框相贴的问题；没有改变选项、当前设置或保存行为。
+- 已在连接真实 Extension Host 的内置浏览器中查看修复效果，页面保留供用户继续联调；未调用模型、未新增样式或静态结构测试。`pnpm run typecheck`、`pnpm run lint:budgets`、生产构建与完整 171 条 VSIX 校验通过。
+- 安装包已更新至 Microsoft VS Code 和 Cursor，两边清单与各 13 个主要文件均与包一致，需 Reload Window；SHA256 为 `26844e93758539b125bc6b12977ca5645f313d88305edf8984a66a1d84df0815`。本次仅本地增量交付，暂停的 Thinking 改动未进入包，未推送或发布新市场版本。
+
 ## 浏览器真实管理页（2026-10-13）
 
 - `/live?view=management` 复用生产管理页、当前 Extension Host 的管理服务与模型处理器，管理消息流独立于聊天；首批请求等待事件流建立，浏览器也接收实际语言设置。默认打开 Missions，可切换常规、模型、补全与会话。打开 Mission／会话和涉及原生确认的操作仍由编辑器执行。
