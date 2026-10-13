@@ -34,8 +34,7 @@
     transition: border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-composer-panel .dvx-model-search-shell { @apply px-2.5; }
-  .v2-composer-panel .dvx-settings-search-shell:focus-within,
-  .v2-composer-panel .dvx-model-search-shell:focus-within { border-color: var(--control-border-focus); }
+  .v2-composer-panel .dvx-settings-search-shell:focus-within { border-color: var(--control-border-focus); }
   .v2-composer-panel .dvx-settings-search-shell .dvx-search-icon,
   .v2-composer-panel .dvx-model-search-shell > svg { @apply pointer-events-none size-3.5; }
   .v2-composer-panel .dvx-settings-search,
