@@ -16,14 +16,24 @@ export type FimRequest = {
 
 /** Native FIM transport; no chat session, editor state, or provider credentials are retained. */
 export async function requestFimCompletion(request: FimRequest): Promise<string> {
-  return requestCompletionTransport(request, {
+  // Mercury can stop partway through an indented inner `}` when the suffix
+  // begins with a matching outer closure. Separate new-block insertions from
+  // that existing line, and include the separator in the returned insertion.
+  const separateClosingLine = /mercury/i.test(request.model)
+    && /\{[\t ]*\r?\n[\t ]*$/.test(request.prefix)
+    && /^[\t ]*\}[};,\t ]*(?:\r?\n|$)/.test(request.suffix);
+  const lastNewline = request.prefix.lastIndexOf('\n');
+  const newline = request.prefix[lastNewline - 1] === '\r' ? '\r\n' : '\n';
+  const completion = await requestCompletionTransport(request, {
     model: request.model,
     prompt: request.prefix,
-    suffix: request.suffix,
+    suffix: separateClosingLine ? newline + request.suffix : request.suffix,
     max_tokens: request.maxTokens,
     temperature: 0,
     stream: true,
   }, 'text/event-stream, application/json', readFimResponse);
+  return separateClosingLine && completion.trim() && !completion.endsWith('\n')
+    ? completion + newline : completion;
 }
 
 /** Shared choices-based response format used by native and SiliconFlow FIM. */
