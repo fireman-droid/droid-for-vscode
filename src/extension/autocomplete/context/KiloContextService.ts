@@ -42,7 +42,10 @@ export class KiloContextService implements vscode.Disposable {
     ];
   }
   invalidate(changedFile?: string): void {
-    invalidateLspCaches(); this.ide.invalidate(); this.retrieval.invalidate(changedFile);
+    // Definitions can point into any edited file, so their ranges and contents
+    // must expire together. Ordinary source edits do not change ignore rules.
+    invalidateLspCaches(); this.retrieval.invalidate(changedFile);
+    if (!changedFile || /(?:^|\/)\.(?:gitignore|droidignore)$/.test(changedFile)) this.ide.invalidate();
   }
   async build(input: { document: vscode.TextDocument; text: string; offset: number; filepath: string;
     settings: CompletionSettings; signal: AbortSignal; snippets: readonly ContextSnippet[]; comments?: LanguageComments }) {

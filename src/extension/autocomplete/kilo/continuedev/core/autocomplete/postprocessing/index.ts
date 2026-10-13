@@ -1,6 +1,4 @@
-/*! Vendored from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (continuedev/core/autocomplete/postprocessing/index.ts). Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. */
-import { longestCommonSubsequence } from "../../util/lcs.js"
-import { lineIsRepeated } from "../util/textSimilarity.js"
+/*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (continuedev/core/autocomplete/postprocessing/index.ts). Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. Droid uses exact repetition checks to preserve similar declarations. */
 import { removePrefixOverlap } from "./removePrefixOverlap.js"
 
 function rewritesLineAbove(completion: string, prefix: string): boolean {
@@ -16,27 +14,26 @@ function rewritesLineAbove(completion: string, prefix: string): boolean {
   if (!firstLineOfCompletion) {
     return false
   }
-  return lineIsRepeated(lineAbove, firstLineOfCompletion)
+  // Similar declarations can differ by a meaningful identifier or literal. Only exact
+  // repeated code is suppressed; short closing tokens can belong to nested blocks.
+  return lineAbove.trim().length > 4 && lineAbove.trim() === firstLineOfCompletion.trim()
 }
 
 const MAX_REPETITION_FREQ_TO_CHECK = 3
 function isExtremeRepetition(completion: string): boolean {
-  const lines = completion.split("\n")
+  const lines = completion.split("\n").map((line) => line.trim())
   if (lines.length < 6) {
     return false
   }
   for (let freq = 1; freq < MAX_REPETITION_FREQ_TO_CHECK; freq++) {
-    const lcs = longestCommonSubsequence(lines[0], lines[freq])
-    if (lcs.length > 5 || lcs.length > lines[0].length * 0.5) {
-      let matchCount = 0
-      for (let i = 0; i < lines.length; i += freq) {
-        if (lines[i].includes(lcs)) {
-          matchCount++
-        }
-      }
-      if (matchCount * freq > 8 || (matchCount * freq) / lines.length > 0.8) {
-        return true
-      }
+    const pattern = lines.slice(0, freq)
+    if (pattern.every((line) => line.length === 0)) continue
+    let matchedLines = 0
+    for (let i = 0; i < lines.length; i += freq) {
+      if (pattern.every((line, offset) => lines[i + offset] === line)) matchedLines += freq
+    }
+    if (matchedLines > 8 || matchedLines / lines.length > 0.8) {
+      return true
     }
   }
   return false

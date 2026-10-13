@@ -1,10 +1,10 @@
 import { findCoveringPendingRequest } from './kilo/inline-utils';
 import type { PendingRequest } from './kilo/types';
 type Request = PendingRequest & {
-  controller: AbortController; promise: Promise<string>; readers: number; settled?: boolean;
+  controller: AbortController; promise: Promise<string>; readers: number;
   cancelTimer?: ReturnType<typeof setTimeout>;
 };
-/** Shares a compatible Kilo-style pending request across consecutive editor invocations. */
+/** Shares compatible context preparation and transport across consecutive editor invocations. */
 export class CompletionRequests {
   private current?: Request;
   /** Retain compatible work while the next invocation checks policy and gathers context. */
@@ -27,7 +27,8 @@ export class CompletionRequests {
   private release(request: Request): void {
     request.readers--;
     if (request.readers !== 0 || this.current !== request) return;
-    if (request.settled) { this.current = undefined; return; }
+    // Keep a just-completed result for the same bounded handoff as in-flight work.
+    // Resolving during a reader change must not discard a reusable completion.
     request.cancelTimer = setTimeout(() => {
       if (request.readers === 0 && this.current === request) this.clear();
     }, 100);
@@ -42,10 +43,10 @@ export class CompletionRequests {
       const controller = new AbortController();
       request = { scope, prefix, suffix, controller, readers: 0, promise: Promise.resolve('') };
       const created = request;
-      created.promise = start(controller.signal).finally(() => {
-        if (created.cancelTimer) clearTimeout(created.cancelTimer);
-        created.settled = true;
-        if (this.current === created && created.readers === 0) this.current = undefined;
+      created.promise = start(controller.signal).catch((error: unknown) => {
+        // Failed work is retried by the provider, never shared with a later reader.
+        if (this.current === created) this.clear();
+        throw error;
       });
       void created.promise.catch(() => undefined);
       this.current = created;
@@ -62,7 +63,8 @@ export class CompletionRequests {
       if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
       const text = await Promise.race([captured.promise, cancelled]);
       const typed = prefix.slice(captured.prefix.length);
-      if (text.startsWith(typed)) return text.slice(typed.length);
+      if (text.startsWith(typed) && (!typed.length || text.length > typed.length)) return text.slice(typed.length);
+      // An accepted/fully typed suggestion is exhausted, not a negative result.
       if (this.current === captured) this.clear();
       return this.run(scope, prefix, suffix, signal, start);
     } finally {

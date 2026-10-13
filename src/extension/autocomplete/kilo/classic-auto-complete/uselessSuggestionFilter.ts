@@ -1,4 +1,4 @@
-/*! Vendored from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (classic-auto-complete/uselessSuggestionFilter.ts). MIT; see third-party/KILO-LICENSE.txt. */
+/*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (classic-auto-complete/uselessSuggestionFilter.ts). MIT; see third-party/KILO-LICENSE.txt. Droid adds explicit filter outcomes. */
 import { postprocessCompletion } from "../continuedev/core/autocomplete/postprocessing/index.js"
 import { applyLanguageFilter } from "./language-filters"
 
@@ -6,6 +6,11 @@ export type AutocompleteSuggestion = {
   suggestion: string
   prefix: string
   suffix: string
+}
+
+export type AutocompletePostprocessResult = {
+  text: string
+  outcome: "suggestion-returned" | "empty" | "already-present" | "repetition-filtered"
 }
 
 export function suggestionConsideredDuplication(params: AutocompleteSuggestion): boolean {
@@ -144,6 +149,16 @@ export function postprocessAutocompleteSuggestion(
     languageId?: string
   },
 ): string | undefined {
+  const result = postprocessAutocompleteSuggestionWithOutcome(params)
+  return result.outcome === "suggestion-returned" ? result.text : undefined
+}
+
+export function postprocessAutocompleteSuggestionWithOutcome(
+  params: AutocompleteSuggestion & {
+    model: string
+    languageId?: string
+  },
+): AutocompletePostprocessResult {
   // First, run through the continuedev postprocessing pipeline
   const processedSuggestion = postprocessCompletion({
     completion: params.suggestion,
@@ -154,7 +169,7 @@ export function postprocessAutocompleteSuggestion(
   })
 
   if (processedSuggestion === undefined) {
-    return undefined
+    return { text: "", outcome: params.suggestion.trim() ? "repetition-filtered" : "empty" }
   }
 
   // Apply language-specific filtering if languageId is provided
@@ -167,6 +182,13 @@ export function postprocessAutocompleteSuggestion(
       })
     : processedSuggestion
 
+  if (!languageFilteredSuggestion.trim()) {
+    return { text: "", outcome: "empty" }
+  }
+  if (params.suffix.trimStart().startsWith(languageFilteredSuggestion.trim())) {
+    return { text: "", outcome: "already-present" }
+  }
+
   if (
     suggestionConsideredDuplication({
       suggestion: languageFilteredSuggestion,
@@ -174,8 +196,8 @@ export function postprocessAutocompleteSuggestion(
       suffix: params.suffix,
     })
   ) {
-    return undefined
+    return { text: "", outcome: "repetition-filtered" }
   }
 
-  return languageFilteredSuggestion
+  return { text: languageFilteredSuggestion, outcome: "suggestion-returned" }
 }

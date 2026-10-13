@@ -181,8 +181,13 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       diagnostics?.record({ level: 'debug', name: 'autocomplete.next-edit.accepted', attributes: {} });
       provider.nextEditAccepted();
     }),
-    vscode.commands.registerCommand('droidvisx.autocomplete.accepted', () => {
-      diagnostics?.record({ level: 'debug', name: 'autocomplete.accepted', attributes: {} });
+    vscode.commands.registerCommand('droidvisx.autocomplete.accepted', (value?: unknown) => {
+      const item = value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
+      diagnostics?.record({ level: 'debug', name: 'autocomplete.accepted', attributes: {
+        suggestionId: typeof item?.suggestionId === 'number' ? item.suggestionId : 0,
+        cached: item?.cached === true,
+        characters: typeof item?.characters === 'number' ? item.characters : 0,
+      } });
     }),
   );
   refresh();

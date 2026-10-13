@@ -1,4 +1,4 @@
-import { postprocessAutocompleteSuggestion } from './kilo/classic-auto-complete/uselessSuggestionFilter';
+import { postprocessAutocompleteSuggestionWithOutcome, type AutocompletePostprocessResult } from './kilo/classic-auto-complete/uselessSuggestionFilter';
 
 /** A UTF-16 character budget matching VS Code document offsets. */
 export function buildCompletionContext(
@@ -28,21 +28,34 @@ function splitsPair(text: string, offset: number): boolean {
     || (before === 13 && after === 10);
 }
 
+export type CompletionPreparationResult = AutocompletePostprocessResult | {
+  text: undefined;
+  outcome: 'format-rejected';
+};
+
 /** Keep code unchanged; undefined rejects ambiguous model formatting instead of repairing it. */
 export function prepareCompletion(
   text: string, prefix: string, suffix: string, languageId: string, model?: string,
 ): string | undefined {
-  if (!text.trim() || suffix.startsWith(text)) return '';
+  return prepareCompletionWithOutcome(text, prefix, suffix, languageId, model).text;
+}
+
+/** Preserve the filter decision so diagnostics can separate empty output from rejected code. */
+export function prepareCompletionWithOutcome(
+  text: string, prefix: string, suffix: string, languageId: string, model?: string,
+): CompletionPreparationResult {
+  if (!text.trim()) return { text: '', outcome: 'empty' };
+  if (suffix.startsWith(text)) return { text: '', outcome: 'already-present' };
   const allowsFences = ['markdown', 'mdx', 'plaintext'].includes(languageId);
   // Without lexical state an isolated fence may be model markup or legitimate string/comment
   // content. Suppress the whole code suggestion rather than guessing and deleting its lines.
-  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) return undefined;
+  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) return { text: undefined, outcome: 'format-rejected' };
   // The provider supplies the model to enable Kilo's model/language-aware pipeline.
-  if (!model) return text;
+  if (!model) return { text, outcome: 'suggestion-returned' };
   const eol = text.includes('\r\n') || prefix.includes('\r\n') ? '\r\n' : '\n';
-  const processed = postprocessAutocompleteSuggestion({ suggestion: text.replace(/\r\n/g, '\n'),
+  const processed = postprocessAutocompleteSuggestionWithOutcome({ suggestion: text.replace(/\r\n/g, '\n'),
     prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model });
-  return (processed ?? '').replace(/\n/g, eol);
+  return { ...processed, text: processed.text.replace(/\n/g, eol) };
 }
 
 export type CachedCompletion = {

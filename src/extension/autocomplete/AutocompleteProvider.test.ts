@@ -63,7 +63,7 @@ vi.mock('vscode', () => {
       constructor(public start: vscode.Position, public end: vscode.Position) {}
     },
     InlineCompletionItem: class {
-      constructor(public insertText: string, public range: vscode.Range) {}
+      constructor(public insertText: string, public range: vscode.Range, public command?: vscode.Command) {}
     },
   };
 });
@@ -454,12 +454,15 @@ describe('AutocompleteProvider', () => {
     expect(provider.lastMessage).toBeUndefined();
   });
 
-  it('does not repeat requests for a cached empty result', async () => {
+  it('coalesces automatic empty results but permits an immediate explicit retry', async () => {
     const file = document();
     mocks.request.mockResolvedValue('');
     expect(await (await requesting(file)).pending).toEqual([]);
-    expect(await (await requesting(file)).pending).toEqual([]);
+    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
     expect(mocks.request).toHaveBeenCalledTimes(1);
+    mocks.request.mockResolvedValue('42');
+    expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
+    expect(mocks.request).toHaveBeenCalledTimes(2);
   });
 
   it.each(['configuration', 'secret'])('invalidates cached suggestions when %s changes', async (change) => {
@@ -677,11 +680,53 @@ describe('full classic and notebook workflows', () => {
     expect((await (await requesting(file)).pending)[0].insertText).toBe('nextStatement()');
     expect(mocks.request).toHaveBeenCalledOnce();
   });
-  it('skips automatic mid-word requests but permits explicit requests', async () => {
-    const file = document('const value = cal'); mocks.request.mockResolvedValue('culate()');
-    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+  it.each(['if', 'for', 'return', 'const value = cal', 'if (ready)', 'function run()', 'if (rea'])
+  ('allows automatic continuation after %s', async prefix => {
+    const file = document(prefix); mocks.request.mockResolvedValue(' next');
+    expect((await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending)[0].insertText).toBe(' next');
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+  it('extends an IntelliSense candidate during automatic typing', async () => {
+    const file = document('console.lo();');
+    const selected = { range: new vscode.Range(position(0, 8), position(0, 10)), text: 'log' };
+    mocks.request.mockResolvedValue('Info');
+    const [item] = await (await requesting(file, 10, { triggerKind: 1, selectedCompletionInfo: selected })).pending;
+    expect(item.insertText).toBe('logInfo');
+    expect(item.range).toBe(selected.range);
+  });
+  it('shares context preparation when typing the third character, without losing the first result', async () => {
+    const snippets = deferred<[]>(), file = document('co');
+    mocks.collect.mockReturnValue(snippets.promise);
+    mocks.request.mockResolvedValue('nsole.log()');
+    const first = await requesting(file, undefined, { ...context, triggerKind: 1 });
+    file.state.text += 'n'; Object.assign(file.value, { version: 2 });
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: 'n' }] });
+    const second = await requesting(file, undefined, { ...context, triggerKind: 1 });
     expect(mocks.request).not.toHaveBeenCalled();
-    expect((await (await requesting(file)).pending)[0].insertText).toBe('culate()');
+    snippets.resolve([]);
+    expect(await first.pending).toEqual([]);
+    expect((await second.pending)[0].insertText).toBe('sole.log()');
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(mocks.record.mock.calls.filter(([event]) => event.name === 'autocomplete.request')).toHaveLength(1);
+  });
+  it('reuses a pending LF response after the user types a CRLF newline', async () => {
+    const output = deferred<string>(), file = document('function run() {\r\n', 'file:///windows.ts', 2);
+    mocks.request.mockReturnValue(output.promise);
+    const first = await requesting(file);
+    file.state.text += '  first();\r\n'; Object.assign(file.value, { version: 2 });
+    const second = await requesting(file);
+    output.resolve('  first();\n  second();');
+    expect(await first.pending).toEqual([]);
+    expect((await second.pending)[0].insertText).toBe('  second();');
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+  it('associates accepted suggestions with the returned candidate rather than calling it displayed', async () => {
+    mocks.request.mockResolvedValue('compute()\nnext()');
+    const [item] = await (await requesting(document('const value = '))).pending;
+    const result = mocks.record.mock.calls.find(([event]) => event.name === 'autocomplete.result')![0];
+    expect(item.command?.arguments).toEqual([{ suggestionId: result.attributes.id, cached: false, characters: 'compute()'.length }]);
+    expect(result.attributes.insertionCharacters).toBe('compute()'.length);
   });
   it.each([{ autoTrigger: false }, { snoozeUntil: Date.now() + 60_000 }])('keeps manual suggestions available while automatic requests are paused: %j', async settings => {
     Object.assign(mocks.config, settings); const file = document(); mocks.request.mockResolvedValue('42');

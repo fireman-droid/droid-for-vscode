@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompletionContext, prepareCompletion, reuseCompletion, type CachedCompletion } from './completionText';
+import { buildCompletionContext, prepareCompletion, prepareCompletionWithOutcome, reuseCompletion, type CachedCompletion } from './completionText';
 
 describe('completion text', () => {
   it.each([
@@ -90,6 +90,39 @@ describe('completion text', () => {
   it('filters repeated lines and looping model output', () => {
     expect(prepareCompletion('const repeated = 1;\nconst next = 2;', 'const repeated = 1;\n', '', 'typescript', 'codestral')).toBe('');
     expect(prepareCompletion('repeat this phrase again and again forever. '.repeat(8), '', '', 'plaintext', 'codestral')).toBe('');
+  });
+
+  it.each([
+    ['const a = computeLongValue();\n', 'const b = computeLongValue();'],
+    ["logger.info('step 1');\n", "logger.info('step 2');"],
+  ])('preserves a similar line with a different identifier or literal (%#)', (prefix, suggestion) => {
+    expect(prepareCompletionWithOutcome(suggestion, prefix, '', 'typescript', 'codestral'))
+      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
+  });
+
+  it('preserves a batch of similar but distinct declarations', () => {
+    const suggestion = Array.from({ length: 6 }, (_, index) => `const item${index} = source.read(${index});`).join('\n');
+    expect(prepareCompletionWithOutcome(suggestion, '', '', 'typescript', 'codestral'))
+      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
+  });
+
+  it.each([
+    'consumeNextRecord();\n'.repeat(8),
+    'const next = readValue();\nconsume(next);\n'.repeat(5),
+  ])('still rejects an exactly repeating generated block (%#)', (suggestion) => {
+    expect(prepareCompletionWithOutcome(suggestion, '', '', 'typescript', 'codestral'))
+      .toEqual({ text: '', outcome: 'repetition-filtered' });
+  });
+
+  it.each([
+    { text: '\n  ', prefix: '', suffix: '', outcome: 'empty', result: '' },
+    { text: 'return value;', prefix: '', suffix: 'return value;\n}', outcome: 'already-present', result: '' },
+    { text: 'return value;', prefix: '', suffix: '\n  return value;\n}', outcome: 'already-present', result: '' },
+    { text: 'const value = 1;', prefix: 'const value = 1;\n', suffix: '', outcome: 'repetition-filtered', result: '' },
+    { text: 'return value;\n```', prefix: '', suffix: '', outcome: 'format-rejected', result: undefined },
+  ])('reports $outcome without confusing it with empty model output', ({ text, prefix, suffix, outcome, result }) => {
+    expect(prepareCompletionWithOutcome(text, prefix, suffix, 'typescript', 'codestral'))
+      .toEqual({ text: result, outcome });
   });
 
   it('preserves Markdown fences while removing extra empty lines before a closing fence', () => {
