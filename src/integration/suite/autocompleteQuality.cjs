@@ -20,10 +20,12 @@ async function run() {
   const corpus = JSON.parse(corpusText);
   const resultFile = process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT;
   const root = path.join(path.dirname(resultFile), 'workspace');
+  const typing = process.env.DROID_AUTOCOMPLETE_QUALITY_TYPING ?? 'accept-only';
+  assert.ok(['accept-only', 'newline-after-empty'].includes(typing), 'Unknown quality typing trajectory');
   assert.equal(path.resolve(vscode.workspace.workspaceFolders[0].uri.fsPath).toLowerCase(), root.toLowerCase());
   const report = { corpusSha256: createHash('sha256').update(corpusText).digest('hex'), ...settings,
     packageSha256: process.env.DROID_AUTOCOMPLETE_PACKAGE_SHA256,
-    contextMode: 'native-context', acceptanceMode: 'automatic-then-explicit', records: [] };
+    contextMode: 'native-context', acceptanceMode: 'automatic-then-explicit', typing, records: [] };
   let current;
   const server = createServer(async (request, response) => {
     const record = current;
@@ -74,7 +76,7 @@ async function run() {
     for (const item of corpus.cases) {
       const record = { id: item.id, category: item.category, language: item.language, entryFile: item.entryFile,
         contextMode: item.language === 'typescript' ? 'typescript-lsp' : `open-files-without-${item.language}-lsp`,
-        requests: [], accepts: [], diagnostics: [] };
+        requests: [], accepts: [], userEdits: [], diagnostics: [] };
       current = record; report.records.push(record);
       try {
         await config.update('enabled', false, true);
@@ -108,9 +110,11 @@ async function run() {
         const started = Date.now();
         await until(() => record.requests.length > beforeType || record.transportError, 3500);
         record.automaticRequested = record.requests.length > beforeType;
+        let automaticPending = record.automaticRequested;
         for (let step = 0; step < 12; step++) {
           const before = document.getText();
-          if (step > 0 || !record.automaticRequested) await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          if (!automaticPending) await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          automaticPending = false;
           let changed = false;
           const deadline = Date.now() + 8000;
           while (Date.now() < deadline && !record.transportError && !record.cacheProbeMiss) {
@@ -119,10 +123,29 @@ async function run() {
             await delay(80);
           }
           if (!changed) {
+            const last = record.requests.at(-1);
+            // A separately labelled user trajectory: after one confirmed empty
+            // result in an unfinished source, press Enter once. No answers or
+            // hidden-test outcomes guide this input; production is unchanged.
+            if (typing === 'newline-after-empty' && !record.userEdits.length && !record.probeCacheOnly
+              && !record.transportError && last?.responded && last.raw === '' && step < 11) {
+              const offset = document.offsetAt(editor.selection.active);
+              const newline = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+              const edit = { step, offset, text: newline, startedAt: Date.now(), automaticRequested: false };
+              record.userEdits.push(edit);
+              const requestsBefore = record.requests.length;
+              await vscode.commands.executeCommand('type', { text: '\n' });
+              assert.equal(document.getText(), before.slice(0, offset) + newline + before.slice(offset), 'Enter changed other fixture text');
+              record.insertion = document.getText().slice(item.prefix.length, item.suffix ? -item.suffix.length : undefined);
+              await until(() => record.requests.length > requestsBefore || record.transportError, 3500);
+              automaticPending = edit.automaticRequested = record.requests.length > requestsBefore;
+              continue;
+            }
             record.stop = record.transportError ? 'transport-error' : record.probeCacheOnly ? 'source-complete' : 'no-acceptable-suggestion';
             break;
           }
-          record.accepts.push({ step, elapsedMs: Date.now() - started, addedCharacters: document.getText().length - before.length });
+          record.accepts.push({ step, elapsedMs: Date.now() - started, addedCharacters: document.getText().length - before.length,
+            ...(record.userEdits.length ? { sinceUserEditMs: Date.now() - record.userEdits.at(-1).startedAt } : {}) });
           const text = document.getText();
           assert.ok(text.startsWith(item.prefix) && text.endsWith(item.suffix), 'Completion changed existing surrounding code');
           record.insertion = text.slice(item.prefix.length, item.suffix ? -item.suffix.length : undefined);
