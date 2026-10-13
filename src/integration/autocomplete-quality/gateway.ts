@@ -50,7 +50,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const kind = input && typeof input === 'object' && 'kind' in input ? input.kind : undefined;
       let result: unknown;
       if (kind === 'raw-fim') result = await rawFim(context.secrets, input, signal);
-      else if (kind === 'next-edit') result = await evaluateNextEdit(context.secrets, input, signal);
+      else if (kind === 'next-edit' || kind === 'next-edit-inspect') result = await evaluateNextEdit(context.secrets, input, signal);
       else {
         result = await evaluation(input, signal);
         if (kind === 'settings') result = { ...(result as object), rawTransport: true, nextEditAvailable: nextEditAvailable() };

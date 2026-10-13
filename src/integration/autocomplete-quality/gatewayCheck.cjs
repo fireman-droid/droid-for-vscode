@@ -39,6 +39,9 @@ async function main() {
     ['Next Edit rejects another model', { kind: 'next-edit', context, model: 'not-the-configured-model' }],
     ['Next Edit rejects out-of-source positions', { kind: 'next-edit', context: { ...context, cursorLine: 1 } }],
     ['Next Edit rejects invalid snippets', { kind: 'next-edit', context: { ...context, recentlyViewedSnippets: [{}] } }],
+    ['inspection rejects excess token budget', { kind: 'next-edit-inspect', context, maxTokens: 1025 }],
+    ['inspection rejects invalid token budget', { kind: 'next-edit-inspect', context, maxTokens: '1024' }],
+    ['production evaluation rejects token overrides', { kind: 'next-edit', context, maxTokens: 1024 }],
   ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers, body: JSON.stringify(input) });
   await assert.rejects(createHostClient()({ kind: 'next-edit', context: null }), /HTTP 400 \(invalid-request\)/);
   console.log('PASS preserves classified errors without exposing response bodies');

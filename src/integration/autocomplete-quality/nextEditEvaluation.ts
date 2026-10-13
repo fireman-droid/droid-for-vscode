@@ -1,6 +1,7 @@
 import type * as vscode from 'vscode';
 import { readCompletionKey, readCompletionSettings, MERCURY_EDIT_ENDPOINT, MERCURY_FIM_ENDPOINT } from '../../extension/autocomplete/settings';
-import { requestNextEdit } from '../../runtime/autocomplete/nextEdit';
+import { buildBoundedEditPrompt, parseNextEditReplacement, requestNextEdit } from '../../runtime/autocomplete/nextEdit';
+import { asRecord, FimCompletionError, parsePayload, protocolError, readBody, requestCompletionTransport } from '../../runtime/autocomplete/completionTransport';
 import type { MercuryEditContext } from '../../runtime/autocomplete/kilo/editPrompt';
 
 // Development gateway only: compare the same configured Mercury model via its
@@ -14,12 +15,44 @@ export function nextEditAvailable(): boolean {
 
 export async function evaluateNextEdit(secrets: vscode.SecretStorage, value: unknown, signal: AbortSignal) {
   if (!nextEditAvailable()) throw new Error('Next Edit evaluation requires the configured official Mercury service');
-  if (!record(value) || Object.keys(value).some(key => !['kind', 'context'].includes(key))) throw new Error('Invalid Next Edit evaluation');
+  if (!record(value) || Object.keys(value).some(key => !['kind', 'context', 'maxTokens'].includes(key))) throw new Error('Invalid Next Edit evaluation');
+  const inspect = value.kind === 'next-edit-inspect';
+  if (value.maxTokens !== undefined && (!inspect || typeof value.maxTokens !== 'number'
+    || !Number.isInteger(value.maxTokens) || value.maxTokens < 32 || value.maxTokens > 1024)) throw new Error('Invalid inspection token limit');
   const context = parseContext(value.context);
   const settings = readCompletionSettings();
   const apiKey = await readCompletionKey(secrets, settings.endpoint);
   if (!apiKey) throw new Error('The configured Mercury key is unavailable');
   const started = Date.now();
+  if (inspect) {
+    const maxTokens = Math.max(512, typeof value.maxTokens === 'number' ? value.maxTokens : settings.maxTokens);
+    const prompt = buildBoundedEditPrompt(context, settings.maxContextCharacters);
+    const encoded = await requestCompletionTransport({ endpoint: MERCURY_EDIT_ENDPOINT, apiKey, signal }, {
+      model: settings.model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, stream: false,
+    }, 'application/json', async response => {
+      let body = '';
+      await readBody(response, chunk => { body += chunk; return false; });
+      const payload = parsePayload(body);
+      const choice = Array.isArray(payload.choices) ? asRecord(payload.choices[0]) : undefined;
+      if (!choice) throw protocolError('Next Edit inspection received no choice');
+      const raw = asRecord(choice.message)?.content;
+      const usage = asRecord(payload.usage);
+      return JSON.stringify({ raw: typeof raw === 'string' ? raw : null,
+        finishReason: choice.finish_reason === 'stop' || choice.finish_reason === 'length' ? choice.finish_reason : 'other',
+        completionTokens: typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : null });
+    });
+    const observed = JSON.parse(encoded) as { raw: string | null; finishReason: string; completionTokens: number | null };
+    let replacement: string | undefined;
+    if (observed.finishReason === 'stop' && typeof observed.raw === 'string') {
+      try { replacement = parseNextEditReplacement(observed.raw); }
+      catch (error) {
+        // Keep known format rejections for inspection, but surface unexpected failures.
+        if (!(error instanceof FimCompletionError) || error.code !== 'protocol') throw error;
+      }
+    }
+    return { ...observed, replacement, model: settings.model, protocol: 'mercury-edit', maxTokens,
+      contextMode: 'response-inspection', elapsedMs: Date.now() - started };
+  }
   const replacement = await requestNextEdit({ context, endpoint: MERCURY_EDIT_ENDPOINT, apiKey,
     model: settings.model, maxTokens: settings.maxTokens, maxContextCharacters: settings.maxContextCharacters, signal });
   return { replacement, model: settings.model, protocol: 'mercury-edit', maxTokens: Math.max(512, settings.maxTokens),

@@ -173,6 +173,10 @@ Mercury 服务时提供此能力，固定使用同一模型及配对的官方 Ed
 指定的地址或模型。返回的是生产解析器接受的整个区域替换；判分时将其应用到原区域，再用原题测试
 检查完整源码。直接提供参考文件的结果标记为 `supplied-fixtures`，不能当成原生编辑器或 LSP 验证。
 Next Edit 沿用生产最少 512 token 的请求预算，与默认 256 token FIM 的单次成本及延迟不能直接等同。
+诊断时可使用 `kind: 'next-edit-inspect'`，记录原始模型文本、结束原因和输出 token 数；此入口允许
+32–1024 的 `maxTokens` 对照（沿用生产至少 512 的规则），仍固定当前模型及官方配对地址。
+只有 `stop` 且生产解析器接受的文本才附带 `replacement`，截断或格式错误不能当成可应用建议。
+普通 `next-edit` 入口不接受预算覆盖，诊断不会改变用户设置。
 审阅题库后再运行；该模式会调用真实模型，并不执行模型代码，代码行为仍在后续受限进程中测试。
 
 将同一网关命令的子命令替换为 `node src/integration/runAutocompleteTest.mjs <Code.exe> <VSIX> --quality`
