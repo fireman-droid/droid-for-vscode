@@ -114,19 +114,13 @@
 .v2-mission-feature:has(.v2-mission-feature-trigger:hover),
 .v2-mission-feature:focus-within { background: color-mix(in srgb, var(--control-surface-hover) 45%, var(--surface)); }
 .v2-mission-feature-trigger { border-radius: inherit; cursor: pointer; }
-.v2-mission-settings-trigger:hover:not(:disabled),
-.v2-mission-settings-trigger[data-state='open'] { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
-.v2-mission-settings-trigger:active:not(:disabled) { background: var(--control-surface-active); }
 .v2-mission-toggle { border-color: var(--panel-edge); cursor: pointer; }
-.v2-mission-toggle:hover:not(:has(:disabled)), .v2-mission-toggle:focus-within { background: var(--control-surface-hover); }
-.v2-mission-toggle:active:not(:has(:disabled)) { background: var(--control-surface-active); }
 .v2-mission-toggle:has(:disabled) { cursor: default; }
-.v2-mission-feature, .v2-mission-feature-trigger, .v2-mission-settings-trigger, .v2-mission-toggle {
+.v2-mission-feature, .v2-mission-feature-trigger {
   transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
 }
 @media (prefers-reduced-motion: reduce) {
-  .v2-mission-card, .v2-mission-feature, .v2-mission-feature-trigger,
-  .v2-mission-settings-trigger, .v2-mission-toggle { transition: none; }
+  .v2-mission-card, .v2-mission-feature, .v2-mission-feature-trigger { transition: none; }
 }
 
 /* A fixed action area and one scroll owner keep setup usable in a narrow sidebar. */

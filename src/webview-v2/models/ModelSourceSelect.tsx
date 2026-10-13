@@ -1,8 +1,9 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { matchesModelSource } from '../../shared/protocol/modelSourceProtocol';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/controls';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { ModelSourceEmpty, useModelSource } from './ModelSourceControl';
@@ -29,9 +30,13 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const { mode } = useModelSource();
   const selected = models.find((model) => model.id === value);
-  const visible = models.filter((model) => matchesModelSource(model, mode));
+  const sourceModels = models.filter((model) => matchesModelSource(model, mode));
+  const visible = sourceModels.filter(model => `${model.displayName} ${model.id} ${model.description ?? ''}`
+    .toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  useEffect(() => { if (!open) setQuery(''); }, [open]);
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>
@@ -43,7 +48,17 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
       </Button>
     </PopoverTrigger>
     <PopoverContent aria-label={label} side={side} align={align} className="flex max-h-[min(360px,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-[min(240px,calc(100vw-16px))] max-w-[calc(100vw-16px)] flex-col gap-2 p-2">
-      {visible.length === 0 ? <ModelSourceEmpty /> : (
+      <div className="dvx-picker-search shrink-0"><Search aria-hidden="true" />
+        <Input type="search" aria-label={t('搜索模型')} placeholder={t('搜索模型')} value={query}
+          onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+            if (event.nativeEvent.isComposing || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+            event.preventDefault();
+            const options = event.currentTarget.closest('[data-slot="popover-content"]')?.querySelectorAll<HTMLElement>('[role="radio"]:not([data-disabled])');
+            options?.[event.key === 'ArrowUp' ? options.length - 1 : 0]?.focus();
+          }} />
+      </div>
+      {visible.length === 0 ? sourceModels.length === 0 ? <ModelSourceEmpty />
+        : <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t('没有匹配的模型。')}</p> : (
         <RadioGroup aria-label={t("{p0} options", { p0: label })} value={value ?? ''} className="min-h-0 overflow-y-auto"
           onValueChange={(next) => { if (next !== value) onChange(next); setOpen(false); }}>
           {visible.map((model) => <RadioGroupItem key={model.id} value={model.id} disabled={model.disabled} onClick={() => setOpen(false)}

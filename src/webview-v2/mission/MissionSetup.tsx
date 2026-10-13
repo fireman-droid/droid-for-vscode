@@ -35,7 +35,7 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
         <p className="text-xs text-muted-foreground">{t("默认沿用当前聊天的模型和推理强度；可在这里分别调整，启动 Mission 时应用。")}</p>
       </section>
       <Collapsible className="v2-mission-execution" open={advanced} onOpenChange={setAdvanced} disabled={flow.controlsDisabled}>
-        <CollapsibleTrigger asChild><Button variant="ghost" className="v2-mission-settings-trigger" aria-label={t("Advanced Mission settings")} disabled={flow.controlsDisabled}>
+        <CollapsibleTrigger asChild><Button variant="plain" className="v2-mission-settings-trigger flex items-center text-muted-foreground hover:text-foreground" aria-label={t("Advanced Mission settings")} disabled={flow.controlsDisabled}>
           <SlidersHorizontal aria-hidden="true" className="v2-mission-section-icon" />
           <span className="min-w-0 flex-1"><span className="block font-medium">{t("Execution settings")}</span><span className="block text-xs font-normal text-muted-foreground">{inheritedProfiles ? t("Worker & Validator inherit Orchestrator") : t("Custom Worker / Validator profiles")}</span><span className="block text-xs font-normal text-muted-foreground">{flow.enabledValidationCount} {flow.enabledValidationCount === 1 ? t("check") : t("checks")} {t("enabled")}</span></span>
           <ChevronDown aria-hidden="true" className="v2-mission-settings-chevron" />
@@ -55,9 +55,9 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
     </div>
     <footer className="v2-mission-setup-actions">
       <p role="status" aria-live="polite" aria-label={t("Mission setup status")} className={`v2-mission-setup-feedback ${flow.visibleErrors.length > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{t(flow.status || startHint || '')}</p>
-      <div className="flex items-center justify-between gap-3">
-        <Button variant="ghost" className="h-9" aria-label={t("Dismiss Mission setup")} disabled={flow.controlsDisabled} onClick={onDismiss}>{t("Cancel setup")}</Button>
-        <Button className="h-9 min-w-32" disabled={flow.pending || startDisabled || flow.validation.errors.length > 0} onClick={flow.submit}>{flow.pending ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Play />}{flow.pending ? t("Starting…") : t("Start Mission")}</Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" aria-label={t("Dismiss Mission setup")} disabled={flow.controlsDisabled} onClick={onDismiss}>{t("Cancel setup")}</Button>
+        <Button disabled={flow.pending || startDisabled || flow.validation.errors.length > 0} onClick={flow.submit}>{flow.pending ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Play />}{flow.pending ? t("Starting…") : t("Start Mission")}</Button>
       </div>
     </footer>
   </section>;
