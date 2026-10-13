@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (event?: unknown) => void>(),
   config: {} as Record<string, unknown>,
   request: vi.fn(),
+  nextRequest: vi.fn(),
   secretGet: vi.fn(),
   record: vi.fn(),
   contextRevision: 0,
@@ -69,6 +70,13 @@ vi.mock('vscode', () => {
 });
 
 vi.mock('../../runtime/autocomplete/requestCompletion', () => ({ requestCompletion: mocks.request }));
+vi.mock('../../runtime/autocomplete/nextEdit', () => ({ requestNextEdit: mocks.nextRequest }));
+vi.mock('./NextEditSupport', () => ({ NextEditSupport: class {
+  manager = { isPending: () => false };
+  presenter = { toCompletionItems: () => [] };
+  async capture() { return {}; }
+  clear() {} dispose() {}
+} }));
 vi.mock('./context/CompletionContextService', () => ({
   CompletionContextService: class {
     onDidChangeContext(listener: () => void) {
@@ -78,6 +86,7 @@ vi.mock('./context/CompletionContextService', () => ({
     revisionFor() { return mocks.contextRevision; }
     isAllowed = mocks.allowed;
     collect = mocks.collect;
+    collectRecentlyViewed = mocks.collect;
     dispose = mocks.contextDispose;
   },
 }));
@@ -164,6 +173,7 @@ beforeEach(() => {
   mocks.comments.mockReset().mockResolvedValue({ line: '//' });
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
+  mocks.nextRequest.mockReset().mockResolvedValue('const answer = 42;');
   mocks.record.mockReset();
   mocks.secretGet.mockReset().mockResolvedValue('synthetic-provider-key');
   provider = new AutocompleteProvider({
@@ -190,6 +200,35 @@ async function requesting(
 }
 
 describe('AutocompleteProvider', () => {
+
+  it('starts Next Edit immediately after idle, but coalesces further automatic input', async () => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    try {
+      const file = document(), automatic = { ...context, triggerKind: 1 };
+      const first = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      await first.pending;
+      file.state.text += '4'; Object.assign(file.value, { version: 2 });
+      const second = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      second.cancel.cancel(); expect(await second.pending).toEqual([]);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      clock.mockReturnValue(12_000);
+      const afterIdle = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
+      await afterIdle.pending;
+    } finally { clock.mockRestore(); }
+  });
+
+  it('retains a configured fixed Next Edit delay and cancels it before transport', async () => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions',
+      adaptiveDebounce: false, debounceMs: 350 });
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+    request.cancel.cancel(); expect(await request.pending).toEqual([]);
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
 
   it.each([0, 1])('offers an if body inside an existing function for trigger %i', async (triggerKind) => {
     const prefix = 'function calculateCartTotal(items: CartItem[]): number {\n  // Empty cart\n  if';

@@ -55,7 +55,7 @@ async function run() {
       if (response.destroyed) { attempt.cancelled = true; return; }
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ choices: [{ finish_reason: attempt.finishReason, message: { content: attempt.raw } }] }));
-      attempt.responded = true;
+      attempt.responded = true; attempt.respondedAt = Date.now();
     } catch (error) {
       if (record) record.transportError = error.message;
       if (!response.destroyed) { response.writeHead(502); response.end('{}'); }
@@ -116,6 +116,7 @@ async function run() {
           assert.equal(document.getText(), text.slice(0, offset) + edit.after + text.slice(offset + edit.before.length));
           record.edits.push({ path: edit.path, before: text, after: document.getText(), cursor: editor.selection.active });
         }
+        record.inputStartedAt = started;
         record.beforeSource = document.getText();
         record.references = [...documents].filter(([name]) => name !== item.entryFile)
           .map(([name, doc]) => ({ path: name, content: doc.getText() }));
@@ -136,7 +137,8 @@ async function run() {
             if (document.getText() === before) await delay(80);
           }
           if (document.getText() === before) { record.stop = record.limitReached ? 'request-limit' : 'no-acceptable-edit'; break; }
-          record.accepts.push({ step, source: document.getText(), jumps, elapsedMs: Date.now() - started });
+          const acceptedAt = Date.now();
+          record.accepts.push({ step, source: document.getText(), jumps, elapsedMs: acceptedAt - started, acceptedAt });
           // Allow production's acceptance chain to start before an explicit fallback.
           await until(() => record.requests.length > previousRequests || record.transportError, 500);
           pending = record.requests.length > previousRequests;

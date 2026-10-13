@@ -227,10 +227,10 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     if (explicit && !isNextEdit && this.history.find(scope, prefix, suffix) === '') this.requests.clear();
     // Keywords, partial identifiers and closing parentheses can all need a continuation.
     // Coalesce automatic input instead of permanently suppressing these positions.
-    const leading = !isNextEdit && Date.now() - this.lastAutomaticRequestAt >= 1000;
+    const leading = Date.now() - this.lastAutomaticRequestAt >= 1000;
     if (!explicit) this.lastAutomaticRequestAt = Date.now();
     const debounceMs = explicit ? 0 : settings.adaptiveDebounce === false ? settings.debounceMs
-      : isNextEdit ? 250 : leading ? 0 : this.latencies.length < 10 ? 150 : Math.min(250, calcDebounceDelay(this.latencies));
+      : leading ? 0 : isNextEdit ? 250 : this.latencies.length < 10 ? 150 : Math.min(250, calcDebounceDelay(this.latencies));
     const pending: PendingCompletion = {
       id, startedAt: Date.now(), phase: 'debounce',
       controller: new AbortController(), document, version: document.version, position, contextRevision, documentScope: autocompleteScope(document),

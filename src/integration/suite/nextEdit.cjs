@@ -39,6 +39,8 @@ async function runNextEdit() {
       'export function literal(value: string) {', '  return value;', '}'].join('\n');
     const cases = [
       {name:'Native same-line insertion and Undo', source:'const value = ', replacement:'const value = 42;', cursor:[0,14], inline:true},
+      {name:'Automatic Next Edit after idle preserves typed input through Undo', source:'const value = ',
+        replacement:'const value = 2;', cursor:[0,14], automaticText:'1;'},
       {name:'Off-cursor rename jumps before applying', source:'const name = 1;\nconsole.log(old);', replacement:'const name = 1;\nconsole.log(name);', cursor:[0,14], jump:1, saved:true},
       {name:'Syntax-aligned region does not duplicate the adjacent closing brace', source:boundarySource,
         replacement:boundarySource.replace('return value + suffix;', 'return value.toUpperCase() + suffix;'), cursor:[0,0], jump:2, saved:true},
@@ -71,9 +73,15 @@ async function runNextEdit() {
         await delay(100);
         await config.update('enabled', true, true);
         await delay(150);
-        const beforeCalls=calls, beforeReplies=replied, before=doc.getText();
-        await vscode.commands.executeCommand('droidvisx.autocomplete.trigger');
+        if(c.automaticText) await delay(1100);
+        const beforeCalls=calls, beforeReplies=replied;
+        let before=doc.getText();
+        if(c.automaticText) {
+          await vscode.commands.executeCommand('type',{text:c.automaticText});
+          before=doc.getText();
+        } else await vscode.commands.executeCommand('droidvisx.autocomplete.trigger');
         await until(()=>calls>beforeCalls,5000,'No Next Edit request from packaged provider');
+        if(c.automaticText) assert.ok(lastPrompt.includes('const value = 1;'), 'Automatic prediction must include the latest typing');
         if(c.behavior==='cancel'){
           await vscode.commands.executeCommand('type',{text:'x'});
           const typed=doc.getText(); await delay(950);

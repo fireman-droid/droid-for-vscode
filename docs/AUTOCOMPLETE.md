@@ -74,8 +74,9 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 - 请求、缓存、退格复用、防抖和编辑提示部分移植自
   [Kilo Code](https://github.com/Kilo-Org/kilocode/tree/7d977bce994af36f0edf752cb53e3aefc7aeb214)，
   Kilo MIT、Continue Apache-2.0 及语法包/分词器许可随包分发；Host 生命周期、读取边界和服务适配由 Droid 负责。
-- `adaptiveDebounce` 开启时，普通续写在首次输入或至少 1 秒空闲后立即开始准备；连续输入的新任务
-  初始等待 150ms，积累响应后在 150–250ms 间调整。Next Edit 保持 250ms；关闭自适应后使用 `debounceMs`。
+- `adaptiveDebounce` 开启时，普通续写和 Next Edit 在首次输入或至少 1 秒空闲后立即开始准备；
+  连续输入时，普通续写初始等待 150ms，积累响应后在 150–250ms 间调整，Next Edit 等待 250ms。
+  关闭自适应后仍使用设置的 `debounceMs`，手动触发不等待防抖。
   兼容的连续输入共享正在等待、收集上下文或生成的任务，不重启计时或重复收集；过期调用不显示结果，
   最后一个消费者离开后只保留 100ms 交接时间。配置、Notebook 或外部上下文变化仍撤销旧任务。
   `if`、`for`、较长标识符和条件右括号后的停顿可以触发，不再按单词长度或结束字符直接禁止请求。
