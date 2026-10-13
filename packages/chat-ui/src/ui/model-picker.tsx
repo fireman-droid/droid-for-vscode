@@ -33,24 +33,26 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
   const title = inherited ? inherit.label : model?.label ?? (modelId ? t('{name} (unavailable)', { name: modelId }) : placeholder ?? t('选择模型'));
   const effortName = (effort: string) => t(effort.charAt(0).toUpperCase() + effort.slice(1));
   const effort = reasoningEffort ? effortName(reasoningEffort) : defaultEffortLabel ? t(defaultEffortLabel) : model?.defaultReasoning ? effortName(model.defaultReasoning) : '';
+  const showEffort = Boolean(onEffortChange && model?.reasoning?.length);
+  const showInheritance = Boolean(inherit && !query.trim());
   const filtered = models.filter(item => (visibleModelIds === undefined || visibleModelIds.includes(item.id))
     && `${item.label} ${item.id}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const groups = [...new Set(filtered.map(item => item.source ?? ''))];
-  const listHeight = Math.min(260, Math.max(56, filtered.length * 34 + groups.filter(Boolean).length * 29 + (inherit && !query.trim() ? 34 : 0) + 10));
+  const listHeight = Math.min(260, Math.max(44, filtered.length * 34 + groups.filter(Boolean).length * 29 + (showInheritance ? 34 : 0) + 10));
   const inheritanceValue = `${id}-inherit`;
   const defaultValue = `${id}-default`;
   const changeOpen = (value: boolean) => { setOpen(value); if (!value) setQuery(''); };
   return <Popover open={open} onOpenChange={changeOpen}>
     <PopoverTrigger asChild><Button variant="outline" size="sm" className="dvx-model-picker-trigger" aria-label={label} disabled={disabled}>
-      <span>{title}</span>{onEffortChange && effort && effort !== title && <small>· {effort}</small>}<ChevronDown aria-hidden="true" />
+      <span>{title}</span>{showEffort && effort && effort !== title && <small>· {effort}</small>}<ChevronDown aria-hidden="true" />
     </Button></PopoverTrigger>
     <PopoverContent className="dvx-model-picker" align="end" aria-label={label}>
       <div className="dvx-picker-search"><Search aria-hidden="true" /><Input type="search" aria-label={t('搜索模型')} placeholder={t('搜索模型')}
         value={query} onChange={event => setQuery(event.target.value)} /></div>
       <ScrollArea className="dvx-picker-models" nonce={nonce} style={{ height: listHeight }}>
-        <RadioGroup aria-label={label} value={inherited ? inheritanceValue : modelId ?? ''} disabled={disabled || modelDisabled}
+        {(filtered.length > 0 || showInheritance) && <RadioGroup aria-label={label} value={inherited ? inheritanceValue : modelId ?? ''} disabled={disabled || modelDisabled}
           onValueChange={value => { onModelChange(value === inheritanceValue ? null : value); if (!onEffortChange) changeOpen(false); }}>
-          {inherit && !query.trim() && <RadioGroupItem value={inheritanceValue} className="dvx-picker-option">
+          {inherit && showInheritance && <RadioGroupItem value={inheritanceValue} className="dvx-picker-option">
             <span>{inherit.label}</span>{inherited && <Check aria-hidden="true" />}
           </RadioGroupItem>}
           {groups.map(group => <div key={group} className="dvx-picker-group">
@@ -60,11 +62,10 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
               <span>{item.label}{item.disabledReason && <small>{t('Unavailable')}</small>}</span>{item.id === modelId && <Check aria-hidden="true" />}
             </RadioGroupItem>)}
           </div>)}
-        </RadioGroup>
-        {filtered.length === 0 && <p className="dvx-picker-empty" role="status">{t('没有匹配的模型。')}</p>}
+        </RadioGroup>}
+        {filtered.length === 0 && !showInheritance && <p className="dvx-picker-empty" role="status">{t('没有匹配的模型。')}</p>}
       </ScrollArea>
-      {modelId && model && visibleModelIds && !visibleModelIds.includes(modelId) && <p className="dvx-picker-empty">{t('当前模型不在筛选范围内，已保留选择。')}</p>}
-      {onEffortChange && <div className="dvx-picker-effort">
+      {showEffort && onEffortChange && <div className="dvx-picker-effort">
         <span>{effortLabel ?? t('推理强度')}</span>
         <Select value={reasoningEffort ?? (defaultEffortLabel ? defaultValue : model?.defaultReasoning ?? '')}
           disabled={disabled || effortDisabled || Boolean(model?.disabledReason) || !model?.reasoning?.length}

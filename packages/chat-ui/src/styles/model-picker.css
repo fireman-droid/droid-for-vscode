@@ -7,7 +7,7 @@
   .dvx-picker-search { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); }
   .dvx-picker-search > svg { width: 14px; height: 14px; color: var(--muted-ink); }
   .dvx-picker-search > input { min-width: 0; width: 100%; height: 28px; padding: 0; border: 0; background: transparent; font-size: 12px; }
-  .dvx-picker-models { height: 250px; max-height: calc(var(--radix-popover-content-available-height) - 116px); min-height: 60px; }
+  .dvx-picker-models { max-height: calc(var(--radix-popover-content-available-height) - 116px); min-height: 44px; }
   .dvx-picker-models [role='radiogroup'] { gap: 0; padding: 5px; }
   .dvx-picker-group + .dvx-picker-group { margin-top: 6px; }
   .dvx-picker-group-label { padding: 7px 8px 5px; font-size: 11px; color: var(--muted-ink); }
