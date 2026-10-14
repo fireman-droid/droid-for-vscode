@@ -19,11 +19,12 @@
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
-- 当前本地独立 FIM／Next Edit 及开发评估入口包仍为 `0.8.11`，已获本次授权安装到 Microsoft VS Code 当前用户目录。
+- 当前本地独立 FIM／Next Edit 及开发评估入口包仍为 `0.8.11`，已分别获授权安装到 Microsoft VS Code 和 Cursor 当前用户目录。
   VSIX SHA256 为 `f710a9c9d67b5897df2aeb71dea1a3c50a3c0873dae4b07790fa54dfa854f454`。
-  已核对 Microsoft VS Code 安装入口 SHA256 与构建入口一致：
+  已核对 Microsoft VS Code 和 Cursor 安装入口 SHA256 均与构建入口一致：
   `143dc9e5be40c981f91709b6c019f1ced8811448f4508eccc0c2b092d4590c8d`。
-  独立测试进程及用户重载后的当前窗口均已加载此包，扩展与 Webview 启动日志正常。
+  独立测试进程及用户重载后的 Microsoft VS Code 窗口均已加载此包，扩展与 Webview 启动日志正常。
+  Cursor `3.24.12` 已从扩展 `0.8.10` 更新至此包，未强制重载窗口，尚未验证其重载后的运行状态。
   模型网关可自动启动，测试不再依赖用户窗口的旧连接。
   此安装包包含本次双服务配置，未改变用户现有补全配置或自动开启 Next Edit；线上正式包仍为前述发布产物。
 - 本机官方 Droid CLI 已按用户要求重新安装最新版 `0.241.1`；此前 `bin/droid.exe` 文件截断，
