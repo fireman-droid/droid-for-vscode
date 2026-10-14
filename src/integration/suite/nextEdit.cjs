@@ -62,7 +62,7 @@ async function runNextEdit() {
         await config.update('enabled', false, true);
         let doc;
         if(c.saved){
-          const filename=path.join(path.dirname(process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT),'next-edit-synthetic.ts');
+          const filename=path.join(path.dirname(process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT),`next-edit-synthetic-${cases.indexOf(c)}.ts`);
           writeFileSync(filename,c.source);
           doc=await vscode.workspace.openTextDocument(vscode.Uri.file(filename));
         } else doc = await vscode.workspace.openTextDocument({language:'typescript',content:c.source});
@@ -76,6 +76,7 @@ async function runNextEdit() {
         if(c.automaticText) await delay(1100);
         const beforeCalls=calls, beforeReplies=replied;
         let before=doc.getText();
+        assert.equal(before,c.source,'The editor must load this case before requesting an edit');
         if(c.automaticText) {
           await vscode.commands.executeCommand('type',{text:c.automaticText});
           before=doc.getText();
