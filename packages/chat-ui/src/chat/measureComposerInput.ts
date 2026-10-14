@@ -34,9 +34,9 @@ export function measureComposerInput(row: HTMLElement, input: HTMLElement, expan
       }
       return contentHeight;
     };
-    const multiline = expanded || text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight);
+    const multiline = expanded || (text.length > 0 && (text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight)));
     shadow.dataset.multiline = String(multiline);
-    const contentHeight = measureUntil(maxHeight);
+    const contentHeight = text.length > 0 ? measureUntil(maxHeight) : lineHeight;
     const height = Math.min(maxHeight, Math.max(multiline ? lineHeight * 2 : lineHeight, contentHeight));
     return { multiline, height, scrollable: contentHeight > maxHeight };
   } finally {
