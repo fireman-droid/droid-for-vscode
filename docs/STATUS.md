@@ -6,12 +6,15 @@
 
 ## 版本与交付
 
-- 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。正式分发正在更新至 `0.8.12`。
-  [GitHub v0.8.11](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.11) 已正式发布。
-  [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38374358655) 已成功，
-  注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录 latest 已确认返回 `0.8.11`。
-  Microsoft Marketplace 的 `0.8.11` 已通过验证，管理页状态为 `Public`，
-  [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 已可用。
+- 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
+  [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12) 已正式发布，
+  [云端构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527079175) 从干净版本标签完成类型、预算、构建与包校验。
+  [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527425293) 已成功，
+  注册中心返回 `Published droidvisx.droidvisx v0.8.12`；公开目录仍在同步，最新查询的 latest 为 `0.8.11`。
+  Microsoft Marketplace 已上传同一份正式 `0.8.12` 包，管理页显示 `Verifying 0.8.12`，验证通过尚未确认；
+  [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 保持可用。
+  [宣传与文档站](https://fireman-droid.github.io/droid-for-vscode/) 已完成部署，
+  [部署流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527081121) 成功。
   Microsoft 自动发布工作流已实现，复用并校验 GitHub Release 原始附件；
   用户选择暂时保留 Microsoft Marketplace 手动上传；自动工作流保留备用，
   `VSCE_PAT` 未配置，`MARKETPLACE_AUTO_PUBLISH` 保持关闭，Open VSX 仍自动发布。
@@ -19,14 +22,11 @@
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
-- 已安装的独立 FIM／Next Edit 及开发评估入口包为 `0.8.11`，已分别获授权安装到 Microsoft VS Code 和 Cursor 当前用户目录。
-  VSIX SHA256 为 `f710a9c9d67b5897df2aeb71dea1a3c50a3c0873dae4b07790fa54dfa854f454`。
-  已核对 Microsoft VS Code 和 Cursor 安装入口 SHA256 均与构建入口一致：
-  `143dc9e5be40c981f91709b6c019f1ced8811448f4508eccc0c2b092d4590c8d`。
-  独立测试进程及用户重载后的 Microsoft VS Code 窗口均已加载此包，扩展与 Webview 启动日志正常。
-  Cursor `3.24.12` 已从扩展 `0.8.10` 更新至此包，未强制重载窗口，尚未验证其重载后的运行状态。
-  模型网关可自动启动，测试不再依赖用户窗口的旧连接。
-  此安装包包含本次双服务配置，未改变用户现有补全配置或自动开启 Next Edit；线上正式包仍为前述发布产物。
+- Microsoft VS Code 当前用户目录已安装正式 `0.8.12`，与 GitHub Release 使用同一份 VSIX；
+  SHA256 为 `923b41ddd261370ffa461906f7d6c11d5e2d195243c7cfbef91e8ebc4a2d1d9a`。
+  安装后的扩展入口、Review 脚本与 Webview 样式均逐字节匹配正式包；用户窗口未强制重载，需 Reload Window。
+  本轮没有安装 Cursor，Cursor 市场更新取决于 Open VSX 同步。独立 FIM／Next Edit 与开发评估入口已包含在正式包，
+  未改变现有补全配置或自动开启 Next Edit；模型网关可自动启动，不依赖用户窗口的旧连接。
 - 本机官方 Droid CLI 已按用户要求重新安装最新版 `0.241.1`；此前 `bin/droid.exe` 文件截断，
   导致 Windows 拒绝启动，扩展已正常加载但新后台无法启动。新文件通过官方 SHA256、
   Authenticode 签名、`--version` 和本地 daemon 监听检查，未发送模型请求；
@@ -115,15 +115,14 @@
   共享 ScrollArea 静态隐藏原生滚动条，避免 Webview CSP 阻止 Radix 注入样式后出现双滑块和原生箭头。
   界面修改与下述 AskUser 修复使用同一安装包，基于 main 的独立构建通过类型、预算、生产构建及 171 项 VSIX 校验。
   主工作区类型检查仍仅报告既有 BYOK `createManagementServices.ts:29` 可空错误，未将该未完成改动带入包。
-  本地修复包 SHA256 为 `782e64ebd41e435de8b88e94258f73f7b286739ed6fdf98d6ac4aaca5b37ead5`，
-  已获本次授权安装到 Microsoft VS Code 当前用户目录，等待用户 Reload Window；正式 `0.8.12` 发布进行中。
+  当前 `dist/droidvisx.vsix` 为正式 `0.8.12` 发布附件，已安装到 Microsoft VS Code，哈希与分发状态见上文。
   现有 Browser Dev Client 页面为空，未另启 Host 或将模拟页面当作验收；浅色／深色的真实编辑器效果待安装后确认。
 - AskUser 按会话与工具调用保持同一提问身份，恢复时更新请求 ID；SDK 已缓存或已处理的回答不再重新弹卡。
   后台撤销／处理提问时同步关闭本地表单，不伪造“用户取消”；仍未回答的恢复提问保留原卡片和草稿。
   新增 11 项跨 Runtime 回调与 Host 协调器的本地回归，相关 5 个文件共 56 项通过，无真实模型调用。
   基于 main 源码的独立构建目录通过类型检查、文件预算、生产构建与 171 项 VSIX 校验，未带入无关 BYOK 改动。
   原有聊天快照 4 项测试在修改前后均无法进入提问状态；主工作区类型检查另有既存 BYOK 可空错误，
-  两项缺口未计为通过。本轮修复尚未安装或公开发布，真实长时间闲置后的编辑器操作仍待验证。
+  两项缺口未计为通过。本轮修复已随 `0.8.12` 安装与分发，真实长时间闲置后的编辑器操作仍待验证。
 - 补全生产优化按用户要求暂停，另行授权的模型对照结果见下文。FIM 上下文准备已与防抖并行，
   两者完成后才发送；文档与光标未变、已发送请求仅被编辑器取消时，交接窗口从 100ms 延至
   250ms，替代调用接入后恢复普通窗口。保留配置变化、上下文失效和过期调用的取消行为。
