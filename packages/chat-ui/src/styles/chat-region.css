@@ -22,6 +22,11 @@
   }
   .v2-chat-footer { padding-block: 4px 12px; }
   .v2-composer-dock { min-width: 0; }
+  :is(.v2-composer-queue, .v2-composer-changes) {
+    --composer-panel-heading-height: 22px;
+    --composer-panel-row-height: 24px;
+    --composer-panel-line-height: 18px;
+  }
   /* All three panels share one height budget; the editor stays outside their scroll area. */
   .v2-composer-panels {
     min-height: 0; max-height: min(240px, 30vh); overflow-y: auto; overscroll-behavior-y: contain;
