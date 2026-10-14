@@ -25,11 +25,12 @@ export interface InlineInputProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   disabled?: boolean;
   maxLength?: number;
   measureText?(value: string): number;
+  onContentLayout?(element: HTMLDivElement): void;
 }
 
 /** Shared editing primitive for text interspersed with non-editable, keyboard-addressable atoms. */
 export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste, onCopy, onKeyDown, onInput, onCompositionStart, onCompositionEnd,
-  placeholder, disabled, maxLength = Infinity, measureText, className, ...props }: InlineInputProps) {
+  placeholder, disabled, maxLength = Infinity, measureText, onContentLayout, className, ...props }: InlineInputProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const rendered = useRef<string | null>(null);
@@ -70,6 +71,14 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     rendered.current = value + tokenKey; setSlots(next);
     if (focused) setInlineSelection(node, selected.start, selected.end, selected.direction);
   }, [value, tokenKey, revision]);
+  useLayoutEffect(() => {
+    const node = root.current!;
+    // The first commit creates atom containers; the next commits their portals.
+    // Consumers must measure only the completed content, including chip labels.
+    if (slots.some(slot => slot.element.parentNode !== node) ||
+      node.querySelectorAll(':scope > [data-inline-token]').length !== slots.length) return;
+    onContentLayout?.(node);
+  }, [value, tokenKey, slots, revision, onContentLayout]);
   const restoreCaret = (next: string, cursor: number) => {
     const input = handle.current!, element = input.element;
     queueMicrotask(() => {
