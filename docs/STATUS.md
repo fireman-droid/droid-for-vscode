@@ -19,7 +19,7 @@
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
-- 当前本地独立 FIM／Next Edit 及开发评估入口包仍为 `0.8.11`，已分别获授权安装到 Microsoft VS Code 和 Cursor 当前用户目录。
+- 已安装的独立 FIM／Next Edit 及开发评估入口包为 `0.8.11`，已分别获授权安装到 Microsoft VS Code 和 Cursor 当前用户目录。
   VSIX SHA256 为 `f710a9c9d67b5897df2aeb71dea1a3c50a3c0873dae4b07790fa54dfa854f454`。
   已核对 Microsoft VS Code 和 Cursor 安装入口 SHA256 均与构建入口一致：
   `143dc9e5be40c981f91709b6c019f1ced8811448f4508eccc0c2b092d4590c8d`。
@@ -42,6 +42,14 @@
   类型检查仍受既有 BYOK `createManagementServices.ts:29` 的 TS18048 阻挡，未将该未完成改动带入包。
   新包 `dist/droidvisx.vsix` 已安装并核对入口哈希，见上文；此轮未发布、未调用真实模型。
   下文模型质量数据仍属于此前评估，未在双服务配置下重测。
+- Composer 清空后的多余空行已在共享行内输入组件修复：忽略浏览器末尾光标占位，
+  主动换行仍保留可定位的空行。29 项草稿／引用／Composer 检查通过；Browser Dev Client
+  连接临时真实 Host，在 480px 窄面板确认逐字删除、长文本清空、多行一次全选删除后均恢复
+  20px 输入高度，Shift+Enter 后可继续在第二行输入。未发送模型请求。
+  扩展抽查的旧 SideChatSheet／QuestionCard 测试另有 7 项失败，涉及旧 textarea 断言、
+  队列标题及缺少 TooltipProvider；未把这些旧用例记为通过。隔离构建的类型、预算检查和
+  VSIX 校验通过，修复包 SHA256 为 `216d461f34b65a100062290941180e51f0461822156beba93f62179fd000dc72`。
+  本轮修复尚未安装或发布。
 - 当前源码包含行内代码引用、Mission 创建面板整改，以及主聊天模型弹层的计划跟随按钮：
   “计划”行右侧一键跟随主模型，重复点击不解除跟随、不切换聊天模式；推理强度仍独立设置。
   主聊天、计划与 BTW 的模型搜索栏聚焦时保持分隔线原色。

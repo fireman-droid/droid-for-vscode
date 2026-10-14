@@ -60,7 +60,11 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
       atom.contentEditable = 'false'; atom.dataset.inlineToken = character; atom.className = 'dvx-inline-atom';
       fragment.append(atom); next.push({ token: character, element: atom });
     }
-    flush(); node.replaceChildren(fragment);
+    flush();
+    // Keep a real caret position on the last empty line. inlineText omits this
+    // filler so selecting/deleting the draft does not leave an invisible newline.
+    if (value.endsWith('\n')) fragment.append(node.ownerDocument.createElement('br'));
+    node.replaceChildren(fragment);
     rendered.current = value + tokenKey; setSlots(next);
     if (focused) setInlineSelection(node, selected.start, selected.end, selected.direction);
   }, [value, tokenKey, composition]);

@@ -3,7 +3,9 @@ export function inlineText(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
   if (!(node instanceof HTMLElement)) return '';
   if (node.dataset.inlineToken) return node.dataset.inlineToken;
-  if (node.tagName === 'BR') return '\n';
+  // Chromium leaves a trailing BR to keep the caret visible after deletion.
+  // Earlier BRs still delimit lines; the final caret filler is not draft text.
+  if (node.tagName === 'BR') return node.nextSibling ? '\n' : '';
   return Array.from(node.childNodes, (child, index) => {
     const block = child instanceof HTMLElement && /^(DIV|P)$/.test(child.tagName);
     return (block && index > 0 ? '\n' : '') + inlineText(child);
