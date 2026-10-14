@@ -35,7 +35,7 @@ Codestral 使用多文件模板，其他服务使用语言注释承载关联片�
 
 Notebook 代码单元使用相邻同语言单元构造上下文，并映射回当前单元接受和撤销；
 单元内容或顺序变化会使缓存失效。官方 Mercury Next Edit 模式下，Notebook 自动走
-Mercury FIM；普通文件保持当前选定模式，Next Edit 空结果不会自动再请求 FIM。
+Mercury FIM；双服务配置下 Notebook 使用所选 FIM。Next Edit 空结果不会自动再请求 FIM。
 
 密钥只保存到编辑器 SecretStorage，并绑定完整 endpoint；官方 Mercury 的 FIM/Edit 两个地址共用凭据。
 模型和地址只取用户级配置。
@@ -58,10 +58,20 @@ SiliconFlow 预设使用 `Qwen/Qwen3-Coder-30B-A3B-Instruct`，协议选 `silico
 
 ## Next Edit 编辑预测
 
-选择 **Inception / Mercury Next Edit**，默认模型 `mercury-edit-2`，地址
-`https://api.inceptionlabs.ai/v1/edit/completions`，使用 Inception API key。
-该模式与 **Inception / Mercury FIM**（`/v1/fim/completions`）可从状态栏切换，
-官方两个地址复用 Inception key。其他服务仍按完整地址隔离凭据。
+在智能补全设置中分别配置 **代码续写** 和 **下一步编辑**，两者可同时启用，也可只启用其中一种。
+代码续写保留当前 Codestral／其他 FIM 模型；下一步编辑默认使用 `mercury-edit-2`，地址
+`https://api.inceptionlabs.ai/v1/edit/completions`，需 Inception API key，不能使用 Mistral key。
+两套模型、接口和密钥分别保存，密钥通过保存时的编辑器密码框录入，不传入 Webview。
+官方 Mercury FIM/Edit 地址仍共用 Inception key，其他服务按完整地址隔离凭据。
+命令面板的 Mercury Next Edit 预设只更新编辑预测服务，不覆盖已有 FIM。
+旧版单独启用 Next Edit 的配置会保留编辑预测，打开或保存设置不会自动启用 FIM。
+
+- 输入续写优先请求 FIM；修改／删除已有文本及接受建议后优先请求 Next Edit。
+  同一行连续输入可延续已有修改意图，换行后恢复普通续写。
+- FIM 返回有效空建议时才继续尝试 Next Edit；已有灰字、候选列表、请求失败或取消时不追加编辑请求。
+  Next Edit 的待接受提示会阻止另一条 FIM 抢占 Tab，两种服务分别记录失败冷却。
+- Next Edit 默认关闭；开启双服务后，空续写及接受后的编辑预测可能增加 API 请求和费用。
+  两套服务的启用、接口和模型只能由用户级设置指定，仓库设置不能开启额外服务或改变发送目标。
 
 - 同行可续写的内容显示原生灰字；已有代码替换、删除和跨行修改显示主题化修改提示。
 - 修改位于别处时，第一次 **Tab** 跳转，第二次接受；光标已在修改处时直接接受。

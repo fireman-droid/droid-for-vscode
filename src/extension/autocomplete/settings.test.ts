@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
 
 import {
   completionNeedsKey, configureCompletion, DEFAULT_ENDPOINT, readCompletionSettings, validateCompletionEndpoint,
-  readCompletionKey, completionSecretKey, MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, switchMercuryMode, removeCompletionKey, mercuryAlternateEndpoint,
+  readCompletionKey, completionSecretKey, MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, removeCompletionKey, mercuryAlternateEndpoint,
 } from './settings';
 
 type Preset = { label: string; protocol: string; endpoint: string; model: string };
@@ -57,8 +57,10 @@ describe('autocomplete configuration workflow', () => {
     choose('Inception / Mercury Next Edit');
     useDefaults('synthetic-mercury-key');
     expect(await configureCompletion(secrets)).toBe(true);
-    expect(mocks.global).toMatchObject({protocol:'mercury-edit',model:'mercury-edit-2',
-      endpoint:'https://api.inceptionlabs.ai/v1/edit/completions'});
+    expect(mocks.global).toMatchObject({'nextEdit.enabled':true,'nextEdit.model':'mercury-edit-2',
+      'nextEdit.endpoint':MERCURY_EDIT_ENDPOINT});
+    expect(mocks.global.protocol).toBeUndefined();
+    expect(readCompletionSettings().fimEnabled).toBe(false);
     expect(mocks.storeSecret).toHaveBeenCalledWith(expect.any(String),'synthetic-mercury-key');
     expect(JSON.stringify(mocks.global)).not.toContain('synthetic-mercury-key');
     expect(validateCompletionEndpoint('https://api.inceptionlabs.ai/v1/chat/completions','mercury-edit')).toBeTruthy();
@@ -242,15 +244,29 @@ describe('autocomplete provider settings', () => {
 });
 
 describe('Mercury completion modes and credentials', () => {
-  it('switches both directions and retains the same saved Inception key', async () => {
-    choose('Inception / Mercury Code Completion'); useDefaults('example-provider-key');
-    expect(await configureCompletion(secrets)).toBe(true);
-    expect(mocks.global).toMatchObject({ endpoint: MERCURY_FIM_ENDPOINT, protocol: 'fim', model: 'mercury-edit-2' });
-    expect(await switchMercuryMode()).toBe(true);
-    expect(mocks.global).toMatchObject({ endpoint: MERCURY_EDIT_ENDPOINT, protocol: 'mercury-edit' });
-    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBe('example-provider-key');
-    expect(await switchMercuryMode()).toBe(true);
-    expect(mocks.global.endpoint).toBe(MERCURY_FIM_ENDPOINT);
+  it('configures Next Edit without replacing Codestral or its key', async () => {
+    choose('Mistral / Codestral'); useDefaults('codestral-key');
+    await configureCompletion(secrets);
+    choose('Inception / Mercury Next Edit'); useDefaults('edit-key');
+    await configureCompletion(secrets);
+    expect(readCompletionSettings()).toMatchObject({ protocol: 'fim', endpoint: DEFAULT_ENDPOINT, model: 'codestral-latest',
+      fimEnabled: true, nextEdit: { enabled: true, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
+    expect(await readCompletionKey(secrets, DEFAULT_ENDPOINT)).toBe('codestral-key');
+    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBe('edit-key');
+  });
+  it('preserves a legacy edit-only service when adding FIM', async () => {
+    mocks.global = { protocol: 'mercury-edit', endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' };
+    expect(readCompletionSettings()).toMatchObject({ fimEnabled: false, nextEdit: { enabled: true } });
+    choose('Mistral / Codestral'); useDefaults('codestral-key');
+    await configureCompletion(secrets);
+    expect(readCompletionSettings()).toMatchObject({ protocol: 'fim', endpoint: DEFAULT_ENDPOINT, fimEnabled: true,
+      nextEdit: { enabled: true, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
+  });
+  it('does not let a repository enable or reroute Next Edit', () => {
+    mocks.workspace = { 'nextEdit.enabled': true, 'nextEdit.endpoint': 'https://untrusted.test/edit/completions',
+      'nextEdit.model': 'untrusted', fimEnabled: false };
+    expect(readCompletionSettings()).toMatchObject({ fimEnabled: true,
+      nextEdit: { enabled: false, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
   });
   it('reuses an existing Next Edit key for FIM without sharing it with another endpoint', async () => {
     mocks.values.set(completionSecretKey(MERCURY_EDIT_ENDPOINT), 'existing-provider-key');

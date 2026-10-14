@@ -7,12 +7,18 @@ const vscode = require('vscode');
 
 async function runNextEdit() {
   const results = [], config = vscode.workspace.getConfiguration('droidvisx.autocomplete');
-  let scenario, lastPrompt, calls = 0, replied = 0;
+  let scenario, lastPrompt, calls = 0, replied = 0, fimCalls = 0;
   const server = createServer(async (request, response) => {
     try {
-      assert.equal(request.url, '/v1/edit/completions');
       let raw = ''; for await (const chunk of request) raw += chunk;
       const payload = JSON.parse(raw);
+      if (request.url === '/v1/fim/completions') {
+        assert.ok(scenario?.independent); assert.equal(payload.stream, true); fimCalls++;
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.end('data: '+JSON.stringify({choices:[{delta:{content:''}}]})+'\n\ndata: [DONE]\n\n');
+        return;
+      }
+      assert.equal(request.url, '/v1/edit/completions');
       assert.equal(payload.stream, false);
       assert.equal(payload.max_tokens, 512, 'Use the production default output budget.');
       assert.ok(payload.messages[0].content.includes('<|!@#IS_NEXT_EDIT!@#|>'));
@@ -38,6 +44,8 @@ async function runNextEdit() {
       'export function format(value: string) {', '  return value;', '}', '',
       'export function literal(value: string) {', '  return value;', '}'].join('\n');
     const cases = [
+      {name:'Independent FIM falls through to Next Edit deletion and Undo', source:'// cleanup\nconst unused = 1;\nconsole.log(2);', replacement:'// cleanup\nconsole.log(2);', cursor:[1,0], independent:true},
+      {name:'Independent FIM falls through to multiline replacement', source:'// simplify\nconst a = 1;\nconst b = 2;', replacement:'// simplify\nconst total = 3;', cursor:[1,0], independent:true},
       {name:'Native same-line insertion and Undo', source:'const value = ', replacement:'const value = 42;', cursor:[0,14], inline:true},
       {name:'Automatic Next Edit after idle preserves typed input through Undo', source:'const value = ',
         replacement:'const value = 2;', cursor:[0,14], automaticText:'1;'},
@@ -60,6 +68,11 @@ async function runNextEdit() {
       scenario = c;
       try {
         await config.update('enabled', false, true);
+        await config.update('protocol', c.independent ? 'fim' : 'mercury-edit', true);
+        await config.update('endpoint', 'http://127.0.0.1:'+server.address().port+(c.independent ? '/v1/fim/completions' : '/v1/edit/completions'), true);
+        await config.update('nextEdit.endpoint', c.independent ? 'http://127.0.0.1:'+server.address().port+'/v1/edit/completions' : undefined, true);
+        await config.update('nextEdit.enabled', c.independent ? true : undefined, true);
+        const beforeFimCalls = fimCalls;
         let doc;
         if(c.saved){
           const filename=path.join(path.dirname(process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT),`next-edit-synthetic-${cases.indexOf(c)}.ts`);
@@ -82,6 +95,7 @@ async function runNextEdit() {
           before=doc.getText();
         } else await vscode.commands.executeCommand('droidvisx.autocomplete.trigger');
         await until(()=>calls>beforeCalls,5000,'No Next Edit request from packaged provider');
+        if(c.independent) assert.equal(fimCalls, beforeFimCalls + 1, 'Exactly one FIM attempt precedes the independent edit');
         if(c.automaticText) assert.ok(lastPrompt.includes('const value = 1;'), 'Automatic prediction must include the latest typing');
         if(c.behavior==='cancel'){
           await vscode.commands.executeCommand('type',{text:'x'});
@@ -184,4 +198,11 @@ async function until(predicate, timeout, message) {
   do {if(await predicate())return;await delay(50);} while(Date.now()<end);
   throw new Error(message);
 }
-module.exports={runNextEdit};
+async function run() {
+  await vscode.extensions.getExtension('droidvisx.droidvisx').activate();
+  const results = await runNextEdit();
+  writeFileSync(process.env.DROID_AUTOCOMPLETE_NATIVE_RESULT, JSON.stringify({ editorVersion: vscode.version,
+    failed: results.filter(result => !result.passed).length, cases: results }, null, 2));
+  assert.ok(results.every(result => result.passed), 'Native Next Edit acceptance failed');
+}
+module.exports={runNextEdit, run};

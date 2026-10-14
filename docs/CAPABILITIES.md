@@ -94,7 +94,7 @@ SDK 中出现接口就自动成为产品功能。
   Kilo 上下文链的 LSP 查询共享 150ms 等待预算，超时后保留其他可用上下文，下次请求可重试。
   主体编辑复用未变的导入定义；导入语句、定义文件或规则变化时刷新。Codestral 文件末尾也保留关联片段。
 - 原生 FIM 支持 Mistral/Codestral、Mercury、DeepSeek 及兼容服务；Ollama generate、
-  SiliconFlow prefix/suffix 扩展独立适配。官方 Mercury FIM/Edit 地址可切换并共用
+  SiliconFlow prefix/suffix 扩展独立适配。代码续写与 Next Edit 可独立配置和同时启用，官方 Mercury FIM/Edit 地址共用
   SecretStorage 凭据，其他地址隔离。模型服务独立于 Factory 聊天。
 - 所有关联读取受同工作区根、Git/Droid ignore、配置排除、敏感文件及根外链接门禁约束。
   默认不枚举项目文件或读取剪贴板；静态上下文开关仅为 TypeScript 枚举最多 2,000 个

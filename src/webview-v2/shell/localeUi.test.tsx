@@ -19,8 +19,8 @@ import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../shared/protocol/sessionVi
 const port = { postMessage: vi.fn() };
 const settings: ManagementSettings = {
   theme: 'light', resolvedTheme: 'light', version: '0.8.10', cwd: null, connection: 'connected', ide: 'connected',
-  completion: { enabled: false, autoTrigger: true, relatedFiles: false, adaptiveDebounce: false,
-    debounceMs: 300, protocol: 'fim', endpoint: 'https://example.invalid/completions', model: 'local-fixture' }, completionHasKey: false,
+  completion: { enabled: false, fimEnabled: true, nextEdit: { enabled: false, endpoint: "https://example.invalid/edit/completions", model: "edit-fixture" }, autoTrigger: true, relatedFiles: false, adaptiveDebounce: false,
+    debounceMs: 300, protocol: 'fim', endpoint: 'https://example.invalid/completions', model: 'local-fixture' }, completionHasKey: false, nextEditHasKey: false,
   sessionManagementAvailable: false, reviewQuestion: { modelId: null, models: [] },
 };
 const capabilities: MissionSetupCapabilities = {

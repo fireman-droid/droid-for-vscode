@@ -273,6 +273,30 @@
           "scope": "resource",
           "description": "%droidvisx.autocomplete.excludePatterns.description%"
         },
+        "droidvisx.autocomplete.fimEnabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%droidvisx.autocomplete.fimEnabled.description%"
+        },
+        "droidvisx.autocomplete.nextEdit.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "%droidvisx.autocomplete.nextEdit.enabled.description%"
+        },
+        "droidvisx.autocomplete.nextEdit.endpoint": {
+          "type": "string",
+          "default": "https://api.inceptionlabs.ai/v1/edit/completions",
+          "scope": "application",
+          "description": "%droidvisx.autocomplete.nextEdit.endpoint.description%"
+        },
+        "droidvisx.autocomplete.nextEdit.model": {
+          "type": "string",
+          "default": "mercury-edit-2",
+          "scope": "application",
+          "description": "%droidvisx.autocomplete.nextEdit.model.description%"
+        },
         "droidvisx.autocomplete.protocol": {
           "type": "string",
           "enum": [

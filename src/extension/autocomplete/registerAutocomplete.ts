@@ -4,7 +4,7 @@ import { configureParserAssets } from './kilo/continuedev/core/util/treeSitter';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { AutocompleteProvider } from './AutocompleteProvider';
 import {
-  COMPLETION_SECTION, completionDocumentBlockReason, configureCompletion, mercuryAlternateEndpoint, removeCompletionKey, switchMercuryMode,
+  COMPLETION_SECTION, completionDocumentBlockReason, configureCompletion, removeCompletionKey, nextEditSettings,
   readCompletionSettings, setCompletionEnabled, setRelatedFilesEnabled, setAutoTriggerEnabled, setCompletionSnooze,
 } from './settings';
 
@@ -46,7 +46,8 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       : snoozed ? 'Automatic suggestions paused until ' + new Date(settings.snoozeUntil!).toLocaleTimeString() + '. Manual requests remain available.'
         : settings.autoTrigger === false ? 'Automatic suggestions are off. Use Droid: Request Code Completion to request one.'
           : provider.lastMessage ?? blocked ??
-      (settings.protocol === 'mercury-edit' ? 'Droid Next Edit · ' : 'Droid autocomplete · ') + settings.model + '\n' +
+      [settings.fimEnabled !== false ? 'FIM · ' + settings.model : '',
+        nextEditSettings(settings) ? 'Next Edit · ' + nextEditSettings(settings)!.model : ''].filter(Boolean).join(' / ') + '\n' +
       (settings.relatedFiles ? provider.lastContextFileCount + ' related files found' : 'Current file only') +
       (provider.lastLatencyMs === undefined ? '' : ' · ' + provider.lastLatencyMs + ' ms') +
       '\nTab accepts a suggestion. Click for options.' + (providerNotice() ? '\n' + providerNotice() : '');
@@ -57,7 +58,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     provider.reset();
     const enabled = await vscode.window.showInformationMessage(
       'Autocomplete is configured. Enable it to send cursor context and relevant workspace snippets to ' +
-        new URL(readCompletionSettings().endpoint).host + '?',
+        'the configured FIM / Next Edit services?',
       'Enable autocomplete',
     );
     if (enabled) await setCompletionEnabled(true);
@@ -87,7 +88,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       await vscode.window.showInformationMessage(blocked);
       return;
     }
-    provider.reset();
+    provider.reset('retry');
     await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
   };
   // Report errors at the UI boundary without printing secrets or provider response bodies.
@@ -105,20 +106,22 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     refresh();
   });
   const removeKey = async () => {
+    const settings = readCompletionSettings(), edit = nextEditSettings(settings);
+    const endpoint = edit && edit.endpoint !== settings.endpoint
+      ? (await vscode.window.showQuickPick([{ label: 'Code completion · ' + settings.model, endpoint: settings.endpoint },
+        { label: 'Next Edit · ' + edit.model, endpoint: edit.endpoint }], { title: 'Remove provider API key' }))?.endpoint : settings.endpoint;
+    if (!endpoint) return;
     const answer = await vscode.window.showWarningMessage(
       'Remove the saved autocomplete API key? For Inception this clears both Code Completion and Next Edit.', { modal: true }, 'Remove API key',
     );
     if (answer === 'Remove API key') {
-      await removeCompletionKey(context.secrets, readCompletionSettings().endpoint);
+      await removeCompletionKey(context.secrets, endpoint);
     }
   };
   const menu = async () => {
     const settings = readCompletionSettings(vscode.window.activeTextEditor?.document.uri);
     const selection = await vscode.window.showQuickPick([
       { label: '$(gear) Configure model and API key', id: 'configure' },
-      ...(mercuryAlternateEndpoint(settings.endpoint) && settings.model.toLowerCase().includes('mercury')
-        ? [{ label: settings.protocol === 'mercury-edit'
-          ? '$(code) Switch to Mercury Code Completion' : '$(edit) Switch to Mercury Next Edit', id: 'mode' }] : []),
       { label: readCompletionSettings(vscode.window.activeTextEditor?.document.uri).enabled
         ? '$(debug-pause) Pause autocomplete' : '$(play) Enable autocomplete', id: 'toggle' },
       { label: settings.autoTrigger === false ? '$(play) Turn automatic suggestions on' : '$(hand) Use manual suggestions only', id: 'automatic' },
@@ -135,7 +138,6 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       placeHolder: provider.lastMessage ?? providerNotice() ?? 'Tab accepts a suggestion; Esc dismisses it.',
     });
     if (selection?.id === 'configure') await configure();
-    if (selection?.id === 'mode') { await switchMercuryMode(); provider.reset(); refresh(); }
     if (selection?.id === 'toggle') await toggle();
     if (selection?.id === 'automatic') await setAutoTriggerEnabled(settings.autoTrigger === false);
     if (selection?.id === 'resume') { await setCompletionSnooze(0); refresh(); }
@@ -150,7 +152,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       await setRelatedFilesEnabled(!readCompletionSettings(vscode.window.activeTextEditor?.document.uri).relatedFiles);
     }
     if (selection?.id === 'settings') {
-      await vscode.commands.executeCommand('workbench.action.openSettings', COMPLETION_SECTION);
+      await vscode.commands.executeCommand('droidvisx.openManagement', 'completion');
     }
   };
   context.subscriptions.push(
@@ -188,6 +190,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
         cached: item?.cached === true,
         characters: typeof item?.characters === 'number' ? item.characters : 0,
       } });
+      provider.completionAccepted();
     }),
   );
   refresh();

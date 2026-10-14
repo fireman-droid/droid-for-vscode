@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   request: vi.fn(),
   nextRequest: vi.fn(),
+  pendingEdit: false,
+  present: vi.fn(),
   definitions: vi.fn(),
   capture: vi.fn(),
   secretGet: vi.fn(),
@@ -74,8 +76,10 @@ vi.mock('vscode', () => {
 vi.mock('../../runtime/autocomplete/requestCompletion', () => ({ requestCompletion: mocks.request }));
 vi.mock('../../runtime/autocomplete/nextEdit', () => ({ requestNextEdit: mocks.nextRequest }));
 vi.mock('./NextEditSupport', () => ({ NextEditSupport: class {
-  manager = { isPending: () => false };
-  presenter = { toCompletionItems: () => [] };
+  constructor(_context: unknown, _error: unknown, _suggestion: unknown, private onAccepted: () => void) {}
+  manager = { isPending: () => mocks.pendingEdit };
+  presenter = { toCompletionItems: mocks.present };
+  accepted() { this.onAccepted(); }
   capture = mocks.capture;
   clear() {} dispose() {}
 } }));
@@ -177,6 +181,7 @@ beforeEach(() => {
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
   mocks.nextRequest.mockReset().mockResolvedValue('const answer = 42;');
+  mocks.pendingEdit = false; mocks.present.mockReset().mockReturnValue([]);
   mocks.definitions.mockReset().mockResolvedValue([]);
   mocks.capture.mockReset().mockResolvedValue({});
   mocks.record.mockReset();
@@ -872,5 +877,92 @@ describe('full classic and notebook workflows', () => {
     mocks.listeners.get('text')!({ document: earlier.value, contentChanges: [{}] });
     expect(hidden).toHaveBeenCalledOnce();
     expect((await (await requesting(cell)).pending)[0].insertText).toBe('43'); expect(mocks.request).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('independent FIM and Next Edit', () => {
+  beforeEach(() => Object.assign(mocks.config, { 'nextEdit.enabled': true, relatedFiles: false }));
+
+  it('keeps a visible Codestral continuation and does not launch a competing edit', async () => {
+    mocks.request.mockResolvedValue('42;');
+    const items = await (await requesting(document())).pending;
+    expect(items[0].insertText).toBe('42;');
+    expect(mocks.request.mock.calls[0][0]).toMatchObject({ protocol: 'fim', model: 'codestral-latest' });
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
+  it('falls through to the independent edit service for a valid empty FIM result', async () => {
+    mocks.request.mockResolvedValue('');
+    mocks.present.mockImplementation(() => { mocks.pendingEdit = true; return []; });
+    await (await requesting(document())).pending;
+    expect(mocks.nextRequest.mock.calls[0][0]).toMatchObject({ model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
+    expect(mocks.present).toHaveBeenCalledOnce();
+    await (await requesting(document())).pending;
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+  });
+  it('predicts a replacement directly after deleting or replacing existing text', async () => {
+    const file = document('const newName = 1;');
+    activate(file.value, file.at());
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 3, text: 'newName' }] });
+    await (await requesting(file)).pending;
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+  });
+  it('retains edit intent while typing the rest of a replacement identifier', async () => {
+    const file = document('const n = 1;'); activate(file.value, file.at(7));
+    const range = new vscode.Range(position(0, 6), position(0, 7));
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 3, text: 'n', range }] });
+    file.state.text = 'const name = 1;'; Object.assign(file.value, { version: 2 });
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 0, text: 'ame', range }] });
+    await (await requesting(file, 10)).pending;
+    expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.nextRequest).toHaveBeenCalledOnce();
+  });
+  it('uses Next Edit after accepting FIM and can run with FIM disabled', async () => {
+    const file = document(); activate(file.value, file.at());
+    provider.completionAccepted();
+    await (await requesting(file)).pending;
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+    provider.reset(); mocks.config.fimEnabled = false;
+    await (await requesting(file)).pending;
+    expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
+  });
+  it('never launches Next Edit after a failed or cancelled FIM request', async () => {
+    mocks.request.mockRejectedValue(new Error('unavailable'));
+    await (await requesting(document())).pending;
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+    provider.reset();
+    const response = deferred<string>(); mocks.request.mockReturnValue(response.promise);
+    const running = await requesting(document()); running.cancel.cancel(); response.resolve('');
+    await running.pending;
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
+  it('does not edit while the language suggestion widget is selected', async () => {
+    mocks.request.mockResolvedValue('');
+    const file = document('const a = va');
+    await (await requesting(file, undefined, { ...context, selectedCompletionInfo: {
+      range: new vscode.Range(position(0, 10), file.at()), text: 'value',
+    } })).pending;
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
+  it('keeps automatic FIM available after the edit provider fails', async () => {
+    const file = document(); activate(file.value, file.at());
+    provider.completionAccepted(); mocks.nextRequest.mockRejectedValue(new Error('edit unavailable'));
+    await (await requesting(file)).pending;
+    file.state.text += '4'; Object.assign(file.value, { version: 2 });
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 0, text: '4' }] });
+    mocks.request.mockResolvedValue('2;');
+    const result = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
+    expect(result[0].insertText).toBe('2;');
+  });
+  it('does not share keys between independently configured services', async () => {
+    mocks.request.mockResolvedValue('');
+    const { completionSecretKey, DEFAULT_ENDPOINT, MERCURY_EDIT_ENDPOINT } = await import('./settings');
+    mocks.secretGet.mockImplementation(async key => key === completionSecretKey(DEFAULT_ENDPOINT) ? 'fim-key'
+      : key === completionSecretKey(MERCURY_EDIT_ENDPOINT) ? 'edit-key' : undefined);
+    await (await requesting(document())).pending;
+    expect(mocks.request.mock.calls[0][0].apiKey).toBe('fim-key');
+    expect(mocks.nextRequest.mock.calls[0][0].apiKey).toBe('edit-key');
   });
 });

@@ -1,4 +1,8 @@
 {
+  "droidvisx.autocomplete.fimEnabled.description": "Enable FIM code completion independently of Next Edit.",
+  "droidvisx.autocomplete.nextEdit.enabled.description": "Enable edit predictions alongside code completion. Sends editing context to the configured Next Edit service.",
+  "droidvisx.autocomplete.nextEdit.endpoint.description": "Full Next Edit endpoint. Requires an edit prediction service, such as Mercury /v1/edit/completions.",
+  "droidvisx.autocomplete.nextEdit.model.description": "Model used for edit predictions, independently of the FIM and chat models.",
   "droidvisx.reviewQuestion.reasoningEffort.description": "Reasoning effort for inline code-review questions. Leave empty to use the selected model default, or follow the main chat when no model is selected. Available levels come from the Droid model catalog.",
   "droidvisx.openManagement.title": "Droid: Open Management",
   "droidvisx.manageCapabilities.title": "Droid: Manage Droid Capabilities",

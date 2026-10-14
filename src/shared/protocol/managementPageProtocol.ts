@@ -20,11 +20,13 @@ export function parseManagementPageOpen(value: unknown): ManagementPageOpenMessa
 
 export interface CompletionPreferences {
   readonly enabled: boolean;
+  readonly fimEnabled: boolean;
+  readonly nextEdit: { readonly enabled: boolean; readonly endpoint: string; readonly model: string };
   readonly autoTrigger: boolean;
   readonly relatedFiles: boolean;
   readonly adaptiveDebounce: boolean;
   readonly debounceMs: number;
-  readonly protocol: 'fim' | 'ollama' | 'siliconflow-fim' | 'mercury-edit';
+  readonly protocol: 'fim' | 'ollama' | 'siliconflow-fim';
   readonly endpoint: string;
   readonly model: string;
 }
@@ -37,6 +39,7 @@ export interface ManagementSettings {
   readonly ide: string;
   readonly completion: CompletionPreferences;
   readonly completionHasKey: boolean;
+  readonly nextEditHasKey: boolean;
   readonly sessionManagementAvailable: boolean;
   readonly reviewQuestion: {
     readonly modelId: string | null;
@@ -64,7 +67,7 @@ export type ManagementAction =
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
   | { readonly kind: 'language.set'; readonly language: LanguagePreference }
   | { readonly kind: 'reviewQuestion.model.set'; readonly modelId: string | null; readonly reasoningEffort?: SessionReasoningEffort | null }
-  | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean }
+  | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean; readonly setNextEditApiKey: boolean }
   | { readonly kind: 'sessions.list'; readonly scope: 'folder' | 'all'; readonly cursor?: number }
   | { readonly kind: 'session.view' | 'session.export' | 'session.folder' | 'session.resume'; readonly id: string }
   | { readonly kind: 'session.favorite'; readonly id: string; readonly value: boolean }
@@ -97,10 +100,12 @@ function text(value: unknown, max = 512): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value);
 }
 export function isCompletionPreferences(value: unknown): value is CompletionPreferences {
-  return isStrictRecord(value) && hasExactKeys(value, ['enabled', 'autoTrigger', 'relatedFiles', 'adaptiveDebounce', 'debounceMs', 'protocol', 'endpoint', 'model'])
-    && ['enabled', 'autoTrigger', 'relatedFiles', 'adaptiveDebounce'].every(key => typeof value[key] === 'boolean')
+  return isStrictRecord(value) && hasExactKeys(value, ['enabled', 'fimEnabled', 'nextEdit', 'autoTrigger', 'relatedFiles', 'adaptiveDebounce', 'debounceMs', 'protocol', 'endpoint', 'model'])
+    && ['enabled', 'fimEnabled', 'autoTrigger', 'relatedFiles', 'adaptiveDebounce'].every(key => typeof value[key] === 'boolean')
+    && isStrictRecord(value.nextEdit) && hasExactKeys(value.nextEdit, ['enabled', 'endpoint', 'model'])
+    && typeof value.nextEdit.enabled === 'boolean' && text(value.nextEdit.endpoint, 2048) && text(value.nextEdit.model, 256)
     && typeof value.debounceMs === 'number' && Number.isInteger(value.debounceMs) && value.debounceMs >= 100 && value.debounceMs <= 2000
-    && ['fim', 'ollama', 'siliconflow-fim', 'mercury-edit'].includes(String(value.protocol))
+    && ['fim', 'ollama', 'siliconflow-fim'].includes(String(value.protocol))
     && text(value.endpoint, 2048) && text(value.model, 256);
 }
 export function parseManagementRequest(value: unknown): ManagementRequest | undefined {
@@ -114,7 +119,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   else if (a.kind === 'language.set') valid = hasExactKeys(a, ['kind', 'language']) && isLanguagePreference(a.language);
   else if (a.kind === 'reviewQuestion.model.set') valid = hasExactKeys(a, ['kind', 'modelId'], ['reasoningEffort']) && (a.modelId === null || isSafeModelId(a.modelId))
     && (a.reasoningEffort === undefined || a.reasoningEffort === null || SESSION_REASONING_EFFORTS.some(e => e === a.reasoningEffort));
-  else if (a.kind === 'completion.save') valid = hasExactKeys(a, ['kind', 'preferences', 'setApiKey']) && isCompletionPreferences(a.preferences) && typeof a.setApiKey === 'boolean';
+  else if (a.kind === 'completion.save') valid = hasExactKeys(a, ['kind', 'preferences', 'setApiKey', 'setNextEditApiKey']) && isCompletionPreferences(a.preferences) && typeof a.setApiKey === 'boolean' && typeof a.setNextEditApiKey === 'boolean';
   else if (a.kind === 'sessions.list') valid = hasExactKeys(a, ['kind', 'scope'], ['cursor']) && (a.scope === 'all' || a.scope === 'folder')
     && (a.cursor === undefined || typeof a.cursor === 'number' && Number.isFinite(a.cursor) && a.cursor >= 0);
   else if (['session.view', 'session.export', 'session.folder', 'session.resume', 'missions.open'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind', 'id']) && text(a.id);
@@ -129,7 +134,7 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   const settings = (v: unknown): v is ManagementSettings => isStrictRecord(v) && isCompletionPreferences(v.completion)
     && ['auto', 'light', 'dark'].includes(String(v.theme)) && ['light', 'dark'].includes(String(v.resolvedTheme))
     && typeof v.version === 'string' && (v.cwd === null || typeof v.cwd === 'string')
-    && typeof v.connection === 'string' && typeof v.ide === 'string' && typeof v.completionHasKey === 'boolean' && typeof v.sessionManagementAvailable === 'boolean'
+    && typeof v.connection === 'string' && typeof v.ide === 'string' && typeof v.completionHasKey === 'boolean' && typeof v.nextEditHasKey === 'boolean' && typeof v.sessionManagementAvailable === 'boolean'
     && isStrictRecord(v.reviewQuestion) && (v.reviewQuestion.modelId === null || isSafeModelId(v.reviewQuestion.modelId))
     && (v.reviewQuestion.reasoningEffort === undefined || v.reviewQuestion.reasoningEffort === null || (SESSION_REASONING_EFFORTS as readonly unknown[]).includes(v.reviewQuestion.reasoningEffort))
     && (v.reviewQuestion.inheritedModelId === undefined || v.reviewQuestion.inheritedModelId === null || isSafeModelId(v.reviewQuestion.inheritedModelId))
