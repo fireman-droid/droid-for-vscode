@@ -2,6 +2,7 @@ import { useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardE
 import { createPortal } from 'react-dom';
 import { cn } from './cn';
 import { inlineSelection, inlineText, setInlineSelection } from './inlineInputDom';
+import { limitInlineEdit } from './inlineInputEdit';
 
 export interface InlineInputHandle {
   readonly element: HTMLDivElement;
@@ -23,16 +24,17 @@ export interface InlineInputProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   placeholder?: string;
   disabled?: boolean;
   maxLength?: number;
+  measureText?(value: string): number;
 }
 
 /** Shared editing primitive for text interspersed with non-editable, keyboard-addressable atoms. */
 export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste, onCopy, onKeyDown, onInput, onCompositionStart, onCompositionEnd,
-  placeholder, disabled, maxLength = Infinity, className, ...props }: InlineInputProps) {
+  placeholder, disabled, maxLength = Infinity, measureText, className, ...props }: InlineInputProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const rendered = useRef<string | null>(null);
   const [slots, setSlots] = useState<Array<{ token: string; element: HTMLElement }>>([]);
-  const [composition, setComposition] = useState(0);
+  const [revision, setRevision] = useState(0);
   const handle = useRef<InlineInputHandle>(null);
   if (!handle.current) handle.current = {
     get element() { return root.current!; }, get value() { return inlineText(root.current!); },
@@ -67,25 +69,39 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     node.replaceChildren(fragment);
     rendered.current = value + tokenKey; setSlots(next);
     if (focused) setInlineSelection(node, selected.start, selected.end, selected.direction);
-  }, [value, tokenKey, composition]);
+  }, [value, tokenKey, revision]);
+  const restoreCaret = (next: string, cursor: number) => {
+    const input = handle.current!, element = input.element;
+    queueMicrotask(() => {
+      if (element.isConnected && element.ownerDocument.activeElement === element && input.value === next)
+        input.setSelectionRange(cursor, cursor);
+    });
+  };
   const change = () => {
     if (composing.current) return;
     const next = inlineText(root.current!);
     const caret = handle.current!.selectionStart;
-    onChange(next.slice(0, maxLength), Math.min(caret, maxLength));
+    const limited = limitInlineEdit(value, next, caret, maxLength, measureText);
+    onChange(limited.value, limited.cursor);
+    if (limited.value !== next) {
+      // A rejected insertion may leave the controlled value unchanged. Still
+      // restore the browser DOM and caret before accepting another edit.
+      setRevision(count => count + 1);
+      restoreCaret(limited.value, limited.cursor);
+    }
   };
   const replace = (text: string) => {
     const input = handle.current!, start = input.selectionStart, end = input.selectionEnd;
-    const inserted = text.slice(0, Math.max(0, maxLength - (input.value.length - end + start)));
-    onChange(input.value.slice(0, start) + inserted + input.value.slice(end), start + inserted.length);
-    queueMicrotask(() => input.setSelectionRange(start + inserted.length, start + inserted.length));
+    const limited = limitInlineEdit(input.value, input.value.slice(0, start) + text + input.value.slice(end), start + text.length, maxLength, measureText);
+    onChange(limited.value, limited.cursor);
+    restoreCaret(limited.value, limited.cursor);
   };
   return <div {...props} ref={root} role="textbox" aria-multiline="true" aria-disabled={disabled || undefined}
     contentEditable={!disabled} suppressContentEditableWarning tabIndex={disabled ? -1 : 0}
     data-slot="inline-input" data-placeholder={placeholder} data-empty={(!value && !composing.current) || undefined}
     className={cn('dvx-inline-input', className)}
-    onCompositionStart={event => { composing.current = true; setComposition(count => count + 1); onCompositionStart?.(event); }}
-    onCompositionEnd={event => { composing.current = false; change(); setComposition(count => count + 1); onCompositionEnd?.(event); }}
+    onCompositionStart={event => { composing.current = true; setRevision(count => count + 1); onCompositionStart?.(event); }}
+    onCompositionEnd={event => { composing.current = false; change(); setRevision(count => count + 1); onCompositionEnd?.(event); }}
     onInput={event => { change(); onInput?.(event); }}
     onPaste={event => {
       onPaste?.(event, handle.current!);

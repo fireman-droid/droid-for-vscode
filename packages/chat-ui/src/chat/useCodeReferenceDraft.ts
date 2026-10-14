@@ -43,7 +43,7 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
     }
     if (!markers.length || !resolveCodeReference) return false;
     // Insert text immediately. A slow host may only fold it if this draft is unchanged.
-    const room = Math.max(0, maxLength - (value.length - (end - start)));
+    const room = Math.max(0, maxLength - format(before + after).length);
     const inserted = plain.slice(0, room);
     const next = format(before + inserted + after);
     event.preventDefault(); commit(next);
@@ -83,6 +83,6 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
     history.current.emitted = next; onChange(next);
   };
   return { ...parsed, body: parsed.inline, change, onPaste, onCopy, onKeyDown,
-    maxLength: Math.max(0, maxLength - (value.length - parsed.inline.length)),
+    maxLength, measureText: (body: string) => format(body).length,
     remove: (index: number) => change(parsed.inline.replace(parsed.tokens[index]!, '')) };
 }
