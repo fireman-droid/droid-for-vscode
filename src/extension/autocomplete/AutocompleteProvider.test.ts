@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { setImmediate } from 'node:timers/promises';
+import { setImmediate, setTimeout as wait } from 'node:timers/promises';
 
 const mocks = vi.hoisted(() => ({
   editor: undefined as unknown,
@@ -247,6 +247,49 @@ describe('AutocompleteProvider', () => {
     expect(mocks.nextRequest).not.toHaveBeenCalled();
   });
 
+  it('prepares FIM context during debounce and waits for both before sending', async () => {
+    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 100 });
+    const snippets = deferred<[]>();
+    mocks.collect.mockReturnValue(snippets.promise);
+    mocks.request.mockResolvedValue('42;');
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+    await wait(120);
+    expect(mocks.request).not.toHaveBeenCalled();
+    snippets.resolve([]);
+    expect((await request.pending)[0].insertText).toBe('42;');
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the FIM send delay when context is fast and abandons cancelled preparation', async () => {
+    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 350 });
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+    request.cancel.cancel();
+    expect(await request.pending).toEqual([]);
+    await wait(380);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  it('reuses transport across a delayed editor-token refresh without repeating context', async () => {
+    const response = deferred<string>(), file = document();
+    mocks.request.mockReturnValue(response.promise);
+    const first = await requesting(file);
+    const transport = mocks.request.mock.calls[0][0].signal as AbortSignal;
+    first.cancel.cancel();
+    expect(await first.pending).toEqual([]);
+    // The native editor can wait longer than the ordinary typing handoff.
+    await wait(180);
+    expect(transport.aborted).toBe(false);
+    const second = await requesting(file);
+    response.resolve('42;');
+    expect((await second.pending)[0].insertText).toBe('42;');
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+
   it.each([0, 1])('offers an if body inside an existing function for trigger %i', async (triggerKind) => {
     const prefix = 'function calculateCartTotal(items: CartItem[]): number {\n  // Empty cart\n  if';
     const file = document(prefix + '\n}');
@@ -410,8 +453,8 @@ describe('AutocompleteProvider', () => {
     const request = await requesting(document());
     request.cancel.cancel();
     await request.pending;
-    // A 100ms handoff lets the next editor invocation share the same transport.
-    await new Promise(resolve => setTimeout(resolve, 120));
+    // An unchanged editor refresh has a bounded 250ms transport handoff.
+    await wait(270);
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     response.resolve('late');
     expect(await request.pending).toEqual([]);
