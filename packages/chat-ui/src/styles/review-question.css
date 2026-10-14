@@ -1,23 +1,34 @@
-@layer components {
+@layer utilities {
   .review-diff-code[data-question-selected] > code, .review-unified-row[data-question-selected] > code { background: color-mix(in srgb, var(--secondary-ink) 16%, transparent); }
   .review-question-menu { font: 12px/1.5 var(--font-sans); color: var(--ink); }
   .review-inline-question { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: var(--overlay-surface); }
   .review-question-history { flex: 1; min-height: 0; }
-  .review-question-history-viewport { overflow-anchor: none; padding: 8px 12px 12px; }
-  .review-question-exchange + .review-question-exchange { margin-top: 12px; }
-  .review-question-exchange .review-question-prompt { white-space: pre-wrap; margin-bottom: 8px; padding: 0; border: 0; border-radius: 0; color: var(--review-question-ink, var(--link-ink)); background: transparent; font-style: normal; }
-  .review-question-history .markdown-prose, .review-question-history [class*='text-[13px]'] { font-size: 12px; line-height: 1.55; }
+  .review-question-history-viewport { overflow-anchor: none; padding: 8px 14px 12px; }
+  .review-question-exchange + .review-question-exchange { margin-top: 16px; }
+  .review-question-exchange .review-question-prompt { flex-direction: row; gap: 9px; white-space: pre-wrap; margin-bottom: 10px; padding: 0; border: 0; border-radius: 0; color: var(--ink); background: transparent; font-style: normal; }
+  .review-question-prompt > :last-child { min-width: 0; overflow-wrap: anywhere; }
+  .review-question-person { flex: none; color: var(--muted-ink); font-size: 11px; line-height: 20px; }
+  .review-question-answer { gap: 6px; }
+  .review-question-author { display: flex; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; }
+  .review-question-author svg { width: 14px; height: 14px; flex: none; }
+  .review-question-history .markdown-prose, .review-question-prompt, .review-question-answer { font-size: 12px; line-height: 1.65; }
+  .review-question-history .markdown-prose p { margin: 0 0 8px; }
   .review-question-history .markdown-prose > :first-child { margin-top: 0; }
   .review-question-history .markdown-prose > :last-child { margin-bottom: 0; }
-  .review-question-composer { position: relative; flex: 0 0 auto; margin: 0 8px 8px; padding: 6px 10px; border: 1px solid var(--panel-edge); border-radius: var(--control-radius); background: var(--field-surface); }
-  .review-question-composer:focus-within { border-color: var(--control-border-focus); }
+  .review-question-history .v2-code-block { margin-block: 10px; border: 0; border-radius: 5px; background: var(--soft-surface); }
+  .review-question-history .v2-code-toolbar { position: absolute; top: 4px; right: 4px; z-index: 1; padding: 0; border: 0; border-radius: 4px; background: var(--soft-surface); opacity: 0; }
+  .review-question-history .v2-code-block:hover .v2-code-toolbar, .review-question-history .v2-code-block:focus-within .v2-code-toolbar { opacity: 1; }
+  .review-question-history .v2-code-language { display: none; }
+  .review-question-history .v2-code-block pre { margin: 0; padding: 9px 11px; background: transparent; font: 12px/1.65 var(--font-mono); }
+  .review-question-composer { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0 10px; flex: 0 0 auto; margin: 4px 0 0; padding: 11px 14px; border-top: 1px solid var(--panel-edge); background: var(--overlay-surface); }
+  .review-question-composer > .review-question-error { grid-column: 1 / -1; grid-row: 2; }
   .review-inline-question[data-empty] .review-question-history { display: none; }
-  .review-inline-question[data-empty] .review-question-composer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .review-inline-question[data-empty] .review-question-input { flex: 1; max-height: none; }
+  .review-inline-question[data-empty] .review-question-composer { flex: 1; grid-template-rows: 1fr auto; min-height: 0; margin: 0; border-top: 0; }
+  .review-inline-question[data-empty] .review-question-input { align-self: stretch; max-height: none; }
   .review-question-composer .review-question-send { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; line-height: 1; }
-  .review-question-composer .review-question-input { display: block; width: 100%; min-height: 27px; max-height: 120px; padding: 2px 24px 2px 0; resize: none; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; box-shadow: none; }
+  .review-question-composer .review-question-input { position: relative; grid-column: 1; grid-row: 1; display: block; width: 100%; min-height: 22px; max-height: 120px; padding: 2px 0; resize: none; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; box-shadow: none; }
   .review-question-input::placeholder { color: var(--muted-ink); }
-  .review-question-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; }
+  .review-question-actions { grid-column: 2; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; }
   .review-question-actions .review-question-send { width: 22px; height: 22px; border-radius: 50%; color: var(--action-ink); background: var(--action); }
   .review-question-actions .review-question-send svg { width: 12px; height: 12px; }
   .review-question-actions .review-question-send[data-busy] svg { width: 8px; height: 8px; fill: currentColor; }
@@ -29,5 +40,6 @@
   .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 28px; min-width: 52px; padding: 0 12px; border-radius: 5px; background: var(--overlay-surface); color: var(--ink); font: 12px/1 var(--font-sans); }
   .review-question-start:hover { background: var(--soft-surface); color: var(--ink); }
   @keyframes review-question-spin { to { transform: rotate(360deg); } }
+  @media (hover: none) { .review-question-history .v2-code-toolbar { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .review-question-progress svg { animation: none; } }
 }

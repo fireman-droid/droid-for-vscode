@@ -2,6 +2,7 @@ import { useI18n } from '../i18n';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react';
 import { Button } from '../ui/button';
+import { PinwheelIcon } from '../ui/pinwheel-icon';
 import type { InlineInputHandle } from '../ui/inline-input';
 import { Message, MessageContent } from '../ai-elements/message';
 import { Markdown } from '../content/Markdown';
@@ -13,7 +14,8 @@ import { useCodeReferenceDraft } from '../chat/useCodeReferenceDraft';
 
 function QuestionAnswer({ answer, state }: Pick<InlineQuestionEntry, 'answer' | 'state'>) {
   const displayed = useSmoothedAnswer(answer, state === 'streaming');
-  return <Message from="assistant"><MessageContent>
+  return <Message from="assistant"><MessageContent className="review-question-answer">
+    <div className="review-question-author"><PinwheelIcon /><span>Droid</span></div>
     <Markdown text={displayed} streaming={state === 'streaming' || displayed !== answer} />
   </MessageContent></Message>;
 }
@@ -75,7 +77,9 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
       followedOffset.current = null;
       follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
     } }}><div ref={historyContent}>{entries.map(entry => <div key={entry.id} className="review-question-exchange">
-      <Message from="user"><MessageContent className="review-question-prompt text-[var(--review-question-ink,var(--link-ink))]"><ReferencedText text={entry.question} /></MessageContent></Message>
+      <Message from="user"><MessageContent className="review-question-prompt">
+        <span className="review-question-person">{t('You')}</span><ReferencedText text={entry.question} />
+      </MessageContent></Message>
       {entry.answer ? <QuestionAnswer answer={entry.answer} state={entry.state} /> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></ScrollArea>
