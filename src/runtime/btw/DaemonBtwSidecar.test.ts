@@ -176,7 +176,7 @@ describe('DaemonBtwSidecar.ask', () => {
     expect(client.askedTexts).toEqual(['What is this error?']);
   });
 
-  it('ignores non-answer stream events', async () => {
+  it('retains read tool progress and ignores empty answer deltas', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('q'));
     await settle();
@@ -186,6 +186,7 @@ describe('DaemonBtwSidecar.ask', () => {
     stream.push({ type: 'assistant_text_delta', text: 'ok' });
     stream.push({ type: 'result', subtype: 'success' });
     expect(await asking).toEqual([
+      { kind: 'progress', progress: 'tool' },
       { kind: 'delta', text: 'ok' },
       { kind: 'done' },
     ]);

@@ -1,4 +1,5 @@
-import { DroidClient, ListToolsResultSchema, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
+import { AutonomyLevel, DroidClient, ProcessTransport, ToolConfirmationOutcome, type Base64ImageSource } from '@factory/droid-sdk/node';
+import { restrictBtwTools, type BtwToolPolicy } from './btwToolPolicy';
 import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 import { BtwThinkingProjection, type BtwThinkingEvent } from './btwThinking';
@@ -49,6 +50,7 @@ export interface BtwPromptOptions {
  */
 export interface BtwSidecarClient {
   loadSession(params: { sessionId: string }): Promise<unknown>;
+  loadSideQuestionSession(params: { sessionId: string }): Promise<void>;
   loadReadOnlySession?(params: { sessionId: string }): Promise<void>;
   forkSession(params: {
     title?: string;
@@ -111,7 +113,7 @@ export async function createBtwSidecar(options: {
     if (options.readOnly) {
       if (!client.loadReadOnlySession) throw new Error('Read-only questions are unavailable with this client.');
       await client.loadReadOnlySession({ sessionId: forkSessionId });
-    } else await client.loadSession({ sessionId: forkSessionId });
+    } else await client.loadSideQuestionSession({ sessionId: forkSessionId });
     return new BtwForkSidecar(client, forkSessionId);
   } catch (error) {
     await client.close().catch(() => undefined);
@@ -126,28 +128,25 @@ async function createLocalBtwClient(
   try {
     await transport.connect();
     const client = new DroidClient({ transport });
+    let policy: BtwToolPolicy | undefined;
     return {
       loadSession: (params) => client.loadSession(params),
+      loadSideQuestionSession: async ({ sessionId }) => {
+        policy = await restrictBtwTools(client, sessionId, true);
+      },
       loadReadOnlySession: async (params) => {
-        const policy = { autoRejectPermissionRequests: true, disableBuiltinSkills: true };
-        await client.loadSession({ ...params, ...policy });
-        const tools = ListToolsResultSchema.parse((await client.listTools()).result);
-        await client.loadSession({ ...params, ...policy,
-          disabledToolIds: tools.tools.map(tool => tool.llmId),
-        });
-        const restricted = ListToolsResultSchema.parse((await client.listTools()).result);
-        // Droid keeps the built-in schema-discovery tool allowed even when its
-        // ID is disabled. It cannot execute the disabled tools it describes.
-        // All file, command and MCP tools must still be disabled.
-        if (restricted.tools.some(tool => tool.currentlyAllowed && !(tool.id === 'tool-search-cli' && tool.llmId === 'ToolSearch')))
-          throw new Error('Droid could not disable tools for this read-only question.');
+        policy = await restrictBtwTools(client, params.sessionId, false);
       },
       forkSession: (params) => client.forkSession(params),
       addUserMessage: async ({ modelId, reasoningEffort, signal, ...params }) => {
-        if (modelId !== undefined || reasoningEffort !== undefined) await client.updateSessionSettings({
+        if (!policy) throw new Error('Side question tool policy is not ready.');
+        await client.updateSessionSettings({
+          autonomyLevel: AutonomyLevel.Off, disabledToolIds: policy.disabledToolIds,
           ...(modelId === undefined ? {} : { modelId }),
           ...(reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: reasoningEffort })),
-          specModeModelId: null, specModeReasoningEffort: null,
+          ...(modelId === undefined && reasoningEffort === undefined ? {} : {
+            specModeModelId: null, specModeReasoningEffort: null,
+          }),
         });
         signal?.throwIfAborted();
         return client.addUserMessage(params);

@@ -1,5 +1,6 @@
 import type { DaemonApi } from '../daemon/api';
-import { ToolConfirmationOutcome } from '@factory/droid-sdk';
+import { AutonomyLevel, ToolConfirmationOutcome } from '@factory/droid-sdk';
+import { prepareBtwToolPolicy } from './btwToolPolicy';
 import { BtwThinkingProjection } from './btwThinking';
 import { projectSettingsUpdate } from '../session/projections';
 
@@ -75,6 +76,7 @@ export interface DaemonBtwClient {
 export type DaemonBtwClientFactory = () => Promise<DaemonBtwClient>;
 
 export async function createDaemonBtwSidecar(options: {
+  readonly cwd?: string;
   readonly mainSessionId: string;
   readonly getDroid?: () => Promise<DaemonApi>;
   readonly createClient?: DaemonBtwClientFactory;
@@ -83,10 +85,10 @@ export async function createDaemonBtwSidecar(options: {
     options.createClient ??
     (() => {
       const getDroid = options.getDroid;
-      if (getDroid === undefined) {
-        throw new Error('createDaemonBtwSidecar needs getDroid or createClient.');
+      if (getDroid === undefined || options.cwd === undefined) {
+        throw new Error('createDaemonBtwSidecar needs cwd and getDroid or createClient.');
       }
-      return createConnectedDroidBtwClient(getDroid);
+      return createConnectedDroidBtwClient(getDroid, options.cwd);
     });
   const client = await createClient();
   const forkResponse = await client.fork(options.mainSessionId, {
@@ -106,6 +108,7 @@ export async function createDaemonBtwSidecar(options: {
 
 async function createConnectedDroidBtwClient(
   getDroid: () => Promise<DaemonApi>,
+  cwd: string,
 ): Promise<DaemonBtwClient> {
   const droid = await getDroid();
   return {
@@ -115,10 +118,12 @@ async function createConnectedDroidBtwClient(
         tags: params.tags.map((tag) => ({ name: tag.name })),
       }),
     attach: async (forkSessionId, onPermissionDenied) => {
+      const policy = await prepareBtwToolPolicy(cwd, forkSessionId);
       // The side card renders no permission or AskUser UI (that is
       // the main chat's interaction surface): permission requests are
       // denied and the entry errors with guidance instead.
       const session = await droid.sessions.resume(forkSessionId, {
+        ...policy,
         permissionHandler: () => {
           onPermissionDenied();
           return ToolConfirmationOutcome.Cancel;
@@ -127,10 +132,13 @@ async function createConnectedDroidBtwClient(
       });
       return {
         async *stream(text, options = {}) {
-          if (options.modelId !== undefined || options.reasoningEffort !== undefined) await droid.sessions.updateSettings(forkSessionId, {
+          await droid.sessions.updateSettings(forkSessionId, {
+            autonomyLevel: AutonomyLevel.Off, disabledToolIds: policy.disabledToolIds,
             ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
             ...(options.reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: options.reasoningEffort })),
-            specModeModelId: null, specModeReasoningEffort: null,
+            ...(options.modelId === undefined && options.reasoningEffort === undefined ? {} : {
+              specModeModelId: null, specModeReasoningEffort: null,
+            }),
           });
           options.signal?.throwIfAborted();
           // Keep the submitted stream alive when interrupt fails. The session

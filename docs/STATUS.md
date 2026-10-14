@@ -23,12 +23,22 @@
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
 - Microsoft VS Code 与 Cursor 当前用户目录均已安装含新 Diff 讲解规则的本地 `0.8.12`（源码提交 `48d2e915`），
-  对应 `dist/droidvisx.vsix`，SHA256 为 `00b08db5ff850b4b64ac68dfa24b517ae43f79e0742e99f7ce1035e70e9d2c2d`。
+  当时安装包 SHA256 为 `00b08db5ff850b4b64ac68dfa24b517ae43f79e0742e99f7ce1035e70e9d2c2d`。
   两个编辑器安装后的扩展入口、Review 脚本与 Webview 样式均逐字节匹配本地包；用户窗口未强制重载，需 Reload Window。
   GitHub 正式发布附件保留在 `dist/release/v0.8.12/droid-0.8.12.vsix`，
   SHA256 为 `923b41ddd261370ffa461906f7d6c11d5e2d195243c7cfbef91e8ebc4a2d1d9a`；新讲解规则尚未公开发布。
   Cursor 已按本次明确授权安装同一份 VSIX，市场更新另取决于 Open VSX 同步。独立 FIM／Next Edit 与开发评估入口已包含在正式包，
   未改变现有补全配置或自动开启 Next Edit；模型网关可自动启动，不依赖用户窗口的旧连接。
+- BTW 源码已收紧为只读工具：Process／Daemon 仅在隐藏 fork 限制编辑、命令、委派、自动化变更
+  及未确认只读的 MCP 工具，保留代码与网页读取／搜索；切模型和每次追问重新附带禁用列表。
+  权限设置失败不发送问题，Review 保持无执行工具。真实 CLI `0.241.1` 无模型调用核对确认
+  278 个工具标识被禁用，Read／LS／Glob／Grep／WebSearch／FetchUrl 等读取入口保留。
+  模型设置更新后再查目录，读取仍可用、写入未恢复；32 项相关回归通过。
+  主工作区 `pnpm run typecheck` 仍因既有 BYOK `createManagementServices.ts:29` TS18048 失败；
+  `pnpm run lint:budgets` 通过。排除两份无关 BYOK 草稿后，从 main 对齐的隔离目录执行
+  `pnpm run package:vsix`，完整类型、预算、构建及 `verifyVsix.mjs` 的 171 项包条目校验通过。
+  当前 `dist/droidvisx.vsix` SHA256 为 `cb1ee9903dd193414ad3be85d939b50e9d78257dfb23cdf3432f53fb49174ffc`。
+  新实现尚未安装或公开发布，当前编辑器仍使用上文 Diff 讲解包；未调用真实模型或做付费攻防评估。
 - 本机官方 Droid CLI 已按用户要求重新安装最新版 `0.241.1`；此前 `bin/droid.exe` 文件截断，
   导致 Windows 拒绝启动，扩展已正常加载但新后台无法启动。新文件通过官方 SHA256、
   Authenticode 签名、`--version` 和本地 daemon 监听检查，未发送模型请求；
