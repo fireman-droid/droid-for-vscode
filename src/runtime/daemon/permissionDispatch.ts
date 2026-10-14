@@ -1,12 +1,11 @@
 import {
-  AskUserResultSchema,
   RequestPermissionResultSchema,
   ToolConfirmationOutcome,
   type DaemonSessionController,
-  type PendingAskUserRequest,
   type PendingPermission,
 } from '@factory/droid-sdk';
 import type { RetainedDaemonSession } from './sessionHandle';
+import { bindDaemonAskUser } from './askUserDispatch';
 
 export interface InteractionTransport {
   waitUntilReady(): Promise<void>;
@@ -84,38 +83,7 @@ export function bindDaemonInteractions(
       return reportResponse(error, revision, owner);
     }
   };
-  const dispatchAskUser = async (request: PendingAskUserRequest): Promise<boolean> => {
-    const owner = handles.get(request.sessionId);
-    let result = AskUserResultSchema.parse({ cancelled: true, answers: [] });
-    const handler = owner?.handlers.askUserHandler;
-    if (handler !== undefined) {
-      try {
-        result = AskUserResultSchema.parse(
-          await handler({
-            toolCallId: request.toolCallId,
-            questions: request.questions,
-          }),
-        );
-      } catch (error) {
-        report(error, owner);
-      }
-    }
-    let revision: number | undefined;
-    try {
-      await transport.waitUntilReady();
-      revision = transport.revision();
-      await controller.respondToAskUser({
-        requestId: request.requestId,
-        sessionId: request.sessionId,
-        result,
-      });
-      return false;
-    } catch (error) {
-      return reportResponse(error, revision, owner);
-    }
-  };
   const inFlightPermissions = new Map<string, { replay?: PendingPermission }>();
-  const inFlightQuestions = new Map<string, { replay?: PendingAskUserRequest }>();
   const once = async <T extends { requestId: string }>(
     request: T, inFlight: Map<string, { replay?: T }>, dispatch: (value: T) => Promise<boolean>,
     isPending: () => boolean,
@@ -141,12 +109,10 @@ export function bindDaemonInteractions(
   // waiting above. Keep one UI request and one response submission in flight.
   const permission = (request: PendingPermission) => once(request, inFlightPermissions, dispatchPermission,
     () => controller.getPendingPermissions().some(value => value.requestId === request.requestId));
-  const askUser = (request: PendingAskUserRequest) => once(request, inFlightQuestions, dispatchAskUser,
-    () => controller.getPendingAskUserRequests().some(value => value.requestId === request.requestId));
+  const unbindAskUser = bindDaemonAskUser(controller, handles, report, transport);
   controller.on('permissionRequested', permission);
-  controller.on('askUserRequested', askUser);
   return () => {
     controller.off('permissionRequested', permission);
-    controller.off('askUserRequested', askUser);
+    unbindAskUser();
   };
 }

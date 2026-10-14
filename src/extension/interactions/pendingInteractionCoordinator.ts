@@ -152,7 +152,7 @@ export class PendingInteractionCoordinator {
     runtimeRequest: RuntimeAskUserRequest,
   ): Promise<RuntimeAskUserResult> {
     const context = this.activeContext;
-    if (runtime !== this.activeRuntime || context === null) {
+    if (runtime !== this.activeRuntime || context === null || runtimeRequest.signal?.aborted) {
       return cancellingRuntimeInteractionHandler.askUser(runtimeRequest);
     }
 
@@ -162,6 +162,8 @@ export class PendingInteractionCoordinator {
     }
 
     const request = projectAskUserRequest(requestId, runtimeRequest);
+    const signal = runtimeRequest.signal;
+    let withdraw: (() => void) | undefined;
     return new Promise<RuntimeAskUserResult>((resolve) => {
       const entry: PendingInteraction = {
         kind: 'ask-user',
@@ -171,7 +173,16 @@ export class PendingInteractionCoordinator {
         resolve,
       };
       this.pending.set(requestId, entry);
+      withdraw = () => {
+        if (!this.pending.delete(requestId)) return;
+        // A reload/another client settled this request; it is not a user cancel.
+        this.close(entry);
+        resolve({ cancelled: true, answers: [] });
+      };
+      signal?.addEventListener('abort', withdraw, { once: true });
       this.publish(entry);
+    }).finally(() => {
+      if (withdraw) signal?.removeEventListener('abort', withdraw);
     });
   }
 

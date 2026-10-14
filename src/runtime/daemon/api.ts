@@ -8,6 +8,7 @@ import type {
   ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
 import type { RuntimeTurnOutcome } from '../turnOutcome';
+import type { RuntimeAskUserHandler } from '../events/runtimeInteractions';
 
 export type DaemonNotification = Parameters<FactoryDroidEvents['sessionNotification']>[0];
 export type DaemonTerminalEvent =
@@ -17,8 +18,8 @@ export type DaemonTerminalEvent =
   | { readonly type: 'disconnected' };
 export type DaemonHandlers = Pick<
   ConnectToDaemonOptions,
-  'permissionHandler' | 'askUserHandler'
->;
+  'permissionHandler'
+> & { readonly askUserHandler?: RuntimeAskUserHandler };
 /** Mission profiles are supplied at initialization and confirmed before planning. */
 export type DaemonCreateSessionOptions = CreateDaemonSessionOptions & Pick<
   Parameters<DaemonSessionController['initializeSession']>[0], 'missionSettings'
