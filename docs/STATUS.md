@@ -6,7 +6,7 @@
 
 ## 版本与交付
 
-- 源码版本 `0.8.11`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
+- 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。正式分发正在更新至 `0.8.12`。
   [GitHub v0.8.11](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.11) 已正式发布。
   [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38374358655) 已成功，
   注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录 latest 已确认返回 `0.8.11`。
@@ -115,7 +115,8 @@
   共享 ScrollArea 静态隐藏原生滚动条，避免 Webview CSP 阻止 Radix 注入样式后出现双滑块和原生箭头。
   界面修改与下述 AskUser 修复使用同一安装包，基于 main 的独立构建通过类型、预算、生产构建及 171 项 VSIX 校验。
   主工作区类型检查仍仅报告既有 BYOK `createManagementServices.ts:29` 可空错误，未将该未完成改动带入包。
-  当前 `dist/droidvisx.vsix` SHA256 为 `782e64ebd41e435de8b88e94258f73f7b286739ed6fdf98d6ac4aaca5b37ead5`，尚未安装或发布。
+  本地修复包 SHA256 为 `782e64ebd41e435de8b88e94258f73f7b286739ed6fdf98d6ac4aaca5b37ead5`，
+  已获本次授权安装到 Microsoft VS Code 当前用户目录，等待用户 Reload Window；正式 `0.8.12` 发布进行中。
   现有 Browser Dev Client 页面为空，未另启 Host 或将模拟页面当作验收；浅色／深色的真实编辑器效果待安装后确认。
 - AskUser 按会话与工具调用保持同一提问身份，恢复时更新请求 ID；SDK 已缓存或已处理的回答不再重新弹卡。
   后台撤销／处理提问时同步关闭本地表单，不伪造“用户取消”；仍未回答的恢复提问保留原卡片和草稿。

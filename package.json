@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid - AI Coding Agent",
   "description": "Unofficial Factory Droid integration for VS Code and Cursor, with coding chat, code review, BYOK models, and independent code completion.",
-  "version": "0.8.11",
+  "version": "0.8.12",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
