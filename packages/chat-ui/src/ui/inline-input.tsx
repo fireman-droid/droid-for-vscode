@@ -98,8 +98,14 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
       if (event.defaultPrevented) replace('');
     }}
     onKeyDown={event => {
+      // Embedded controls own their keys; IME confirmation/cancellation must
+      // never reach a consumer's send, undo or close shortcuts.
+      if (event.target !== event.currentTarget) return;
+      if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) {
+        event.stopPropagation(); return;
+      }
       onKeyDown?.(event);
-      if (event.defaultPrevented || composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+      if (event.defaultPrevented) return;
       if (event.key === 'Enter') { event.preventDefault(); replace('\n'); }
     }}>{slots.filter(slot => tokens.includes(slot.token)).map(({ token, element }, index) => createPortal(renderToken(token), element, `${token}:${index}`))}</div>;
 }
