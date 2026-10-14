@@ -55,7 +55,15 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     const fragment = node.ownerDocument.createDocumentFragment();
     const next: typeof slots = [];
     let text = '';
-    const flush = () => { fragment.append(node.ownerDocument.createTextNode(text)); text = ''; };
+    const flush = () => {
+      if (!text && tokens.length) {
+        // Empty text nodes are not caret stops in Chromium. Give the edges of
+        // atoms a real editable position without adding text to the draft.
+        const caret = node.ownerDocument.createElement('span');
+        caret.dataset.inlineCaret = ''; caret.textContent = '\u200b'; fragment.append(caret);
+      } else fragment.append(node.ownerDocument.createTextNode(text));
+      text = '';
+    };
     for (const character of value) {
       if (!tokens.includes(character)) { text += character; continue; }
       flush();
@@ -131,6 +139,29 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
       }
       onKeyDown?.(event);
       if (event.defaultPrevented) return;
+      if (tokens.length && ['ArrowLeft', 'ArrowRight', 'Backspace', 'Delete'].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const input = handle.current!, text = input.value;
+        const { start, end, direction } = inlineSelection(root.current!);
+        const backward = event.key === 'ArrowLeft' || event.key === 'Backspace';
+        const arrow = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+        const deletion = event.key === 'Backspace' || event.key === 'Delete';
+        if (deletion && start === end && (backward ? start === 0 : end === text.length)) {
+          event.preventDefault(); return;
+        }
+        const focus = direction === 'backward' ? start : end;
+        const adjacent = tokens.includes(text[(arrow ? focus : start) - (backward ? 1 : 0)] ?? '');
+        const selectedAtom = start !== end && tokens.some(token => text.slice(start, end).includes(token));
+        if (arrow && (adjacent || (!event.shiftKey && selectedAtom))) {
+          event.preventDefault();
+          const next = start !== end && !event.shiftKey ? (backward ? start : end) : focus + (backward ? -1 : 1);
+          const anchor = event.shiftKey ? (direction === 'backward' ? end : start) : next;
+          input.setSelectionRange(Math.min(anchor, next), Math.max(anchor, next), next < anchor ? 'backward' : 'forward');
+        } else if (deletion && (selectedAtom || start === end && adjacent)) {
+          event.preventDefault();
+          if (start === end) input.setSelectionRange(backward ? start - 1 : start, backward ? end : end + 1);
+          replace('');
+        }
+      }
       if (event.key === 'Enter') { event.preventDefault(); replace('\n'); }
     }}>{slots.filter(slot => tokens.includes(slot.token)).map(({ token, element }, index) => createPortal(renderToken(token), element, `${token}:${index}`))}</div>;
 }
