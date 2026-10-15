@@ -88,7 +88,7 @@ describe('BtwSideChat', () => {
     expect(sidecar.asked).toEqual(['first']);
   });
 
-  it('serializes a rapid reopen behind stale preparation', async () => {
+  it('prepares a fresh fork without waiting for discarded preparation', async () => {
     let releaseFirst: (sidecar: BtwSideChatSidecar) => void = () => undefined;
     const firstPreparation = new Promise<BtwSideChatSidecar>((resolve) => {
       releaseFirst = resolve;
@@ -109,15 +109,18 @@ describe('BtwSideChat', () => {
     const first = card.handlePrepare('/repo', 'main-1');
     card.reset();
     const reopened = card.handlePrepare('/repo', 'main-1');
-    await Promise.resolve();
-    expect(calls).toBe(1);
+    await reopened;
+    expect(calls).toBe(2);
+    expect(emitted.at(-1)?.btw.status).toBe('ready');
 
     releaseFirst(stale);
     await first;
-    await reopened;
 
     expect(calls).toBe(2);
     expect(stale.disposed).toBe(true);
+    expect(fresh.disposed).toBe(false);
+    await card.handleAsk('/repo', 'main-1', 'fresh question');
+    expect(fresh.asked).toEqual(['fresh question']);
     expect(emitted.at(-1)?.btw.status).toBe('ready');
   });
 
@@ -133,7 +136,8 @@ describe('BtwSideChat', () => {
     expect(factoryCalls).toEqual([{ cwd: '/repo', mainSessionId: 'main-1' }]);
     expect(sidecar.asked).toEqual(['What is this?']);
     const statuses = emitted.map((event) => event.btw.status);
-    expect(statuses[0]).toBe('forking');
+    expect(emitted[0]?.btw.entries[0]).toMatchObject({ question: 'What is this?', progress: 'waiting' });
+    expect(statuses).toContain('forking');
     expect(statuses).toContain('ready');
     const last = emitted.at(-1);
     expect(last?.sessionId).toBe('main-1');
@@ -196,12 +200,10 @@ describe('BtwSideChat', () => {
     const card = createCard();
     await card.handleAsk('/repo', 'main-1', 'q');
 
-    // forking + ready + question + done are urgent; the three deltas
-    // fold into the final done emit because it flushes the timer.
-    const streamingEmits = emitted.filter((event) =>
-      event.btw.entries.some((entry) => entry.state === 'streaming'),
-    );
-    expect(streamingEmits.length).toBeLessThanOrEqual(2);
+    // Preparing/waiting states may emit immediately; answer deltas still
+    // fold into one final update rather than publishing each token.
+    const visibleAnswers = emitted.flatMap(event => event.btw.entries.map(entry => entry.answer).filter(Boolean));
+    expect(visibleAnswers).toEqual(['abc']);
     expect(emitted.at(-1)?.btw.entries[0]?.answer).toBe('abc');
   });
 
@@ -313,7 +315,7 @@ describe('BtwSideChat', () => {
     expect(sidecar.asked).toHaveLength(2);
   });
 
-  it('reports a card-level error when the fork cannot start', async () => {
+  it('retains the submitted question with the startup error', async () => {
     factoryError = new Error('spawn failed');
     const card = createCard();
     await card.handleAsk('/repo', 'main-1', 'q');
@@ -321,7 +323,9 @@ describe('BtwSideChat', () => {
     const last = emitted.at(-1);
     expect(last?.btw.status).toBe('error');
     expect(last?.btw.message).toContain('side chat could not start');
-    expect(last?.btw.entries).toEqual([]);
+    expect(last?.btw.entries).toEqual([{
+      id: 'btw-1', question: 'q', answer: '', state: 'error', message: last?.btw.message,
+    }]);
   });
 
   it('dismiss discards the fork and every entry', async () => {

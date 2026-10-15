@@ -41,6 +41,11 @@ class FakeBtwClient implements BtwSidecarClient {
     return {};
   }
 
+  async loadSideQuestionSession(params: { sessionId: string }): Promise<void> {
+    this.calls.push(`loadSideQuestionSession:${params.sessionId}`);
+    this.loadedSessionIds.push(params.sessionId);
+  }
+
   async forkSession(params: {
     title?: string;
     tags?: { name: string }[];
@@ -124,7 +129,7 @@ describe('createBtwSidecar', () => {
     expect(client.calls).toEqual([
       'loadSession:main-1',
       'forkSession',
-      'loadSession:fork-1',
+      'loadSideQuestionSession:fork-1',
     ]);
     expect(client.forkParams).toEqual({
       title: BTW_FORK_TITLE,
@@ -172,7 +177,7 @@ describe('BtwSidecar.ask', () => {
     expect(client.askedTexts).toEqual(['What is this error?']);
   });
 
-  it('ignores other-session and non-answer notifications', async () => {
+  it('ignores other-session notifications and retains read tool progress', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('q'));
     await Promise.resolve();
@@ -184,6 +189,7 @@ describe('BtwSidecar.ask', () => {
     client.emit('fork-1', { type: 'assistant_text_delta', textDelta: 'ok' });
     client.emit('fork-1', { type: 'agent_turn_completed' });
     expect(await asking).toEqual([
+      { kind: 'progress', progress: 'tool' },
       { kind: 'delta', text: 'ok' },
       { kind: 'done' },
     ]);

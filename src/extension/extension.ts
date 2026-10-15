@@ -451,6 +451,7 @@ export function activate(context: vscode.ExtensionContext): void {
     btwSidecarFactory: (cwd, mainSessionId) =>
       daemonSessionsActive()
         ? createDaemonBtwSidecar({
+            cwd,
             mainSessionId,
             getDroid: daemonSidecar.droid,
           })

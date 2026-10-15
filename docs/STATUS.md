@@ -1,11 +1,18 @@
 # 当前状态
 
-核对日期：2026-10-14。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-10-15。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
+- BTW 分析能力在 `codex/btw-analysis-tools` 任务分支实现，尚未安装、合并或正式发布。
+  同时接入 eli5 讲解约束、只读工具策略、固定 Git 查询及 Worker／QuickJS WASM
+  隔离的 JS／TS 示例执行；不开放任意命令，不修改项目／配置／依赖／Git。
+  76 项 BTW／Review 相关本地检查、typecheck、lint:budgets、VSIX 构建及 172 项包条目校验通过；
+  包内 Worker 已实际执行 TS／Promise 示例。真实 CLI 工具目录及本地 MCP 调用通过，
+  发现并修正 CLI 对 MCP 服务名的截短问题。窄侧栏与 Review 行为不变；
+  本轮不调用付费模型，实际回答质量仍需使用中确认。
 - 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
   [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12) 已正式发布，
   [云端构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527079175) 从干净版本标签完成类型、预算、构建与包校验。
