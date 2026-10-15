@@ -33,5 +33,6 @@ describe('BTW worker lifecycle', () => {
       .toMatchObject({ ok: false });
     expect(await runner.run({ code: 'return 1', language: 'javascript', files: {} }))
       .toMatchObject({ ok: true, value: '1' });
-  });
+  // Two independent workers each retain their production 5s deadline.
+  }, 15_000);
 });

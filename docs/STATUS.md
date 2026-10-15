@@ -13,6 +13,11 @@
   包内 Worker 已实际执行 TS／Promise 示例。真实 CLI 工具目录及本地 MCP 调用通过，
   发现并修正 CLI 对 MCP 服务名的截短问题。窄侧栏与 Review 行为不变；
   本轮不调用付费模型，实际回答质量仍需使用中确认。
+  [PR #2](https://github.com/fireman-droid/droid-for-vscode/pull/2) 保留草稿：首轮云端构建和包校验通过，
+  依赖变化触发全量测试后出现 82 个文件／342 个用例失败及 5 个未处理错误。
+  其中本次 Worker 用例把两次各有 5 秒上限的执行放在默认 5 秒测试期限内，已将测试期限
+  调整为 15 秒并通过本地复查，生产执行上限不变。其余失败涉及未改动的模型 UI、
+  会话状态、VS Code mock 等，未逐项归因，不据此声称可合并；未放宽 CI 检查。
 - 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
   [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12) 已正式发布，
   [云端构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527079175) 从干净版本标签完成类型、预算、构建与包校验。
