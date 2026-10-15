@@ -1,6 +1,7 @@
 import { useI18n } from '../i18n';
 import { useEffect, useRef, type PointerEvent } from 'react';
-import { Aperture, ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
+import { Aperture, ArrowUp, Clock3, MessageSquare, Quote, X } from 'lucide-react';
+import { AnswerStopButton } from './AnswerStopButton';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
@@ -138,7 +139,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           {!composerActions ?
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
             : composeHint}</span> : null}
-          {streaming ? <Button size="icon-sm" variant="ghost" aria-label={t("Stop side answer")} title={t("Stop side answer")} onClick={onStop}><Square className="size-3 fill-current" /></Button> : null}
+          {streaming ? <AnswerStopButton stopping={state.stopping} onStop={onStop} /> : null}
           <Button size="none" variant="plain" className="v2-btw-send" data-queue={streaming || undefined} aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
             title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp />{streaming ? <span>{t('Queue')}</span> : null}</Button>
         </div>

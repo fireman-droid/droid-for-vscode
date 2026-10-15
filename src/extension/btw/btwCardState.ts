@@ -132,7 +132,7 @@ export function applyBtwThinking(state: SessionBtwState, id: string, event: BtwT
   }) };
 }
 
-export function completeBtwEntry(state: SessionBtwState, id: string): SessionBtwState {
+export function completeBtwEntry(state: SessionBtwState, id: string, stopped = false): SessionBtwState {
   return {
     ...state,
     entries: state.entries.map((entry) => {
@@ -140,7 +140,7 @@ export function completeBtwEntry(state: SessionBtwState, id: string): SessionBtw
         return entry;
       }
       const { progress: _progress, ...settled } = entry;
-      return { ...settled, ...(entry.tools ? { tools: settleTools(entry.tools) } : {}), state: 'done' as const };
+      return { ...settled, ...(entry.tools ? { tools: settleTools(entry.tools) } : {}), state: 'done' as const, ...(stopped ? { stopped: true } : {}) };
     }),
   };
 }

@@ -89,7 +89,7 @@ export function ReviewQuestions({ port, sessionId, scopeKey, enabled, children }
       selection: { ...anchor.selection, context: anchor.selection.context.slice(0, MAX_REVIEW_QUESTION_CONTEXT) } });
     setDraft('');
   };
-  const content = questionId ? <InlineQuestion entries={state.entries} draft={draft} onDraft={setDraft} busy={busy}
+  const content = questionId ? <InlineQuestion entries={state.entries} draft={draft} onDraft={setDraft} busy={busy} stopping={state.stopping}
     disabled={!available || !!selectionError || !enabled} message={selectionError ?? stateMessage ?? modelError} maxLength={MAX_REVIEW_QUESTION_TEXT}
     focusRequested={focusRequested} onFocused={() => setFocusRequested(false)}
     onSend={send} onStop={() => port.postMessage({ type: 'reviewQuestion.stop', sessionId, questionId })} onClose={close}

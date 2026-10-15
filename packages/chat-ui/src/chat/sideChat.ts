@@ -17,6 +17,7 @@ export interface SideToolActivity {
 
 export interface SideConversation {
   readonly status: 'idle' | 'preparing' | 'ready' | 'error' | 'unsupported';
+  readonly stopping?: boolean;
   readonly entries: readonly {
     readonly id: string;
     readonly question: string;
@@ -26,6 +27,7 @@ export interface SideConversation {
     readonly thinkingTruncated?: boolean;
     readonly thinkingDurationMs?: number;
     readonly state: 'streaming' | 'done' | 'error';
+    readonly stopped?: boolean;
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
     readonly tools?: readonly SideToolActivity[];
     readonly message: string | null;

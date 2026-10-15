@@ -39,7 +39,7 @@ export type BtwAnswerEvent =
   | BtwToolEvent
   | { readonly kind: 'progress'; readonly progress: BtwEntryProgress }
   | { readonly kind: 'done' }
-  | { readonly kind: 'error'; readonly message: string };
+  | { readonly kind: 'error'; readonly message: string; readonly connectionLost?: boolean };
 
 export interface BtwPromptOptions {
   readonly images?: Base64ImageSource[];
@@ -252,7 +252,7 @@ class BtwForkSidecar implements BtwSidecar {
       },
     );
     const unsubscribeErrors = this.client.onError(() => {
-      push({ kind: 'error', message: 'Side chat connection failed.' });
+      push({ kind: 'error', message: 'Side chat connection failed.', connectionLost: true });
     });
 
     try {

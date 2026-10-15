@@ -32,5 +32,6 @@ export function SideReply({ entry, preparing }: { readonly entry: SideConversati
     </p> : null}
     {entry.answer ? <AssistantMessage text={entry.answer} streaming={running} /> : null}
     <SideAnalysisResults tools={tools.filter(tool => tool.kind === 'analysis' && tool.state !== 'running')} />
+    {entry.stopped ? <p role="status" className="text-[11px] text-muted-foreground">{t('Stopped')}</p> : null}
   </ReplyView>;
 }

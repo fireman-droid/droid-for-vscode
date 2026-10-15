@@ -167,15 +167,19 @@ describe('BtwSideChat', () => {
     // Let the deltas land, then stop mid-stream.
     await vi.advanceTimersByTimeAsync(60);
     card.handleStop('main-1');
+    expect(emitted.at(-1)?.btw.stopping).toBe(true);
+    expect(emitted.at(-1)?.btw.entries[0]?.state).toBe('streaming');
     await ask;
 
     expect(sidecar.interrupts).toBe(1);
+    expect(emitted.at(-1)?.btw.stopping).toBeUndefined();
     expect(emitted.at(-1)?.btw.entries).toEqual([
       {
         id: 'btw-1',
         question: 'q',
         answer: 'Partial answer',
         state: 'done',
+        stopped: true,
         message: null,
       },
     ]);

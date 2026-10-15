@@ -245,7 +245,7 @@ describe('BtwSidecar.ask', () => {
     await Promise.resolve();
     client.emitError();
     expect(await second).toEqual([
-      { kind: 'error', message: 'Side chat connection failed.' },
+      { kind: 'error', message: 'Side chat connection failed.', connectionLost: true },
     ]);
   });
 

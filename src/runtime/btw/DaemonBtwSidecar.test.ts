@@ -254,7 +254,7 @@ describe('DaemonBtwSidecar.ask', () => {
     await settle();
     client.streams[0].fail(new Error('socket gone'));
     expect(await asking).toEqual([
-      { kind: 'error', message: 'Side chat connection failed.' },
+      { kind: 'error', message: 'Side chat connection failed.', connectionLost: true },
     ]);
   });
 

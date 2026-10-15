@@ -55,6 +55,8 @@ export interface BtwEntry {
   readonly thinkingTruncated?: boolean;
   readonly thinkingDurationMs?: number;
   readonly state: BtwEntryState;
+  /** Turn ended after a user-requested stop; partial text is retained. */
+  readonly stopped?: boolean;
   /** Current activity, separate from retained thinking and answer text. */
   readonly progress?: BtwEntryProgress;
   readonly tools?: readonly BtwToolActivity[];
@@ -65,6 +67,8 @@ export interface BtwEntry {
 /** Whole-card state snapshot projected by the host. */
 export interface SessionBtwState {
   readonly status: BtwStatus;
+  /** Stop requested, awaiting the active turn's terminal event. */
+  readonly stopping?: boolean;
   readonly entries: readonly BtwEntry[];
   readonly message: string | null;
   /** At most one follow-up waiting for the streaming answer to settle. */
@@ -195,7 +199,8 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: number): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs', 'tools']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs', 'tools', 'stopped']) ||
+    (value.stopped !== undefined && typeof value.stopped !== 'boolean') ||
     (value.tools !== undefined && !isBtwToolActivities(value.tools)) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
@@ -239,6 +244,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: 
     ...(value.thinkingTruncated === undefined ? {} : { thinkingTruncated: value.thinkingTruncated as boolean }),
     ...(value.thinkingDurationMs === undefined ? {} : { thinkingDurationMs: value.thinkingDurationMs as number }),
     state: value.state as BtwEntryState,
+    ...(value.stopped === undefined ? {} : { stopped: value.stopped as boolean }),
     ...(value.tools === undefined ? {} : { tools: value.tools as readonly BtwToolActivity[] }),
     ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
     message: value.message ?? null,
@@ -259,7 +265,8 @@ export function parseSessionBtwMessage(value: unknown, maxQuestionLength = MAX_B
   const btw = value.btw;
   if (
     !isRecord(btw) ||
-    !hasExactKeys(btw, ['status', 'entries'], ['message', 'pendingQuestion', 'pendingImages', 'pendingModelId', 'pendingReasoningEffort']) ||
+    !hasExactKeys(btw, ['status', 'entries'], ['message', 'pendingQuestion', 'pendingImages', 'pendingModelId', 'pendingReasoningEffort', 'stopping']) ||
+    (btw.stopping !== undefined && typeof btw.stopping !== 'boolean') ||
     !BTW_STATUSES.includes(btw.status as BtwStatus) ||
     !Array.isArray(btw.entries) ||
     btw.entries.length > MAX_BTW_ENTRIES
@@ -299,6 +306,7 @@ export function parseSessionBtwMessage(value: unknown, maxQuestionLength = MAX_B
     sessionId: value.sessionId,
     btw: {
       status: btw.status as BtwStatus,
+      ...(btw.stopping === undefined ? {} : { stopping: btw.stopping as boolean }),
       entries,
       message: btw.message ?? null,
       pendingQuestion: btw.pendingQuestion ?? null,

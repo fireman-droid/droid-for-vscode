@@ -225,7 +225,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
         if (this.disposed) {
           return;
         }
-        yield { kind: 'error', message: 'Side chat connection failed.' };
+        yield { kind: 'error', message: 'Side chat connection failed.', connectionLost: true };
         return;
       }
       if (this.disposed) {

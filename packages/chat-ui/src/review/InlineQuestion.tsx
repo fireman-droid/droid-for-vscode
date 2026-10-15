@@ -1,6 +1,7 @@
 import { useI18n } from '../i18n';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ArrowUp, LoaderCircle, Square } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
+import { AnswerStopButton } from '../chat/AnswerStopButton';
 import { Button } from '../ui/button';
 import { PinwheelIcon } from '../ui/pinwheel-icon';
 import type { InlineInputHandle } from '../ui/inline-input';
@@ -25,13 +26,15 @@ export interface InlineQuestionEntry {
   question: string;
   answer: string;
   state: 'streaming' | 'done' | 'error';
+  stopped?: boolean;
   message: string | null;
 }
-export function InlineQuestion({ entries, draft, onDraft, busy, disabled, message, actions, onSend, onStop, onClose, maxLength, focusRequested, onFocused }: {
+export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabled, message, actions, onSend, onStop, onClose, maxLength, focusRequested, onFocused }: {
   entries: readonly InlineQuestionEntry[];
   draft: string;
   onDraft(value: string): void;
   busy: boolean;
+  stopping?: boolean;
   disabled: boolean;
   message: string | null;
   actions?: ReactNode;
@@ -81,6 +84,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
         <span className="review-question-person">{t('You')}</span><ReferencedText text={entry.question} />
       </MessageContent></Message>
       {entry.answer ? <QuestionAnswer answer={entry.answer} state={entry.state} /> : null}
+      {entry.stopped ? <p role="status" className="text-[11px] text-muted-foreground">{t('Stopped')}</p> : null}
       {entry.message ? <p className="review-question-error" role="alert">{entry.message}</p> : null}
     </div>)}</div></ScrollArea>
     <div className="review-question-composer">
@@ -92,11 +96,10 @@ export function InlineQuestion({ entries, draft, onDraft, busy, disabled, messag
         }} />
       {message ? <p className="review-question-error" role="alert">{message}</p> : null}
       <div className="review-question-actions">
-        {busy ? <span className="review-question-progress" role="status" aria-label={t("Answering")}><LoaderCircle /></span> : null}
         {actions}
-        <Button variant="plain" size="none" className="review-question-send" disabled={!busy && (disabled || !draft.trim())}
-          data-busy={busy || undefined}
-          aria-label={busy ? t("Stop answer") : t("Send question")} onClick={busy ? onStop : send}>{busy ? <Square /> : <ArrowUp />}</Button>
+        {busy ? <AnswerStopButton stopping={stopping} onStop={onStop} />
+          : <Button variant="plain" size="none" className="review-question-send" disabled={disabled || !draft.trim()}
+            aria-label={t("Send question")} onClick={send}><ArrowUp /></Button>}
       </div>
     </div>
   </section>;
