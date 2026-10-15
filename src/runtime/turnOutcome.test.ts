@@ -13,6 +13,7 @@ describe('durable daemon turn outcomes', () => {
     });
     expect(result?.completion).toMatchObject({ type: 'turn-complete', outcome });
     expect(result?.completion.turnUsage).toBeUndefined();
+    expect(result?.completion.modelConnectionFailed).toBe(reason === 'model_provider_unreachable' ? true : undefined);
   });
 
   it('retains structured results for the exact requested turn', () => {

@@ -21,6 +21,7 @@ export function projectDurableTurnOutcome(
   // Use the SDK's reason mapping, without inventing missing usage or replaying text.
   const completion = normalizeSdkEvent(new StreamStateTracker({ sessionId }).completeTurn({ reason: outcome.reason }));
   if (completion?.type !== 'turn-complete') throw new ProtocolError('The recovered turn outcome could not be represented.');
-  return { backendTurnId, reason: outcome.reason, resultKind: outcome.resultKind, completion,
+  return { backendTurnId, reason: outcome.reason, resultKind: outcome.resultKind,
+    completion: outcome.reason === 'model_provider_unreachable' ? { ...completion, modelConnectionFailed: true } : completion,
     ...(outcome.resultKind === 'structured' ? { structuredResult: outcome.result } : {}) };
 }

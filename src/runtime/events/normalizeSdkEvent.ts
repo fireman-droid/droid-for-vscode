@@ -158,6 +158,7 @@ export function normalizeSdkEvent(
       return {
         type: 'error',
         message: event.message,
+        ...modelConnectionFailure(event.message),
       };
 
     case 'token_usage_update': {
@@ -175,6 +176,7 @@ export function normalizeSdkEvent(
         type: 'turn-complete',
         outcome: event.subtype,
         ...(event.error?.message === undefined ? {} : { errorMessage: event.error.message }),
+        ...modelConnectionFailure(event.error?.message),
         ...(turnUsage === undefined ? {} : { turnUsage }),
       };
     }
@@ -182,6 +184,11 @@ export function normalizeSdkEvent(
     default:
       return undefined;
   }
+}
+
+/** The SDK's provider connection failure text; do not classify arbitrary turn errors. */
+function modelConnectionFailure(message: string | undefined): { modelConnectionFailed?: true } {
+  return message?.trim() === 'Connection error.' ? { modelConnectionFailed: true } : {};
 }
 
 /**

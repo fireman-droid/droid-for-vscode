@@ -1,6 +1,8 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ['Last model request failed to connect','上一次模型请求连接失败','上一次模型請求連線失敗'],
+  ['The last model request failed to connect. The local Droid runtime is connected. Check your model service or network before trying again.','上一次模型请求连接失败，本地 Droid 运行时仍已连接。请检查模型服务或网络后重试。','上一次模型請求連線失敗，本機 Droid 執行階段仍已連線。請檢查模型服務或網路後重試。'],
   ['Can read, search and run isolated examples. Cannot modify the project.','可读代码、查资料、运行独立示例，不修改项目。','可讀程式碼、查資料、執行獨立範例，不修改專案。'],
   ['Reading code…','正在读取代码…','正在讀取程式碼…'],
   ['Read code','读取代码','讀取程式碼'],

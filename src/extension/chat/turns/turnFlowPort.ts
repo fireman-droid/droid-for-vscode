@@ -6,6 +6,7 @@ import type { MissionSessionState } from '../mission/MissionSessionState';
 import type { SessionDirectoryState } from '../sessions/SessionDirectoryState';
 import type { SessionLifecycleState } from '../sessions/SessionLifecycleState';
 import type { TurnState } from './TurnState';
+import type { ModelConnectionPort } from './modelConnectionState';
 
 /** Guard-only code cannot replace a runtime or mutate turn ownership. */
 export interface TurnIdentityPort {
@@ -41,7 +42,7 @@ export type SpecHandoffPort = SpecHandoffSignalPort & Pick<HostOperations, 'reco
 };
 
 /** Runtime events project activity; they cannot switch sessions or load a catalog. */
-export type TurnRuntimeEventPort = TurnStatusPort & SpecHandoffSignalPort & Pick<HostOperations, 'reviewCoordinator'> & {
+export type TurnRuntimeEventPort = TurnStatusPort & SpecHandoffSignalPort & ModelConnectionPort & Pick<HostOperations, 'reviewCoordinator'> & {
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly effects: Pick<ChatEffects,
     'flushPendingThinking' | 'handleMissionRuntimeEvent' | 'queueThinkingProjection' | 'mirrorExecuteEvent' |
@@ -61,7 +62,7 @@ export type TurnFailurePort = TurnStatusPort & TurnContextPort & Pick<HostOperat
   readonly effects: Pick<ChatEffects, 'flushPendingThinking' | 'publishTurnChanges'>;
 };
 
-export type TurnCompletionPort = TurnFailurePort & SpecHandoffPort & {
+export type TurnCompletionPort = TurnFailurePort & SpecHandoffPort & ModelConnectionPort & {
   readonly effects: Pick<ChatEffects, 'updateTokenUsage' | 'settleTurnSubagents'>;
 };
 

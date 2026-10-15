@@ -8,6 +8,7 @@ import type { TurnRuntimeEventPort, TurnTranscriptPort } from './turnFlowPort';
 import { recordSpecHandoff } from './specHandoff';
 import { emitTurnState, startStreaming } from './turnSettlement';
 import { formatTurnErrorMessage } from './turnErrorMessage';
+import { setModelRequestFailed } from './modelConnectionState';
 
 export const RUNTIME_EVENT_ERROR_MESSAGE =
   'Droid reported a runtime error while processing this turn.';
@@ -21,6 +22,9 @@ export function handleRuntimeEvent(
   turnId: string,
   event: Exclude<RuntimeEvent, { type: 'turn-complete' }>,
 ): void {
+  if ((event.type === 'text-delta' || event.type === 'thinking-delta') && event.text.length > 0 || event.type === 'tool-start') {
+    setModelRequestFailed(ctl, sessionId, turnId, false);
+  }
   if (event.type !== 'thinking-delta') {
     ctl.effects.flushPendingThinking(sessionId, turnId);
   }
@@ -232,6 +236,7 @@ export function handleRuntimeEvent(
       recordSpecHandoff(ctl, sessionId, turnId, event.implementationSessionId);
       return;
     case 'error': {
+      if (event.modelConnectionFailed) setModelRequestFailed(ctl, sessionId, turnId, true);
       const message = formatTurnErrorMessage(event.message) ?? RUNTIME_EVENT_ERROR_MESSAGE;
       if (ctl.turnState.turn !== null) ctl.turnState.turn.runtimeError = message;
       ctl.emit({

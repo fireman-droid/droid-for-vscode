@@ -20,7 +20,7 @@ function harness() {
   let listener: Parameters<SubagentTranscriptService['subscribeParent']>[1] | undefined;
   const messages: HostToWebviewMessage[] = [];
   const port = {
-    sessionState: { sessionId: 'session-1', activeRuntimeCwd: 'd:/sandbox', disposed: false },
+    sessionState: { sessionId: 'session-1', conversationId: 'session-1', connection: { status: 'connected' }, activeRuntimeCwd: 'd:/sandbox', disposed: false },
     recoveryState: { transcript: createHostTranscriptState('complete') },
     turnState,
     effects: {

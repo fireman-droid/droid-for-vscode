@@ -51,6 +51,8 @@ export interface UiThemeMessage {
 export interface ConnectionState {
   readonly status: ConnectionStatus;
   readonly message?: string;
+  /** Last observed model request failed to connect; independent of the local runtime. */
+  readonly modelRequestFailed?: true;
 }
 
 export interface HostConnectionMessage {
