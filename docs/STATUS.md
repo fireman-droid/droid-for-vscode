@@ -7,8 +7,8 @@
 ## 版本与交付
 
 - BTW 分析能力与代码批注 UI 在 `codex/btw-analysis-tools` 任务分支实现，`6df809c3` 试用包
-  已按用户授权安装到 Microsoft VS Code 当前用户扩展目录，文件哈希与构建一致；需 Reload Window
-  后生效。Cursor 本轮未安装，尚未合并或正式发布。
+  已按用户授权安装到 Microsoft VS Code 与 Cursor 当前用户扩展目录，两处文件哈希均与构建一致；
+  需各自 Reload Window 后生效，尚未合并或正式发布。
   同时接入 eli5 讲解约束、只读工具策略、固定 Git 查询及 Worker／QuickJS WASM
   隔离的 JS／TS 示例执行；不开放任意命令，不修改项目／配置／依赖／Git。
   76 项 BTW／Review 相关本地检查、typecheck、lint:budgets、VSIX 构建及 172 项包条目校验通过；
