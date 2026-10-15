@@ -5,6 +5,7 @@ import { createBtwAnalysisTools, canRunBtwAnalysisTool } from './btwAnalysisTool
 import { buildBtwPrompt } from './btwPrompt';
 import { BtwThinkingProjection } from './btwThinking';
 import { projectSettingsUpdate } from '../session/projections';
+import { BtwToolProjection } from './btwToolProjection';
 
 import {
   BTW_FORK_TAG,
@@ -43,6 +44,12 @@ export interface DaemonBtwStreamEvent {
   readonly blockIndex?: unknown;
   readonly durationMs?: unknown;
   readonly message?: unknown;
+  readonly toolUse?: unknown;
+  readonly toolUseId?: unknown;
+  readonly name?: unknown;
+  readonly input?: unknown;
+  readonly content?: unknown;
+  readonly isError?: unknown;
 }
 
 /** Attached fork surface consumed by the sidecar. */
@@ -105,7 +112,7 @@ export async function createDaemonBtwSidecar(options: {
   const fork = await client.attach(forkSessionId, () => {
     denied.value = true;
   });
-  return new DaemonBtwForkSidecar(fork, forkSessionId, denied);
+  return new DaemonBtwForkSidecar(fork, forkSessionId, denied, options.cwd);
 }
 
 async function createConnectedDroidBtwClient(
@@ -181,6 +188,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     readonly forkSessionId: string,
     /** Set by the attach-time deny-all handler during a turn. */
     private readonly denied: { value: boolean },
+    private readonly cwd?: string,
   ) {}
 
   async *ask(text: string, options: BtwPromptOptions = {}): AsyncGenerator<BtwAnswerEvent, void> {
@@ -194,6 +202,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     this.abortAsk = new AbortController();
     this.denied.value = false;
     const thinking = new BtwThinkingProjection();
+    const tools = new BtwToolProjection(this.cwd);
     try {
       let terminal: BtwAnswerEvent | null = null;
       try {
@@ -201,11 +210,11 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           if (this.disposed) {
             return;
           }
-          const event = thinking.project(raw) ?? this.projectStreamEvent(raw);
+          const event = thinking.project(raw) ?? tools.project({ ...raw }) ?? this.projectStreamEvent(raw);
           if (event === null) {
             continue;
           }
-          if (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'progress') {
+          if (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'progress' || event.kind === 'tool') {
             yield event;
             continue;
           }

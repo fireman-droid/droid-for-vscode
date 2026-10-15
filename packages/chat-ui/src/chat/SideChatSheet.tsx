@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n';
 import { useEffect, useRef, type PointerEvent } from 'react';
-import { ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
+import { Aperture, ArrowUp, Clock3, MessageSquare, Quote, Square, X } from 'lucide-react';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
 import { formatSelectionQuotes, parseSelectionQuotes } from './selectionQuote';
@@ -9,14 +9,13 @@ import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 import type { InlineInputHandle } from '../ui/inline-input';
 import { QuoteChips } from './QuoteChips';
-import { UserMessageBubble } from './UserMessageView';
 import { SideReply } from './SideReply';
 import { ReferencedText } from './CodeReferenceChips';
 import { CodeReferenceInput } from './CodeReferenceInput';
 import { useCodeReferenceDraft } from './useCodeReferenceDraft';
 
 export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDraftChange, onQuoteClear, onQuoteRemove, onWidthChange, onDismiss, onAsk, onStop, maxTextLength,
-  attachments, composerActions, composerStatus, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
+  attachments, composerActions, composerStatus, headerActions, hasAttachments = false, sendDisabled = false, onPaste, onDrop, onDragOver, renderImages }: SideChatProps) {
   const { t } = useI18n();
   const { assistantName } = useUiEnvironment();
   const panel = useRef<HTMLElement>(null);
@@ -26,11 +25,10 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const resize = useRef<{ id: number; x: number; width: number } | null>(null);
   const activeEntry = state.entries.find((entry) => entry.state === 'streaming');
   const streaming = activeEntry !== undefined;
-  const activeProgress = activeEntry?.progress ?? (activeEntry?.answer ? 'answering' : 'waiting');
   const unavailable = state.status === 'unsupported' || state.status === 'error';
   const canAsk = !unavailable && state.pendingQuestion === null;
   const preparing = state.status === 'preparing';
-  const composeHint = state.pendingQuestion !== null ? 'Continue drafting' : streaming ? 'Enter to queue follow-up' : null;
+  const composeHint = state.pendingQuestion !== null ? t('Continue drafting') : null;
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const quotePrefix = formatSelectionQuotes(quotedContext, '');
@@ -79,18 +77,14 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
       }} />
     <header className="v2-btw-header">
       <div className="v2-btw-heading">
-        <h2 title={t("By the way")}>{t("By the way")}</h2>
-        <p>{t("Side conversation")}</p>
+        <h2>BTW</h2>
       </div>
-      <span role="status" className="v2-btw-status" data-unavailable={unavailable || undefined}>
-        {streaming || preparing ? <DroidActivity phase={preparing || activeProgress === 'waiting' ? 'loading' : activeProgress === 'thinking' ? 'thinking' : 'working'} /> : null}
-        {unavailable ? t("Unavailable") : preparing ? t("Preparing") : streaming
-          ? activeProgress === 'waiting' ? t("Waiting") : activeProgress === 'thinking' ? t("Thinking") : activeProgress === 'tool' ? t("Using tools") : t("Answering") : null}
-      </span>
+      {headerActions}
       <Button variant="ghost" size="icon-sm" aria-label={t("Close By the Way")} title={t("Close side conversation")} onClick={onDismiss}><X /></Button>
     </header>
     <div ref={follow.viewportRef} aria-label={t("Side conversation")} className="v2-btw-viewport">
       <div ref={follow.contentRef} className="v2-btw-transcript">
+        {preparing && !state.entries.length ? <p role="status" className="v2-btw-progress"><DroidActivity phase="loading" />{t('Preparing')}</p> : null}
         {state.entries.length === 0 && !unavailable && !preparing ? <div className="v2-btw-empty">
           <MessageSquare className="v2-btw-empty-mark" aria-hidden="true" />
           <p>{t("A question on the side.")}</p>
@@ -103,15 +97,14 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           const parsed = parseSelectionQuotes(entry.question);
           return <article key={entry.id} className="v2-btw-turn">
             <div className="v2-btw-question">
-              <UserMessageBubble>
                 <div role="region" aria-label={t("Your question")} tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
                   {entry.images?.length ? renderImages?.(entry.images) : null}
-                  <div className="select-text"><ReferencedText text={parsed?.body ?? entry.question} /></div>
+                  <div className="select-text"><span className="v2-btw-speaker">{t('You')}</span><ReferencedText text={parsed?.body ?? entry.question} /></div>
                 </div>
-              </UserMessageBubble>
             </div>
             <div aria-label={t("{p0} answer", { p0: assistantName })} className="v2-btw-answer">
+              <div className="v2-btw-author"><Aperture aria-hidden="true" />{assistantName}</div>
               <SideReply entry={entry} preparing={preparing} />
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
@@ -122,7 +115,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     <footer className="v2-btw-footer">
       {state.pendingQuestion !== null ? <div className="v2-btw-queued" role="status">
         <Clock3 aria-hidden="true" /><div className="min-w-0 flex-1 space-y-1">
-          <div><span>{t("Queued")}</span><ReferencedText text={pendingBody ?? ''} /></div>
+          <div><span>{t("Next question")}</span><p><ReferencedText text={pendingBody ?? ''} /></p></div>
           {pendingQuote ? <QuoteChips quotes={pendingQuote.quotes} /> : null}
         </div>
       </div> : null}
@@ -145,9 +138,9 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           {!composerActions ?
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
             : composeHint}</span> : null}
-          {streaming ? <Button size="none" variant="plain" className="v2-btw-send" aria-label={t("Stop side answer")} title={t("Stop side answer")} onClick={onStop}><Square className="fill-current" /></Button>
-            : <Button size="none" variant="plain" className="v2-btw-send" aria-label={t("Send side question")}
-              title={t("Send · Enter")} disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp /></Button>}
+          {streaming ? <Button size="icon-sm" variant="ghost" aria-label={t("Stop side answer")} title={t("Stop side answer")} onClick={onStop}><Square className="size-3 fill-current" /></Button> : null}
+          <Button size="none" variant="plain" className="v2-btw-send" data-queue={streaming || undefined} aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
+            title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp />{streaming ? <span>{t('Queue')}</span> : null}</Button>
         </div>
       </div>
     </footer>

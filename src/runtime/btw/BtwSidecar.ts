@@ -6,6 +6,7 @@ import type { BtwEntryProgress } from '../../shared/protocol/btwProtocol';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 import { BtwThinkingProjection, type BtwThinkingEvent } from './btwThinking';
 import { projectSettingsUpdate } from '../session/projections';
+import { BtwToolProjection, type BtwToolEvent } from './btwToolProjection';
 
 /**
  * Hidden-fork sidecar behind the `/btw` Side Chat card
@@ -35,6 +36,7 @@ export const BTW_PERMISSION_GUIDANCE =
 export type BtwAnswerEvent =
   | { readonly kind: 'delta'; readonly text: string }
   | BtwThinkingEvent
+  | BtwToolEvent
   | { readonly kind: 'progress'; readonly progress: BtwEntryProgress }
   | { readonly kind: 'done' }
   | { readonly kind: 'error'; readonly message: string };
@@ -116,7 +118,7 @@ export async function createBtwSidecar(options: {
       if (!client.loadReadOnlySession) throw new Error('Read-only questions are unavailable with this client.');
       await client.loadReadOnlySession({ sessionId: forkSessionId });
     } else await client.loadSideQuestionSession({ sessionId: forkSessionId });
-    return new BtwForkSidecar(client, forkSessionId);
+    return new BtwForkSidecar(client, forkSessionId, options.cwd);
   } catch (error) {
     await client.close().catch(() => undefined);
     throw error;
@@ -207,6 +209,7 @@ class BtwForkSidecar implements BtwSidecar {
   constructor(
     private readonly client: BtwSidecarClient,
     readonly forkSessionId: string,
+    private readonly cwd: string,
   ) {
     // The adapter handles owned analysis tools; remaining permission requests
     // belong in the main chat and surface guidance here.
@@ -229,6 +232,7 @@ class BtwForkSidecar implements BtwSidecar {
 
     const queue: BtwAnswerEvent[] = [];
     const thinking = new BtwThinkingProjection();
+    const tools = new BtwToolProjection(this.cwd);
     let wake: (() => void) | null = null;
     this.interruptAsk = () => {
       wake?.();
@@ -241,7 +245,7 @@ class BtwForkSidecar implements BtwSidecar {
     };
     const unsubscribeNotifications = this.client.onNotification(
       (raw) => {
-        const event = this.projectNotification(raw, thinking);
+        const event = this.projectNotification(raw, thinking, tools);
         if (event !== null) {
           push(event);
         }
@@ -305,6 +309,7 @@ class BtwForkSidecar implements BtwSidecar {
   private projectNotification(
     raw: Record<string, unknown>,
     thinking: BtwThinkingProjection,
+    tools: BtwToolProjection,
   ): BtwAnswerEvent | null {
     const params = isRecord(raw.params) ? raw.params : raw;
     if (
@@ -318,6 +323,8 @@ class BtwForkSidecar implements BtwSidecar {
       : params;
     const thought = thinking.project({ ...notification, text: notification.textDelta });
     if (thought) return thought;
+    const tool = tools.project(notification);
+    if (tool) return tool;
     switch (notification.type) {
       case 'tool_call':
       case 'tool_progress_update':

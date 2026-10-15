@@ -8,6 +8,7 @@ import {
 import {
   appendBtwAnswerDelta,
   applyBtwThinking,
+  applyBtwTool,
   appendBtwQuestion,
   completeBtwEntry,
   failBtwEntry,
@@ -142,6 +143,10 @@ export class BtwSideChat {
               }
               if (event.kind === 'progress') {
                 this.setState(setBtwEntryProgress(this.state, entryId, event.progress), false);
+                continue;
+              }
+              if (event.kind === 'tool') {
+                this.setState(applyBtwTool(this.state, entryId, event.tool), false);
                 continue;
               }
               if (event.kind === 'done' || this.stopping) {

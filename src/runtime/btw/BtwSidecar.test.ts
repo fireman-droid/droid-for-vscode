@@ -153,6 +153,20 @@ describe('createBtwSidecar', () => {
 });
 
 describe('BtwSidecar.ask', () => {
+  it('streams structured tool activity and keeps the answer stream alive', async () => {
+    const { client, sidecar } = await createFixture();
+    const asking = collect(sidecar.ask('Read this'));
+    await Promise.resolve();
+    client.emit('fork-1', { type: 'tool_call', toolUse: { id: 'read-1', name: 'Read', input: { file_path: 'src/cart.ts' } } });
+    client.emit('fork-1', { type: 'tool_result', toolUseId: 'read-1', isError: false, content: 'private file body' });
+    client.emit('fork-1', { type: 'assistant_text_delta', textDelta: 'Explanation' });
+    client.emit('fork-1', { type: 'agent_turn_completed' });
+    const events = await asking;
+    expect(events).toMatchObject([{ kind: 'tool', tool: { id: 'read-1', state: 'running' } },
+      { kind: 'tool', tool: { id: 'read-1', state: 'done' } }, { kind: 'delta', text: 'Explanation' }, { kind: 'done' }]);
+    expect(JSON.stringify(events)).not.toContain('private file body');
+  });
+
   it('streams deltas then done', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('What is this error?'));

@@ -1,4 +1,5 @@
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
+import { isBtwToolActivities, type BtwToolActivity } from './btwToolActivity';
 import { hasExactKeys } from '../validation/strictValidation';
 import { isEnumValue, isSafeModelId } from '../validation/guards';
 import { SESSION_REASONING_EFFORTS } from './bounds';
@@ -56,6 +57,7 @@ export interface BtwEntry {
   readonly state: BtwEntryState;
   /** Current activity, separate from retained thinking and answer text. */
   readonly progress?: BtwEntryProgress;
+  readonly tools?: readonly BtwToolActivity[];
   /** Quiet error copy for `state: 'error'` (e.g. permission guidance). */
   readonly message: string | null;
 }
@@ -193,7 +195,8 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
 function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: number): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs', 'tools']) ||
+    (value.tools !== undefined && !isBtwToolActivities(value.tools)) ||
     !isId(value.id) ||
     seenIds.has(value.id) ||
     !isBoundedString(value.question, maxQuestionLength) ||
@@ -236,6 +239,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: 
     ...(value.thinkingTruncated === undefined ? {} : { thinkingTruncated: value.thinkingTruncated as boolean }),
     ...(value.thinkingDurationMs === undefined ? {} : { thinkingDurationMs: value.thinkingDurationMs as number }),
     state: value.state as BtwEntryState,
+    ...(value.tools === undefined ? {} : { tools: value.tools as readonly BtwToolActivity[] }),
     ...(value.progress === undefined ? {} : { progress: value.progress as BtwEntryProgress }),
     message: value.message ?? null,
   };

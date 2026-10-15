@@ -9,6 +9,22 @@ import {
 } from '../../shared/protocol/btwProtocol';
 import { btwImageSummaries } from '../../shared/protocol/btwAttachments';
 import type { BtwThinkingEvent } from '../../runtime/btw/btwThinking';
+import { retainBtwTools, type BtwToolActivity } from '../../shared/protocol/btwToolActivity';
+
+export function applyBtwTool(state: SessionBtwState, id: string, tool: BtwToolActivity): SessionBtwState {
+  return { ...state, entries: state.entries.map(entry => {
+    if (entry.id !== id || entry.state !== 'streaming') return entry;
+    const tools = [...entry.tools ?? []];
+    const index = tools.findIndex(item => item.id === tool.id);
+    if (index < 0) tools.push(tool); else tools[index] = tool;
+    return { ...entry, tools: retainBtwTools(tools), progress: tool.state === 'running' ? 'tool' as const
+      : entry.progress === 'tool' ? 'waiting' as const : entry.progress };
+  }) };
+}
+
+function settleTools(tools: readonly BtwToolActivity[] | undefined): readonly BtwToolActivity[] | undefined {
+  return tools?.map(tool => tool.state === 'running' ? { ...tool, state: 'incomplete' as const } : tool);
+}
 
 /**
  * Pure bounded projection of the `/btw` side-chat card the host
@@ -124,7 +140,7 @@ export function completeBtwEntry(state: SessionBtwState, id: string): SessionBtw
         return entry;
       }
       const { progress: _progress, ...settled } = entry;
-      return { ...settled, state: 'done' as const };
+      return { ...settled, ...(entry.tools ? { tools: settleTools(entry.tools) } : {}), state: 'done' as const };
     }),
   };
 }
@@ -141,7 +157,7 @@ export function failBtwEntry(
         return entry;
       }
       const { progress: _progress, ...settled } = entry;
-      return { ...settled, state: 'error' as const, message };
+      return { ...settled, ...(entry.tools ? { tools: settleTools(entry.tools) } : {}), state: 'error' as const, message };
     }),
   };
 }
