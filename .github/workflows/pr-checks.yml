@@ -1,0 +1,76 @@
+name: Check pull request
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: PR checks
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check diff and select validation scope
+        id: scope
+        shell: pwsh
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          $base = $env:PR_BASE_SHA
+          if (-not $base) {
+            $base = git merge-base HEAD origin/main
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the comparison base.' }
+          }
+          git diff --check $base HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Diff whitespace check failed.' }
+          $files = @(git -c core.quotePath=false diff --name-only $base HEAD)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read changed paths.' }
+          $code = @($files | Where-Object {
+            $_ -notmatch '\.(md|mdx)$|^LICENSE$|^docs/images/.*\.(png|jpe?g|webp|gif|svg)$'
+          })
+          $extension = @($code | Where-Object { $_ -notmatch '^docs/' }).Count -gt 0
+          $docs = @($code | Where-Object { $_ -match '^docs/|^\.github/workflows/docs\.yml$' }).Count -gt 0
+          "base=$base" >> $env:GITHUB_OUTPUT
+          "extension=$($extension.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "docs=$($docs.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "Validation scope: extension=$extension, docs=$docs. Prose-only changes skip builds." >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.scope.outputs.extension == 'true' || steps.scope.outputs.docs == 'true'
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.scope.outputs.extension == 'true'
+        with:
+          run_install: false
+      - name: Install extension dependencies
+        if: steps.scope.outputs.extension == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck, enforce budgets and build VSIX
+        if: steps.scope.outputs.extension == 'true'
+        run: pnpm run package:vsix
+      - name: Verify packaged contents
+        if: steps.scope.outputs.extension == 'true'
+        run: pnpm run verify:vsix
+      - name: Run tests affected by this pull request
+        if: steps.scope.outputs.extension == 'true'
+        env:
+          CHANGE_BASE: ${{ steps.scope.outputs.base }}
+        run: pnpm exec vitest run --changed "$env:CHANGE_BASE" --passWithNoTests
+      - name: Install documentation dependencies
+        if: steps.scope.outputs.docs == 'true'
+        run: npm --prefix docs ci --no-audit --no-fund
+      - name: Build documentation and check internal links
+        if: steps.scope.outputs.docs == 'true'
+        run: npm --prefix docs run build
