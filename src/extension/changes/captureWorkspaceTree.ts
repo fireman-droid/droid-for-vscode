@@ -7,10 +7,25 @@ type Run = (args: readonly string[], maxBytes: number, input?: Buffer) => Promis
 
 /** Build a fresh private index from disk bytes, independent of Git ignore/clean filters. */
 export async function captureWorkspaceTree(root: string, run: Run): Promise<string> {
-  const checked = async (args: readonly string[], maxBytes = 4096, input?: Buffer) => {
+  try {
+    return await captureWorkspaceTreeOnce(root, run);
+  } catch (error) {
+    if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'ENOENT') throw error;
+    // A build/watch process can remove a file after enumeration. Re-enumerate
+    // and reset the entire private index once; never publish a partial tree.
+    return captureWorkspaceTreeOnce(root, run);
+  }
+}
+
+async function captureWorkspaceTreeOnce(root: string, run: Run): Promise<string> {
+  const checked = async (args: readonly string[], maxBytes = 4096, input?: Buffer, paths?: readonly string[]) => {
     const result = await run(args, maxBytes, input);
-    if (result.timedOut || result.code !== 0)
+    if (result.timedOut || result.code !== 0) {
+      // Git does not expose a filesystem error code. Only a confirmed missing
+      // input permits a retry; read/permission errors and timeouts stay fatal.
+      if (!result.timedOut && paths) await Promise.all(paths.map(path => lstat(join(root, path))));
       throw new Error(result.timedOut ? `Workspace snapshot timed out (${args[0]}).` : `Workspace snapshot failed (${args[0]}).`);
+    }
     return result.stdout;
   };
   const paths = await snapshotWorkspaceFiles(root);
@@ -36,7 +51,8 @@ export async function captureWorkspaceTree(root: string, run: Run): Promise<stri
     for (let offset = 0; offset < files.length; offset += 512) {
       const batch = files.slice(offset, offset + 512);
       const input = Buffer.from(batch.map(({ path }) => JSON.stringify(join(root, path).replaceAll('\\', '/'))).join('\n') + '\n');
-      const hashes = (await checked(['hash-object', '-w', '--no-filters', '--stdin-paths'], batch.length * 42 + 4096, input))
+      const hashes = (await checked(['hash-object', '-w', '--no-filters', '--stdin-paths'], batch.length * 42 + 4096, input,
+        batch.map(({ path }) => path)))
         .toString('utf8').trim().split(/\r?\n/);
       if (hashes.length !== batch.length || hashes.some(hash => !/^[0-9a-f]{40}$/.test(hash)))
         throw new Error('Workspace snapshot returned an incomplete file set.');
