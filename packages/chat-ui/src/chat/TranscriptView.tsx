@@ -39,6 +39,7 @@ export interface TranscriptViewProps {
   readonly onQuote?: (text: string) => void;
   readonly onBtwQuote?: (text: string) => void;
   readonly reportLayout?: (detail: string) => void;
+  readonly pauseAutoFollow?: boolean;
   readonly ref?: Ref<TranscriptHandle>;
 }
 const PINNED_QUESTION_GAP = 12;
@@ -51,7 +52,7 @@ const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, re
 }) {
   return renderMessage(id, { placeholder, placeholderHeight });
 });
-export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, statusContent, onQuote, onBtwQuote, reportLayout, ref }: TranscriptViewProps) {
+export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, trailingContent, statusContent, onQuote, onBtwQuote, reportLayout, pauseAutoFollow = false, ref }: TranscriptViewProps) {
   const { t } = useI18n();
   const selectionRoot = useRef<HTMLDivElement>(null);
   const selecting = useTranscriptSelection(selectionRoot);
@@ -73,7 +74,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump);
+  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow);
   const lastQuestionId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index].role === 'user') return messages[index].id;

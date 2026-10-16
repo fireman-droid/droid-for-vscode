@@ -23,10 +23,12 @@ function transcript(reducedMotion = false) {
   });
   viewport.scrollTo = ({ top }: ScrollToOptions) => { viewport.scrollTop = Number(top); };
   const viewportRef = { current: viewport }, columnRef = { current: column };
-  const { result } = renderHook(() => useTranscriptScroll(viewportRef, columnRef, 'history', 0));
+  const { result, rerender } = renderHook(({ editing }) =>
+    useTranscriptScroll(viewportRef, columnRef, 'history', 0, undefined, undefined, editing),
+  { initialProps: { editing: false } });
   act(() => { result.current.stopFollowing(); viewport.scrollTop = 100; fireEvent.scroll(viewport); });
   return {
-    viewport, result, frames,
+    viewport, result, frames, setEditing: (editing: boolean) => rerender({ editing }),
     frame: () => act(() => {
       const pending = [...frames.values()]; frames.clear(); time += 16;
       pending.forEach((callback) => callback(time));
@@ -76,4 +78,39 @@ it('honors reduced motion when returning to the latest reply', () => {
   act(() => chat.result.current.scrollToBottom());
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(1600);
+});
+
+it.each(['wheel', 'keyboard', 'touch'] as const)('keeps the chat under user control during message editing after a %s reaches bottom', (gesture) => {
+  const chat = transcript(true);
+  act(() => chat.result.current.scrollToBottom('auto'));
+  act(() => chat.result.current.stopFollowing());
+  chat.setEditing(true);
+  expect(chat.result.current.follow.current.following).toBe(false);
+
+  act(() => { chat.viewport.scrollTop = 1480; fireEvent.scroll(chat.viewport); });
+  if (gesture === 'wheel') fireEvent.wheel(chat.viewport, { deltaY: 120 });
+  if (gesture === 'keyboard') fireEvent.keyDown(chat.viewport, { key: 'End' });
+  if (gesture === 'touch') fireEvent.pointerDown(chat.viewport, { pointerType: 'touch' });
+  act(() => { chat.viewport.scrollTop = 1600; fireEvent.scroll(chat.viewport); });
+  // A second wheel event at the edge used to turn following back on, too.
+  if (gesture === 'wheel') fireEvent.wheel(chat.viewport, { deltaY: 120 });
+  chat.resize(400, 2400);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBe(1600);
+  expect(chat.result.current.follow.current.following).toBe(false);
+
+  // Streaming must still leave both directions available, and closing the
+  // editor must not jump away from the user's reading position.
+  fireEvent.wheel(chat.viewport, { deltaY: -120 });
+  act(() => { chat.viewport.scrollTop = 1480; fireEvent.scroll(chat.viewport); });
+  chat.setEditing(false);
+  chat.resize(400, 2600);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBe(1480);
+  // Once editing ends, returning to the bottom deliberately resumes following.
+  fireEvent.wheel(chat.viewport, { deltaY: 720 });
+  act(() => { chat.viewport.scrollTop = 2200; fireEvent.scroll(chat.viewport); });
+  chat.resize(400, 2800);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBe(2400);
 });

@@ -142,6 +142,7 @@ export function Transcript({
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
   const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
+    pauseAutoFollow={editor.draft?.phase === 'editing'}
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
     leadingContent={<>
       {historyNotice ? <p role="note" className="mb-2 text-xs text-muted-foreground">{t(historyNotice)}</p> : null}
