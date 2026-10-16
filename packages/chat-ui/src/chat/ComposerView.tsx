@@ -69,8 +69,10 @@ export function ComposerView({
   const focusInput = () => (richInput.current ?? input.current)?.focus({ preventScroll: true });
   const surface = useRef<HTMLFormElement>(null);
   const [expanded, setExpanded] = useState(false);
+  const [limitExceeded, setLimitExceeded] = useState(false);
+  const change = (next: string, cursor: number) => { setLimitExceeded(false); onChange(next, cursor); };
   useLayoutEffect(() => {
-    if (value.length === 0) setExpanded(false);
+    if (value.length === 0) { setExpanded(false); setLimitExceeded(false); }
   }, [value, focusSignal]);
   useEffect(() => {
     if (focusSignal > 0) focusInput();
@@ -116,13 +118,14 @@ export function ComposerView({
     : codeDraft ? <CodeReferenceInput draft={codeDraft} ref={richInput} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
       aria-autocomplete={suggestionsListId ? 'list' : undefined} aria-controls={suggestionsOpen ? suggestionsListId : undefined}
       aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
-      placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} onChange={onChange} onKeyDown={keyDown} onPaste={onPaste} onContentLayout={resize}
+      placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} onChange={change} onKeyDown={keyDown} onPaste={onPaste} onContentLayout={resize}
+      onLimitExceeded={() => setLimitExceeded(true)}
       className="min-h-[20px] max-h-42 rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px]" />
     : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
     aria-controls={suggestionsOpen ? suggestionsListId : undefined} aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
     placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} rows={1} maxLength={maxLength} value={value}
-    onChange={(event) => onChange(event.target.value, event.target.selectionStart)}
+    onChange={(event) => change(event.target.value, event.target.selectionStart)}
     onKeyDown={keyDown}
     onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px] focus-visible:ring-0" />;
   const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={t(stopLabel)} title={t(stopLabel)} onClick={onStop}><Square className="size-3 fill-current" /></Button>
@@ -136,6 +139,7 @@ export function ComposerView({
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}
+        {limitExceeded ? <p role="alert" className="px-3 pb-2 text-xs text-destructive">{t("Input limit reached ({p0} characters, including code references). Excess text was not inserted.", { p0: codeDraft?.maxLength ?? maxLength ?? '' })}</p> : null}
         {notice ? <p role="status" className="px-3 text-xs text-muted-foreground">{t(notice)}</p> : null}
       </form>
     </PopoverAnchor>

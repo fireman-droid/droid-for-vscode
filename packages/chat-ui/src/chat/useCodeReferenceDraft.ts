@@ -22,7 +22,7 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
   };
   const format = (body: string) => formatInlineCodeReferences(body, parsed.references, parsed.tokens);
   const change = (body: string) => commit(format(body));
-  const onPaste = (event: ClipboardEvent<HTMLElement>, target?: InlineInputHandle): boolean => {
+  const onPaste = (event: ClipboardEvent<HTMLElement>, target?: InlineInputHandle, onLimitExceeded?: () => void): boolean => {
     const plain = event.clipboardData.getData('text/plain');
     const reference = decodeCodeReference(event.clipboardData.getData(CODE_REFERENCE_MIME));
     const markers = editorCopyMarkers(event.clipboardData.getData(EDITOR_COPY_MIME));
@@ -47,6 +47,7 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
     const inserted = plain.slice(0, room);
     const next = format(before + inserted + after);
     event.preventDefault(); commit(next);
+    if (inserted !== plain) onLimitExceeded?.();
     restoreCaret(before + inserted + after, start + inserted.length);
     const captured = ++generation.current;
     void resolveCodeReference(markers, plain).then(ref => {

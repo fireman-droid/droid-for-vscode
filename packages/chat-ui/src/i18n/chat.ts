@@ -221,6 +221,7 @@ export const chatMessages: readonly MessageTranslations[] = [
   ["Saved for this VS Code profile. Applies to new chats, worktree sessions and Missions. Existing, resumed and forked sessions keep their original prompt.","保存在当前 VS Code 配置中，适用于新建聊天、工作树会话和 Mission。已有、恢复和分叉的会话保留原提示词。","保存在當前 VS Code 設定中，適用于新建聊天、工作樹會話和 Mission。已有、恢復和分叉的會話保留原提示詞。"],
   ["Prompt mode","提示词模式","提示詞模式"],
   ["characters.","个字符。","個字符。"],
+  ["Input limit reached ({p0} characters, including code references). Excess text was not inserted.","已达到输入上限（{p0} 个字符，含代码引用）。超出部分未插入。","已達到輸入上限（{p0} 個字元，含程式碼引用）。超出部分未插入。"],
   ["Saved. Start a new session to use this prompt.","已保存，新建会话即可使用此提示词。","已保存，新建會話即可使用此提示詞。"],
   ["Background process · Keeps running until you stop it manually","后台进程 · 将持续运行，直到手动停止","后臺處理程序 · 將持續運行，直到手動停止"],
   ["Task plan","任务计划","任務計劃"],
