@@ -126,7 +126,7 @@ export function ReviewDockSlot({ store, vscode }: {
   if (turnId === null || count === 0) return null;
   const status = complete ? 'Review complete' : null;
   return <Button variant="plain" size="none" className="review-launcher" aria-label={t("Open Review")}
-    title={`${t('{count} directly confirmed files in this turn', { count })}${status ? ` · ${t(status)}` : ''}`}
+    title={`${t(count === 1 ? '{count} directly confirmed file in this turn' : '{count} directly confirmed files in this turn', { count })}${status ? ` · ${t(status)}` : ''}`}
     disabled={sessionId === null} onClick={() => vscode.postMessage({
     type: 'review.panel.open', sessionId: sessionId!, scopeKind: 'turn', turnId,
   })}>
