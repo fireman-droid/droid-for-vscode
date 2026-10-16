@@ -72,7 +72,7 @@ function fixture() {
     registry,
     apply,
     readApplyState,
-    promptKey: async () => undefined,
+    promptKey: async () => "fixture-key",
     discovery: { discover: async () => [] },
   });
   return { manager, gateway, registry, apply, readApplyState };
@@ -81,6 +81,7 @@ function fixture() {
 describe('independent model management', () => {
   it('holds operation ownership until the connection and every model write settle', async () => {
     const { manager, gateway } = fixture();
+    const connectionId = (await manager.snapshot()).connections[0]!.id;
     let finish!: () => void;
     gateway.save.mockImplementationOnce(
       () =>
@@ -92,11 +93,11 @@ describe('independent model management', () => {
       {
         kind: 'saveConnection',
         draft: {
-          id: 'imported:0',
+          id: connectionId,
           name: 'Gateway',
           protocol: 'openai',
           baseUrl: 'https://gateway.example.com/v2',
-          setApiKey: false,
+          setApiKey: true,
         },
       },
       new AbortController().signal,

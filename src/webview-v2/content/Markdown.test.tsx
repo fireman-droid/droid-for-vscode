@@ -19,11 +19,10 @@ describe('V2 Markdown actions', () => {
     expect(screen.queryByRole('img')).toBeNull();
     expect(fireEvent.click(screen.getByRole('link', { name: 'src/demo.html:12' }))).toBe(false);
     expect(actions.openPath).toHaveBeenCalledWith({ path: 'src/demo.html', line: 12 });
-    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }));
-    expect(actions.previewFile).toHaveBeenCalledWith('src/demo.html');
+    expect(screen.queryByRole('button', { name: 'Canvas' })).toBeNull();
   });
 
-  it('opens the settled HTML source in Canvas and never offers artifacts from streaming or thinking text', () => {
+  it('keeps HTML as inert code across streaming, settled and thinking states', () => {
     const actions = { openPath: vi.fn(), previewFile: vi.fn(), previewHtml: vi.fn() };
     const value = { actions, workspaceRoot: 'C:\\project', theme: 'dark' as const };
     const html = '<!doctype html><title>Sample</title><p>Hello</p>';
@@ -31,13 +30,14 @@ describe('V2 Markdown actions', () => {
     const { rerender } = render(<ContentProvider value={value}><Markdown text={text} streaming /></ContentProvider>);
     expect(screen.queryByRole('button', { name: 'Open Canvas' })).toBeNull();
     rerender(<ContentProvider value={value}><Markdown text={text} /></ContentProvider>);
-    fireEvent.click(screen.getByRole('button', { name: 'Open Canvas' }));
-    expect(actions.previewHtml).toHaveBeenCalledWith(`${html}\n`, { artifactId: expect.stringMatching(/^inline:/), title: 'Sample' });
+    expect(screen.queryByRole('button', { name: 'Open Canvas' })).toBeNull();
+    expect(actions.previewHtml).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'html code' }).textContent).toBe(`${html}\n`);
     rerender(<ContentProvider value={value}><Markdown text={text} thinking /></ContentProvider>);
     expect(screen.queryByRole('button', { name: 'Open Canvas' })).toBeNull();
   });
 
-  it('highlights the unchanged code source when streaming finishes', () => {
+  it('preserves code when no syntax worker is connected', () => {
     const code = 'const settledValue = 42;\n';
     const text = `\`\`\`typescript\n${code}\`\`\``;
     const { rerender } = render(<Markdown text={text} streaming />);
@@ -45,7 +45,7 @@ describe('V2 Markdown actions', () => {
     expect(screen.queryByText('const', { exact: true })).toBeNull();
 
     rerender(<Markdown text={text} streaming={false} />);
-    expect(screen.getByText('const', { exact: true })).toBeTruthy();
+    expect(screen.queryByText('const', { exact: true })).toBeNull();
     expect(screen.getByRole('region', { name: 'typescript code' }).textContent).toBe(code);
   });
 

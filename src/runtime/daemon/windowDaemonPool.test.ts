@@ -32,6 +32,10 @@ const fake = vi.hoisted(() => ({
   failedRelay: 0,
 }));
 
+vi.mock('./ideDaemonFeatures', () => ({
+  prepareIdeDaemonEnvironment: async (_id: string, env: NodeJS.ProcessEnv) => env,
+  removeIdeDaemonSnapshot: async () => {},
+}));
 vi.mock('../ide/persistentIdeRelay', () => ({
   createPersistentIdeRelay: vi.fn(async ({ sessionId }: { sessionId: string }) => {
     const index = ++fake.relays;

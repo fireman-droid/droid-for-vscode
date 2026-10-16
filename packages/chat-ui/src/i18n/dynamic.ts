@@ -390,6 +390,7 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["{count} tool running","{count} 个工具运行中","{count} 個工具運行中"],
   ["{count} tools running","{count} 个工具运行中","{count} 個工具運行中"],
   ["{count} other running","另有 {count} 项运行中","另有 {count} 項運行中"],
+  ["{count} directly confirmed file in this turn","本轮直接确认了 {count} 个文件","本輪直接確認了 {count} 個檔案"],
   ["{count} directly confirmed files in this turn","本轮直接确认了 {count} 个文件","本輪直接確認了 {count} 個檔案"],
   ["{count} commit","{count} 次提交","{count} 次提交"],
   ["{count} commits","{count} 次提交","{count} 次提交"],

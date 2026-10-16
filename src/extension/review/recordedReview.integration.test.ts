@@ -43,7 +43,7 @@ async function open(before: string | undefined, operations: RecordedOperation[],
   const coordinator = new ReviewCoordinator({
     ...(readOperationBody === undefined ? {} : { readOperationBody }),
     getWorkspaceRoot: () => root,
-    snapshots: { readTreeBytes: async (_scope: unknown, _path: string, phase: string) => phase === 'before' && before !== undefined ? Buffer.from(before) : undefined } as unknown as TurnSnapshotStore,
+    snapshots: { read: () => undefined, readTreeBytes: async (_scope: unknown, _path: string, phase: string) => phase === 'before' && before !== undefined ? Buffer.from(before) : undefined } as unknown as TurnSnapshotStore,
     fileDiff: { openDiff }, persistence: { get: () => undefined, update: async () => {} },
     storageDir: join(root, 'storage'),
     publish: message => { if (message.type === 'review.state') states.push(message as Extract<ReviewHostMessage, { type: 'review.state' }>); },
@@ -162,7 +162,7 @@ describe('recorded Review host requests', () => {
       turnSnapshot: { before: 'value 1\nunchanged\n', after: 'value 2\nunchanged\n', phase: 'settled' },
     }));
     await expect(coordinator.openNative({ ...request, toolUseId: 'missing' })).rejects.toThrow('no complete saved file versions');
-    await expect(coordinator.openNative({ ...request, path: 'other.txt', toolUseId: 'edit-0' })).rejects.toThrow('no complete saved file versions');
+    await expect(coordinator.openNative({ ...request, path: 'other.txt', toolUseId: 'edit-0' })).rejects.toThrow('Review file is no longer available');
     expect(openDiff).toHaveBeenCalledTimes(2);
   });
   it('serves one selected complete patch independently of all excerpt metadata', async () => {

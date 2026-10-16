@@ -492,7 +492,7 @@ describe('ChatController', () => {
       field: 'interactionMode',
       value: 'spec',
     });
-    expect(runtime.updateSessionSetting).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(runtime.updateSessionSetting).toHaveBeenCalledOnce());
     expect(messages.at(-1)).toMatchObject({
       type: 'runtime.diagnostic',
       code: 'settings-update-blocked',

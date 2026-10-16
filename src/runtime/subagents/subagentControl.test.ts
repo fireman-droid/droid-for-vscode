@@ -106,7 +106,7 @@ describe('projectSubagentActivities', () => {
       ),
     ).toEqual([
       { action: 'Weird Tool', target: null },
-      { action: 'Read file', target: null },
+      { action: 'Read file', target: 'secret.txt · outside workspace' },
     ]);
     expect(
       projectSubagentActivities(

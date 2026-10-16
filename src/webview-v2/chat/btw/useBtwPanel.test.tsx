@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EMPTY_SESSION_BTW_STATE, type SessionBtwState, type BtwAskMessage } from '../../../shared/protocol/btwProtocol';
 import { prepareAttachment, type PreparedAttachment } from '../attachments/attachmentIngress';
@@ -47,17 +47,17 @@ it('keeps text, quotes, images and an explicit model when the sheet unmounts on 
   view.rerender(<Harness available={false} defaultModelId="different-main-model" />);
   view.rerender(<Harness defaultModelId="different-main-model" />);
   act(() => panel.openPanel());
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this question');
+  expect((screen.getByRole('textbox') as HTMLElement).textContent).toBe('Keep this question');
   expect(screen.getByRole('button', { name: 'View quoted context: Keep this context' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Preview diagram.png' })).toBeDefined();
-  expect(screen.getByRole('combobox').textContent).toBe('chosen-model');
+  expect(panel.selectedModel).toBe('chosen-model');
   expect(postMessage.mock.calls.some(([message]) => message.type === 'btw.dismiss' || message.type === 'btw.stop')).toBe(false);
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
   expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
     type: 'btw.ask', sessionId: 'session-a', text: '> Keep this context\n\nKeep this question', modelId: 'chosen-model',
     images: [expect.objectContaining({ name: 'diagram.png', dataBase64: 'aW1hZ2U=' })],
   }));
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this question');
+  expect((screen.getByRole('textbox') as HTMLElement).textContent).toBe('Keep this question');
 });
 
 it('cleans the previous session and ignores its late reads without corrupting the new pending count', async () => {
@@ -248,3 +248,8 @@ it('does not let the previous session deadline settle a new session submission',
   expect(result.current.draft).toBe('New question');
   expect(port.postMessage).toHaveBeenCalledTimes(2);
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });

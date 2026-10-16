@@ -79,6 +79,14 @@ const ideRelayWorkerResult = await build({
   metafile: true, logLevel: 'info',
 });
 await notices.add(ideRelayWorkerResult.metafile);
+const btwAnalysisWorkerResult = await build({
+  entryPoints: ['src/runtime/btw/btwAnalysisWorker.ts'],
+  outfile: 'dist/extension/btwAnalysisWorker.cjs',
+  bundle: true, platform: 'node', format: 'cjs', target: 'node20',
+  minify: true, keepNames: true, sourcemap: false, legalComments: 'eof',
+  metafile: true, logLevel: 'info',
+});
+await notices.add(btwAnalysisWorkerResult.metafile);
 await notices.write('dist/extension/THIRD_PARTY_LICENSES.txt');
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nKilo Code (vendored autocomplete, 7d977bce994af36f0edf752cb53e3aefc7aeb214)\n' + readFileSync('third-party/KILO-LICENSE.txt', 'utf8'));
 
@@ -99,6 +107,11 @@ assertExpectedExternals(historyWorkerResult.metafile, {
 });
 assertExpectedExternals(ideRelayWorkerResult.metafile, {
   required: new Set(), allowed: (path) => isBuiltin(path),
+});
+assertExpectedExternals(btwAnalysisWorkerResult.metafile, {
+  // TypeScript's optional source-map debugging helper is guarded by try/catch;
+  // transpileModule does not use it, and the packaged worker is smoke-tested below.
+  required: new Set(), allowed: (path) => isBuiltin(path) || path === 'source-map-support',
 });
 assertExpectedExternals(catalogWorkerResult.metafile, {
   required: new Set(),

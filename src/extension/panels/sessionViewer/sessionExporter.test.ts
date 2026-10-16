@@ -106,7 +106,7 @@ describe('renderSessionMarkdown', () => {
     expect(markdown).toContain('- **Session:** `session-abc`');
     expect(markdown).toContain('- **Exported:** 2026-08-12 14:05');
     expect(markdown).toContain('- **Workspace:** `D:\\projects\\demo`');
-    expect(markdown).toContain('> Exported by DroidVisX. Thinking blocks are omitted');
+    expect(markdown).toContain('> Exported by Droid. Thinking blocks are omitted');
 
     const firstUser = markdown.indexOf('## User');
     const firstAssistant = markdown.indexOf('## Assistant');

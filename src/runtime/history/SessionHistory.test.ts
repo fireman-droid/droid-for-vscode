@@ -47,7 +47,7 @@ describe('projectSessionHistory', () => {
     },
   );
 
-  it('identifies external child reads without exposing directories or file contents', () => {
+  it('preserves returned external read evidence without exposing its source directory', () => {
     const root = resolve('workspace-root');
     const result = projectSessionHistory(response([
       message('assistant-read', 'assistant', [{ type: 'tool_use', id: 'external-read', name: 'Read',
@@ -56,9 +56,9 @@ describe('projectSessionHistory', () => {
     ]), { workspaceRoot: root });
     expect(result).toMatchObject({ status: 'available', state: { transcript: [
       { kind: 'tool', toolName: 'Read', status: 'completed', target: 'handlers.ts · outside workspace',
-        resultPreview: { availability: 'unavailable', reason: 'restricted' } },
+        resultPreview: { availability: 'available', text: 'PRIVATE_CONTENT', source: { scope: 'external', path: 'External/handlers.ts' } } },
     ] } });
-    expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_DIRECTORY');
     const row = result.status === 'available' ? result.state.transcript[0] : undefined;
     expect(row).not.toHaveProperty('filePath');
   });
@@ -83,7 +83,9 @@ describe('projectSessionHistory', () => {
       { action: 'Read page text', status: 'completed' },
       { action: 'Inspect local history', status: 'completed' },
     ]);
-    expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_VALUE');
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_TARGET');
+    expect(result.state.transcript).toEqual(expect.arrayContaining([expect.objectContaining({ resultPreview: expect.objectContaining({ text: 'PRIVATE_RESULT' }) })]));
   });
 
   it('reconstructs answered and cancelled AskUser results from public tool history', () => {
@@ -293,9 +295,9 @@ describe('projectSessionHistory', () => {
     expect(transcript[2]).not.toHaveProperty('filePath');
     expect(transcript[2]).toMatchObject({ target: 'src/app.ts' });
     expect(transcript[1]).toMatchObject({ toolUseId: 'tool-outside' });
-    expect(transcript[1]).not.toHaveProperty('target');
+    expect(transcript[1]).toMatchObject({ target: 'outside.ts · outside workspace' });
     expect(transcript[1]).not.toHaveProperty('input');
-    expect(JSON.stringify(result)).not.toContain('outside.ts');
+    expect(JSON.stringify(result)).not.toContain('../outside.ts');
 
     // Without a workspace root no paths are projected at all.
     const rootless = projectSessionHistory(loaded);

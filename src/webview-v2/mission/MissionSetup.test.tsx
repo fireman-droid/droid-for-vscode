@@ -75,22 +75,22 @@ describe.each([['V2', V2MissionSetup]] as const)('%s MissionSetup', (_version, M
     );
     await user.click(screen.getByRole('combobox', { name: 'Worker inheritance' }));
     await user.click(screen.getByRole('option', { name: 'Choose independently' }));
-    await user.click(screen.getByRole('combobox', { name: 'Worker model' }));
-    expect(screen.getByRole('listbox', { name: 'Worker model options' })).toBeDefined();
-    await user.keyboard('{ArrowDown}{Enter}');
+    await user.click(screen.getByRole('button', { name: 'Worker model' }));
+    expect(screen.getByRole('radiogroup', { name: 'Worker model options' })).toBeDefined();
+    await user.click(screen.getByRole('radio', { name: /Worker B/ }));
     await user.click(screen.getByRole('combobox', { name: 'Worker reasoning' }));
     await user.click(screen.getByRole('option', { name: 'Medium' }));
     await user.click(screen.getByRole('combobox', { name: 'Validator inheritance' }));
     await user.click(screen.getByRole('option', { name: 'Choose independently' }));
-    await user.click(screen.getByRole('combobox', { name: 'Validator model' }));
-    await user.click(screen.getByRole('option', { name: 'Validator C' }));
+    await user.click(screen.getByRole('button', { name: 'Validator model' }));
+    await user.click(screen.getByRole('radio', { name: /Validator C/ }));
     await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
     await waitFor(() => {
       expect(screen.queryByLabelText('Validator model')).toBeNull();
     });
     await user.click(screen.getByRole('button', { name: 'Advanced Mission settings' }));
     expect(
-      screen.getByRole('combobox', { name: 'Validator model' }).textContent,
+      screen.getByRole('button', { name: 'Validator model' }).textContent,
     ).toContain('Validator C');
     await user.click(screen.getByRole('switch', { name: 'Run Scrutiny' }));
     await user.click(screen.getByRole('button', { name: 'Start Mission' }));

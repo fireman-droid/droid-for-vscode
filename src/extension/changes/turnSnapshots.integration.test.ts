@@ -153,8 +153,8 @@ it('captures real before/after bytes in a non-Git workspace containing a nested 
   expect(await store.readTreeBytes(scope, 'project/app.ts', 'after')).toEqual(Buffer.from('after\n'));
   expect(await store.readTreeBytes(scope, 'project/created.ts', 'before')).toBeNull();
   expect(await store.readTreeBytes(scope, 'project/deleted.ts', 'after')).toBeNull();
-  // An ignored file omitted from the capture is unknown, not proven absent.
-  expect(await store.readTreeBytes(scope, 'project/ignored.txt', 'before')).toBeUndefined();
+  // Full workspace coverage includes ignored files independently of the Git index.
+  expect(await store.readTreeBytes(scope, 'project/ignored.txt', 'before')).toEqual(Buffer.from('ignored output\n'));
   expect(await readFile(join(nested, '.git/index'))).toEqual(index);
   await expect(access(join(root, '.git'))).rejects.toMatchObject({ code: 'ENOENT' });
   await writeFile(join(nested, 'app.ts'), 'later unrelated edit\n');
@@ -210,7 +210,7 @@ it('preserves the original Git baseline when Execute changes precede a named fil
   });
 }, 30_000);
 
-it('never treats files below a Git submodule as newly added when the snapshot contains only its gitlink', async () => {
+it('captures files below a Git submodule without replacing the working index gitlink', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dvx-gitlink-review-'));
   directories.push(directory);
   const root = join(directory, 'workspace');
@@ -228,9 +228,9 @@ it('never treats files below a Git submodule as newly added when the snapshot co
   const store = createTurnSnapshotStore(() => root, join(directory, 'store'), memory());
   stores.push(store);
   expect(await store.capture(scope, 'before')).toMatch(/^[0-9a-f]{40}$/);
-  expect(await store.readTreeBytes(scope, '.cursor/skills/mcp.json', 'before')).toBeUndefined();
-  expect(await store.readTreeBytesBatched!(scope, '.cursor/skills/mcp.json', 'before', 1024)).toBeUndefined();
-  expect(await store.readTreeBytes(scope, '.cursor/skills/new.json', 'before')).toBeUndefined();
+  expect(await store.readTreeBytes(scope, '.cursor/skills/mcp.json', 'before')).toEqual(Buffer.from('{"fixture":true}\n'));
+  expect(await store.readTreeBytesBatched!(scope, '.cursor/skills/mcp.json', 'before', 1024)).toEqual(Buffer.from('{"fixture":true}\n'));
+  expect(await store.readTreeBytes(scope, '.cursor/skills/new.json', 'before')).toBeNull();
   expect(await store.readTreeBytes(scope, 'new.ts', 'before')).toBeNull();
   await writeFile(join(root, 'app.ts'), 'after\n');
   await store.capture(scope, 'after');

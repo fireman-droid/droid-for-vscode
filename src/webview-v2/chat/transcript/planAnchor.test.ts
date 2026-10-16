@@ -131,14 +131,14 @@ describe('selectPlanAnchors', () => {
     expect(anchor?.title).toBe('Wire the selector');
   });
 
-  it('hides the card once every step is completed', () => {
+  it('retains the completed card as task history', () => {
     expect(
       selectPlanAnchors([
         user('u1'),
         planTool('turn-1', 'use-1', PLAN_V1),
         planTool('turn-1', 'use-3', PLAN_V3),
       ]).size,
-    ).toBe(0);
+    ).toBe(1);
   });
 
   it('titles the line with the live step, the next pending one, or the last when done', () => {
@@ -153,22 +153,22 @@ describe('selectPlanAnchors', () => {
     ).toBe('Second');
     // Between updates (nothing in progress) the frontier pending step leads.
     expect(titleOf('1. [completed] First\n2. [pending] Second')).toBe('Second');
-    // Fully done: the card is omitted rather than retitled.
-    expect(titleOf('1. [completed] First\n2. [completed] Second')).toBeUndefined();
+    // Completed cards retain their last step.
+    expect(titleOf('1. [completed] First\n2. [completed] Second')).toBe('Second');
     expect(
       titleOf('1. [completed] First\n2. [completed] Second\n3. [completed] Third'),
-    ).toBeUndefined();
+    ).toBe('Third');
   });
 
-  it('replaces the old card when a new lineage starts', () => {
+  it('keeps historical cards when a new lineage starts', () => {
     const anchors = selectPlanAnchors([
       user('u1'),
       planTool('turn-1', 'use-1', PLAN_V3),
       user('u2'),
       planTool('turn-2', 'use-9', '1. [in_progress] A wholly new mission'),
     ]);
-    expect([...anchors.keys()]).toEqual(['u2']);
-    expect(anchors.get('u1')).toBeUndefined();
+    expect([...anchors.keys()]).toEqual(['u1', 'u2']);
+    expect(anchors.get('u1')?.allCompleted).toBe(true);
     expect(anchors.get('u2')?.title).toBe('A wholly new mission');
     expect(anchors.get('u2')?.latestTurnId).toBe('turn-2');
   });
@@ -223,7 +223,7 @@ describe('selectPlanAnchors', () => {
     expect(anchors.get('u1')?.anchorToolUseId).toBe('use-1');
   });
 
-  it('removes a completed plan when the next user plan begins', () => {
+  it('retains a completed plan when the next user plan begins', () => {
     const anchors = selectPlanAnchors([
       user('u1'),
       planTool('turn-1', 'use-1', PLAN_V3),
@@ -234,8 +234,8 @@ describe('selectPlanAnchors', () => {
         '1. [in_progress] Write the tests\n2. [pending] Ship it',
       ),
     ]);
-    expect([...anchors.keys()]).toEqual(['u2']);
-    expect(anchors.get('u1')).toBeUndefined();
+    expect([...anchors.keys()]).toEqual(['u1', 'u2']);
+    expect(anchors.get('u1')?.allCompleted).toBe(true);
     expect(anchors.get('u2')?.anchorToolUseId).toBe('use-2');
   });
 });

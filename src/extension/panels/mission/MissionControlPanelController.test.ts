@@ -113,7 +113,9 @@ const vscodeMock = vi.hoisted(() => {
   };
 });
 
-vi.mock('vscode', () => vscodeMock);
+vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
+  Disposable: class { constructor(private cleanup: () => void) {} dispose() { this.cleanup(); } },
+}));
 
 import {
   MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
@@ -596,7 +598,7 @@ describe('MissionControlPanelController', () => {
     }
   });
 
-  it('owns New Mission draft revisions and rejects stale Webview updates', () => {
+  it('owns New Mission draft revisions and rejects stale Webview updates', async () => {
     const authority = {
       workspaceAuthorityRevision: 4,
       chatOwnerRevision: 7,
@@ -614,6 +616,7 @@ describe('MissionControlPanelController', () => {
     const posted: unknown[] = [];
     controller.onDidChangeWorkspaceSetup((message) => posted.push(message));
     controller.openNewMission('Preserve this task');
+    await settle();
     expect(vscodeMock.__panels).toHaveLength(0);
 
     expect(posted.at(-1)).toMatchObject({
@@ -689,7 +692,9 @@ describe('MissionControlPanelController', () => {
       expect(JSON.stringify(posted)).not.toContain(sessionId);
       const replayed: unknown[] = [];
       controller.replayWorkspaceSetupTo(message => replayed.push(message));
-      expect(parseMissionControlPanelHostMessage(replayed[0])).toEqual(decoded);
+      // Replay preserves the user's current tab; only explicit navigation chooses a view.
+      const { view: _view, ...route } = decoded as Extract<NonNullable<typeof decoded>, { type: 'missionControl.route' }>;
+      expect(parseMissionControlPanelHostMessage(replayed[0])).toEqual(route);
       expect(controller.routeState()).toMatchObject({ route: 'detail' });
       controller.dispose();
     },

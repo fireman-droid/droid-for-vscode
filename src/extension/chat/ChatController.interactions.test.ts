@@ -275,7 +275,7 @@ describe('ChatController', () => {
         return first;
       })
       .mockReturnValueOnce(second);
-    const { controller, messages } = createController(createRuntime);
+    const { controller, messages } = createController(createRuntime, undefined, undefined, undefined, { loadHistory: async () => ({ status: 'available', state: { transcript: [], historyStatus: 'complete', truncated: false } }) });
     ready(controller);
     await waitForConnected(messages);
     send(controller, 'session-1', 'turn-1', 'Ask');

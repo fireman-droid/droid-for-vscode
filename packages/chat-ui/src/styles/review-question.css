@@ -31,7 +31,6 @@
   .review-question-actions { grid-column: 2; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 22px; }
   .review-question-actions .review-question-send { width: 22px; height: 22px; border-radius: 50%; color: var(--action-ink); background: var(--action); }
   .review-question-actions .review-question-send svg { width: 12px; height: 12px; }
-  .review-question-actions .review-question-send[data-busy] svg { width: 8px; height: 8px; fill: currentColor; }
   .review-question-send:disabled { opacity: .3; }
   .review-question-send:hover:not(:disabled) { background: color-mix(in srgb, var(--action) 86%, var(--ink)); }
   .review-question-progress { display: flex; margin-right: auto; color: var(--muted-ink); }

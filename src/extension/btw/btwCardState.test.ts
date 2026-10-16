@@ -24,6 +24,7 @@ describe('btwCardState', () => {
         question: 'What is the codeword?',
         answer: '',
         state: 'streaming',
+        progress: 'waiting',
         message: null,
       },
     ]);

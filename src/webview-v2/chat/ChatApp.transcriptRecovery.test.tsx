@@ -96,14 +96,14 @@ describe('ChatApp transcript delivery recovery', () => {
     const editor = screen.getByRole('textbox', { name: 'Message Droid' });
     port.postMessage.mockClear();
     for (const command of ['/new', '/compact', '/sessions']) {
-      fireEvent.change(editor, { target: { value: command } });
+      fireEvent.input(editor, { target: { textContent: command } });
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       await screen.findByText('Return to the main chat to switch sessions, start a new task, or compact the conversation.');
     }
     expect(port.postMessage.mock.calls.some(([message]) =>
       ['session.new', 'session.compact', 'session.select', 'turn.send'].includes(message.type))).toBe(false);
 
-    fireEvent.change(editor, { target: { value: 'Continue the child task' } });
+    fireEvent.input(editor, { target: { textContent: 'Continue the child task' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({
       type: 'turn.send', sessionId, turnId: expect.any(String), text: 'Continue the child task',
@@ -128,7 +128,7 @@ describe('ChatApp transcript delivery recovery', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull());
     expect(screen.getAllByText(answer)).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /Run checks/ })).toHaveLength(1);
-    expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLTextAreaElement).value).toBe(draft);
+    expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLElement).textContent).toBe(draft);
   });
 
   it('recovers missed prose from an authoritative snapshot without duplicating the reply or command', async () => {
@@ -152,7 +152,7 @@ describe('ChatApp transcript delivery recovery', () => {
     await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
     await waitFor(() => expect(screen.getAllByText(answer)).toHaveLength(1));
     expect(screen.getAllByRole('button', { name: /Run checks/ })).toHaveLength(1);
-    expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLTextAreaElement).value).toBe(draft);
+    expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLElement).textContent).toBe(draft);
   });
 
   it('restores a pending question from a snapshot alone and answers its original request once', async () => {

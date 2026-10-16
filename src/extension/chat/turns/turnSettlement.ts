@@ -6,6 +6,7 @@ import { isCurrentTurn } from './turnIdentity';
 import { finishSpecHandoff } from './specHandoff';
 import { STOP_TIMEOUT_MESSAGE } from './turnWatchdog';
 import { formatTurnErrorMessage } from './turnErrorMessage';
+import { setModelRequestFailed } from './modelConnectionState';
 
 export const TURN_FAILURE_MESSAGE = 'Droid could not complete this reply.';
 
@@ -15,6 +16,7 @@ export function handleTurnComplete(
   turnId: string,
   event: Extract<RuntimeEvent, { type: 'turn-complete' }>,
 ): void {
+  if (event.modelConnectionFailed) setModelRequestFailed(ctl, sessionId, turnId, true);
   ctl.interactions.endTurn(sessionId, turnId);
   ctl.terminalMirror?.settleAll();
   if (event.turnUsage !== undefined) {
@@ -24,6 +26,7 @@ export function handleTurnComplete(
   }
   switch (event.outcome) {
     case 'success':
+      setModelRequestFailed(ctl, sessionId, turnId, false);
       ctl.effects.publishTurnChanges(sessionId, turnId, 'completed');
       setTurnStatus(ctl, sessionId, turnId, 'completed');
       ctl.effects.settleTurnSubagents(sessionId, turnId);

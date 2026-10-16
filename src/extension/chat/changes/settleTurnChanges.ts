@@ -2,6 +2,7 @@ import { MAX_CHANGED_FILES_PER_TURN } from '../../../shared/protocol/bounds';
 import { type ChangedFileSummary } from '../../../shared/protocol/transcript';
 import { hasFileChange, type FileChangeStat } from '../../changes/changeStats';
 import type { SettleTurnChangesPort } from './settleTurnChangesPort';
+import { finishPendingSnapshot } from './snapshotCapture';
 
 /**
  * Settled ledger rows for one finished turn: git tree diff is the
@@ -31,7 +32,7 @@ export async function resolveSettledChangeFiles(
   const before = snapshots.read(sessionId, turnId);
   if (!before?.before) return fallback('missing-before-tree');
   try {
-    await snapshots.capture(scope, 'after');
+    await finishPendingSnapshot(snapshots, scope);
   } catch (error) {
     if (before.coverage === 'workspace-files-v1') throw error;
     return fallback('after-capture-threw');

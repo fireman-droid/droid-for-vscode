@@ -48,27 +48,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .v2-btw-heading p {
-    overflow: hidden;
-    color: var(--muted-ink);
-    font-size: 10px;
-    line-height: 14px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .v2-btw-status {
-    display: inline-flex;
-    min-width: 0;
-    flex-shrink: 0;
-    align-items: center;
-    gap: 5px;
-    overflow: hidden;
-    color: var(--muted-ink);
-    font-size: 10.5px;
-    white-space: nowrap;
-  }
-  .v2-btw-status:empty { display: none; }
-  .v2-btw-status[data-unavailable] { color: var(--error-ink); }
   .v2-btw-viewport {
     min-height: 0;
     overflow: auto;
@@ -107,9 +86,33 @@
     overscroll-behavior-x: contain;
     border-radius: 2px;
     outline: none;
+    font-size: 13px;
+    line-height: 21px;
   }
   .v2-btw-question-content:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-btw-answer { min-width: 0; padding: 4px 2px 0; }
+  .v2-btw-speaker { margin-right: 8px; color: var(--muted-ink); font-size: 12px; }
+  .v2-btw-author { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; color: var(--muted-ink); font-size: 12px; }
+  .v2-btw-author > svg { width: 16px; height: 16px; }
+  .v2-btw-tool-record { min-width: 0; }
+  .v2-btw-tool-toggle {
+    display: flex; width: 100%; min-width: 0; align-items: center; gap: 6px;
+    padding: 4px 1px; border-radius: var(--control-radius); text-align: left;
+    color: var(--muted-ink); font-size: 11px; line-height: 18px;
+  }
+  .v2-btw-tool-toggle:hover { background: var(--control-surface-hover); }
+  .v2-btw-tool-toggle > span { min-width: 0; overflow-wrap: anywhere; }
+  .v2-btw-tool-toggle > svg { width: 13px; height: 13px; flex: none; }
+  .v2-btw-tool-toggle .v2-btw-tool-chevron { margin-left: auto; width: 12px; }
+  .v2-btw-tool-toggle[data-state='open'] .v2-btw-tool-chevron { transform: rotate(90deg); }
+  .v2-btw-tool-toggle[data-failed] { color: var(--error-ink); }
+  .v2-btw-tool-detail { min-width: 0; padding-block: 4px 8px; }
+  .v2-btw-tool-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .v2-btw-tool-row { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 18px; }
+  .v2-btw-tool-row > span:first-of-type { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+  .v2-btw-tool-row svg { width: 13px; height: 13px; flex: none; color: var(--muted-ink); }
+  .v2-btw-tool-output { max-height: 180px; padding: 8px; margin-top: 6px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft-surface); border-radius: var(--control-radius); font: 12px/1.6 var(--vscode-editor-font-family, monospace); }
+  .v2-btw-tool-note { margin-top: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .v2-btw-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted-ink); font-size: 12px; line-height: 20px; user-select: none; }
   .v2-btw-error { margin-top: 6px; color: var(--error-ink); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
   .v2-btw-footer {
@@ -189,6 +192,7 @@
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-btw-send > svg { display: block; width: 14px; height: 14px; flex: none; }
+  .v2-btw-send[data-queue] { width: auto; min-width: 26px; gap: 3px; padding-inline: 6px; border-radius: 13px; font-size: 11px; }
   .v2-btw-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
   .v2-btw-send:active:not(:disabled) { border-color: var(--control-border-focus); }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }

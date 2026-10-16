@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useRef, type ComponentProps } from 'react';
-import { ImagePlus, LoaderCircle, Unplug } from 'lucide-react';
+import { ImagePlus, LoaderCircle, LockKeyhole, Unplug } from 'lucide-react';
 import { SideChatSheet as SideChatView } from '@droidvisx/chat-ui/chat/SideChatSheet';
 import { MAX_BTW_TEXT_LENGTH, type SessionBtwState } from '../../shared/protocol/btwProtocol';
 import type { ModelCatalogState } from '../../shared/protocol/settings';
@@ -38,6 +38,9 @@ export function SideChatSheet({ state, images, modelCatalog, selectedModel, onMo
     : selected?.supportsImages === false && images.images.length > 0
       ? 'This model does not support images. Remove the images or choose another model.' : null;
   return <SideChatView {...props} state={{ ...state, status: state.status === 'forking' ? 'preparing' : state.status }} maxTextLength={MAX_BTW_TEXT_LENGTH}
+    headerActions={<Tooltip content={t('Can read, search and run isolated examples. Cannot modify the project.')}>
+      <Button variant="ghost" size="icon-sm" aria-label={t('Can read, search and run isolated examples. Cannot modify the project.')}><LockKeyhole /></Button>
+    </Tooltip>}
     notice={images.reading ? 'Preparing images…' : modelNotice ?? images.notice ?? props.notice}
     composerStatus={modelsLoading ? <Tooltip content={t(statusLabel)}>
       <span role="status" aria-label={t(statusLabel)} tabIndex={0}

@@ -24,8 +24,10 @@ it('persists the exact submission identity before allowing the runtime generator
   controllers.push(controller); ready(controller); await waitForConnected(messages);
   const saved = deferred<void>(), resume = deferred<void>();
   const flush = controller.effects.flushRecoveryCheckpointOrReport;
-  vi.spyOn(controller.effects, 'flushRecoveryCheckpointOrReport').mockImplementationOnce(async () => {
-    const result = await flush(); saved.resolve(); await resume.promise; return result;
+  vi.spyOn(controller.effects, 'flushRecoveryCheckpointOrReport').mockImplementation(async () => {
+    const result = await flush();
+    if (controller.turnState.turn?.backendTurnId === 'exact-submission') { saved.resolve(); await resume.promise; }
+    return result;
   });
   send(controller, 'session-1', 'ui-turn', 'Continue');
   await saved.promise;

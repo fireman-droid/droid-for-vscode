@@ -66,7 +66,7 @@ describe('getWebviewHtml', () => {
       preference: 'dark',
       resolved: 'dark',
     });
-    expect(dark).toContain('html,body{background:#181818}');
+    expect(dark).toContain('html,body{background:#121212}');
     expect(dark).toContain('data-dvx-theme="dark"');
     expect(dark).toContain('data-dvx-theme-preference="dark"');
     expect(dark).toContain('data-theme="dark"');

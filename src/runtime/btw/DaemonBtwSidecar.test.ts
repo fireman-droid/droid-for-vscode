@@ -160,6 +160,21 @@ describe('createDaemonBtwSidecar', () => {
 });
 
 describe('DaemonBtwSidecar.ask', () => {
+  it('streams structured tool activity and keeps the answer stream alive', async () => {
+    const { client, sidecar } = await createFixture();
+    const asking = collect(sidecar.ask('Read this'));
+    await settle();
+    const stream = client.streams[0]!;
+    stream.push({ type: 'tool_call', toolUseId: 'read-1', name: 'Read', input: { file_path: 'src/cart.ts' } });
+    stream.push({ type: 'tool_result', toolUseId: 'read-1', isError: false, content: 'private file body' });
+    stream.push({ type: 'assistant_text_delta', text: 'Explanation' });
+    stream.push({ type: 'result', subtype: 'success' });
+    const events = await asking;
+    expect(events).toMatchObject([{ kind: 'tool', tool: { id: 'read-1', state: 'running' } },
+      { kind: 'tool', tool: { id: 'read-1', state: 'done' } }, { kind: 'delta', text: 'Explanation' }, { kind: 'done' }]);
+    expect(JSON.stringify(events)).not.toContain('private file body');
+  });
+
   it('streams deltas then done on a successful result', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('What is this error?'));
@@ -176,7 +191,7 @@ describe('DaemonBtwSidecar.ask', () => {
     expect(client.askedTexts).toEqual(['What is this error?']);
   });
 
-  it('ignores non-answer stream events', async () => {
+  it('retains read tool progress and ignores empty answer deltas', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('q'));
     await settle();
@@ -186,6 +201,7 @@ describe('DaemonBtwSidecar.ask', () => {
     stream.push({ type: 'assistant_text_delta', text: 'ok' });
     stream.push({ type: 'result', subtype: 'success' });
     expect(await asking).toEqual([
+      { kind: 'progress', progress: 'tool' },
       { kind: 'delta', text: 'ok' },
       { kind: 'done' },
     ]);
@@ -238,7 +254,7 @@ describe('DaemonBtwSidecar.ask', () => {
     await settle();
     client.streams[0].fail(new Error('socket gone'));
     expect(await asking).toEqual([
-      { kind: 'error', message: 'Side chat connection failed.' },
+      { kind: 'error', message: 'Side chat connection failed.', connectionLost: true },
     ]);
   });
 

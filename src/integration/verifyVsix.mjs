@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 const vsixPath = path.resolve(process.argv[2] ?? 'dist/droidvisx.vsix');
 const repositoryManifest = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -21,6 +22,7 @@ const expectedEntries = [
   'extension/dist/extension/sessionCatalogWorker.cjs',
   'extension/dist/extension/sessionHistoryWorker.cjs',
   'extension/dist/extension/persistentIdeRelayWorker.cjs',
+  'extension/dist/extension/btwAnalysisWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.
   'extension/dist/extension/THIRD_PARTY_LICENSES.txt',
   // Lazily injected mermaid bundle; ships alongside webview.js but is
@@ -140,6 +142,21 @@ assertExtensionBundleLoads(extensionBundle);
 const catalogWorkerBundle = readEntry('extension/dist/extension/sessionCatalogWorker.cjs');
 assert.doesNotMatch(catalogWorkerBundle, /\brequire\(["']@factory\/droid-sdk/u);
 assert.doesNotMatch(catalogWorkerBundle, /sourceMappingURL/u);
+const analysisWorkerBundle = readEntry('extension/dist/extension/btwAnalysisWorker.cjs');
+await new Promise((resolve, reject) => {
+  const worker = new Worker(analysisWorkerBundle, { eval: true, workerData: {
+    code: 'const values: number[] = await Promise.resolve([2, 3]); assert(typeof process === "undefined"); assert(typeof require === "undefined"); return values.reduce((a, b) => a + b, 0);',
+    language: 'typescript', files: {},
+  }, resourceLimits: { maxOldGenerationSizeMb: 128, stackSizeMb: 4 } });
+  const timer = setTimeout(() => { void worker.terminate(); reject(new Error('Packaged BTW worker timed out')); }, 10_000);
+  worker.once('error', error => { clearTimeout(timer); reject(error); });
+  worker.once('message', result => {
+    clearTimeout(timer);
+    void worker.terminate();
+    try { assert.deepEqual(result, { ok: true, output: '', value: '5' }); resolve(); }
+    catch (error) { reject(error); }
+  });
+});
 
 const webviewBundle = readEntry('extension/dist/webview/webview.js');
 assert.deepEqual(

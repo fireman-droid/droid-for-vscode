@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen } from '@testing-library/react';
 import { useStore } from 'zustand';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_PROTOCOL_VERSION, type HostSnapshotMessage, type HostToWebviewMessage } from '../../shared/bridgeMessages';
@@ -9,7 +9,7 @@ import { useHostMessageFlow } from '../host/useHostMessageFlow';
 import type { ChatPort } from '../host/chatIntent';
 import { initialAssistantWebviewState } from '../state/initialState';
 import type { AssistantWebviewState } from '../state/types';
-import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
+import { SessionRecovery } from './ConnectionFeedback';
 import { createChatStore, type ChatStore } from './store';
 
 beforeEach(() => {
@@ -52,7 +52,7 @@ function receive(message: HostToWebviewMessage) {
 }
 
 function requests(port: ReturnType<typeof fixture>['port']) {
-  return port.postMessage.mock.calls.map(([message]) => message).filter((message) => message.type !== 'webview.state-applied');
+  return port.postMessage.mock.calls.map(([message]) => message).filter((message) => message.type !== 'webview.state-applied' && message.type !== 'ide.refresh');
 }
 
 function Harness({ store, port, recovery = false }: { store: ChatStore; port: ChatPort; recovery?: boolean }) {
@@ -72,117 +72,92 @@ function Harness({ store, port, recovery = false }: { store: ChatStore; port: Ch
   return <>
     <output aria-label="Draft">{composer.draft}</output>
     <output aria-label="Attachments">{state.attachments.map((attachment) => attachment.name).join(', ')}</output>
-    {recovery ? <SessionRecovery state={state} blocked={false} onReconnect={sessions.handleRetry} port={port} />
-      : <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut connection={state.connection} port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} />}
+    <SessionRecovery state={state} blocked={!recovery} onReconnect={sessions.handleRetry} port={port} phase={recovery ? 'idle' : 'restoring'} />
   </>;
 }
 
 describe('session connection recovery', () => {
-  it('refreshes once until a new snapshot arrives and preserves the unsent draft and attachments', () => {
+  it('refreshes once until a new snapshot arrives and preserves the draft and attachments', () => {
     const { store, port } = fixture();
     render(<Harness store={store} port={port} />);
-    port.postMessage.mockClear();
-    const draft = screen.getByLabelText('Draft');
     const attachments = store.getState().state.attachments;
-    expect(screen.queryByRole('button', { name: 'Refresh session state' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).toBeNull();
     act(() => vi.advanceTimersByTime(60_000));
     port.postMessage.mockClear();
-    const refresh = screen.getByRole('button', { name: 'Refresh session state' });
-    fireEvent.click(refresh);
-    fireEvent.click(refresh);
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(port.postMessage).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'webview.ready', protocolVersion: BRIDGE_PROTOCOL_VERSION }));
-    expect(refresh.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    const waiting = screen.getByRole('button', { name: 'Reconnecting…' });
+    expect(waiting.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(waiting);
+    expect(requests(port)).toEqual([expect.objectContaining({ type: 'webview.ready', protocolVersion: BRIDGE_PROTOCOL_VERSION })]);
     receive(snapshot(store.getState().state, 11));
-    expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
-    expect(store.getState().state.connection.status).toBe('connecting');
-    expect(screen.getByLabelText('Draft')).toBe(draft);
-    expect(draft.textContent).toBe('Unsent work');
+    expect(screen.getByRole('button', { name: 'Reconnect' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByLabelText('Draft').textContent).toBe('Unsent work');
     expect(store.getState().state.attachments).toBe(attachments);
-    expect(screen.getByLabelText('Attachments').textContent).toBe('notes.md');
-    expect(port.setState).not.toHaveBeenCalled();
   });
 
   it('ends an unanswered refresh after ten seconds and retries only on another click', () => {
-    const { store, port } = fixture({ status: 'unavailable' });
-    const state = store.getState().state;
-    render(<ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false} connection={state.connection}
-      port={port} sequence={state.sequence} conversationId={state.conversationId} sessionId={state.sessionId} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
-    act(() => vi.advanceTimersByTime(9_999));
-    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
-    act(() => vi.advanceTimersByTime(1));
-    expect(screen.getByText('No session state received after 10 seconds. You can refresh again.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
-    act(() => vi.advanceTimersByTime(20_000));
-    expect(port.postMessage).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
-    expect(screen.queryByText('No session state received after 10 seconds. You can refresh again.')).toBeNull();
-    expect(port.postMessage).toHaveBeenCalledTimes(2);
-    expect(port.postMessage.mock.calls.every(([message]) => message.type === 'webview.ready')).toBe(true);
-    receive(snapshot(state, state.sequence));
-    receive({ ...snapshot(state, state.sequence + 1), sessionId: 'another-session', sessions: { status: 'ready', items: [] } });
-    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
-    receive(snapshot(state, state.sequence + 2));
-    expect(screen.getByText('Latest host state received.')).toBeTruthy();
+    const { store, port } = fixture();
+    render(<SessionRecovery state={store.getState().state} blocked={false} onReconnect={vi.fn()} port={port} handshakeTimedOut />);
+    act(() => vi.advanceTimersByTime(60_000));
+    port.postMessage.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     act(() => vi.advanceTimersByTime(10_000));
-    expect(screen.queryByText('No session state received after 10 seconds. You can refresh again.')).toBeNull();
-    expect(port.postMessage).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Reconnect' }).hasAttribute('disabled')).toBe(false);
+    expect(requests(port)).toHaveLength(1);
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(requests(port)).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    expect(requests(port)).toHaveLength(2);
   });
 
-  it.each(['sessionId', 'conversationId'] as const)('cancels the old refresh when %s changes', (field) => {
-    const { store, port } = fixture({ status: 'unavailable' });
+  it.each(['sessionId', 'conversationId'] as const)('cancels the old refresh when %s changes', field => {
+    const { store, port } = fixture();
     const state = store.getState().state;
-    const view = (identity: Pick<AssistantWebviewState, 'conversationId' | 'sessionId'>) =>
-      <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false} connection={state.connection}
-        port={port} sequence={state.sequence} {...identity} />;
+    const view = (identity: typeof state) => <SessionRecovery state={identity} blocked={false} onReconnect={vi.fn()} port={port} handshakeTimedOut />;
     const { rerender } = render(view(state));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+    port.postMessage.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     act(() => vi.advanceTimersByTime(5_000));
-    const next = { ...state, [field]: 'new-identity', sessions: { status: 'ready' as const, items: [] } };
+    const next = { ...state, [field]: 'new-identity', sessions: { ...state.sessions, items: state.sessions.items.map(item => ({ ...item, id: field === 'sessionId' ? 'new-identity' : item.id })) } };
     rerender(view(next));
-    expect(screen.getByRole('button', { name: 'Refresh session state' }).hasAttribute('disabled')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
-    receive(snapshot(state, state.sequence + 1));
-    act(() => vi.advanceTimersByTime(5_000));
-    expect(screen.getByRole('button', { name: 'Waiting for session state…' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.queryByText('Latest host state received.')).toBeNull();
-    receive(snapshot(next, state.sequence + 2));
-    expect(screen.getByText('Latest host state received.')).toBeTruthy();
-    expect(port.postMessage).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Reconnect' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    receive(snapshot(state, 11));
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(true);
+    receive(snapshot(next, 12));
+    expect(screen.getByRole('button', { name: 'Reconnect' }).hasAttribute('disabled')).toBe(false);
+    expect(requests(port)).toHaveLength(2);
   });
 
-  it('cancels the refresh timeout and subscription when the view unmounts', () => {
-    const { store, port } = fixture({ status: 'unavailable' });
-    const state = store.getState().state;
-    const { unmount } = render(<ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false}
-      connection={state.connection} port={port} sequence={state.sequence}
-      conversationId={state.conversationId} sessionId={state.sessionId} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh session state' }));
+  it('cancels the refresh timeout and subscription when unmounted', () => {
+    const { store, port } = fixture();
+    const { unmount } = render(<SessionRecovery state={store.getState().state} blocked={false} onReconnect={vi.fn()} port={port} handshakeTimedOut />);
+    port.postMessage.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     unmount();
     expect(vi.getTimerCount()).toBe(0);
-    receive(snapshot(state, state.sequence + 1));
+    receive(snapshot(store.getState().state, 11));
     act(() => vi.advanceTimersByTime(10_000));
-    expect(port.postMessage).toHaveBeenCalledTimes(1);
+    expect(requests(port)).toHaveLength(1);
   });
 
   it.each(['connected', 'unavailable'] as const)('releases reconnect after a %s outcome without resending the previous message', (status) => {
     const { store, port } = fixture({ status: 'unavailable', message: 'Runtime stopped' });
     render(<Harness store={store} port={port} recovery />);
     port.postMessage.mockClear();
-    const reconnect = screen.getByRole('button', { name: 'Reconnect Droid session' });
+    const reconnect = screen.getByRole('button', { name: /^Reconnect/  });
     fireEvent.click(reconnect);
     fireEvent.click(reconnect);
     expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'runtime.retry', sessionId: 'session-a' });
     receive({ type: 'host.connection', sequence: 11, conversationId: 'conversation-a', sessionId: 'session-a', connection: { status: 'connecting' } });
-    expect(screen.getByText('Waiting for the Droid session…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(true);
     const sessionId = status === 'connected' ? 'session-b' : 'session-a';
     receive({ ...snapshot(store.getState().state, 12), sessionId, connection: { status }, sessions: {
       status: 'ready', items: [{ id: sessionId, title: 'Current session', messageCount: 1, modifiedTime: '2026-09-20T00:00:00.000Z', active: true, isFavorite: false }],
     } });
-    expect(screen.queryByText('Waiting for the Droid session…')).toBeNull();
-    if (status === 'unavailable') expect(screen.getByRole('button', { name: 'Reconnect Droid session' }).hasAttribute('disabled')).toBe(false);
-    else expect(screen.queryByRole('button', { name: 'Reconnect Droid session' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reconnecting…' })).toBeNull();
+    if (status === 'unavailable') expect(screen.getByRole('button', { name: /^Reconnect/  }).hasAttribute('disabled')).toBe(false);
+    else expect(screen.queryByRole('button', { name: /^Reconnect/  })).toBeNull();
     expect(store.getState().state.transcript).toEqual([{ id: 'user-a', kind: 'user', text: 'Existing message' }]);
     expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
     expect(port.setState).not.toHaveBeenCalled();
@@ -192,14 +167,14 @@ describe('session connection recovery', () => {
     const { store, port } = fixture({ status: 'unavailable' });
     render(<Harness store={store} port={port} recovery />);
     port.postMessage.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Droid session' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Reconnect/  }));
     receive({ ...snapshot(store.getState().state, 11), sessions: { status: 'loading', items: [] } });
-    const reconnect = screen.getByRole('button', { name: 'Reconnect Droid session' });
+    const reconnect = screen.getByRole('button', { name: /^Reconnect/  });
     expect(reconnect.hasAttribute('disabled')).toBe(true);
     fireEvent.click(reconnect);
     expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
     receive({ ...snapshot(store.getState().state, 12), sessions: { status: 'ready', items: [] } });
-    expect(screen.getByRole('button', { name: 'Reconnect Droid session' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: /^Reconnect/  }).hasAttribute('disabled')).toBe(false);
   });
 
   it.each(['connected', 'unavailable'] as const)('keeps the draft through IDE preparation and restoration, then handles %s', status => {
@@ -209,22 +184,22 @@ describe('session connection recovery', () => {
     const attachments = store.getState().state.attachments;
     receive({ type: 'host.ide', sequence: 11, conversationId: 'conversation-a', sessionId: 'session-a',
       ide: { status: 'reconnecting', canReconnect: false, message: 'Reconnecting this conversation to the IDE…' } });
-    expect(screen.getByText('Reconnecting this conversation to the IDE…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(true);
     act(() => vi.advanceTimersByTime(20_000));
-    expect(screen.queryByRole('button', { name: 'Refresh session state' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Reconnect Droid session' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(true);
     receive({ ...snapshot(store.getState().state, 12), connection: { status: 'connecting' },
       ide: { status: 'reconnecting', canReconnect: false, message: 'Restoring this conversation on its new IDE connection…' } });
-    expect(screen.getByText('Restoring this conversation on its new IDE connection…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(true);
     expect(screen.queryByText('Waiting for the Droid session…')).toBeNull();
-    act(() => vi.advanceTimersByTime(40_000));
-    expect(screen.getByRole('button', { name: 'Refresh session state' })).toBeTruthy();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole('button', { name: 'Reconnecting…' }).hasAttribute('disabled')).toBe(false);
     receive({ ...snapshot(store.getState().state, 13), connection: { status },
       ide: status === 'connected' ? { status: 'connected', canReconnect: true, message: 'Connected to IDE.' }
         : { status: 'error', canReconnect: false, message: 'Could not restore the session. Retry to restore it.' } });
     expect(screen.queryByText('Restoring this conversation on its new IDE connection…')).toBeNull();
     if (status === 'unavailable') {
-      fireEvent.click(screen.getByRole('button', { name: 'Reconnect Droid session' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Reconnect/  }));
       expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
     } else expect(requests(port)).toEqual([]);
     expect(screen.getByLabelText('Draft').textContent).toBe('Unsent work');
@@ -232,3 +207,8 @@ describe('session connection recovery', () => {
     expect(port.setState).not.toHaveBeenCalled();
   });
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });

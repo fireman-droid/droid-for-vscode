@@ -19,9 +19,9 @@ describe('model selection capabilities', () => {
   it('shows unavailable reasons and refuses disabled models in main and Spec selection', async () => {
     const user = userEvent.setup(), onUpdate = vi.fn();
     render(<ModelPopover id="models" settings={settings} disabled={false} onUpdate={onUpdate} onManageModels={vi.fn()}
-      modelCatalog={{ status: 'ready', items: [builtin, { ...builtin, id: 'retired', displayName: 'Retired model', disabled: true, disabledReason: 'Blocked by account policy' }] }} />);
-    expect(screen.getAllByText('Built-in · Text only')).toHaveLength(2);
-    expect(screen.getByText('Blocked by account policy')).toBeDefined();
+      modelCatalog={{ status: 'ready', items: [builtin, { ...builtin, id: 'other', displayName: 'Other model' }, { ...builtin, id: 'retired', displayName: 'Retired model', disabled: true, disabledReason: 'Blocked by account policy' }] }} />);
+    expect(screen.getAllByRole('listitem').every(row => row.title.includes('Text only'))).toBe(true);
+    expect(screen.getByTitle(/Blocked by account policy/)).toBeDefined();
     const disabled = screen.getByRole('button', { name: 'Retired model, retired' });
     expect(disabled.hasAttribute('disabled')).toBe(true);
     await user.click(disabled);
@@ -29,8 +29,8 @@ describe('model selection capabilities', () => {
     await user.click(screen.getByRole('button', { name: 'Spec drafting' }));
     await user.click(screen.getByRole('button', { name: 'Retired model, retired' }));
     expect(onUpdate).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Built-in model, builtin' }));
-    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ field: 'specModeModelId', value: 'builtin' });
+    await user.click(screen.getByRole('button', { name: 'Other model, other' }));
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ field: 'specModeModelId', value: 'other' });
   });
 
   it('shows the official default reasoning level and sends a supported choice', async () => {
@@ -38,7 +38,7 @@ describe('model selection capabilities', () => {
     render(<ModelPopover id="models" settings={settings} disabled={false} onUpdate={onUpdate} onManageModels={vi.fn()}
       modelCatalog={{ status: 'ready', items: [builtin] }} />);
     await user.click(screen.getByRole('button', { name: 'Edit reasoning for Built-in model' }));
-    expect(screen.getByText('High (default)')).toBeDefined();
+    expect(screen.getByText('High(default)')).toBeDefined();
     await user.click(screen.getByRole('radio', { name: 'High' }));
     expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ field: 'reasoningEffort', value: 'high' });
   });

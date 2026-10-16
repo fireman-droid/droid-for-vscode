@@ -85,7 +85,7 @@ describe('Droid model verification lifecycle', () => {
     expect(archive).toHaveBeenCalledOnce();
     await expect(access(create.mock.calls[0]![0].cwd)).rejects.toThrow();
   });
-  it('does not claim success for a different model or failed cleanup', async () => {
+  it('rejects a different model and reports cleanup failure separately from a successful request', async () => {
     const first = fixture();
     first.session.settings.modelId = 'different';
     expect(
@@ -95,7 +95,7 @@ describe('Droid model verification lifecycle', () => {
     const second = fixture();
     second.session.close.mockRejectedValueOnce(new Error('close failed'));
     const result = await second.gateway.verify('actual-id', new AbortController().signal);
-    expect(result.status).toBe('failed');
+    expect(result.status).toBe('passed');
     expect(result.message).toContain('cleanup');
     expect(second.session.detach).toHaveBeenCalledOnce();
   });

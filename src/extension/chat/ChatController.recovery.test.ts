@@ -40,7 +40,7 @@ import type { TurnSnapshotStore } from '../changes/turnSnapshots';
 import { RECOVERED_FINAL_HISTORY_TIMEOUT_MS, RECOVERED_HISTORY_FAILED_MESSAGE } from './recovery/recovery';
 
 describe('ChatController', () => {
-  it('contains a rejected recovered-turn snapshot before capture', async () => {
+  it('does not invent a before snapshot for a turn already running when restored', async () => {
     const failure = new Error('C:\\sensitive\\persistence-failure');
     const capture = vi.fn(() => Promise.reject(failure));
     const recovery = await seededRecoveryStore('saved-session');
@@ -64,30 +64,9 @@ describe('ChatController', () => {
     ready(controller);
     await waitForConnected(messages);
 
-    await vi.waitFor(() => {
-      expect(capture).toHaveBeenCalledWith(
-        { sessionId: 'saved-session', turnId: 'recovery-1' },
-        'before',
-      );
-    });
-    await vi.waitFor(() => {
-      expect(recordHost).toHaveBeenCalledWith({
-        level: 'warn',
-        name: 'host.changes.snapshot-failed',
-        attributes: {
-          sessionId: 'saved-session',
-          turnId: 'recovery-1',
-          phase: 'before',
-          reason: 'persistence-failed',
-        },
-      });
-    });
+    await vi.waitFor(() => expect(controller.turnState.turn).toMatchObject({ recovery: true, status: 'streaming' }));
+    expect(capture).not.toHaveBeenCalled();
     expect(JSON.stringify(recordHost.mock.calls)).not.toContain('persistence-failure');
-    expect(
-      recordHost.mock.calls.filter(
-        ([event]) => event.name === 'host.changes.snapshot-failed',
-      ),
-    ).toHaveLength(1);
     await controller.dispose();
   });
 

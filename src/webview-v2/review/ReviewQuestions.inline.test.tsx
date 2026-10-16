@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useContext } from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ReviewQuestions } from './ReviewQuestions';
 import { DiffQuestionContext, DiffQuestionContentContext } from '@droidvisx/chat-ui/review/diffQuestion';
@@ -26,7 +26,7 @@ it('includes the first selected excerpt when Ask opens, before any paste or mode
     status: 'ready', selectedId: 'model-1', items: [{ id: 'model-1', label: 'Model' }], error: null } })));
   fireEvent.click(screen.getByRole('button', { name: 'Select excerpt' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ask about selected code' }));
-  expect(screen.getByRole('textbox').textContent).toBe('file.ts (3–4)');
+  expect(within(screen.getByRole('textbox')).getByText('file.ts (3–4)')).toBeDefined();
   expect(port.postMessage.mock.calls.some(([message]) => message.type === 'reviewQuestion.ask')).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Send question' }));
   const request = port.postMessage.mock.calls.find(([message]) => message.type === 'reviewQuestion.ask')![0];

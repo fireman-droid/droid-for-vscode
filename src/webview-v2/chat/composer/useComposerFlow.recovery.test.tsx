@@ -78,22 +78,45 @@ const withQueue: AssistantWebviewState = {
   ] },
 };
 
-it.each(['cancel', 'save', 'dispatched'] as const)('restores the ordinary draft when queue editing ends through %s', async (end) => {
+it.each(['cancel', 'save'] as const)('restores the ordinary draft when queue editing ends through %s', async (end) => {
   const view = mount(withQueue);
   act(() => view.result.current.flow.handleDraftChange('Unsent draft to keep'));
   act(() => view.result.current.flow.handleQueueEditBegin('queued-1'));
   act(() => view.result.current.flow.handleDraftChange('Edited queued question'));
   if (end === 'cancel') act(() => view.result.current.flow.handleQueueEditCancel());
-  else if (end === 'save') await act(() => view.result.current.flow.callbacks.onSend('Edited queued question'));
-  else act(() => view.result.current.dispatch({ type: 'host.message', message: {
-    type: 'queue.state', sequence: 10, sessionId: 'session-1', paused: null, items: [],
-  } }));
+  else await act(() => view.result.current.flow.callbacks.onSend('Edited queued question'));
   expect(view.result.current.flow.draft).toBe('Unsent draft to keep');
   expect(view.port.setState).toHaveBeenLastCalledWith({ draft: 'Unsent draft to keep' });
   expect(view.result.current.flow.queueEditingId).toBeNull();
   if (end === 'save') expect(view.port.postMessage).toHaveBeenCalledWith({
     type: 'queue.update', sessionId: 'session-1', queueId: 'queued-1', text: 'Edited queued question',
   });
+});
+
+it.each(['', 'Unsent draft to keep'])('recovers unsaved queue edits when the prompt leaves the queue (original: %s)', original => {
+  const view = mount(withQueue);
+  act(() => view.result.current.flow.handleDraftChange(original));
+  act(() => view.result.current.flow.handleQueueEditBegin('queued-1'));
+  act(() => view.result.current.flow.handleDraftChange('Edited queued question'));
+  act(() => view.result.current.dispatch({ type: 'host.message', message: {
+    type: 'queue.state', sequence: 10, sessionId: 'session-1', paused: null, items: [],
+  } }));
+  const recovered = original ? `${original}\n\nEdited queued question` : 'Edited queued question';
+  expect(view.result.current.flow.draft).toBe(recovered);
+  expect(view.port.setState).toHaveBeenLastCalledWith({ draft: recovered });
+  expect(view.result.current.flow.commandNotice).toContain('unsaved edits');
+  expect(view.port.postMessage).not.toHaveBeenCalled();
+});
+
+it('does not recover an unchanged queued prompt after dispatch', () => {
+  const view = mount(withQueue);
+  act(() => view.result.current.flow.handleDraftChange('Original draft'));
+  act(() => view.result.current.flow.handleQueueEditBegin('queued-1'));
+  act(() => view.result.current.dispatch({ type: 'host.message', message: {
+    type: 'queue.state', sequence: 10, sessionId: 'session-1', paused: null, items: [],
+  } }));
+  expect(view.result.current.flow.draft).toBe('Original draft');
+  expect(view.result.current.flow.commandNotice).toBeNull();
 });
 
 it('keeps the original draft while moving directly between queued messages', () => {

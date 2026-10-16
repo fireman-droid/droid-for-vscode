@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useMessageEditor } from './editing/useMessageEditor';
@@ -25,15 +25,15 @@ it('shows outside-file restore effects before resending and explains omitted ent
   };
   const view = render(<Harness events={events} rewind={external} />);
   await user.click(screen.getByRole('button', { name: 'Edit message and resend from here' }));
-  await user.click(screen.getByRole('button', { name: 'Restorable files' }));
+  await user.click(screen.getByRole('button', { name: 'Resend options' }));
+  await user.click(screen.getByRole('menuitem', { name: 'View 2 file details' }));
   expect(screen.getByText('settings.json')).toBeDefined();
-  expect(screen.getByText('Delete newly created file')).toBeDefined();
-  expect(screen.getByText(/also affects the listed files outside/)).toBeDefined();
+  expect(screen.getByLabelText('new.json · Delete · Outside workspace')).toBeDefined();
   expect(events.onResend).not.toHaveBeenCalled();
   view.rerender(<Harness events={events} rewind={{ ...external, details: external.details!.slice(0, 1) }} />);
-  expect(screen.getByText(/1 additional affected file is not listed/)).toBeDefined();
-  await user.click(screen.getByRole('checkbox', { name: 'Restore 2 files changed after this point' }));
-  await user.click(screen.getByRole('button', { name: 'Resend edited message' }));
+  expect(screen.getByText(/more affected files not listed/)).toBeDefined();
+  await user.click(screen.getByRole('menuitem', { name: 'Back to resend options' }));
+  await user.click(screen.getByRole('menuitem', { name: /^Restore & resend/ }));
   expect(events.onResend).toHaveBeenCalledExactlyOnceWith('message-1', 'Original question', true);
 });
 
@@ -78,16 +78,15 @@ function Harness({ surface = 'flow', events, rejection = null, rewind = impact, 
   </>;
 }
 
-it('preserves a single editable draft, selection, attachments and restore choice through pinning and eviction', async () => {
+it('preserves a single editable draft, selection and attachments through pinning and eviction', async () => {
   const user = userEvent.setup();
   const events = callbacks();
   const { rerender } = render(<Harness events={events} />);
   await user.click(screen.getByRole('button', { name: 'Edit message and resend from here' }));
-  await user.click(screen.getByRole('checkbox', { name: 'Restore 2 files changed after this point' }));
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
   act(() => input.focus());
-  fireEvent.change(input, { target: { value: 'Keep this edited question' } });
-  input.setSelectionRange(2, 8, 'backward');
+  fireEvent.input(input, { target: { textContent: 'Keep this edited question' } });
+  setInlineSelection(input, 2, 8, 'backward');
   fireEvent.select(input);
   input.scrollTop = 21;
   fireEvent.scroll(input);
@@ -96,16 +95,15 @@ it('preserves a single editable draft, selection, attachments and restore choice
     if (surface === 'unmounted') continue;
     const restored = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
-    expect(restored.value).toBe('Keep this edited question');
-    expect([restored.selectionStart, restored.selectionEnd, restored.selectionDirection, restored.scrollTop]).toEqual([2, 8, 'backward', 21]);
+    expect(restored.textContent).toBe('Keep this edited question');
+    expect([inlineSelection(restored)?.start, inlineSelection(restored)?.end, inlineSelection(restored)?.direction, restored.scrollTop]).toEqual([2, 8, 'backward', 21]);
     expect(document.activeElement).toBe(restored);
-    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('true');
     expect(screen.getByRole('button', { name: 'Preview notes.txt' })).toBeDefined();
   }
   expect(events.onStageBegin).toHaveBeenCalledExactlyOnceWith('message-1');
   expect(events.onStageCancel).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Resend edited message' }));
-  expect(events.onResend).toHaveBeenCalledExactlyOnceWith('message-1', 'Keep this edited question', true);
+  await user.click(screen.getByRole('button', { name: 'Resend' }));
+  expect(events.onResend).toHaveBeenCalledExactlyOnceWith('message-1', 'Keep this edited question', false);
   expect(screen.queryByRole('button', { name: 'Edit message and resend from here' })).toBeNull();
 });
 
@@ -138,17 +136,16 @@ it('scopes restore data and rejection copy to the edited message, preserving the
   const events = callbacks();
   const { rerender } = render(<Harness events={events} />);
   await user.click(screen.getByRole('button', { name: 'Edit message and resend from here' }));
-  await user.click(screen.getByRole('checkbox'));
-  fireEvent.change(screen.getByRole('textbox'), { target: { value: '中文草稿' } });
+  fireEvent.input(screen.getByRole('textbox'), { target: { textContent: '中文草稿' } });
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', code: 'Enter', isComposing: true });
   expect(events.onResend).not.toHaveBeenCalled();
   rerender(<Harness events={events} rewind={{ ...impact, messageId: 'other-message' }} stageOwner="other-message" />);
-  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Resend options' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Preview notes.txt' })).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Resend edited message' }));
+  await user.click(screen.getByRole('button', { name: 'Resend' }));
   expect(events.onResend).toHaveBeenCalledExactlyOnceWith('message-1', '中文草稿', false);
   rerender(<Harness events={events} rejection={{ messageId: 'message-1', reason: 'busy', sequence: 3 }} />);
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('中文草稿');
+  expect((screen.getByRole('textbox') as HTMLElement).textContent).toBe('中文草稿');
   expect(screen.getByText(/Droid is busy/)).toBeDefined();
   rerender(<Harness events={events} rejection={{ messageId: 'other-message', reason: 'failed', sequence: 4 }} />);
   expect(screen.queryByText(/Rewinding to this message failed/)).toBeNull();
@@ -176,8 +173,15 @@ it('keeps the editor alive while attachment portals open and close, and sends ed
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'attachment.remove', sessionId: 'session-1', attachmentId: 'file', stage: 'edit' });
   await user.click(screen.getByRole('button', { name: 'Edit message settings' }));
   fireEvent.keyDown(screen.getByRole('combobox', { name: 'Mode' }), { key: 'Enter' });
-  await user.click(screen.getByRole('option', { name: 'spec' }));
+  await user.click(screen.getByRole('option', { name: 'Spec' }));
   expect(port.postMessage).toHaveBeenCalledWith({ type: 'session.setting.update', sessionId: 'session-1', field: 'interactionMode', value: 'spec' });
   expect(screen.getByRole('textbox')).toBeDefined();
   expect(events.onStageCancel).not.toHaveBeenCalled();
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });
+
+import { inlineSelection, setInlineSelection } from '../../../packages/chat-ui/src/ui/inlineInputDom';

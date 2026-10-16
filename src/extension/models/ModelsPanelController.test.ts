@@ -47,7 +47,9 @@ const vscodeMock = vi.hoisted(() => {
     postMessage,
   };
 });
-vi.mock('vscode', () => vscodeMock);
+vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
+  Disposable: class { constructor(private cleanup: () => void) {} dispose() { this.cleanup(); } },
+}));
 import { ModelsPanelController } from './ModelsPanelController';
 import type { ModelManager } from './ModelManager';
 import { MODEL_MANAGER_VERSION } from '../../shared/protocol/modelManagerProtocol';

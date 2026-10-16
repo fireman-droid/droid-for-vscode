@@ -86,7 +86,7 @@ describe('createGitChangeStatsReader turn baselines', () => {
     source = Buffer.from('after\n');
     await reader.captureTurnBaseline?.(scope, ['index.html']);
     await expect(reader.read(['index.html'], scope)).resolves.toEqual(
-      new Map([['index.html', { additions: 4, deletions: 2 }]]),
+      new Map([['index.html', { additions: 4, deletions: 2, changed: true }]]),
     );
     expect(readWorkspaceFile).toHaveBeenCalledOnce();
     expect(readBaselineStat.mock.calls[0]?.[1].toString('utf8')).toBe('before\n');
@@ -115,6 +115,7 @@ describe('createGitChangeStatsReader turn baselines', () => {
     await reader.captureTurnBaseline?.(scope, ['index.html']);
     const stats = await reader.read(['index.html'], scope);
     expect(stats.get('index.html')).toEqual({
+      changed: true,
       additions: 653,
       deletions: 0,
     });
@@ -122,7 +123,7 @@ describe('createGitChangeStatsReader turn baselines', () => {
     await expect(reader.readTurnBaseline?.(scope, 'index.html')).resolves.toBe('');
   });
 
-  it('falls back to git HEAD when no live baseline exists', async () => {
+  it('uses HEAD only outside a turn and leaves an unknown turn baseline unavailable', async () => {
     const head = new Map([['src/app.ts', { additions: 3, deletions: 1 }]]);
     const readHeadStats = vi.fn(async (_root: string, _paths: readonly string[]) => head);
     const reader = createGitChangeStatsReader(() => 'C:\\workspace', {
@@ -131,7 +132,9 @@ describe('createGitChangeStatsReader turn baselines', () => {
       readHeadStats,
     });
 
-    await expect(reader.read(['src/app.ts'], scope)).resolves.toStrictEqual(head);
+    await expect(reader.read(['src/app.ts'], scope)).resolves.toEqual(new Map());
+    expect(readHeadStats).not.toHaveBeenCalled();
+    await expect(reader.read(['src/app.ts'])).resolves.toStrictEqual(head);
     expect(readHeadStats).toHaveBeenCalledWith('C:\\workspace', ['src/app.ts']);
   });
 
@@ -229,9 +232,8 @@ describe('createGitChangeStatsReader turn baselines', () => {
       });
 
       await reader.captureTurnBaseline?.(scope, ['large.html']);
-      await reader.read(['large.html'], scope);
-
-      expect(readHeadStats).toHaveBeenCalledWith(root, ['large.html']);
+      await expect(reader.read(['large.html'], scope)).resolves.toEqual(new Map());
+      expect(readHeadStats).not.toHaveBeenCalled();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -249,6 +251,7 @@ describe('createGitChangeStatsReader turn baselines', () => {
       const stats = await reader.read(['index.html'], scope);
 
       expect(stats.get('index.html')).toEqual({
+        changed: true,
         additions: 1,
         deletions: 0,
       });
@@ -283,8 +286,8 @@ describe('createGitChangeStatsReader turn baselines', () => {
     expect(readTreeFile).toHaveBeenCalledWith(scope, 'src/app.ts');
 
     await reader.captureTurnBaseline?.(scope, ['src/app.ts']);
-    await expect(reader.readTurnBaseline?.(scope, 'src/app.ts')).resolves.toBe('live\n');
-    expect(readTreeFile).toHaveBeenCalledOnce();
+    await expect(reader.readTurnBaseline?.(scope, 'src/app.ts')).resolves.toBe('from-tree\n');
+    expect(readTreeFile).toHaveBeenCalledTimes(2);
   });
 });
 

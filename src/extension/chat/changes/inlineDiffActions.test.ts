@@ -35,7 +35,7 @@ describe('inline diff host routing', () => {
     handleFileReadDiff(ctl, request);
     await vi.waitFor(() => expect(ctl.emit).toHaveBeenCalled());
     expect(readInlineDiff).toHaveBeenCalledWith(ctl.turnSnapshots,
-      { sessionId: 'session-before-compaction', turnId: 'turn-1' }, 'C:/workspace', 'app.ts', 'settled');
+      { sessionId: 'session-before-compaction', turnId: 'turn-1' }, 'C:/workspace', 'app.ts', 'settled', { record: expect.any(Function) });
     expect(ctl.emit).toHaveBeenCalledWith({ ...request, type: 'file.diff', result: ready });
   });
 
@@ -48,7 +48,7 @@ describe('inline diff host routing', () => {
     handleFileReadDiff(ctl, request);
     await vi.waitFor(() => expect(ctl.emit).toHaveBeenCalled());
     expect(readInlineDiff).toHaveBeenCalledWith(ctl.turnSnapshots,
-      { sessionId: 'session-now', turnId: 'turn-1' }, 'C:/workspace', 'app.ts', 'live');
+      { sessionId: 'session-now', turnId: 'turn-1' }, 'C:/workspace', 'app.ts', 'live', { record: expect.any(Function) });
   });
 
   it('rejects paths not attributed to the turn and invalid workspace context before reading', () => {

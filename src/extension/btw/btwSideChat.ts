@@ -8,6 +8,7 @@ import {
 import {
   appendBtwAnswerDelta,
   applyBtwThinking,
+  applyBtwTool,
   appendBtwQuestion,
   completeBtwEntry,
   failBtwEntry,
@@ -108,7 +109,7 @@ export class BtwSideChat {
         this.pendingRequest = null;
         this.setState(
           this.stopping
-            ? completeBtwEntry(this.state, entryId)
+            ? completeBtwEntry(this.state, entryId, true)
             : failBtwEntry(this.state, entryId, BTW_START_FAILED_MESSAGE),
           true,
         );
@@ -144,9 +145,13 @@ export class BtwSideChat {
                 this.setState(setBtwEntryProgress(this.state, entryId, event.progress), false);
                 continue;
               }
-              if (event.kind === 'done' || this.stopping) {
+              if (event.kind === 'tool') {
+                this.setState(applyBtwTool(this.state, entryId, event.tool), false);
+                continue;
+              }
+              if (event.kind === 'done' || (this.stopping && !event.connectionLost)) {
                 // Stop preserves whatever partial answer arrived.
-                this.setState(completeBtwEntry(this.state, entryId), true);
+                this.setState(completeBtwEntry(this.state, entryId, this.stopping), true);
               } else {
                 this.setState(failBtwEntry(this.state, entryId, event.message), true);
               }
@@ -155,13 +160,13 @@ export class BtwSideChat {
             }
           }
           if (!settled && this.generation === generation) {
-            this.setState(completeBtwEntry(this.state, entryId), true);
+            this.setState(completeBtwEntry(this.state, entryId, this.stopping), true);
           }
         } catch (error) {
           if (this.generation === generation) {
             this.setState(
-              this.stopping
-                ? completeBtwEntry(this.state, entryId)
+              this.stopping && error instanceof Error && error.name === 'AbortError'
+                ? completeBtwEntry(this.state, entryId, true)
                 : failBtwEntry(this.state, entryId, error instanceof ModelAvailabilityError ? error.message : BTW_ANSWER_FAILED_MESSAGE),
               true,
             );
@@ -217,7 +222,7 @@ export class BtwSideChat {
     if (sidecar === null) {
       const preparing = state.entries.find((entry) => entry.state === 'streaming');
       if (preparing !== undefined) {
-        state = completeBtwEntry(state, preparing.id);
+        state = completeBtwEntry(state, preparing.id, true);
       }
     }
     this.setState(state, true);
@@ -336,7 +341,9 @@ export class BtwSideChat {
     if (next === this.state) {
       return;
     }
-    this.state = next;
+    const { stopping: _stopping, ...rest } = next;
+    this.state = this.stopping && next.entries.some(entry => entry.state === 'streaming')
+      ? { ...rest, stopping: true } : rest;
     if (urgent) {
       this.flush();
       return;

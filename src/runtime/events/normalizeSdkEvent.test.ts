@@ -16,6 +16,15 @@ import {
 import { normalizeSdkEvent, normalizeSdkEventImages } from './normalizeSdkEvent';
 
 describe('normalizeSdkEvent', () => {
+  it('marks only the SDK provider connection failure for live and terminal errors', () => {
+    for (const message of ['Connection error.', 'Connection timed out.', 'Request cancelled', 'The operation failed.']) {
+      const expected = message === 'Connection error.' ? true : undefined;
+      const live = normalizeSdkEvent(sdkEvent('error', { message }));
+      const terminal = normalizeSdkEvent(sdkEvent('result', { subtype: 'error_during_execution', error: { message } }));
+      expect(live?.type === 'error' && live.modelConnectionFailed).toBe(expected);
+      expect(terminal?.type === 'turn-complete' && terminal.modelConnectionFailed).toBe(expected);
+    }
+  });
   it('projects documented browser action titles in complete and partial tool calls', () => {
     const input = { action: { kind: 'fill', value: 'PRIVATE_VALUE', target: { selector: 'PRIVATE_TARGET' } } };
     const complete = normalizeSdkEvent(sdkEvent('tool_call', {
@@ -490,6 +499,7 @@ describe('normalizeSdkEvent', () => {
       action: 'Edit file',
       inputComplete: true,
       filePath: 'src/app.ts',
+      target: 'src/app.ts',
     });
 
     // Relative inputs resolve against the workspace root.
@@ -514,7 +524,8 @@ describe('normalizeSdkEvent', () => {
       root,
     );
     expect(escaped).not.toHaveProperty('filePath');
-    expect(JSON.stringify(escaped)).not.toContain('outside');
+    expect(escaped).toMatchObject({ target: 'outside.ts · outside workspace' });
+    expect(JSON.stringify(escaped)).not.toContain(join(root, '..'));
 
     // Non-file tools never surface their inputs.
     const read = normalizeSdkEvent(
@@ -822,6 +833,7 @@ describe('normalizeSdkEvent', () => {
     });
     expect(normalizeSdkEvent(error)).toEqual({
       type: 'error',
+      message: 'The operation failed.',
     });
   });
 

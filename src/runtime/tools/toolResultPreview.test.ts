@@ -69,10 +69,10 @@ describe('bounded native tool result extraction', () => {
     expect(tool?.kind === 'tool' && tool.resultPreview).toEqual(live);
   });
 
-  it('does not trust third-party leaf names, missing starts, or another invocation name', () => {
+  it('uses identified third-party results but rejects missing or mismatched invocation identities', () => {
     const collect = createToolResultCollector(root);
     collect({ ...call, name: 'mcp__example__Read' });
-    expect(collect({ ...result, toolName: 'mcp__example__Read' })).toBeUndefined();
+    expect(collect({ ...result, toolName: 'mcp__example__Read' })).toMatchObject({ availability: 'available', source: { tool: 'mcp__example__Read', callId: call.toolUseId } });
     expect(collect(result)).toEqual({ availability: 'unavailable', reason: 'untrusted' });
     collect(call);
     expect(collect({ ...result, toolName: 'Grep' })).toEqual({
@@ -85,7 +85,7 @@ describe('bounded native tool result extraction', () => {
     });
   });
 
-  it.each([['.env', 'restricted'], ['.ssh/id_ed25519', 'restricted'], ['.npmrc', 'restricted'], ['../outside.txt', 'outside-workspace']])(
+  it.each([['.env', 'restricted'], ['.ssh/id_ed25519', 'restricted'], ['.npmrc', 'restricted']])(
     'does not expose unavailable source %s',
     (path, reason) => {
       expect(
@@ -93,6 +93,10 @@ describe('bounded native tool result extraction', () => {
       ).toBe(reason);
     },
   );
+
+  it('labels already-returned external evidence without exposing its directory', () => {
+    expect(readResultSource('Read', { file_path: resolve(root, '../outside.txt') }, root, 'read-1')).toEqual({ tool: 'Read', path: 'External/outside.txt', scope: 'external', callId: 'read-1' });
+  });
 
   it('uses the workspace default for directory tools but never invents a missing Read source', () => {
     expect(readResultSource('Grep', { pattern: 'TODO' }, root, 'grep-1')).toEqual({

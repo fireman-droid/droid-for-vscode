@@ -73,9 +73,10 @@ function harness(transcript: readonly SessionTranscriptItem[]) {
     children.set(sessionId, child);
     return { controller: child.value, openReview: vi.fn(), dispose: vi.fn() };
   });
+  const openViewer = vi.fn();
   const manager = new AgentChatManager({
     root: root.value, extensionUri: {} as vscode.Uri,
-    diagnostics: { record: vi.fn() }, createChild,
+    diagnostics: { record: vi.fn() }, createChild, openTask: openViewer,
   });
   cleanup.push(() => manager.dispose());
   const messages: AgentChatNavigationMessage[] = [];
@@ -87,7 +88,7 @@ function harness(transcript: readonly SessionTranscriptItem[]) {
     parentSessionId: 'parent', childSessionId: `child-${toolUseId}`, toolUseId,
     title: toolUseId, cwd: 'C:/workspace',
   });
-  return { manager, root, children, createChild, latest, titles, openTask };
+  return { manager, root, children, createChild, openViewer, latest, titles, openTask };
 }
 
 describe('Agent composer scope', () => {
@@ -122,37 +123,22 @@ describe('Agent composer scope', () => {
     expect(reopened.titles()).toEqual(['unresolved', 'current']);
   });
 
-  it('opens hidden historical tasks and retains complete navigation in their child view', () => {
+  it('opens a historical task in the read-only viewer without creating a child runtime', () => {
     const h = harness([user('first'), task('older', 'completed'), user('second'), task('current', 'completed')]);
-    expect(h.titles()).toEqual(['current']);
     h.openTask('older');
-
-    expect(h.createChild).toHaveBeenCalledWith({ sessionId: 'child-older', cwd: 'C:/workspace' });
+    expect(h.openViewer).toHaveBeenCalledExactlyOnceWith({ parentSessionId: 'parent', childSessionId: 'child-older', toolUseId: 'older', title: 'older', cwd: 'C:/workspace' });
+    expect(h.createChild).not.toHaveBeenCalled();
+    expect(mocks.panels).toHaveLength(0);
     expect(mocks.warning).not.toHaveBeenCalled();
-    const childNavigation: AgentChatNavigationMessage[] = [];
-    mocks.panels[0]!.navigation.subscribe(message => childNavigation.push(message as AgentChatNavigationMessage));
-    mocks.panels[0]!.navigation.replay();
-    const latest = childNavigation.at(-1)!;
-    expect(latest.agents.map(agent => agent.title)).toEqual(['older', 'current']);
-    expect(latest.agents.find(agent => agent.key === latest.currentKey)?.title).toBe('older');
     expect(h.titles()).toEqual(['current']);
   });
 
-  it('retains an older task when its child has resumed despite a completed parent record', () => {
-    const h = harness([user('first'), task('resumed', 'completed'), user('second')]);
-    h.openTask('resumed');
-    const child = h.children.get('child-resumed')!;
-    child.state.turnState.turn = {
-      turnId: 'child-followup', status: 'streaming', activity: createTurnActivityState(),
-    };
-    child.notifyTurn();
-    vi.advanceTimersByTime(80);
-    expect(h.latest().agents).toEqual([expect.objectContaining({ title: 'resumed', status: 'running', canStop: true })]);
-
-    child.state.turnState.turn.status = 'completed';
-    child.notifyTurn();
-    vi.advanceTimersByTime(80);
-    expect(h.titles()).toEqual([]);
+  it('rejects a task whose source row is absent instead of opening an unrelated child', () => {
+    const h = harness([user('first')]);
+    h.openTask('missing');
+    expect(h.openViewer).not.toHaveBeenCalled();
+    expect(h.createChild).not.toHaveBeenCalled();
+    expect(mocks.warning).toHaveBeenCalledOnce();
   });
 
   it('removes an earlier running task when its late result settles in the original transcript position', () => {

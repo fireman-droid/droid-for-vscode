@@ -70,6 +70,7 @@ describe('Mission entry contract', () => {
       start: vi.fn(async () => ({
         status: 'ready' as const,
         sessionId: 'orchestrator-2',
+        activateInteractions: vi.fn(),
         runtime: {
           runtime: missionRuntime,
           initialize: async () => {},

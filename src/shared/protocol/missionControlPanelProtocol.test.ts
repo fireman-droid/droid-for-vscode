@@ -122,7 +122,7 @@ describe('Mission Control panel protocol', () => {
   it('accepts exact versioned catalog requests and official filters', () => {
     expect(parseMissionControlPanelWebviewMessage(request)).toEqual(request);
     for (const invalid of [
-      { ...request, protocolVersion: 2 },
+      { ...request, protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION + 1 },
       { ...request, filter: 'failed' },
       { ...request, requestId: 'x'.repeat(129) },
       { ...request, sessionId: 'daemon-session-1' },

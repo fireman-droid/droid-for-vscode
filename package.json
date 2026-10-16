@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid - AI Coding Agent",
   "description": "Unofficial Factory Droid integration for VS Code and Cursor, with coding chat, code review, BYOK models, and independent code completion.",
-  "version": "0.8.12",
+  "version": "0.8.13",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
@@ -394,6 +394,7 @@
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",
     "@factory/droid-sdk": "0.9.1",
+    "@jitl/quickjs-singlefile-cjs-release-sync": "0.32.0",
     "@tanstack/react-virtual": "^3.14.9",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -408,6 +409,7 @@
     "lucide-react": "1.43.0",
     "mermaid": "^11.16.1",
     "quick-lru": "7.0.1",
+    "quickjs-emscripten-core": "0.32.0",
     "radix-ui": "1.6.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -420,6 +422,7 @@
     "uri-js": "4.4.1",
     "web-tree-sitter": "0.24.7",
     "yazl": "^3.3.1",
+    "zod": "3.25.76",
     "zustand": "5.0.15"
   },
   "devDependencies": {

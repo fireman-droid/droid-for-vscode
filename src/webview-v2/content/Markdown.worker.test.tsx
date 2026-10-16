@@ -106,7 +106,7 @@ it('coalesces appends and resolves whole-document references, loose lists, table
   expect(screen.getAllByRole('listitem')[0]!.querySelectorAll('p')).toHaveLength(2);
   expect(screen.getByRole('table').textContent).toContain('Whole');
   expect(screen.getByRole('math', { hidden: true }).querySelector('annotation')?.textContent).toBe('x^2');
-  expect(screen.getByText('const', { exact: true })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'typescript code' }).textContent).toContain('const');
   expect(screen.getByRole('region', { name: 'typescript code' }).textContent).toBe('const finalValue = 42;\n');
   expect(container.querySelector('script')).toBeNull();
   expect(container.textContent).not.toContain('unsafe()');

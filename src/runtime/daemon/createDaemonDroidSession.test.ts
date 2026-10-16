@@ -510,7 +510,7 @@ describe('createDaemonDroidSession', () => {
         messageId: 'message-9',
         forkTitle: 'Rewound',
       }),
-    ).resolves.toEqual({ sessionId: 'session-2' });
+    ).resolves.toEqual({ sessionId: 'session-2', files: { restoredCount: 0, deletedCount: 0, failedRestoreCount: 0, failedDeleteCount: 0 } });
     expect(mock.created.rewind).toHaveBeenCalledWith({
       messageId: 'message-9',
       filesToRestore: [],

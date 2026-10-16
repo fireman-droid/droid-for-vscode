@@ -216,7 +216,7 @@ describe('ChatController', () => {
 
     expect(recovery.getSelectedSessionId()).toBe('session-1');
     expect(snapshots(messages).at(-1)).toMatchObject({
-      sessionId: 'session-1',
+      sessionId: 'b-only',
       connection: { status: 'unavailable' },
     });
     expect(
@@ -342,7 +342,7 @@ describe('ChatController', () => {
     await vi.waitFor(() => {
       expect(candidate.dispose).toHaveBeenCalledOnce();
       expect(snapshots(messages).at(-1)).toMatchObject({
-        sessionId: 'session-1',
+        sessionId: 'b-only',
         connection: {
           status: 'unavailable',
           message: 'The workspace changed before the Droid session could be opened.',
@@ -747,7 +747,7 @@ describe('ChatController', () => {
     expect(first.sendTurn).not.toHaveBeenCalled();
   });
 
-  it('closes before resume and keeps selection stable when resume fails', async () => {
+  it('closes before resume and keeps the persisted selection while showing the failed target', async () => {
     const calls: string[] = [];
     const first = createMockRuntime();
     first.dispose.mockImplementation(async () => {
@@ -789,7 +789,7 @@ describe('ChatController', () => {
 
     expect(calls).toEqual(['close-old', 'initialize-new']);
     expect(recovery.getSelectedSessionId()).toBe('session-1');
-    expect(snapshots(messages).at(-1)?.sessionId).toBe('session-1');
+    expect(snapshots(messages).at(-1)?.sessionId).toBe('session-2');
     expect(JSON.stringify(messages)).not.toContain('sensitive resume failure');
   });
 
@@ -817,7 +817,7 @@ describe('ChatController', () => {
     await vi.waitFor(() => {
       expect(turnStates(messages).at(-1)?.status).toBe('completed');
     });
-    expect(writeSession).toHaveBeenCalledTimes(2);
+    expect(writeSession).toHaveBeenCalledTimes(3);
     expect(writeSession).toHaveBeenLastCalledWith(
       recovery.getSelectedConversationId(),
       'session-1',

@@ -2,8 +2,22 @@ import type { ClipboardEventHandler, DragEventHandler, ReactNode } from 'react';
 
 export interface SideChatImage { readonly id: string; readonly name: string }
 
+export interface SideToolActivity {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: 'read' | 'search' | 'web' | 'git' | 'analysis' | 'other';
+  readonly state: 'running' | 'done' | 'error' | 'incomplete';
+  readonly target?: string;
+  readonly code?: string;
+  readonly language?: 'javascript' | 'typescript';
+  readonly output?: string;
+  readonly error?: string;
+  readonly detailsOmitted?: boolean;
+}
+
 export interface SideConversation {
   readonly status: 'idle' | 'preparing' | 'ready' | 'error' | 'unsupported';
+  readonly stopping?: boolean;
   readonly entries: readonly {
     readonly id: string;
     readonly question: string;
@@ -13,7 +27,9 @@ export interface SideConversation {
     readonly thinkingTruncated?: boolean;
     readonly thinkingDurationMs?: number;
     readonly state: 'streaming' | 'done' | 'error';
+    readonly stopped?: boolean;
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';
+    readonly tools?: readonly SideToolActivity[];
     readonly message: string | null;
   }[];
   readonly message: string | null;
@@ -39,6 +55,7 @@ export interface SideChatProps {
   readonly attachments?: ReactNode;
   readonly composerActions?: ReactNode;
   readonly composerStatus?: ReactNode;
+  readonly headerActions?: ReactNode;
   readonly hasAttachments?: boolean;
   readonly sendDisabled?: boolean;
   readonly onPaste?: ClipboardEventHandler<HTMLElement>;

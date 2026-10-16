@@ -32,9 +32,11 @@ export function showSessionHistory(
   identity: SessionIdentity,
   transcript: HostTranscriptState,
 ): void {
+  const sameSession = ctl.sessionState.sessionId === identity.sessionId &&
+    ctl.sessionState.conversationId === identity.conversationId;
   bindSessionIdentity(ctl, identity);
   ctl.recoveryState.transcript = transcript;
-  ctl.turnState.turn = null;
+  if (!sameSession) ctl.turnState.turn = null;
 }
 
 /**

@@ -76,7 +76,7 @@ describe('createTerminalMirror', () => {
     h.mirror.open();
     h.mirror.open();
     expect(h.terminals).toHaveLength(1);
-    expect(h.last().name).toBe('DroidVisX: 命令输出');
+    expect(h.last().name).toBe('Droid: 命令输出');
     expect(h.last().showCalls).toBe(2);
   });
 
@@ -85,7 +85,7 @@ describe('createTerminalMirror', () => {
     h.mirror.open();
     expect(h.last().writes).toHaveLength(0);
     h.last().pty.open();
-    expect(h.plain()).toContain('[DroidVisX 镜像终端 · 只读]');
+    expect(h.plain()).toContain('[Droid 镜像终端 · 只读]');
   });
 
   it('discards keyboard input and hints exactly once', () => {

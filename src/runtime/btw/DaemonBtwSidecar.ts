@@ -1,7 +1,11 @@
 import type { DaemonApi } from '../daemon/api';
-import { ToolConfirmationOutcome } from '@factory/droid-sdk';
+import { AutonomyLevel, ToolConfirmationOutcome } from '@factory/droid-sdk';
+import { prepareBtwToolPolicy } from './btwToolPolicy';
+import { createBtwAnalysisTools, canRunBtwAnalysisTool } from './btwAnalysisTools';
+import { buildBtwPrompt } from './btwPrompt';
 import { BtwThinkingProjection } from './btwThinking';
 import { projectSettingsUpdate } from '../session/projections';
+import { BtwToolProjection } from './btwToolProjection';
 
 import {
   BTW_FORK_TAG,
@@ -40,6 +44,12 @@ export interface DaemonBtwStreamEvent {
   readonly blockIndex?: unknown;
   readonly durationMs?: unknown;
   readonly message?: unknown;
+  readonly toolUse?: unknown;
+  readonly toolUseId?: unknown;
+  readonly name?: unknown;
+  readonly input?: unknown;
+  readonly content?: unknown;
+  readonly isError?: unknown;
 }
 
 /** Attached fork surface consumed by the sidecar. */
@@ -75,6 +85,7 @@ export interface DaemonBtwClient {
 export type DaemonBtwClientFactory = () => Promise<DaemonBtwClient>;
 
 export async function createDaemonBtwSidecar(options: {
+  readonly cwd?: string;
   readonly mainSessionId: string;
   readonly getDroid?: () => Promise<DaemonApi>;
   readonly createClient?: DaemonBtwClientFactory;
@@ -83,10 +94,10 @@ export async function createDaemonBtwSidecar(options: {
     options.createClient ??
     (() => {
       const getDroid = options.getDroid;
-      if (getDroid === undefined) {
-        throw new Error('createDaemonBtwSidecar needs getDroid or createClient.');
+      if (getDroid === undefined || options.cwd === undefined) {
+        throw new Error('createDaemonBtwSidecar needs cwd and getDroid or createClient.');
       }
-      return createConnectedDroidBtwClient(getDroid);
+      return createConnectedDroidBtwClient(getDroid, options.cwd);
     });
   const client = await createClient();
   const forkResponse = await client.fork(options.mainSessionId, {
@@ -101,11 +112,12 @@ export async function createDaemonBtwSidecar(options: {
   const fork = await client.attach(forkSessionId, () => {
     denied.value = true;
   });
-  return new DaemonBtwForkSidecar(fork, forkSessionId, denied);
+  return new DaemonBtwForkSidecar(fork, forkSessionId, denied, options.cwd);
 }
 
 async function createConnectedDroidBtwClient(
   getDroid: () => Promise<DaemonApi>,
+  cwd: string,
 ): Promise<DaemonBtwClient> {
   const droid = await getDroid();
   return {
@@ -115,32 +127,40 @@ async function createConnectedDroidBtwClient(
         tags: params.tags.map((tag) => ({ name: tag.name })),
       }),
     attach: async (forkSessionId, onPermissionDenied) => {
-      // The side card renders no permission or AskUser UI (that is
-      // the main chat's interaction surface): permission requests are
-      // denied and the entry errors with guidance instead.
-      const session = await droid.sessions.resume(forkSessionId, {
-        permissionHandler: () => {
-          onPermissionDenied();
-          return ToolConfirmationOutcome.Cancel;
-        },
-        askUserHandler: () => ({ cancelled: true, answers: [] }),
-      });
-      return {
-        async *stream(text, options = {}) {
-          if (options.modelId !== undefined || options.reasoningEffort !== undefined) await droid.sessions.updateSettings(forkSessionId, {
-            ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
-            ...(options.reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: options.reasoningEffort })),
-            specModeModelId: null, specModeReasoningEffort: null,
-          });
-          options.signal?.throwIfAborted();
-          // Keep the submitted stream alive when interrupt fails. The session
-          // owns admission cancellation and only ends an active stream after
-          // interrupt succeeds, so the Host can report failure and retry Stop.
-          yield* session.stream(text, { includePartialMessages: true, images: options.images });
-        },
-        interrupt: () => session.interrupt(),
-        close: () => session.close(),
-      };
+      const analysis = await createBtwAnalysisTools(cwd);
+      try {
+        const policy = await prepareBtwToolPolicy(cwd, forkSessionId, analysis);
+        // Only our bounded analysis tools may request approval in the side card.
+        // All other permissions and AskUser interactions stay in the main chat.
+        const session = await droid.sessions.resume(forkSessionId, {
+          ...policy,
+          permissionHandler: (params) => {
+            if (canRunBtwAnalysisTool(params, analysis)) return ToolConfirmationOutcome.ProceedOnce;
+            onPermissionDenied();
+            return ToolConfirmationOutcome.Cancel;
+          },
+          askUserHandler: () => ({ cancelled: true, answers: [] }),
+        });
+        return {
+          async *stream(text, options = {}) {
+            await droid.sessions.updateSettings(forkSessionId, {
+              autonomyLevel: AutonomyLevel.Off, disabledToolIds: policy.disabledToolIds,
+              ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
+              ...(options.reasoningEffort === undefined ? {} : projectSettingsUpdate({ field: 'reasoningEffort', value: options.reasoningEffort })),
+              ...(options.modelId === undefined && options.reasoningEffort === undefined ? {} : {
+                specModeModelId: null, specModeReasoningEffort: null,
+              }),
+            });
+            options.signal?.throwIfAborted();
+            // Keep the submitted stream alive when interrupt fails. The session
+            // owns admission cancellation and only ends an active stream after
+            // interrupt succeeds, so the Host can report failure and retry Stop.
+            yield* session.stream(buildBtwPrompt(text), { includePartialMessages: true, images: options.images });
+          },
+          interrupt: () => { analysis.cancel(); return session.interrupt(); },
+          close: async () => { try { await analysis.close(); } finally { await session.close(); } },
+        };
+      } catch (error) { await analysis.close(); throw error; }
     },
   };
 }
@@ -168,6 +188,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     readonly forkSessionId: string,
     /** Set by the attach-time deny-all handler during a turn. */
     private readonly denied: { value: boolean },
+    private readonly cwd?: string,
   ) {}
 
   async *ask(text: string, options: BtwPromptOptions = {}): AsyncGenerator<BtwAnswerEvent, void> {
@@ -181,6 +202,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
     this.abortAsk = new AbortController();
     this.denied.value = false;
     const thinking = new BtwThinkingProjection();
+    const tools = new BtwToolProjection(this.cwd);
     try {
       let terminal: BtwAnswerEvent | null = null;
       try {
@@ -188,11 +210,11 @@ class DaemonBtwForkSidecar implements BtwSidecar {
           if (this.disposed) {
             return;
           }
-          const event = thinking.project(raw) ?? this.projectStreamEvent(raw);
+          const event = thinking.project(raw) ?? tools.project({ ...raw }) ?? this.projectStreamEvent(raw);
           if (event === null) {
             continue;
           }
-          if (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'progress') {
+          if (event.kind === 'delta' || event.kind === 'thinking' || event.kind === 'progress' || event.kind === 'tool') {
             yield event;
             continue;
           }
@@ -203,7 +225,7 @@ class DaemonBtwForkSidecar implements BtwSidecar {
         if (this.disposed) {
           return;
         }
-        yield { kind: 'error', message: 'Side chat connection failed.' };
+        yield { kind: 'error', message: 'Side chat connection failed.', connectionLost: true };
         return;
       }
       if (this.disposed) {

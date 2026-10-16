@@ -225,16 +225,18 @@ export function parseLatestConversationChanges(
 export function parseConnection(value: unknown): ConnectionState | undefined {
   if (
     !isStrictRecord(value) ||
-    !hasExactKeys(value, ['status'], ['message']) ||
+    !hasExactKeys(value, ['status'], ['message', 'modelRequestFailed']) ||
     !isConnectionStatus(value.status) ||
+    (value.modelRequestFailed !== undefined && value.modelRequestFailed !== true) ||
     (value.message !== undefined && !isBoundedString(value.message, MAX_STRING_LENGTH))
   ) {
     return undefined;
   }
 
-  return value.message === undefined
-    ? { status: value.status }
-    : { status: value.status, message: value.message };
+  return { status: value.status,
+    ...(value.message === undefined ? {} : { message: value.message }),
+    ...(value.modelRequestFailed === true ? { modelRequestFailed: true } : {}),
+  };
 }
 
 export function parseSnapshotTurn(value: unknown):

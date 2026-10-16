@@ -59,7 +59,8 @@ it('keeps independent inline activity disclosures across eviction without moving
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: /Thought for 0\.8s/ }));
-  expect(rendered.container.textContent).toContain('Planning Outlining');
+  expect(screen.getByText('Planning')).toBeTruthy();
+  expect(screen.getByText('Outlining')).toBeTruthy();
   expect(rendered.container.textContent).not.toContain('****');
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(following.current.following).toBe(false);
@@ -128,7 +129,7 @@ it('retains explicit reasoning disclosure through appended text, completion and 
   expect(activity.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByRole('button', { name: /^Thinking/ })).toBeNull();
   await user.click(activity);
-  expect(activity.textContent).not.toContain('Thinking');
+  expect(activity.getAttribute('aria-expanded')).toBe('true');
   expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
   await user.click(screen.getByRole('button', { name: /^Thinking/ }));
   expect(screen.getByText('Initial reasoning.')).toBeTruthy();

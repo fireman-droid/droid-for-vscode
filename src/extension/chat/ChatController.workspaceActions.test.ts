@@ -1187,6 +1187,7 @@ describe('ChatController', () => {
           action: 'Edited workspace files',
           isError: false,
         };
+        settlementWrites = true;
         yield successfulTurn();
       });
       const { controller, messages } = createController(
@@ -1203,13 +1204,11 @@ describe('ChatController', () => {
       );
       const settleWritingTurn = vi.fn();
       Object.defineProperty(controller, 'reviewCoordinator', {
-        value: { settleWritingTurn, replay: vi.fn(async () => {}), dispose: vi.fn() },
+        value: { settleWritingTurn, refreshOperationsTurn: vi.fn(), replay: vi.fn(async () => {}), dispose: vi.fn() },
       });
       try {
         ready(controller);
         await waitForConnected(messages);
-        settlementWrites = true;
-
         send(controller, 'session-1', 'turn-1', 'Change file');
         await vi.waitFor(() => expect(writes).toBe(outcome === 'pending' ? 1 : 2));
         expect(messages.some(

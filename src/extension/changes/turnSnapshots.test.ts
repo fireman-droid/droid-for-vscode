@@ -10,10 +10,17 @@ import {
   type TurnSnapshotDependencies,
 } from './turnSnapshots';
 
+vi.mock('./snapshotWorkspaceFiles', () => ({ snapshotWorkspaceFiles: async () => [], isSnapshotWorkspacePath: () => true }));
+vi.mock('./workspaceTurnLease', () => ({
+  acquireWorkspaceTurnLease: async () => ({ dispatch: async () => {}, finish: async () => {}, detach: async () => {} }),
+  readPendingWorkspaceTurn: async () => undefined,
+  releaseCompletedWorkspaceTurn: async () => {},
+}));
+
 const SCOPE = { sessionId: 'session-a', turnId: 'turn-a' };
 const BEFORE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const AFTER = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const PATH_BEFORE = 'cccccccccccccccccccccccccccccccccccccccc';
+const COVERAGE = { coverage: 'workspace-files-v1', workspaceRoot: '/workspace' };
 
 function memoryPersistence(initial?: unknown): ChangeStatsPersistence & {
   stored: unknown;
@@ -91,7 +98,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -112,15 +119,16 @@ describe('createTurnSnapshotStore', () => {
     await vi.waitFor(() => {
       expect(order).toEqual(['before-start']);
     });
-    const after = store.capture(SCOPE, 'after');
+    await expect(store.capture(SCOPE, 'after')).resolves.toBeUndefined();
     await Promise.resolve();
     expect(order).toEqual(['before-start']);
     releaseBefore?.();
     await expect(before).resolves.toBe(BEFORE);
-    await expect(after).resolves.toBe(AFTER);
+    await expect(store.capture(SCOPE, 'after')).resolves.toBe(AFTER);
     expect(order).toEqual(['before-start', 'before-done', 'after-done']);
     expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
       turnId: SCOPE.turnId,
+      ...COVERAGE,
       before: BEFORE,
       after: AFTER,
     });
@@ -143,7 +151,7 @@ describe('createTurnSnapshotStore', () => {
         persistence.stored = value;
         return Promise.resolve();
       });
-      const writes = [BEFORE, BEFORE, AFTER, AFTER, PATH_BEFORE, PATH_BEFORE];
+      const writes = [BEFORE, BEFORE, AFTER, AFTER];
       const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
         const command = verb(args);
         if (command === 'check-ignore') return gitResult('ignored.txt\0');
@@ -154,7 +162,7 @@ describe('createTurnSnapshotStore', () => {
               : '/workspace/.git/objects',
           );
         }
-        if (command === 'add' || command === 'read-tree') {
+        if (command === 'read-tree') {
           return gitResult('');
         }
         if (command === 'write-tree') {
@@ -174,6 +182,7 @@ describe('createTurnSnapshotStore', () => {
       await expect(store.capture(SCOPE, 'after')).rejects.toBe(failure);
       expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
         turnId: SCOPE.turnId,
+        ...COVERAGE,
         before: BEFORE,
       });
 
@@ -181,43 +190,18 @@ describe('createTurnSnapshotStore', () => {
       await store.capture(SCOPE, 'after');
       expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
         turnId: SCOPE.turnId,
+        ...COVERAGE,
         before: BEFORE,
         after: AFTER,
       });
 
-      const path = join('/workspace', 'ignored.txt');
-      fail = true;
-      await expect(store.capturePaths(SCOPE, [path])).rejects.toBe(failure);
-      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
-        turnId: SCOPE.turnId,
-        before: BEFORE,
-        after: AFTER,
-      });
+      // Tool notifications must never rewrite an already captured baseline.
+      const stored = persistence.stored;
+      const writesBefore = vi.mocked(persistence.update).mock.calls.length;
+      await store.capturePaths(SCOPE, [join('/workspace', 'ignored.txt')]);
+      expect(persistence.stored).toBe(stored);
+      expect(persistence.update).toHaveBeenCalledTimes(writesBefore);
 
-      fail = false;
-      await store.capturePaths(SCOPE, [path]);
-      expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({
-        turnId: SCOPE.turnId,
-        before: PATH_BEFORE,
-        after: AFTER,
-        snapshotPaths: ['ignored.txt'],
-      });
-      expect(persistence.stored).toEqual({
-        version: 1,
-        sessions: [
-          {
-            sessionId: SCOPE.sessionId,
-            turns: [
-              {
-                turnId: SCOPE.turnId,
-                before: PATH_BEFORE,
-                after: AFTER,
-                snapshotPaths: ['ignored.txt'],
-              },
-            ],
-          },
-        ],
-      });
     },
   );
 
@@ -247,7 +231,7 @@ describe('createTurnSnapshotStore', () => {
               : '/workspace/.git/objects',
           );
         }
-        if (command === 'add') {
+        if (command === 'read-tree') {
           return gitResult('');
         }
         if (command === 'write-tree') {
@@ -257,6 +241,8 @@ describe('createTurnSnapshotStore', () => {
       };
       const { store } = createStore(runGit, {}, persistence);
       const capture = store.capture(SCOPE, 'before');
+      void capture.catch(() => undefined);
+      await vi.waitFor(() => expect(persistence.update).toHaveBeenCalledOnce());
       const first = store.dispose();
       const joiner = store.dispose();
 
@@ -278,82 +264,22 @@ describe('createTurnSnapshotStore', () => {
     },
   );
 
-  it('force-includes tool paths in both trees even when Git ignores them', async () => {
-    const path = 'artifacts/diff-review-test/a.txt';
-    const toolPath = join('/workspace', ...path.split('/'));
-    const writes = [BEFORE, PATH_BEFORE, AFTER];
+  it('does not rewrite the baseline when a tool reports an ignored or newly created path', async () => {
+    const writes = [BEFORE, AFTER];
     const runGit = vi.fn<TurnSnapshotDependencies['runGit']>(async (args) => {
       const command = verb(args);
-      if (command === 'check-ignore') return gitResult(`${path}\0`);
-      if (command === 'rev-parse') {
-        return gitResult(
-          args.includes('--absolute-git-dir')
-            ? '/workspace/.git\n'
-            : '/workspace/.git/objects\n',
-        );
-      }
-      if (command === 'write-tree') {
-        return gitResult(`${writes.shift()}\n`);
-      }
-      return gitResult('');
-    });
-    const persistence = memoryPersistence();
-    const { store } = createStore(runGit, {}, persistence);
-
-    await store.capture(SCOPE, 'before');
-    await store.capturePaths(SCOPE, [toolPath]);
-    await store.capture(SCOPE, 'after');
-
-    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toMatchObject({
-      before: PATH_BEFORE,
-      after: AFTER,
-      snapshotPaths: [path],
-    });
-    const forcedAdds = runGit.mock.calls.filter(
-      ([args]) => verb(args) === 'add' && args.includes('-f') && args.includes(path),
-    );
-    expect(forcedAdds).toHaveLength(2);
-  });
-
-  it('keeps a missing ignored Create path absent from the before tree', async () => {
-    const path = 'docs/new.md';
-    const toolPath = join('/workspace', ...path.split('/'));
-    const writes = [BEFORE, BEFORE, AFTER];
-    let present = false;
-    const runGit = vi.fn<TurnSnapshotDependencies['runGit']>(async (args) => {
-      const command = verb(args);
-      if (command === 'check-ignore') return gitResult(`${path}\0`);
-      if (command === 'rev-parse') {
-        return gitResult(
-          args.includes('--absolute-git-dir')
-            ? '/workspace/.git\n'
-            : '/workspace/.git/objects\n',
-        );
-      }
-      if (command === 'write-tree') {
-        return gitResult(`${writes.shift()}\n`);
-      }
-      if (command === 'add' && args.includes(path) && !present) {
-        return gitResult('', 128);
-      }
+      if (command === 'rev-parse') return gitResult(args.includes('--absolute-git-dir') ? '/workspace/.git' : '/workspace/.git/objects');
+      if (command === 'write-tree') return gitResult(`${writes.shift()}\n`);
       return gitResult('');
     });
     const { store } = createStore(runGit);
-
     await store.capture(SCOPE, 'before');
-    await store.capturePaths(SCOPE, [toolPath]);
-    present = true;
+    const callsBefore = runGit.mock.calls.length;
+    await store.capturePaths(SCOPE, [join('/workspace', 'ignored.txt'), join('/workspace', 'new.ts')]);
+    expect(runGit).toHaveBeenCalledTimes(callsBefore);
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({ turnId: SCOPE.turnId, before: BEFORE, ...COVERAGE });
     await store.capture(SCOPE, 'after');
-
-    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toMatchObject({
-      before: BEFORE,
-      after: AFTER,
-      snapshotPaths: [path],
-    });
-    const forcedAdds = runGit.mock.calls.filter(
-      ([args]) => verb(args) === 'add' && args.includes('-f') && args.includes(path),
-    );
-    expect(forcedAdds).toHaveLength(2);
+    expect(store.read(SCOPE.sessionId, SCOPE.turnId)).toEqual({ turnId: SCOPE.turnId, before: BEFORE, after: AFTER, ...COVERAGE });
   });
 
   it('diffs the two captured trees without binding an index', async () => {
@@ -371,7 +297,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -408,7 +334,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -433,7 +359,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('', failed ? 128 : 0);
       }
       if (command === 'write-tree') return gitResult(BEFORE);
@@ -443,14 +369,14 @@ describe('createTurnSnapshotStore', () => {
     const { store } = createStore(runGit, { recordDiagnostic });
     await expect(store.capture(SCOPE, 'before')).resolves.toBeUndefined();
     await expect(store.capture(SCOPE, 'after')).resolves.toBeUndefined();
-    expect(runGit.mock.calls.filter((call) => verb(call[0]) === 'add')).toHaveLength(1);
+    expect(runGit.mock.calls.filter((call) => verb(call[0]) === 'read-tree')).toHaveLength(1);
     expect(recordDiagnostic).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'host.changes.snapshot-failed',
         attributes: expect.objectContaining({
           sessionId: SCOPE.sessionId,
           phase: 'before',
-          reason: 'add-failed',
+          reason: 'Workspace snapshot failed (read-tree).',
         }),
       }),
     );
@@ -477,7 +403,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add' || command === 'write-tree') {
+      if (command === 'read-tree' || command === 'write-tree') {
         return command === 'write-tree' ? gitResult(`${BEFORE}\n`) : gitResult('');
       }
       if (command === 'show') {
@@ -503,7 +429,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -532,7 +458,7 @@ describe('createTurnSnapshotStore', () => {
       if (command === 'write-tree') {
         return gitResult(`${BEFORE}\n`);
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'show') {
@@ -577,7 +503,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree' || command === 'add') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -622,7 +548,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         return gitResult('');
       }
       if (command === 'write-tree') {
@@ -651,7 +577,7 @@ describe('createTurnSnapshotStore', () => {
     expect(store.read(SCOPE.sessionId)?.before).toBe(BEFORE);
     expect(persistence.stored).toEqual({
       version: 1,
-      sessions: [{ sessionId: SCOPE.sessionId, turns: [{ turnId: SCOPE.turnId, before: BEFORE }] }],
+      sessions: [{ sessionId: SCOPE.sessionId, turns: [{ turnId: SCOPE.turnId, before: BEFORE, ...COVERAGE }] }],
     });
   });
 
@@ -659,7 +585,7 @@ describe('createTurnSnapshotStore', () => {
     const runGit: TurnSnapshotDependencies['runGit'] = async (args) => {
       const command = verb(args);
       if (command === 'rev-parse') return gitResult(args.includes('--absolute-git-dir') ? '/workspace/.git' : '/workspace/.git/objects');
-      if (command === 'add') return gitResult('');
+      if (command === 'read-tree') return gitResult('');
       if (command === 'write-tree') return gitResult(`${BEFORE}\n`);
       if (command === 'show') return gitResult('saved text\n');
       return gitResult('', 1);
@@ -693,7 +619,7 @@ describe('createTurnSnapshotStore', () => {
             : '/workspace/.git/objects',
         );
       }
-      if (command === 'add') {
+      if (command === 'read-tree') {
         env = options.env;
         return gitResult('');
       }

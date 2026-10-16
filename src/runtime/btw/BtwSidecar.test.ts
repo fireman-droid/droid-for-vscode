@@ -41,6 +41,11 @@ class FakeBtwClient implements BtwSidecarClient {
     return {};
   }
 
+  async loadSideQuestionSession(params: { sessionId: string }): Promise<void> {
+    this.calls.push(`loadSideQuestionSession:${params.sessionId}`);
+    this.loadedSessionIds.push(params.sessionId);
+  }
+
   async forkSession(params: {
     title?: string;
     tags?: { name: string }[];
@@ -124,7 +129,7 @@ describe('createBtwSidecar', () => {
     expect(client.calls).toEqual([
       'loadSession:main-1',
       'forkSession',
-      'loadSession:fork-1',
+      'loadSideQuestionSession:fork-1',
     ]);
     expect(client.forkParams).toEqual({
       title: BTW_FORK_TITLE,
@@ -148,6 +153,20 @@ describe('createBtwSidecar', () => {
 });
 
 describe('BtwSidecar.ask', () => {
+  it('streams structured tool activity and keeps the answer stream alive', async () => {
+    const { client, sidecar } = await createFixture();
+    const asking = collect(sidecar.ask('Read this'));
+    await Promise.resolve();
+    client.emit('fork-1', { type: 'tool_call', toolUse: { id: 'read-1', name: 'Read', input: { file_path: 'src/cart.ts' } } });
+    client.emit('fork-1', { type: 'tool_result', toolUseId: 'read-1', isError: false, content: 'private file body' });
+    client.emit('fork-1', { type: 'assistant_text_delta', textDelta: 'Explanation' });
+    client.emit('fork-1', { type: 'agent_turn_completed' });
+    const events = await asking;
+    expect(events).toMatchObject([{ kind: 'tool', tool: { id: 'read-1', state: 'running' } },
+      { kind: 'tool', tool: { id: 'read-1', state: 'done' } }, { kind: 'delta', text: 'Explanation' }, { kind: 'done' }]);
+    expect(JSON.stringify(events)).not.toContain('private file body');
+  });
+
   it('streams deltas then done', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('What is this error?'));
@@ -172,7 +191,7 @@ describe('BtwSidecar.ask', () => {
     expect(client.askedTexts).toEqual(['What is this error?']);
   });
 
-  it('ignores other-session and non-answer notifications', async () => {
+  it('ignores other-session notifications and retains read tool progress', async () => {
     const { client, sidecar } = await createFixture();
     const asking = collect(sidecar.ask('q'));
     await Promise.resolve();
@@ -184,6 +203,7 @@ describe('BtwSidecar.ask', () => {
     client.emit('fork-1', { type: 'assistant_text_delta', textDelta: 'ok' });
     client.emit('fork-1', { type: 'agent_turn_completed' });
     expect(await asking).toEqual([
+      { kind: 'progress', progress: 'tool' },
       { kind: 'delta', text: 'ok' },
       { kind: 'done' },
     ]);
@@ -225,7 +245,7 @@ describe('BtwSidecar.ask', () => {
     await Promise.resolve();
     client.emitError();
     expect(await second).toEqual([
-      { kind: 'error', message: 'Side chat connection failed.' },
+      { kind: 'error', message: 'Side chat connection failed.', connectionLost: true },
     ]);
   });
 

@@ -40,10 +40,13 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
   const pending = recovery.pending || recovery.refresh.pending || ideBusy;
   const failed = recovery.failed || recovery.active && recovery.timedOut || !recovery.active && ideFailed;
   const connecting = pending || recovery.waiting || ide.status === 'preparing';
-  const status = pending ? 'connecting' : failed ? 'unavailable' : connecting ? 'connecting' : 'connected';
+  const modelFailed = connection.modelRequestFailed === true && !recovery.active && !ideFailed && !connecting;
+  const status = pending ? 'connecting' : failed || modelFailed ? 'unavailable' : connecting ? 'connecting' : 'connected';
   const label = status === 'connected' ? 'Online' : status === 'connecting' ? 'Connecting'
+    : modelFailed ? 'Last model request failed to connect'
     : connection.status === 'connected' && !recovery.active ? 'IDE offline' : 'Offline';
-  const detail = reconnect.error ?? (recovery.active ? connection.message : ide.message) ?? label;
+  const detail = modelFailed ? 'The last model request failed to connect. The local Droid runtime is connected. Check your model service or network before trying again.'
+    : reconnect.error ?? (recovery.active ? connection.message : ide.message) ?? label;
   const actionLabel = pending ? 'Reconnecting…' : 'Reconnect';
   return <>
     <Tooltip content={t(detail)}><span role="status" aria-atomic="true" tabIndex={0} aria-label={`${t(label)}. ${t(detail)}`}

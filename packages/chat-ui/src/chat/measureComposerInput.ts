@@ -10,7 +10,8 @@ export function measureComposerInput(row: HTMLElement, input: HTMLElement, expan
   });
   shadow.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
   const measured = shadow.querySelector<HTMLTextAreaElement>('[data-composer-input]')!;
-  measured.removeAttribute('data-composer-input');
+  // Keep the layout selector: the measuring input must flex and wrap exactly
+  // like the live input, especially after switching to the full-width row.
   // Height is capped: lay out only enough text to reach the cap. The live input
   // keeps the complete value; laying out a second full draft is unnecessary.
   const text = value ?? (input as HTMLTextAreaElement).value;

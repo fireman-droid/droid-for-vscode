@@ -186,6 +186,7 @@ export class SessionRecoveryStore {
     if (
       conversation.activeSessionId === sessionId &&
       previousTurn?.turnId === turn?.turnId &&
+      previousTurn?.backendTurnId === turn?.backendTurnId &&
       previousTurn?.status === turn?.status &&
       previousTurn?.error === turn?.error &&
       mergedOperations === existingOperations

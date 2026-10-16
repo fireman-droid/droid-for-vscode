@@ -65,12 +65,6 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
     };
   };
   useLayoutEffect(() => {
-    const element = input.current?.element;
-    if (!editing || !element) return;
-    element.style.height = 'auto';
-    element.style.height = `${Math.min(168, Math.max(27, element.scrollHeight))}px`;
-  }, [editing, draft?.text]);
-  useLayoutEffect(() => {
     const element = input.current;
     const selection = editor.selection.current;
     if (!editing || element === null || selection === null || selection.messageId !== messageId) return;
@@ -123,6 +117,10 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           }} className="mb-1" />
           <CodeReferenceInput draft={references}
             ref={input}
+            onContentLayout={element => {
+              element.style.height = 'auto';
+              element.style.height = `${Math.min(168, Math.max(27, element.scrollHeight))}px`;
+            }}
             aria-label={t("Edit message and resend")}
             className="v2-user-edit-input"
             onChange={(value) => {

@@ -84,10 +84,11 @@ describe('durable workspace capture on session reopen', () => {
       await vi.waitFor(() => expect(fixture.capture).toHaveBeenCalledTimes(1));
       const send = captureSnapshotBeforeSend({ turnSnapshots: fixture.store }, sessionId,
         'new-retry', undefined, fixture.runtime);
-      await vi.waitFor(() => expect(fixture.runtime.readSessionWorkingState).toHaveBeenCalledTimes(2));
+      await Promise.resolve();
       expect(fixture.capture).toHaveBeenCalledTimes(1);
       after.resolve('saved-after');
       await send;
+      expect(fixture.runtime.readSessionWorkingState).toHaveBeenCalledTimes(1);
       expect(fixture.capture.mock.calls).toEqual([
         [pending, 'after', undefined],
         [{ sessionId, turnId: 'new-retry' }, 'before', undefined],
