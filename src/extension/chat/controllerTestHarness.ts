@@ -196,6 +196,13 @@ export function createController(
 ) {
   const controller = new ChatController({
     createRuntime,
+    // Unit controllers have no disk-backed Host. Snapshot behavior has its own suites.
+    turnSnapshots: {
+      capture: async () => 'test-tree', capturePaths: async () => {},
+      read: () => undefined, readTurns: () => [], diff: async () => new Map(),
+      readTreeFile: async () => undefined, readTreeBytes: async () => undefined,
+      prune: async () => {}, dispose: async () => {},
+    },
     getWorkspaceContext: () =>
       workspace ?? {
         cwd: 'C:\\workspace',
