@@ -87,7 +87,9 @@ const vscodeMock = vi.hoisted(() => {
   };
 });
 
-vi.mock('vscode', () => vscodeMock);
+vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
+  Disposable: class { constructor(private cleanup: () => void) {} dispose() { this.cleanup(); } },
+}));
 
 import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../../shared/protocol/sessionViewerProtocol';
 import {

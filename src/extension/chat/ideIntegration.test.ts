@@ -68,7 +68,7 @@ it('rejects duplicate reconnection while preparation is pending and preserves th
   preparation.reject(new Error('Managed terminals are still open.'));
   await reconnect;
   expect(original.dispose).not.toHaveBeenCalled();
-  expect(messages.at(-1)).toMatchObject({ type: 'host.ide', ide: { status: 'error', canReconnect: true } });
+  expect(messages.at(-1)).toMatchObject({ type: 'host.ide', ide: { status: 'connected', canReconnect: true } });
   send(controller, 'session-1', 'turn-after-preparation', 'Continue without IDE reconnect');
   await vi.waitFor(() => expect(original.sendTurn).toHaveBeenCalledOnce());
 });

@@ -142,7 +142,7 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   updateWorkspace(current.store, 'settled');
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 5, status: 'completed' });
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
-  expect(within(card).getByText('1 File Changed')).toBeTruthy();
+  expect(within(card).getByText('1 file changed')).toBeTruthy();
   expect(screen.queryByRole('button', { name: `Hide changes to ${path}` })).toBeNull();
   expect(screen.getByRole('button', { name: `Review changes to ${path}` })).toBeDefined();
   expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();

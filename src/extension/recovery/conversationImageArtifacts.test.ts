@@ -5,11 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createConversationImageArtifactStore } from './conversationImageArtifacts';
-import {
-  SessionRecoveryStore,
-  type SessionRecoveryPersistence,
-} from './SessionRecoveryStore';
-import { readRecoverySession, writeRecoverySession } from './recoveryStoreTestSupport';
+import { createRootConversation } from './conversationRecoveryState';
 
 const temporaryDirectories: string[] = [];
 
@@ -22,76 +18,34 @@ afterEach(async () => {
 });
 
 describe('conversation image artifacts', () => {
-  it('restores persisted image bytes into the exact V2 display snapshot', async () => {
+  it('restores persisted image bytes from an artifact record', async () => {
     const directory = await createTemporaryDirectory();
-    const persistence = memoryPersistence();
     const artifacts = createConversationImageArtifactStore(directory);
-    const store = new SessionRecoveryStore(persistence, 'recovery', 0, artifacts);
-    writeRecoverySession(store, 'session-1', {
-      transcript: [image('image-1', 'aGVsbG8=', 5)],
-      historyStatus: 'complete',
-      truncated: false,
-    });
-
-    await store.flush();
-
-    expect(JSON.stringify(persistence.value)).not.toContain('aGVsbG8=');
+    const conversation = createRootConversation('session-1', {
+      transcript: [image('image-1', 'aGVsbG8=', 5)], historyStatus: 'complete', truncated: false,
+    }, 1);
+    await artifacts.persist([conversation]);
     expect(await readdir(directory)).toHaveLength(1);
-
-    const reloaded = new SessionRecoveryStore(
-      persistence,
-      'recovery',
-      0,
-      createConversationImageArtifactStore(directory),
-    );
-    await reloaded.load();
-    expect(readRecoverySession(reloaded, 'session-1')).toMatchObject({
-      historyStatus: 'complete',
-      transcript: [
-        expect.objectContaining({
-          id: 'image-1',
-          data: 'aGVsbG8=',
-          byteLength: 5,
-        }),
-      ],
-    });
+    const placeholder = { ...conversation, display: { ...conversation.display, transcript: {
+      ...conversation.display.transcript, transcript: [image('image-1', '', 5)],
+    } } };
+    const result = await createConversationImageArtifactStore(directory).hydrate([placeholder]);
+    expect(result.missing).toBe(0);
+    expect(result.conversations[0]?.display.transcript.transcript).toEqual([image('image-1', 'aGVsbG8=', 5)]);
   });
-
   it('keeps a missing image row in place and marks recovery partial', async () => {
     const directory = await createTemporaryDirectory();
-    const persistence = memoryPersistence();
-    const store = new SessionRecoveryStore(
-      persistence,
-      'recovery',
-      0,
-      createConversationImageArtifactStore(directory),
-    );
-    writeRecoverySession(store, 'session-1', {
-      transcript: [image('image-1', 'aGVsbG8=', 5)],
-      historyStatus: 'complete',
-      truncated: false,
-    });
-    await store.flush();
+    const conversation = createRootConversation('session-1', {
+      transcript: [image('image-1', 'aGVsbG8=', 5)], historyStatus: 'complete', truncated: false,
+    }, 1);
+    await createConversationImageArtifactStore(directory).persist([conversation]);
     await rm(directory, { recursive: true, force: true });
-
-    const reloaded = new SessionRecoveryStore(
-      persistence,
-      'recovery',
-      0,
-      createConversationImageArtifactStore(directory),
-    );
-    await reloaded.load();
-
-    expect(readRecoverySession(reloaded, 'session-1')).toMatchObject({
-      historyStatus: 'partial',
-      transcript: [
-        expect.objectContaining({
-          id: 'image-1',
-          data: '',
-          byteLength: 5,
-        }),
-      ],
-    });
+    const placeholder = { ...conversation, display: { ...conversation.display, transcript: {
+      ...conversation.display.transcript, transcript: [image('image-1', '', 5)],
+    } } };
+    const result = await createConversationImageArtifactStore(directory).hydrate([placeholder]);
+    expect(result.missing).toBe(1);
+    expect(result.conversations[0]?.display.transcript).toMatchObject({ historyStatus: 'partial', transcript: [image('image-1', '', 5)] });
   });
 });
 
@@ -112,19 +66,4 @@ function image(id: string, data: string, byteLength: number) {
     generated: false,
     byteLength,
   };
-}
-
-function memoryPersistence() {
-  const persistence = { value: undefined as unknown };
-  return {
-    get<T>(): T | undefined {
-      return persistence.value as T | undefined;
-    },
-    async update(_key: string, value: unknown): Promise<void> {
-      persistence.value = value;
-    },
-    get value(): unknown {
-      return persistence.value;
-    },
-  } satisfies SessionRecoveryPersistence & { readonly value: unknown };
 }

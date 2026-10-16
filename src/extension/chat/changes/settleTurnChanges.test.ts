@@ -29,6 +29,7 @@ describe('resolveSettledChangeFiles', () => {
       read: () => ({
         turnId: SCOPE.turnId,
         before: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        after: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       }),
       diff: async () =>
         new Map([
@@ -49,10 +50,10 @@ describe('resolveSettledChangeFiles', () => {
       { path: 'src/tool.ts', additions: 2, deletions: 0 },
       { path: 'src/git.ts', additions: 4, deletions: 1 },
     ]);
-    expect(snapshots.capture).toHaveBeenCalledWith(SCOPE, 'after');
+    expect(snapshots.capture).toHaveBeenCalledWith(SCOPE, 'after', undefined);
   });
 
-  it('fills gitignored tool paths from memory stats and drops 0/0 rows', async () => {
+  it('trusts completed tree evidence over unmatched candidate paths', async () => {
     const files = await resolveSettledChangeFiles(
       fakeCtl({
         changeStatsRead: async () =>
@@ -65,6 +66,7 @@ describe('resolveSettledChangeFiles', () => {
           read: () => ({
             turnId: SCOPE.turnId,
             before: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        after: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           }),
           diff: async () => new Map([['src/app.ts', { additions: 1, deletions: 0 }]]),
         },
@@ -74,7 +76,6 @@ describe('resolveSettledChangeFiles', () => {
       ['secret.log', 'rejected.ts'],
     );
     expect(files).toEqual([
-      { path: 'secret.log', additions: 5, deletions: 1 },
       { path: 'src/app.ts', additions: 1, deletions: 0 },
     ]);
   });

@@ -30,7 +30,7 @@ it('loads only on expansion and opens the exact turn diff only when snapshots ar
   expect(screen.queryByRole('button', { name: 'Open diff in editor' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   reply();
-  expect(screen.getByText('old code')).toBeDefined();
+  expect(screen.getByText((_text, element) => element?.tagName === 'CODE' && element.textContent === 'old code')).toBeDefined();
   expect(screen.getByText((_text, element) => element?.tagName === 'CODE' && element.textContent === 'new code')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Open diff in editor' }));
   expect(postMessage).toHaveBeenLastCalledWith({ type: 'file.openTurnDiff', sessionId: 'session-1', turnId: 'turn-1', path: 'app.ts' });

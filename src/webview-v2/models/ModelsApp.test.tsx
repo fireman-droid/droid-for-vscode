@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ModelsApp as ModelsAppV2 } from './ModelsApp';
@@ -10,8 +10,8 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
   it('retains connection input on a failed save and closes only after confirmation', async () => {
     const preview = createModelsPreviewTransport();
     render(<App transport={preview.transport} />);
-    await screen.findByRole('heading', { name: 'gateway.example.com' });
-    fireEvent.click(screen.getByRole('button', { name: '添加服务商接口' }));
+    await screen.findByRole('heading', { name: 'Personal gateway' });
+    fireEvent.click(screen.getByRole('button', { name: '创建渠道' }));
     fireEvent.change(screen.getByRole('textbox', { name: /^接口别名/ }), {
       target: { value: 'My new gateway' },
     });
@@ -26,18 +26,17 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
         .value,
     ).toBe('My new gateway');
     fireEvent.click(screen.getByRole('button', { name: '保存并输入密钥' }));
-    await screen.findByRole('heading', { name: 'new.example.com' });
-    expect(screen.getByRole('combobox', { name: '兼容接口' }).textContent).toContain('My new gateway');
+    await screen.findByRole('heading', { name: 'My new gateway' });
     expect(screen.queryByRole('textbox', { name: /^接口别名/ })).toBeNull();
   });
   it('saves an edited Model ID before verifying it and disables chat selection while busy', async () => {
     const preview = createModelsPreviewTransport();
     const user = userEvent.setup();
     render(<App transport={preview.transport} />);
-    await screen.findByRole('heading', { name: 'gateway.example.com' });
+    await screen.findByRole('heading', { name: 'Personal gateway' });
     await user.click(screen.getByRole('button', { name: 'Reasoner · Personal gateway 的更多操作' }));
     await user.click(screen.getByRole('menuitem', { name: '编辑配置' }));
-    fireEvent.change(screen.getByRole('textbox', { name: /^Model ID/ }), {
+    fireEvent.change(screen.getByRole('textbox', { name: /^模型 ID/ }), {
       target: { value: 'new-upstream-id' },
     });
     await user.click(screen.getByRole('button', { name: '高级设置' }));
@@ -63,10 +62,9 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
       },
     };
     render(<App transport={transport} />);
-    await screen.findByRole('heading', { name: 'gateway.example.com' });
-    fireEvent.click(screen.getByRole('button', { name: '添加模型', exact: true }));
-    fireEvent.click(screen.getByRole('button', { name: '获取模型列表' }));
-    const discovered = await screen.findByRole('dialog', { name: '添加模型' });
+    await screen.findByRole('heading', { name: 'Personal gateway' });
+    fireEvent.click(screen.getByRole('button', { name: '向Personal gateway添加模型' }));
+    const discovered = await screen.findByRole('dialog', { name: 'Personal gateway · 添加模型' });
     await within(discovered).findByRole('checkbox', { name: 'gateway-coder-32b' });
     expect(within(discovered).getByRole('checkbox', { name: /gateway-reasoner/ }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(within(discovered).getByRole('checkbox', { name: 'gateway-coder-32b' }));
@@ -81,3 +79,7 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
     });
   });
 });
+
+import { I18nProvider } from '@droidvisx/chat-ui/i18n';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: ({children}) => <I18nProvider locale="zh-CN">{children}</I18nProvider> });

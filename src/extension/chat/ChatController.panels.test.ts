@@ -273,7 +273,7 @@ describe('ChatController', () => {
           'credentials-unreadable',
           'keyring auth-detail-must-not-leak',
         ),
-        'DroidVisX could not read the current Droid CLI sign-in.',
+        'Droid could not read the current Droid CLI sign-in.',
       ],
       [
         new DaemonAvailabilityError(

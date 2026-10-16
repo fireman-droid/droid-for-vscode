@@ -72,14 +72,12 @@ describe('resolveBuiltinSlash', () => {
     expect(resolveBuiltinSlash('explain /mission', btwOff)).toBeNull();
   });
 
-  it('turns /canvas forms into local template requests', () => {
+  it('recognizes removed /canvas forms without sending them as chat', () => {
     expect(resolveBuiltinSlash('/canvas', btwOff)).toEqual({
-      kind: 'canvas',
-      request: '',
+      kind: 'removed',
     });
     expect(resolveBuiltinSlash('/canvas  A review dashboard ', btwOff)).toEqual({
-      kind: 'canvas',
-      request: 'A review dashboard',
+      kind: 'removed',
     });
   });
 });

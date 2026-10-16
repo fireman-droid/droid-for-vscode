@@ -50,7 +50,7 @@ describe('ChatController', () => {
     await vi.waitFor(() => expect(capture).toHaveBeenCalled());
     expect(runtime.sendTurn).not.toHaveBeenCalled();
     if (cancel) stop(controller, 'session-1', 'turn-before');
-    before.resolve(undefined);
+    before.resolve('a'.repeat(40));
     if (cancel) {
       await vi.waitFor(() => expect(lastMessage(messages, 'turn.state')?.status).toBe('interrupted'));
       expect(runtime.sendTurn).not.toHaveBeenCalled();
@@ -66,7 +66,6 @@ describe('ChatController', () => {
     Object.defineProperty(controller, 'turnSnapshots', {
       value: { capture, read: () => undefined, dispose: async () => undefined } as unknown as TurnSnapshotStore,
     });
-    const recordHost = vi.spyOn(controller, 'recordHost');
 
     ready(controller);
     await waitForConnected(messages);
@@ -76,28 +75,13 @@ describe('ChatController', () => {
       expect(capture).toHaveBeenCalledWith(
         { sessionId: 'session-1', turnId: 'turn-1' },
         'before',
+        expect.any(AbortSignal),
       );
     });
-    await vi.waitFor(() => {
-      expect(recordHost).toHaveBeenCalledWith({
-        level: 'warn',
-        name: 'host.changes.snapshot-failed',
-        attributes: {
-          sessionId: 'session-1',
-          turnId: 'turn-1',
-          phase: 'before',
-          reason: 'persistence-failed',
-        },
-      });
-    });
-    expect(JSON.stringify(recordHost.mock.calls)).not.toContain('persistence-failure');
-    expect(
-      recordHost.mock.calls.filter(
-        ([event]) => event.name === 'host.changes.snapshot-failed',
-      ),
-    ).toHaveLength(1);
-    await vi.waitFor(() => expect(lastMessage(messages, 'turn.state')?.status).toBe('completed'));
-    expect(runtime.sendTurn).toHaveBeenCalledExactlyOnceWith('Capture safely', undefined);
+    await vi.waitFor(() => expect(lastMessage(messages, 'turn.state')?.status).toBe('failed'));
+    expect(runtime.sendTurn).not.toHaveBeenCalled();
+    expect(lastMessage(messages, 'turn.error')).toBeDefined();
+    expect(JSON.stringify(messages)).not.toContain('C:\\sensitive');
     await controller.dispose();
   });
 

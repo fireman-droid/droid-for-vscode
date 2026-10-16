@@ -56,10 +56,10 @@ it('separates unavailable snippets from failure and opens current files without 
   const read: ToolTranscriptItem = { kind: 'tool', id: 'read-row', turnId: 'turn-1', toolUseId: 'read-1', toolName: 'Read', action: 'Read file', status: 'completed', progressCount: 0, latestUpdateKind: null, target: 'src/app.ts' };
   const view = render(<View item={read} actions={{ openPath }} />);
   expect(screen.queryByText('Not saved')).toBeNull();
-  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
+  expect(screen.getByRole('button', { name: /^Read/ }).getAttribute('aria-expanded')).toBe('false');
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read-1' }, text: 'const retained = true;', truncated: true } }} actions={{ openPath }} />);
   fireEvent.click(screen.getByRole('button', { name: /^Read/ }));
-  expect(screen.getByText('Result snippet · truncated')).toBeDefined();
+  expect(screen.getByText('truncated')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Open current file' }));
   expect(openPath).toHaveBeenCalledExactlyOnceWith({ path: 'src/app.ts' });
   expect(postMessage).not.toHaveBeenCalled();
@@ -72,7 +72,7 @@ it.each([false, true])('omits missing targets and unavailable preview noise with
   const view = render(<View item={read} grouped={grouped} />);
   expect(view.container.textContent).toContain('Read');
   expect(view.container.textContent).not.toMatch(/Target not recorded|No preview|Not saved/);
-  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
+  expect(screen.getByRole('button', { name: /^Read/ }).getAttribute('aria-expanded')).toBe('false');
   expect(screen.getByTitle(/restricted/)).toBeTruthy();
 });
 
@@ -118,15 +118,15 @@ it('omits unavailable elapsed and activity fields from a completed subagent whil
     action: 'Delegate task', status: 'completed', progressCount: 0, latestUpdateKind: null,
     subagent: { type: 'scout', status: 'completed', description: 'Inspect the selected module' } };
   const view = render(<View item={item} />);
-  expect(screen.getByRole('button', { name: /scout subagent/ }).textContent).toContain('Completed');
+  expect(screen.getByRole('button', { name: /Inspect the selected module/ }).textContent).toContain('Completed');
   expect(view.container.textContent).not.toContain('Elapsed');
   expect(view.container.textContent).not.toContain('No activity details available');
   view.rerender(<View item={{ ...item, subagent: { ...item.subagent!, durationMs: 1200, toolUseCount: 2 } }} />);
-  expect(screen.getByRole('button', { name: /scout subagent/ }).textContent).toContain('1.2s');
-  expect(screen.getByRole('button', { name: /scout subagent/ }).textContent).toContain('Tools 2');
+  expect(screen.getByRole('button', { name: /Inspect the selected module/ }).textContent).toContain('1.2s');
+  expect(screen.getByRole('button', { name: /Inspect the selected module/ }).textContent).toContain('2 tools');
 });
 
-it('does not substitute a turn Diff for missing operation evidence and keeps Canvas independent', () => {
+it('does not substitute a turn Diff for missing operation evidence without offering a removed Canvas action', () => {
   const preview = vi.fn();
   const item: ToolTranscriptItem = { kind: 'tool', id: 'edit-row', turnId: 'turn-1', toolUseId: 'edit-1', toolName: 'ApplyPatch', action: 'Edited', status: 'running', progressCount: 0, latestUpdateKind: null, filePath: 'src/app.html' };
   function Scene({ settled }: { settled: boolean }) {
@@ -138,8 +138,8 @@ it('does not substitute a turn Diff for missing operation evidence and keeps Can
   expect(screen.queryByRole('button', { name: /^Edited/ })).toBeNull();
   view.rerender(<Scene settled />);
   expect(postMessage).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Canvas' }));
-  expect(preview).toHaveBeenCalledExactlyOnceWith('src/app.html');
+  expect(screen.queryByRole('button', { name: 'Canvas' })).toBeNull();
+  expect(preview).not.toHaveBeenCalled();
   expect(postMessage).not.toHaveBeenCalled();
   expect(screen.getByText('This operation’s Diff was not recorded.')).toBeDefined();
   expect(screen.queryByRole('button', { name: /Review/ })).toBeNull();
@@ -174,7 +174,7 @@ it('uses the host-owned subagent row identity and live feed, without exposing ch
   } })));
   expect(screen.getByText('Read · src/app.ts')).toBeDefined();
   expect(screen.getByText('Running in background')).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: /scout subagent/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Inspect the selected module/ }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'subagent.open', sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1' });
 });
 

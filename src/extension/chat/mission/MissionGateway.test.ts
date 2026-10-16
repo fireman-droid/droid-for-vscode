@@ -845,7 +845,7 @@ describe('MissionGateway', () => {
         message,
         catalog,
       }),
-    ).resolves.toEqual({ status: 'rejected', code: 'daemon-unavailable' });
+    ).resolves.toEqual({ status: 'rejected', code: 'settings-update-failed' });
     expect(detach).toHaveBeenCalledTimes(1);
     expect(createRuntime).not.toHaveBeenCalled();
   });
@@ -936,7 +936,7 @@ describe('MissionGateway', () => {
       }),
     ).resolves.toEqual({
       status: 'rejected',
-      code: 'settings-mismatch',
+      code: 'settings-update-failed',
     });
     expect(initialize).not.toHaveBeenCalled();
   });

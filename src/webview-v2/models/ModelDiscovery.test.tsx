@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBase, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DiscoveredCustomModel } from '../../shared/protocol/customModelsProtocol';
@@ -58,14 +58,13 @@ function createHost(discovered: readonly DiscoveredCustomModel[], models: readon
 
 async function openAddModels(host: ReturnType<typeof createHost>) {
   render(<ModelsApp transport={host.transport} />);
-  await screen.findByRole('heading', { name: 'gateway.example.com' });
-  fireEvent.click(screen.getByRole('button', { name: '添加模型', exact: true, expanded: false }));
-  return screen.findByRole('dialog', { name: '添加模型' });
+  await screen.findByRole('heading', { name: 'First endpoint' });
+  fireEvent.click(screen.getByRole('button', { name: '向First endpoint添加模型' }));
+  return screen.findByRole('dialog', { name: 'First endpoint · 添加模型' });
 }
 
 async function discover(host: ReturnType<typeof createHost>, firstId: string) {
   const dialog = await openAddModels(host);
-  fireEvent.click(within(dialog).getByRole('button', { name: '获取模型列表' }));
   await within(dialog).findByRole('checkbox', { name: firstId, exact: true });
   return dialog;
 }
@@ -99,15 +98,13 @@ describe('model discovery interactions', () => {
     }));
   });
 
-  it('requires an explicit unique alias when a model on another interface already uses the name', async () => {
+  it('allows an alias shared with another channel and preserves an explicit rename', async () => {
     const host = createHost([{ model: 'new-model', displayName: 'Shared name' }], [savedModel('existing', 'Shared name', 'second')]);
     const dialog = await discover(host, 'new-model');
     const view = within(dialog);
     fireEvent.click(view.getByRole('checkbox', { name: 'new-model' }));
     const submit = view.getByRole('button', { name: '添加所选模型（1）' }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    fireEvent.click(submit);
-    expect(host.requests.some((request) => request.action.kind === 'importModels')).toBe(false);
+    expect(submit.disabled).toBe(false);
     fireEvent.click(view.getByRole('button', { name: '修改 new-model 的导入别名' }));
     fireEvent.change(view.getByRole('textbox', { name: /显示别名/ }), { target: { value: 'First endpoint model' } });
     expect(submit.disabled).toBe(false);
@@ -117,14 +114,13 @@ describe('model discovery interactions', () => {
     }));
   });
 
-  it('blocks duplicate aliases in one batch until the selected names are distinct', async () => {
+  it('allows shared aliases within a batch and preserves explicit renames', async () => {
     const host = createHost([{ model: 'alpha', displayName: 'Shared' }, { model: 'beta', displayName: 'Shared' }]);
     const dialog = await discover(host, 'alpha');
     const view = within(dialog);
     fireEvent.click(view.getByRole('button', { name: '选择筛选结果' }));
     const submit = view.getByRole('button', { name: '添加所选模型（2）' }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    expect(view.getByText('2 个别名需要调整')).toBeTruthy();
+    expect(submit.disabled).toBe(false);
     fireEvent.click(view.getByRole('button', { name: '修改 beta 的导入别名' }));
     fireEvent.change(view.getByRole('textbox', { name: /显示别名/ }), { target: { value: 'Beta personal' } });
     expect(submit.disabled).toBe(false);
@@ -136,25 +132,24 @@ describe('model discovery interactions', () => {
     }));
   });
 
-  it('keeps a manual draft across steps on the same interface and clears it when the interface changes', async () => {
+  it('preserves a manual draft across tabs and starts fresh for another channel', async () => {
     const host = createHost([]);
     const dialog = await openAddModels(host);
     const view = within(dialog);
     const user = userEvent.setup();
     await user.click(view.getByRole('tab', { name: '手动填写 ID' }));
-    fireEvent.change(view.getByRole('textbox', { name: 'Model ID', exact: true }), { target: { value: 'draft-model' } });
-    fireEvent.change(view.getByRole('textbox', { name: /模型别名/ }), { target: { value: 'My draft alias' } });
-    fireEvent.click(view.getByRole('button', { name: '返回选择服务商和接口' }));
-    fireEvent.click(view.getByRole('button', { name: '下一步' }));
-    expect((view.getByRole('textbox', { name: 'Model ID', exact: true }) as HTMLInputElement).value).toBe('draft-model');
-    expect((view.getByRole('textbox', { name: /模型别名/ }) as HTMLInputElement).value).toBe('My draft alias');
+    fireEvent.change(view.getByRole('textbox', { name: '模型 ID', exact: true }), { target: { value: 'draft-model' } });
+    await user.click(view.getByRole('tab', { name: '从列表选择' }));
+    await user.click(view.getByRole('tab', { name: '手动填写 ID' }));
+    expect((view.getByRole('textbox', { name: '模型 ID', exact: true }) as HTMLInputElement).value).toBe('draft-model');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: '向Second endpoint添加模型' }));
+    const second = within(await screen.findByRole('dialog', { name: 'Second endpoint · 添加模型' }));
+    await user.click(second.getByRole('tab', { name: '手动填写 ID' }));
+    expect((second.getByRole('textbox', { name: '模型 ID', exact: true }) as HTMLInputElement).value).toBe('');
+    expect(host.requests.some(request => request.action.kind === 'saveModel')).toBe(false);
+  });});
 
-    fireEvent.click(view.getByRole('button', { name: '返回选择服务商和接口' }));
-    await user.click(view.getByRole('combobox', { name: '兼容接口' }));
-    await user.click(screen.getByRole('option', { name: /Second endpoint/ }));
-    fireEvent.click(view.getByRole('button', { name: '下一步' }));
-    expect((view.getByRole('textbox', { name: 'Model ID', exact: true }) as HTMLInputElement).value).toBe('');
-    expect((view.getByRole('textbox', { name: /模型别名/ }) as HTMLInputElement).value).toBe('');
-    expect(host.requests.some((request) => request.action.kind === 'saveModel')).toBe(false);
-  });
-});
+import { I18nProvider } from '@droidvisx/chat-ui/i18n';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: ({children}) => <I18nProvider locale="zh-CN">{children}</I18nProvider> });

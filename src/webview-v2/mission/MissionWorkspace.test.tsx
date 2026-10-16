@@ -67,12 +67,11 @@ describe.each([['V2', V2MissionWorkspace]] as const)('%s Mission workspace', (_v
       };
       view.rerender(<MissionWorkspace {...props} result={result} />);
     };
-    expect(screen.queryByRole('button', { name: 'View', exact: true })).toBeNull();
-    await user.click(screen.getByRole('button', { name: /First feature/ }));
+    expect(screen.getByRole('button', { name: 'Open worker chat', exact: true })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Pause activity' }));
     expect((screen.getByRole('button', { name: 'Pause activity' }) as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Stop feature' }));
-    await user.click(screen.getByRole('button', { name: 'View', exact: true }));
+    expect((screen.getByRole('button', { name: 'Open worker chat', exact: true }) as HTMLButtonElement).disabled).toBe(false);
     expect(postMessage).toHaveBeenCalledTimes(1);
     acknowledge('pause');
     await user.click(screen.getByRole('button', { name: 'Stop feature' }));
@@ -82,7 +81,7 @@ describe.each([['V2', V2MissionWorkspace]] as const)('%s Mission workspace', (_v
     await user.click(screen.getByRole('button', { name: 'Stop feature' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Stop feature' }));
     acknowledge('stop-current-feature');
-    await user.click(screen.getByRole('button', { name: 'View', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Open worker chat', exact: true }));
     acknowledge('open-viewer');
     const envelope = { protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION, requestId: expect.any(String), scope: 'selected-chat', snapshotRevision: 3 };
     expect(postMessage).toHaveBeenNthCalledWith(1, { ...envelope, type: 'mission.pause' });

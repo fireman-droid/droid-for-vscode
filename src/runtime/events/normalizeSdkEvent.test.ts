@@ -499,6 +499,7 @@ describe('normalizeSdkEvent', () => {
       action: 'Edit file',
       inputComplete: true,
       filePath: 'src/app.ts',
+      target: 'src/app.ts',
     });
 
     // Relative inputs resolve against the workspace root.
@@ -523,7 +524,8 @@ describe('normalizeSdkEvent', () => {
       root,
     );
     expect(escaped).not.toHaveProperty('filePath');
-    expect(JSON.stringify(escaped)).not.toContain('outside');
+    expect(escaped).toMatchObject({ target: 'outside.ts · outside workspace' });
+    expect(JSON.stringify(escaped)).not.toContain(join(root, '..'));
 
     // Non-file tools never surface their inputs.
     const read = normalizeSdkEvent(
@@ -831,6 +833,7 @@ describe('normalizeSdkEvent', () => {
     });
     expect(normalizeSdkEvent(error)).toEqual({
       type: 'error',
+      message: 'The operation failed.',
     });
   });
 

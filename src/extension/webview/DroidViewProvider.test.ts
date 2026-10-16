@@ -86,7 +86,9 @@ const vscodeMock = vi.hoisted(() => {
   };
 });
 
-vi.mock('vscode', () => vscodeMock);
+vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
+  Disposable: class { constructor(private cleanup: () => void) {} dispose() { this.cleanup(); } },
+}));
 
 import { DroidViewProvider } from './DroidViewProvider';
 
@@ -282,7 +284,7 @@ describe('DroidViewProvider', () => {
       {} as vscodeTypes.CancellationToken,
     );
 
-    expect(first.messageSubscription.dispose).toHaveBeenCalledOnce();
+    expect(first.messageSubscription.dispose).toHaveBeenCalledTimes(2);
     expect(first.viewSubscription.dispose).toHaveBeenCalledOnce();
     expect(controller.unsubscribe).toHaveBeenCalledOnce();
 
@@ -419,7 +421,7 @@ describe('DroidViewProvider', () => {
       {} as vscodeTypes.CancellationToken,
     );
     expect(second.webview.html).toContain('data-dvx-theme="light"');
-    expect(second.webview.html).toContain('html,body{background:#f8f8f8}');
+    expect(second.webview.html).toContain('html,body{background:#ffffff}');
   });
 
   it('persists ui.theme.set as the user setting and echoes ui.theme', () => {

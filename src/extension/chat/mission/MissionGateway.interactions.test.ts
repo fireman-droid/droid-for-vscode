@@ -147,7 +147,7 @@ describe('Mission attachment interaction ownership', () => {
 
   it.each(['create', 'settings', 'initialize'] as const)('retains the previous chat permission owner after %s fails', async failAt => {
     const mock = setup(failAt);
-    await expect(mock.gateway.start(input)).resolves.toEqual({ status: 'rejected', code: 'daemon-unavailable' });
+    await expect(mock.gateway.start(input)).resolves.toEqual({ status: 'rejected', code: failAt === 'settings' ? 'settings-update-failed' : 'daemon-unavailable' });
     mock.coordinator.beginTurn('previous-chat', 'previous-turn');
     const answer = mock.previousHandler.requestPermission({
       options: [{ label: 'Approve', value: ToolConfirmationOutcome.ProceedOnce, requiresEditedSpec: false }],

@@ -17,11 +17,12 @@ function fixture() {
   const unsubscribe = vi.fn();
   const runtime = {
     readMissionSnapshot: () => value,
+    refreshMissionSnapshot: async (): Promise<unknown> => value,
     subscribeMissionSnapshot: vi.fn((next: () => void) => { listener = next; return unsubscribe; }),
   };
   const missionState = new MissionSessionState();
   missionState.mission = { role: 'orchestrator', state: 'running' };
-  const ctl = { missionState, isCurrentSessionOperation: vi.fn(() => true), emit: vi.fn() };
+  const ctl = { missionState, isCurrentSessionOperation: vi.fn(() => true), emit: vi.fn(), recordHost: vi.fn() };
   const recover = () => recoverMissionProjection(ctl as never, runtime as never, 1, 'mission-a', 'D:/repo');
   return { ctl, runtime, recover, unsubscribe, update: (next: unknown) => { value = next; listener?.(); } };
 }
@@ -77,21 +78,20 @@ describe('authoritative Mission recovery', () => {
     update(initial);
     expect(ctl.missionState.missionRuntime!.snapshot().availability).toBe('attached');
   });
-  it('refresh reads the Runtime snapshot instead of replaying stale local state', () => {
+  it('refresh reads the Runtime snapshot instead of replaying stale local state', async () => {
     const { ctl, runtime, recover } = fixture();
     recover();
     const mission = ctl.missionState.missionRuntime!;
     const command = { type: 'mission.refresh', protocolVersion: 25, scope: 'selected-chat',
       requestId: 'refresh-a', snapshotRevision: mission.currentRevision() } as const;
-    const port = { ...ctl, sessionState: { sessionId: 'mission-a', runtime: {
-      ...runtime, readMissionSnapshot: () => ({ ...initial, state: 'completed' }),
-    } } };
+    runtime.refreshMissionSnapshot = async () => ({ ...initial, state: 'completed' });
+    const port = { ...ctl, sessionState: { sessionId: 'mission-a', runtime } };
     handleMissionCommand(port as never, command);
-    expect(mission.snapshot().lifecycle).toBe('completed');
+    await vi.waitFor(() => expect(mission.snapshot().lifecycle).toBe('completed'));
     expect(ctl.emit).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'accepted' }));
-    port.sessionState.runtime.readMissionSnapshot = () => null as never;
+    runtime.refreshMissionSnapshot = async () => null;
     handleMissionCommand(port as never, { ...command, snapshotRevision: mission.currentRevision() });
-    expect(ctl.emit).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'rejected', rejectionCode: 'unavailable' }));
+    await vi.waitFor(() => expect(ctl.emit).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'rejected', rejectionCode: 'unavailable' })));
   });
   it('settings catalog updates preserve active Mission content and revision', () => {
     const { ctl, recover } = fixture();

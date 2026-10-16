@@ -201,14 +201,14 @@ describe('releaseSessionLease', () => {
     const file = memoryFile(initial);
     const writeFile = vi.fn(file.writeFile);
 
-    releaseSessionLease(FILE, 'session-1', {
+    expect(() => releaseSessionLease(FILE, 'session-1', {
       readFile: file.readFile,
       writeFile,
       pid: () => 111,
       now: () => 2,
       isPidAlive: () => true,
       runExclusive: () => ({ acquired: false, heldByPid: 222 }),
-    });
+    })).toThrow('registry is busy');
 
     expect(writeFile).not.toHaveBeenCalled();
     expect(file.current()).toBe(initial);
@@ -232,7 +232,7 @@ function expectUnavailableRegistry(
     acquired: false,
     heldByPid: 0,
   });
-  releaseSessionLease(FILE, 'session-1', deps);
+  expect(() => releaseSessionLease(FILE, 'session-1', deps)).toThrow('could not be read');
 }
 
 describe('readLeases', () => {

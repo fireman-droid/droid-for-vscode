@@ -38,7 +38,7 @@ it('blocks session mutations during IDE preparation while retaining a sendable d
     ide: { status: 'reconnecting', canReconnect: false, message: 'Reconnecting this conversation to the IDE…' } });
   await waitFor(() => expect(send.hasAttribute('disabled')).toBe(true));
   expect(screen.queryByText('Stopped')).toBeNull();
-  expect(screen.getByText('Reconnecting this conversation to the IDE…')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Reconnecting…' })).toBeTruthy();
   const draft = screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLTextAreaElement;
   fireEvent.keyDown(draft, { key: 'Enter' });
   fireEvent.click(send);
@@ -46,10 +46,10 @@ it('blocks session mutations during IDE preparation while retaining a sendable d
   expect(newChat.hasAttribute('disabled')).toBe(true);
   fireEvent.click(newChat);
   expect(port.postMessage.mock.calls.some(([message]) => ['turn.send', 'session.new', 'queue.add'].includes(message.type))).toBe(false);
-  expect(draft.value).toBe('Continue with my changes');
+  expect(draft.textContent).toBe('Continue with my changes');
   receive({ ...snapshot, sequence: 3, ide: { status: 'connected', canReconnect: true, message: 'Native IDE tools are connected.' } });
   await waitFor(() => expect(send.hasAttribute('disabled')).toBe(false));
-  expect(draft.value).toBe('Continue with my changes');
+  expect(draft.textContent).toBe('Continue with my changes');
   fireEvent.click(send);
   await waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({
     type: 'turn.send', sessionId: 'session-a', turnId: expect.any(String), text: 'Continue with my changes',

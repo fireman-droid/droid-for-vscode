@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { initialAssistantWebviewState } from '../state/initialState';
 import type { AssistantWebviewState } from '../state/types';
@@ -91,3 +91,8 @@ it('clamps late questions to the real content boundary and pins questions as the
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
   }
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });

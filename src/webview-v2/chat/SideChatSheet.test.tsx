@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBase, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -31,7 +31,7 @@ it('sends quoted side questions without touching main chat and preserves IME inp
   expect(ask).not.toHaveBeenCalled();
   await user.keyboard('{Enter}');
   expect(ask).toHaveBeenCalledExactlyOnceWith('> Selected context\n\nExplain this part');
-  expect((input as HTMLTextAreaElement).value).toBe('');
+  expect((input as HTMLElement).textContent).toBe('');
   expect(screen.queryByRole('button', { name: 'Remove quoted context' })).toBeNull();
 });
 
@@ -46,14 +46,14 @@ it('keeps drafting available while a follow-up is queued and preserves stop and 
       onAsk={onAsk} onStop={onStop} onDismiss={onDismiss} onWidthChange={onWidthChange} />;
   }
   const view = render(<Harness state={state} />);
-  expect(screen.getByTitle('Queued follow-up')).toBeDefined();
+  expect(screen.getByText('Queued follow-up')).toBeDefined();
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
-  expect(input.disabled).toBe(false);
+  expect(input.getAttribute('contenteditable')).toBe('true');
   await user.type(input, 'Keep this next question{Enter}');
-  expect(input.value).toBe('Keep this next question');
+  expect(input.textContent).toBe('Keep this next question');
   expect(onAsk).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Send side question' })).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Stop side answer' }));
+  await user.click(screen.getByRole('button', { name: 'Stop answer' }));
   expect(onStop).toHaveBeenCalledOnce();
   view.rerender(<Harness state={{ ...state, pendingQuestion: null }} />);
   await user.click(input);
@@ -105,3 +105,8 @@ it('blocks side questions for unavailable models and images for text-only models
   await user.click(screen.getByRole('button', { name: 'Send side question' }));
   expect(onAsk).not.toHaveBeenCalled();
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });

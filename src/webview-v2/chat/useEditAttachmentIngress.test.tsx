@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderBase, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
@@ -48,7 +48,7 @@ it.each(['conversation switch', 'cancel and reopen'])('stages files in the edit 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Begin edit' }));
   }
-  expect((screen.getByRole('button', { name: 'Resend edited message' }) as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getByRole('button', { name: 'Resend' }) as HTMLButtonElement).disabled).toBe(false);
   await act(async () => finish({ kind: 'text', name: 'late.txt', text: 'Do not cross sessions', truncated: false }));
   expect(port.postMessage).toHaveBeenCalledTimes(2);
 });
@@ -61,11 +61,11 @@ it('blocks an immediate historical resend until prepared attachments reach its e
   act(() => {
     fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.click(screen.getByRole('button', { name: 'Resend edited message' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
   });
   expect(onResend).not.toHaveBeenCalled();
   expect(screen.getByText('Preparing attachments…')).toBeDefined();
-  expect((screen.getByRole('button', { name: 'Resend edited message' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Resend' }) as HTMLButtonElement).disabled).toBe(true);
   await act(async () => finish({ kind: 'image', name: 'shot.png', mediaType: 'image/png', data: 'dGVzdA==' }));
   expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'attachment.addImage', sessionId: 'first', stage: 'edit', name: 'shot.png', mediaType: 'image/png', dataBase64: 'dGVzdA==' });
   expect(screen.queryByText('Preparing attachments…')).toBeNull();
@@ -80,8 +80,13 @@ it('releases the historical resend gate when attachment preparation fails', asyn
   const input = screen.getByRole('textbox');
   fireEvent.paste(input, { clipboardData: { files: [new File(['image'], 'shot.png', { type: 'image/png' })], getData: () => '' } });
   await screen.findByText('shot.png could not be attached.');
-  expect((input as HTMLTextAreaElement).value).toBe('Question');
-  expect((screen.getByRole('button', { name: 'Resend edited message' }) as HTMLButtonElement).disabled).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Resend edited message' }));
+  expect((input as HTMLElement).textContent).toBe('Question');
+  expect((screen.getByRole('button', { name: 'Resend' }) as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
   expect(onResend).toHaveBeenCalledExactlyOnceWith('message-1', 'Question', false);
 });
+
+
+import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: TooltipProvider });

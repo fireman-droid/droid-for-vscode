@@ -44,23 +44,29 @@ it.each([null, Number.NaN, 0])('does not manufacture a time for missing or inval
   expect(document.querySelector('time')).toBeNull();
 });
 
-it('keeps sent message time when opening its editor', () => {
+it('keeps the recorded sent time after editing is cancelled', async () => {
+  const user = userEvent.setup();
   vi.spyOn(Date, 'now').mockReturnValue(recorded.getTime() + 5 * 60_000);
   const item = { id: 'user', messageId: 'message', text: 'Question', timestamp: recorded.getTime() };
   const editor = { draft: null, selection: { current: null }, begin: vi.fn(), cancel: vi.fn(), update: vi.fn() };
   const view = render(<TooltipProvider><QuestionCardView item={item} editor={editor} canResend onResend={vi.fn()} /></TooltipProvider>);
-  const time = screen.getByText('5m ago').getAttribute('datetime');
+  await user.hover(screen.getByRole('button', { name: 'Edit message and resend from here' }));
+  const time = (await screen.findByRole('tooltip')).textContent;
+  await user.unhover(screen.getByRole('button', { name: 'Edit message and resend from here' }));
   view.rerender(<TooltipProvider><QuestionCardView item={item} editor={{ ...editor,
     draft: { messageId: 'message', text: 'Edited', phase: 'editing', notice: null } }} canResend onResend={vi.fn()} /></TooltipProvider>);
   expect(screen.getByLabelText('Edit message and resend')).toBeTruthy();
-  expect(screen.getByText('5m ago').getAttribute('datetime')).toBe(time);
+  view.rerender(<TooltipProvider><QuestionCardView item={item} editor={editor} canResend onResend={vi.fn()} /></TooltipProvider>);
+  await user.hover(screen.getByRole('button', { name: 'Edit message and resend from here' }));
+  expect((await screen.findByRole('tooltip')).textContent).toBe(time);
 });
 
-it('shows recorded time in the history viewer without exposing reply actions', () => {
+it('shows recorded time in the history viewer while allowing copy and hiding mutation actions', () => {
   vi.spyOn(Date, 'now').mockReturnValue(recorded.getTime() + 5 * 60_000);
   const view = render(<TooltipProvider><ReplyView readOnly replyText="Answer" completedAt={recorded.getTime()}>Answer</ReplyView></TooltipProvider>);
   expect(screen.getByText('5m ago')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Copy reply' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Copy reply' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull();
   view.rerender(<TooltipProvider><ReplyView running replyText="Answer" completedAt={recorded.getTime()}>Answer</ReplyView></TooltipProvider>);
   expect(screen.queryByText('5m ago')).toBeNull();
 });

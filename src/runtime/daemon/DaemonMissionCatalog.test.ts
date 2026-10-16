@@ -125,6 +125,7 @@ describe('DaemonMissionCatalog', () => {
 
     await expect(resources.sessions.list()).resolves.toEqual([{
       id: 'mission-session-1',
+      getMessages: expect.any(Function),
       modifiedTime: new Date(1_777_000_000_000),
       messageCount: 5,
       parentSessionId: 'parent',

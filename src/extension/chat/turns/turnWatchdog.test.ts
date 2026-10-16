@@ -8,7 +8,6 @@ import {
   stop,
   turnStates,
   waitForConnected,
-  type HostToWebviewMessage,
   type RuntimeEvent,
 } from '../controllerTestHarness';
 import {
@@ -25,15 +24,8 @@ function hangingStream(): (text: string) => AsyncIterable<RuntimeEvent> {
   };
 }
 
-function diagnostics(messages: readonly HostToWebviewMessage[]) {
-  return messages.filter(
-    (message): message is Extract<HostToWebviewMessage, { type: 'runtime.diagnostic' }> =>
-      message.type === 'runtime.diagnostic',
-  );
-}
-
 describe('turnWatchdog', () => {
-  it('force-settles a Stop stuck past its window as interrupted', async () => {
+  it('keeps a timed-out Stop blocked until the local stream releases ownership', async () => {
     const runtime = Object.assign(createMockRuntime(hangingStream()), {
       interruptSession: vi.fn(async () => {}),
     });
@@ -58,28 +50,19 @@ describe('turnWatchdog', () => {
     controller.turnState.turnWatchdog!.stopDeadlineAt = Date.now() - 1;
     await tickTurnWatchdog(controller);
 
-    expect(turnStates(messages).at(-1)).toMatchObject({
-      turnId: 'turn-1',
-      status: 'interrupted',
-    });
-    expect(runtime.interruptSession).toHaveBeenCalled();
-    expect(
-      diagnostics(messages).some((message) => message.code === 'turn-stop-timeout'),
-    ).toBe(true);
-    expect(controller.turnState.turnWatchdog).toBeNull();
-
-    // The settled turn releases the send path (queue dispatch uses it).
+    expect(turnStates(messages).at(-1)).toMatchObject({ turnId: 'turn-1', status: 'stopping' });
+    expect(runtime.interruptSession).toHaveBeenCalledOnce();
+    expect(controller.turnState.turnWatchdog).not.toBeNull();
     send(controller, 'session-1', 'turn-2', 'Next prompt');
-    expect(turnStates(messages).at(-1)).toMatchObject({
-      turnId: 'turn-2',
-      status: 'submitting',
-    });
+    expect(runtime.sendTurn).toHaveBeenCalledOnce();
+    expect(turnStates(messages).some(turn => turn.turnId === 'turn-2' && turn.status === 'submitting')).toBe(false);
     await controller.dispose();
   });
 
-  it('settles a streaming turn after consecutive idle backend reads', async () => {
+  it('interrupts a lost stream after consecutive idle reads without claiming it completed', async () => {
     const runtime = Object.assign(createMockRuntime(hangingStream()), {
       readSessionWorkingState: vi.fn(async () => 'idle' as const),
+      interruptSession: vi.fn(async () => {}),
     });
     const { controller, messages } = createController(() => runtime);
     ready(controller);
@@ -103,11 +86,9 @@ describe('turnWatchdog', () => {
     }
     await tickTurnWatchdog(controller);
 
-    expect(turnStates(messages).at(-1)).toMatchObject({
-      turnId: 'turn-1',
-      status: 'completed',
-    });
-    expect(controller.turnState.turnWatchdog).toBeNull();
+    expect(runtime.interruptSession).toHaveBeenCalledOnce();
+    expect(turnStates(messages).at(-1)).toMatchObject({ turnId: 'turn-1', status: 'streaming' });
+    expect(controller.turnState.turnWatchdog).not.toBeNull();
     await controller.dispose();
   });
 

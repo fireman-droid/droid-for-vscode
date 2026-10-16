@@ -1244,6 +1244,7 @@ describe('FactoryDroidRuntime', () => {
       specModeReasoningEffort: null,
     });
     expect(session.updateSettings).toHaveBeenCalledWith({
+      interactionMode: 'auto',
       specModeModelId: 'model-2',
     });
 
@@ -1254,6 +1255,7 @@ describe('FactoryDroidRuntime', () => {
       }),
     ).resolves.toMatchObject({ specModeReasoningEffort: 'medium' });
     expect(session.updateSettings).toHaveBeenCalledWith({
+      interactionMode: 'auto',
       specModeReasoningEffort: 'medium',
     });
 
@@ -1264,6 +1266,7 @@ describe('FactoryDroidRuntime', () => {
       }),
     ).resolves.toMatchObject({ specModeModelId: null });
     expect(session.updateSettings).toHaveBeenCalledWith({
+      interactionMode: 'auto',
       specModeModelId: null,
     });
 

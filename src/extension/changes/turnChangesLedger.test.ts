@@ -38,7 +38,7 @@ describe('createTurnChangesLedger', () => {
     vi.useRealTimers();
   });
 
-  it('publishes a new row immediately and its counts after the debounce', async () => {
+  it('publishes a row only after the debounced read confirms a change', async () => {
     const read = vi.fn(
       async (): Promise<ReadonlyMap<string, FileChangeStat>> =>
         new Map([['src/app.ts', { additions: 3, deletions: 1 }]]),
@@ -51,11 +51,7 @@ describe('createTurnChangesLedger', () => {
     });
 
     ledger.recordPaths(['src/app.ts']);
-    // The row appears at once, before any git read.
-    expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenLastCalledWith([
-      { path: 'src/app.ts', additions: null, deletions: null },
-    ]);
+    expect(publish).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(500);
@@ -89,8 +85,8 @@ describe('createTurnChangesLedger', () => {
 
     await vi.advanceTimersByTimeAsync(200);
     expect(read).toHaveBeenCalledTimes(1);
-    // First publish appended the row; second carries the counts.
-    expect(publish).toHaveBeenCalledTimes(2);
+    // The confirmed counts produce the first visible row.
+    expect(publish).toHaveBeenCalledTimes(1);
   });
 
   it('keeps existing rows in place and appends new files in order', async () => {
@@ -110,7 +106,6 @@ describe('createTurnChangesLedger', () => {
     ledger.recordPaths(['src/b.ts', 'src/a.ts']);
     expect(publish).toHaveBeenLastCalledWith([
       { path: 'src/a.ts', additions: 1, deletions: 0 },
-      { path: 'src/b.ts', additions: null, deletions: null },
     ]);
     await vi.advanceTimersByTimeAsync(500);
     const last = publish.mock.lastCall?.[0] as ChangedFileSummary[];
@@ -163,18 +158,18 @@ describe('createTurnChangesLedger', () => {
 
     ledger.recordPaths(['src/app.ts']);
     await vi.advanceTimersByTimeAsync(500);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenCalledTimes(1);
 
     // Same counts again: nothing visible changed, nothing published.
     ledger.recordPaths(['src/app.ts']);
     await vi.advanceTimersByTimeAsync(500);
     expect(read).toHaveBeenCalledTimes(2);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenCalledTimes(1);
   });
 
-  it('caps the ledger at the changed-files bound', () => {
+  it('caps the ledger at the changed-files bound', async () => {
     const read = vi.fn(
-      async (): Promise<ReadonlyMap<string, FileChangeStat>> => new Map(),
+      async (paths: readonly string[]): Promise<ReadonlyMap<string, FileChangeStat>> => new Map(paths.map(path => [path, { additions: 1, deletions: 0 }])),
     );
     const publish = vi.fn();
     const ledger = createTurnChangesLedger({
@@ -189,6 +184,8 @@ describe('createTurnChangesLedger', () => {
         (_, index) => `src/file-${index}.ts`,
       ),
     );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(read.mock.calls.flatMap(([paths]) => paths)).toHaveLength(MAX_CHANGED_FILES_PER_TURN);
     expect(ledger.files()).toHaveLength(MAX_CHANGED_FILES_PER_TURN);
   });
 
@@ -204,7 +201,7 @@ describe('createTurnChangesLedger', () => {
     ledger.recordPaths(['src/a.ts']);
     await vi.advanceTimersByTimeAsync(500);
     ledger.recordPaths(['src/b.ts']);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).not.toHaveBeenCalled();
 
     ledger.cancel();
     // The pending b.ts debounce dies with the timers…
@@ -213,8 +210,8 @@ describe('createTurnChangesLedger', () => {
     // …and the in-flight a.ts result is dropped instead of published.
     resolveNext(new Map([['src/a.ts', { additions: 7, deletions: 7 }]]));
     await vi.advanceTimersByTimeAsync(0);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).not.toHaveBeenCalled();
     ledger.recordPaths(['src/c.ts']);
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).not.toHaveBeenCalled();
   });
 });

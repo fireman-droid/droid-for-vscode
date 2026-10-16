@@ -8,7 +8,8 @@ import { MAX_ATTACHMENT_IMAGE_BYTES } from '../../shared/bridgeMessages';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('preserves annotation after an oversized encode and saves the replacement only after a valid encode', async () => {
-  vi.stubGlobal('PointerEvent', MouseEvent);
+  class PrimaryPointerEvent extends MouseEvent { readonly isPrimary = true; readonly pointerId = 1; }
+  vi.stubGlobal('PointerEvent', PrimaryPointerEvent);
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     clearRect: vi.fn(), drawImage: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(),
   } as unknown as CanvasRenderingContext2D);
@@ -18,13 +19,14 @@ it('preserves annotation after an oversized encode and saves the replacement onl
   const user = userEvent.setup();
   const save = vi.fn();
   const close = vi.fn();
-  render(<StagedImagePreview name="shot.png" data="dGVzdA==" mediaType="image/png" onSave={save} onClose={close} />);
+  render(<StagedImagePreview maxBytes={MAX_ATTACHMENT_IMAGE_BYTES} name="shot.png" data="dGVzdA==" mediaType="image/png" onSave={save} onClose={close} />);
   const image = screen.getByRole('img', { name: 'shot.png' });
   Object.defineProperties(image, { naturalWidth: { value: 100 }, naturalHeight: { value: 100 } });
   fireEvent.load(image);
   const canvas = screen.getByLabelText('Image annotation canvas');
   Object.assign(canvas, { setPointerCapture: vi.fn(), hasPointerCapture: () => false });
   vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 100, height: 100 } as DOMRect);
+  await user.click(screen.getByRole('radio', { name: 'Annotate image' }));
   fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10 });
   fireEvent.pointerMove(canvas, { clientX: 30, clientY: 25 });
   fireEvent.pointerUp(canvas, { clientX: 30, clientY: 25 });

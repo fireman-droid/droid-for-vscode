@@ -27,14 +27,14 @@ describe('tool display input boundaries', () => {
     expect(extractToolTarget('Read', { file_path: 'src/app.ts' })).toBeUndefined();
   });
 
-  it('does not grant native target or command-summary handling to MCP tools with matching leaves', () => {
+  it('shows safe generic MCP targets without treating command input as a native summary', () => {
     for (const tool of ['mcp__database__read', 'mcp__browser__ls', 'mcp__service__grep']) {
       expect(extractToolTarget(tool, {
         file_path: 'src/app.ts', directory_path: 'src', path: 'src', pattern: 'PRIVATE_INPUT',
-      }, workspace)).toBeUndefined();
+      }, workspace)).toBe('src/app.ts');
     }
     expect(extractToolTarget('browser_evaluate', { code: 'PRIVATE_INPUT', path: 'src' }, workspace))
-      .toBeUndefined();
+      .toBe('src');
     expect(extractExecuteSummary('mcp__remote__execute', { summary: 'PRIVATE_INPUT' })).toBeUndefined();
   });
 

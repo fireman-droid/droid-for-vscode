@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBase, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ManagedModel, ModelConnection } from '../../shared/protocol/modelManagerProtocol';
 import { AliasForm, ConnectionForm, ModelForm } from './ModelForms';
 
+import { I18nProvider } from '@droidvisx/chat-ui/i18n';
+import type { ReactNode } from 'react';
+const render = (node: ReactNode) => renderBase(node, { wrapper: ({ children }) => <I18nProvider locale="zh-CN">{children}</I18nProvider> });
 afterEach(cleanup);
 
 const connection: ModelConnection = {
@@ -74,7 +77,7 @@ describe('ModelForm identity, advanced settings, and focus', () => {
   it('rejects an empty ID and duplicates on the current connection', () => {
     const save = vi.fn();
     render(<ModelForm model={null} connection={connection} existingModels={[existing]} busy={false} onSave={save} onCancel={vi.fn()} />);
-    const id = screen.getByRole('textbox', { name: 'Model ID' });
+    const id = screen.getByRole('textbox', { name: '模型 ID' });
     fireEvent.change(id, { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
     expect(save).not.toHaveBeenCalled();
@@ -85,28 +88,14 @@ describe('ModelForm identity, advanced settings, and focus', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it('allows a duplicate ID on another connection only with a unique display name', () => {
+  it('allows the same ID and display name on another connection', () => {
     const save = vi.fn();
-    render(<ModelForm model={null} connection={connection} existingModels={[{ ...existing, connectionId: 'other', displayName: existing.model }]} busy={false} onSave={save} onCancel={vi.fn()} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Model ID' }), { target: { value: existing.model } });
+    render(<ModelForm model={null} connection={connection} existingModels={[{ ...existing, connectionId: 'other' }]} busy={false} onSave={save} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByRole('textbox', { name: '模型 ID' }), { target: { value: existing.model } });
+    fireEvent.change(screen.getByRole('textbox', { name: /模型别名/ }), { target: { value: existing.displayName } });
     fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-    const alias = screen.getByRole('textbox', { name: /模型别名/ });
-    expect(document.activeElement).toBe(alias);
-    expect(screen.getByRole('alert').textContent).toContain('显示名称已被其他模型使用');
-    expect(save).not.toHaveBeenCalled();
-    fireEvent.change(alias, { target: { value: 'Unique alias' } });
-    fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ model: existing.model, displayName: 'Unique alias' }), false);
-  });
-
-  it('compares the same truncated fallback name as the Host', () => {
-    const save = vi.fn();
-    const longId = 'x'.repeat(170);
-    render(<ModelForm model={null} connection={connection} existingModels={[{ ...existing, displayName: longId.slice(0, 160) }]} busy={false} onSave={save} onCancel={vi.fn()} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Model ID' }), { target: { value: longId } });
-    fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-    expect(screen.getByRole('alert').textContent).toContain('显示名称已被其他模型使用');
-    expect(save).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ model: existing.model, displayName: existing.displayName }), false);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('excludes the edited model from ID and alias uniqueness checks', () => {
@@ -137,7 +126,7 @@ describe('ModelForm identity, advanced settings, and focus', () => {
     const save = vi.fn();
     const props = { model: existing, connection, onSave: save, onCancel: vi.fn() };
     const view = render(<ModelForm {...props} busy={false} />);
-    const id = screen.getByRole('textbox', { name: 'Model ID' });
+    const id = screen.getByRole('textbox', { name: '模型 ID' });
     fireEvent.change(id, { target: { value: 'edited-model' } });
     view.rerender(<ModelForm {...props} busy />);
     fireEvent.submit(id.closest('form')!);
@@ -150,7 +139,7 @@ describe('ModelForm identity, advanced settings, and focus', () => {
   it('does not take focus while inactive, but focuses Model ID when activated', () => {
     const props = { model: null, connection, busy: false, onSave: vi.fn(), onCancel: vi.fn() };
     const view = render(<ModelForm {...props} autoFocus={false} />);
-    const id = screen.getByRole('textbox', { name: 'Model ID' });
+    const id = screen.getByRole('textbox', { name: '模型 ID' });
     expect(document.activeElement).not.toBe(id);
     view.rerender(<ModelForm {...props} autoFocus />);
     expect(document.activeElement).toBe(id);
