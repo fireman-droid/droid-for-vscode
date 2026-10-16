@@ -220,6 +220,52 @@ pnpm run typecheck
 pnpm run lint:budgets
 ```
 
+### 测试入口与文件归属
+
+普通单元与组件测试使用 Node 24、pnpm 10.2.0；下面命令均从仓库根目录执行。
+
+| 命令 | 范围 |
+| --- | --- |
+| `pnpm test` | 全部 Vitest 测试，包含应用与公共 UI 包 |
+| `pnpm run test:extension` | Extension Host 与共享 Bridge 契约 |
+| `pnpm run test:runtime` | Runtime 适配、历史、补全请求等本地测试 |
+| `pnpm run test:webview` | Droid Webview 业务和页面集成 |
+| `pnpm run test:chat-ui` | 公共组件、Markdown、Diff、代码引用与输入交互 |
+| `pnpm exec vitest run <测试文件或目录>` | 当前改动的最窄测试集合 |
+| `pnpm run test:integration` | 构建后启动隔离的 Windows VS Code，检查扩展激活、命令与卸载；首次运行会下载编辑器，不调用模型 |
+| `pnpm run test:quality` | 补全评估器自身的 5 个 Node 测试文件，检查评分、类型/语法、断言和执行隔离；不请求模型 |
+
+已有 Microsoft VS Code 时，可在 PowerShell 中指定二进制，避免集成测试再次下载编辑器：
+
+```powershell
+$env:DROID_TEST_VSCODE_EXECUTABLE = 'C:/path/to/Microsoft VS Code/Code.exe'
+pnpm run test:integration
+```
+
+仍使用临时目录中的独立用户配置与扩展目录，不安装到日常使用的编辑器。未指定时下载固定版本 `1.108.2`。
+
+`test:quality` 单独要求 **Node 26+、Python 3.11+、Go 1.23+**；评估器依赖 Node 26 的网络权限边界。
+不要为了兼容 Node 24 移除隔离。PR 在 Node 24 构建结束后切换到 Node 26 执行评估器测试，二者都纳入必需的 `PR checks`。
+`pnpm test` 不包含这组 Node 测试，也不包含真实编辑器测试；代码 PR 会额外运行 `test:quality`。
+真实模型质量评估入口见 [补全评估说明](AUTOCOMPLETE.md)，它与本地评估器校准分开，可能产生模型费用。
+`smoke:runtime`、`smoke:capabilities` 连接实际 Droid 环境，不属于上述离线测试或常规 CI。
+
+- 应用单元测试与对应模块就近存放，使用 `*.test.ts` / `*.test.tsx`。
+- 仅依赖公共 UI 的测试放在 `packages/chat-ui/test/`，直接验证该包的源码；不放进 `src/` 构建入口。
+- 涉及 Host、Bridge 或 Droid 页面装配的测试继续留在 `src/webview-v2/`，不为统一目录而搬进公共包。
+- 编辑器集成与补全评估放在 `src/integration/`；夹具保留在 `fixtures/`，运行结果写入被忽略的 `artifacts/` 或系统临时目录。
+- 旧 Figma 原型与过期设计截图从 Git 历史查阅；当前预览复用 Browser Dev Client / Studio，不另维护一套原型应用。
+
+### 性能工具
+
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm run benchmark:markdown --baseline=<提交> --chrome=<Chrome路径>` | 本地 Markdown 渲染对比 |
+| `pnpm run benchmark:review --chrome=<Chrome路径>` | 本地 Diff 渲染基准 |
+| `pnpm run dev:performance` | 启动本地性能场景页面 |
+
+性能基准使用合成数据，不连接 Host 或模型；按性能任务需要执行，不加入每次 UI 修改的必跑项。
+
 根据改动选择构建：
 
 | 命令 | 产物或作用 |

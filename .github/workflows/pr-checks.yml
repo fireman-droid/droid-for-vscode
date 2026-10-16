@@ -74,3 +74,23 @@ jobs:
       - name: Build documentation and check internal links
         if: steps.scope.outputs.docs == 'true'
         run: npm --prefix docs run build
+
+      # Run after all Node 24 builds. Keep these tests inside the required
+      # PR checks job so a failed evaluator also blocks the existing gate.
+      - name: Select Node 26 for local evaluator tests
+        if: steps.scope.outputs.extension == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: steps.scope.outputs.extension == 'true'
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: steps.scope.outputs.extension == 'true'
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Test local completion evaluators without model requests
+        if: steps.scope.outputs.extension == 'true'
+        run: pnpm run test:quality
