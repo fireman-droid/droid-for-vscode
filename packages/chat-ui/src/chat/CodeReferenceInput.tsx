@@ -6,7 +6,7 @@ export function CodeReferenceInput({ draft, onPaste, onKeyDown, onChange, ...pro
   draft: ReturnType<typeof useCodeReferenceDraft>;
   onChange?: InlineInputProps['onChange'];
 }) {
-  return <InlineInput {...props} value={draft.body} tokens={draft.tokens} maxLength={draft.maxLength}
+  return <InlineInput {...props} value={draft.body} tokens={draft.tokens} maxLength={draft.maxLength} measureText={draft.measureText}
     renderToken={token => <CodeReferenceChips references={[draft.references[draft.tokens.indexOf(token)]!]} />}
     onChange={onChange ?? draft.change}
     onCopy={draft.onCopy}

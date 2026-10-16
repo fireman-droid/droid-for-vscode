@@ -37,7 +37,7 @@
   .management-default-override { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
   .management-default-override input[type='number'] { width: 92px; }
   .management-row-control:has(> .management-default-override-add) { width: min(420px, 65%); }
-  .management-default-override-add { display: grid; grid-template-columns: minmax(0, 1fr) 92px auto; width: 100%; }
+  .management-default-override-add { display: grid; grid-template-columns: minmax(0, max-content) 92px auto; justify-content: end; width: 100%; }
   .management-page .management-default-override-add [role='combobox'] { width: 100%; min-width: 0; }
   .management-default-override-add > button:last-child { height: 30px; }
   .management-row-control:has(> input[data-slot='input']) { width: min(330px, 65%); }

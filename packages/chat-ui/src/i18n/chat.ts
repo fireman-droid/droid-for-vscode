@@ -28,6 +28,7 @@ export const chatMessages: readonly MessageTranslations[] = [
   ['Queue','排队','排隊'],
   ['Searching…','正在搜索…','正在搜尋…'],
   ['Send after the current answer · Enter','当前回答结束后发送 · Enter','目前回答結束後傳送 · Enter'],
+  ["The queued message is no longer waiting. Your unsaved edits were restored to the draft.","该消息已离开队列，未保存的修改已保留到草稿。","該訊息已離開佇列，未儲存的修改已保留到草稿。"],
   ["subagent","子代理","子代理"],
   ["Agents","子代理","子代理"],
   ["Could not copy result.","无法复制结果。","無法復制結果。"],

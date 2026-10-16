@@ -1,6 +1,6 @@
 # 当前状态
 
-核对日期：2026-10-15。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-10-16。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
@@ -42,9 +42,9 @@
   [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12) 已正式发布，
   [云端构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527079175) 从干净版本标签完成类型、预算、构建与包校验。
   [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527425293) 已成功，
-  注册中心返回 `Published droidvisx.droidvisx v0.8.12`；公开目录仍在同步，最新查询的 latest 为 `0.8.11`。
-  Microsoft Marketplace 已上传同一份正式 `0.8.12` 包，管理页显示 `Verifying 0.8.12`，验证通过尚未确认；
-  [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 保持可用。
+  注册中心 latest 已确认为 `0.8.12`。
+  Microsoft Marketplace 此前上传 `0.8.12` 后显示 Verifying；2026-10-16 公开查询未返回插件，
+  当前上架状态未确认，不能声称已公开更新。
   [宣传与文档站](https://fireman-droid.github.io/droid-for-vscode/) 已完成部署，
   [部署流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527081121) 成功。
   Microsoft 自动发布工作流已实现，复用并校验 GitHub Release 原始附件；
@@ -54,11 +54,10 @@
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
-- Microsoft VS Code 当前用户目录已安装正式 `0.8.12`，与 GitHub Release 使用同一份 VSIX；
-  SHA256 为 `923b41ddd261370ffa461906f7d6c11d5e2d195243c7cfbef91e8ebc4a2d1d9a`。
-  安装后的扩展入口、Review 脚本与 Webview 样式均逐字节匹配正式包；用户窗口未强制重载，需 Reload Window。
-  本轮没有安装 Cursor，Cursor 市场更新取决于 Open VSX 同步。独立 FIM／Next Edit 与开发评估入口已包含在正式包，
-  未改变现有补全配置或自动开启 Next Edit；模型网关可自动启动，不依赖用户窗口的旧连接。
+- Microsoft VS Code 与 Cursor 当前用户目录于 2026-10-15 安装了 `dbccfe3f` 圆环修复试用包，
+  版本仍为 `0.8.12`，SHA256 为 `716015183de0f0cebddd62bfb0e662cf0268b235e5fe03155e283b80163e3355`。
+  两个编辑器的入口、聊天 JS／CSS 与同一包一致；该包没有包含本轮整合的全部修复，也不是市场正式包。
+  用户已确认试用无问题。本轮只提交已验收改动，不重新安装或公开发布。
 - 本机官方 Droid CLI 已按用户要求重新安装最新版 `0.241.1`；此前 `bin/droid.exe` 文件截断，
   导致 Windows 拒绝启动，扩展已正常加载但新后台无法启动。新文件通过官方 SHA256、
   Authenticode 签名、`--version` 和本地 daemon 监听检查，未发送模型请求；
@@ -140,6 +139,16 @@
 | 补全 | 独立 FIM 与 Next Edit；自动续写允许较长词尾、条件右括号和语言候选扩展，共享防抖／上下文／请求，短负缓存及可关联诊断；多行建议的嵌套闭合括号不再因相邻同形括号被整段拒绝；默认关闭，模型费用独立于聊天 |
 
 ## 最近验证
+
+- `codex/accepted-fixes` 从远端 main 整理已完成的九项修复：回合快照收尾与连续发送、队列草稿恢复、
+  引用键盘／IME 路由、输入上限、引用渲染后测高、引用边界光标、模型选择器宽度、贴合源码的 Diff 讲解、
+  上下文圆环与右侧控件对齐。旧分支的较早圆环实现与较早 Diff 指令不再重复带入。
+  用户已验收；六个相关测试文件共 43 项通过，不追加页面验收或真实模型调用。
+  最终 package:vsix（含类型、文件预算、公共包及生产构建）与 171 项 VSIX 条目校验通过；
+  远端 PR 检查仍需以最新提交为准。
+- BTW 工具与停止反馈、快照重试、模型连接状态保留在独立 PR #2；其最新云端检查为 82 个文件、344 项失败，
+  包含固定工作区路径不存在、VS Code mock 和旧界面断言问题，尚未逐项完成归因与修复。
+  本轮不跳过必需检查或把用户界面验收等同于 CI 通过；主工作区两个模型管理未完成文件保留原状。
 
 - Diff 代码问答已采用用户选定的代码批注布局：以“你 / Droid”区分角色、柔和底色代码块、底部同排追问与发送，
   不保留左侧竖线；代码引用、发送与历史跟随的 6 项现有回归通过。
