@@ -25,13 +25,12 @@ export interface InlineInputProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   disabled?: boolean;
   maxLength?: number;
   measureText?(value: string): number;
-  onLimitExceeded?(): void;
   onContentLayout?(element: HTMLDivElement): void;
 }
 
 /** Shared editing primitive for text interspersed with non-editable, keyboard-addressable atoms. */
 export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste, onCopy, onKeyDown, onInput, onCompositionStart, onCompositionEnd,
-  placeholder, disabled, maxLength = Infinity, measureText, onLimitExceeded, onContentLayout, className, ...props }: InlineInputProps) {
+  placeholder, disabled, maxLength = Infinity, measureText, onContentLayout, className, ...props }: InlineInputProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const revealAfterEdit = useRef(false);
@@ -109,7 +108,6 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     revealAfterEdit.current = true;
     onChange(limited.value, limited.cursor);
     if (limited.value !== next) {
-      onLimitExceeded?.();
       // A rejected insertion may leave the controlled value unchanged. Still
       // restore the browser DOM and caret before accepting another edit.
       setRevision(count => count + 1);
@@ -121,7 +119,6 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     const next = input.value.slice(0, start) + text + input.value.slice(end);
     const limited = limitInlineEdit(input.value, next, start + text.length, maxLength, measureText);
     onChange(limited.value, limited.cursor);
-    if (limited.value !== next) onLimitExceeded?.();
     restoreCaret(limited.value, limited.cursor);
   };
   return <div {...props} ref={root} role="textbox" aria-multiline="true" aria-disabled={disabled || undefined}

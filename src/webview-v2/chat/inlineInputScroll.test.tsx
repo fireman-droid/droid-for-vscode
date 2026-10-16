@@ -8,6 +8,7 @@ import { UiEnvironmentProvider } from '../../../packages/chat-ui/src/environment
 import { EDITOR_COPY_MIME } from '../../../packages/chat-ui/src/chat/codeReferences';
 import { useCodeReferenceDraft } from '../../../packages/chat-ui/src/chat/useCodeReferenceDraft';
 import { inlineText, setInlineSelection } from '../../../packages/chat-ui/src/ui/inlineInputDom';
+import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import { pasteText } from './inlineInput.testHelpers';
 
 const originalRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
@@ -18,7 +19,7 @@ afterEach(() => {
 });
 function Draft() {
   const [value, setValue] = useState('');
-  const draft = useCodeReferenceDraft(value, setValue, 200_000);
+  const draft = useCodeReferenceDraft(value, setValue, MAX_TURN_TEXT_LENGTH);
   return <><CodeReferenceInput draft={draft} /><output>{value}</output></>;
 }
 
@@ -80,25 +81,24 @@ it('does not pull a manually scrolled draft back to its caret on an unrelated re
   expect(input.scrollTop).toBe(20);
 });
 
-it.each([false, true])('explains oversized paste and rejected typing, then clears the notice after deletion (editor metadata=%s)', async metadata => {
+it.each([false, true])('keeps a million-character paste and subsequent typing intact (editor metadata=%s)', async metadata => {
+  const send = vi.fn();
   function Composer() {
     const [value, setValue] = useState('');
-    const draft = useCodeReferenceDraft(value, setValue, 200_000);
-    return <ComposerView value={draft.body} codeDraft={draft} onChange={draft.change} onSend={() => {}} />;
+    const draft = useCodeReferenceDraft(value, setValue, MAX_TURN_TEXT_LENGTH);
+    return <ComposerView value={draft.body} codeDraft={draft} onChange={draft.change} onSend={() => send(value)} />;
   }
   render(<UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => {}, resolveCodeReference: async () => null }}><Composer /></UiEnvironmentProvider>);
   const input = screen.getByRole('textbox'); input.focus();
-  await act(async () => fireEvent.paste(input, { clipboardData: { getData: (type: string) => type === 'text/plain' ? 'x'.repeat(200_010)
+  const text = '长代码与说明\n'.repeat(150_000) + '原文末尾';
+  await act(async () => fireEvent.paste(input, { clipboardData: { getData: (type: string) => type === 'text/plain' ? text
     : metadata && type === EDITOR_COPY_MIME ? JSON.stringify({ providerCopyMimeTypes: ['application/vnd.droid.copy.aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'] }) : '' } }));
-  expect(inlineText(input)).toHaveLength(200_000);
-  expect(screen.getByRole('alert').textContent).toContain('Excess text was not inserted');
-  // At the limit, a native keystroke must be explained rather than disappearing silently.
-  (input.firstChild as Text).appendData('y'); setInlineSelection(input, 200_001);
+  expect(inlineText(input)).toBe(text);
+  const suffix = '继续输入';
+  (input.firstChild as Text).appendData(suffix); setInlineSelection(input, text.length + suffix.length);
   await act(async () => fireEvent.input(input, { inputType: 'insertText' }));
-  expect(inlineText(input)).toHaveLength(200_000);
-  expect(screen.getByRole('alert').textContent).toContain('200000');
-  (input.firstChild as Text).deleteData(199_999, 1); setInlineSelection(input, 199_999);
-  fireEvent.input(input, { inputType: 'deleteContentBackward' });
-  expect(inlineText(input)).toHaveLength(199_999);
+  expect(inlineText(input)).toBe(text + suffix);
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(send).toHaveBeenCalledWith(text + suffix);
   expect(screen.queryByRole('alert')).toBeNull();
 });

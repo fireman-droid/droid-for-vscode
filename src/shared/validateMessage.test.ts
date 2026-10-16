@@ -21,6 +21,13 @@ import {
 import { isWebviewToHostMessage, parseWebviewMessage } from './validateMessage';
 
 describe('parseWebviewMessage', () => {
+  it.each(['turn.send', 'turn.editResend'])('accepts the full expanded prompt for %s', type => {
+    const message = { type, sessionId: 'session-1', turnId: 'turn-1',
+      ...(type === 'turn.editResend' ? { messageId: 'message-1' } : {}),
+      text: '码'.repeat(MAX_TURN_TEXT_LENGTH) };
+    expect(parseWebviewMessage(message)).toEqual(message);
+  });
+
   it('accepts only exact Plan document open identities', () => {
     const message = {
       type: 'plan.document.open',
