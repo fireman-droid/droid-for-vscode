@@ -63,10 +63,13 @@ it('offers local refs and uses only an explicit unique remote HEAD default', asy
   await execute('git', ['clone', '--no-hardlinks', '--quiet', process.cwd(), root], { windowsHide: true });
   const head = (await reviewGit(root, ['rev-parse', 'HEAD'])).toString().trim();
   await reviewGit(root, ['update-ref', 'refs/heads/review-base', head]);
+  // CI checks out a detached merge commit, so establish this fixture explicitly.
+  await reviewGit(root, ['update-ref', 'refs/remotes/origin/review-base', head]);
+  await reviewGit(root, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/review-base']);
   const branches = await readReviewBranches(root);
   expect(branches.refs).toContain('refs/heads/review-base');
   expect(branches.refs.some(ref => ref.endsWith('/HEAD'))).toBe(false);
-  expect(branches.defaultBranch).toMatch(/^refs\/remotes\/origin\//);
+  expect(branches.defaultBranch).toBe('refs/remotes/origin/review-base');
   const scope = await loadReviewGitScope(root, 'branch', 'refs/heads/review-base');
   expect(scope.files).toEqual([]);
   expect(scope.comparison.after).toBe(head);
