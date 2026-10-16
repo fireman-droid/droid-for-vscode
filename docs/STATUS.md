@@ -14,8 +14,9 @@
   SHA256：`a303015bb85b4df21a9fa19a7c44386f999534ed8b1ce6b16e6244196afb1d9d`。
 - [Open VSX 0.8.13](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.13) 已公开可下载，
   下载后的 VSIX SHA256 与 GitHub 正式包一致。Cursor 客户端更新仍取决于其市场同步。
-- Microsoft Marketplace 已选择同一正式 VSIX 并点击上传，当前被图片验证码阻止，
-  尚未确认提交成功或公开上架；已请求用户当次验证码授权。未重复上传。
+- Microsoft Marketplace 的验证码已在用户授权后完成，但上传被拒绝：`The extension 'droidvisx' already exists in the Marketplace`。
+  当前账号在发布者下显示 Owner，刷新后扩展列表仍为空，公开详情页返回 404；没有可用的更新入口。
+  微软 `0.8.13` 尚未发布，需 Marketplace 支持核查占用记录；保留扩展 ID，不改名或覆盖已发布包。
   微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - Microsoft VS Code 与 Cursor 已安装过用户验收的 `0.8.12` 试用包，本轮没有重新安装。
   官方 Droid CLI 当前为 `0.241.1`。宣传与文档站为
