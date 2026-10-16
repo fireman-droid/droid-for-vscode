@@ -6,21 +6,21 @@
 
 ## 版本与交付
 
-- 正在准备 `0.8.13`，扩展 ID 保持 `droidvisx.droidvisx`。用户已验收并授权合并、
-  发布 GitHub、Open VSX 与 Microsoft Marketplace；要求 CI 全部通过后再发布。
-  集成分支为 `codex/release-0-8-13`，整合 BTW 分析工具及已验收的聊天、引用、
-  Diff、模型选择和快照修复。目前未正式发布，不以本地试用包代替市场版本。
-- 本次检查发现并修复两处恢复缺陷：后台回合 ID 更新会被去重条件跳过；
-  同一会话重连时提前展示历史会清除原失败状态。对应既有回归已通过。
-- 最近已确认的公开版本为 [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12)
-  与 Open VSX `0.8.12`。Microsoft Marketplace 当前发布者管理页显示没有扩展；此前 Verifying 记录不能视为上架成功。
-  本次正式包将从合入 main 的版本标签构建，各渠道复用相同 VSIX 与 SHA256。
-- Microsoft 自动发布未配置 `VSCE_PAT`，继续采用用户已授权的手动上传；Open VSX
-  通过正式 GitHub Release 触发。宣传与文档站地址为
+- `0.8.13` 已通过 [PR #4](https://github.com/fireman-droid/droid-for-vscode/pull/4)
+  合入 `main`，提交 `79053b47`；标签 `v0.8.13` 与版本号、CHANGELOG 一致。
+  扩展 ID 保持 `droidvisx.droidvisx`，包含已验收的 BTW、聊天、引用、Diff、模型选择与恢复修复。
+- [GitHub v0.8.13](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.13)
+  已正式公开，VSIX 从标签的干净源码构建，包内容与入口校验通过。
+  SHA256：`a303015bb85b4df21a9fa19a7c44386f999534ed8b1ce6b16e6244196afb1d9d`。
+- Open VSX 自动发布成功，发布者后台列出 `0.8.13` 为 Latest / Public；
+  公开页面与下载接口尚不可用新版，不能据此确认 Cursor 已可更新；等待市场处理，具体原因未确认。
+- Microsoft Marketplace 已选择同一正式 VSIX 并点击上传，当前被图片验证码阻止，
+  尚未确认提交成功或公开上架；已请求用户当次验证码授权。未重复上传。
+  微软自动发布保持关闭，未配置 `VSCE_PAT`。
+- Microsoft VS Code 与 Cursor 已安装过用户验收的 `0.8.12` 试用包，本轮没有重新安装。
+  官方 Droid CLI 当前为 `0.241.1`。宣传与文档站为
   https://fireman-droid.github.io/droid-for-vscode/ 。
-- Microsoft VS Code 与 Cursor 已安装过用户验收的 `0.8.12` 试用包，但不含本次完整集成。
-  本轮发布授权不包含重新安装编辑器。官方 Droid CLI 当前为 `0.241.1`。
-- 主工作区暂停中的 BYOK 未提交改动保留原样，不进入本次发行。
+- 主工作区暂停中的 BYOK 未提交改动保留原样，未进入本次发行。
 
 ## 当前源码
 
@@ -38,15 +38,16 @@
 
 ## 最近验证
 
-- 用户已验收聊天、代码引用、Diff 讲解和上下文圆环等界面改动；本轮不追加页面验收或付费模型调用。
-- 发行整合时发现旧回归夹具未同步生产行为：包括缺少真实入口的 Provider、旧 textarea／选择器定位、
-  缺少快照服务、旧模型接口 ID、已移除的 Canvas 入口，以及用停止请求代替真正完成的断言。
-  已按对应生产调用链更新，未跳过测试或降低运行时约束。
-- 两处会话恢复缺陷通过既有回归验证。最新类型检查、文件预算与差异空白检查通过；
-  完整本地测试 3921 项通过、0 失败、0 跳过；最终 VSIX 构建和 172 项包内容校验通过。
-  远端首轮 3919 项通过、2 项夹具失败：已显式设置测试远端 HEAD，并按可见标签检查代码引用；等待最新 CI。
-- BTW 的隔离示例、只读策略与双传输工具活动此前已做针对性验证；真实模型回答质量、
-  长期运行及全部模型服务不属于本轮本地测试的结论范围。历史测量及旧安装包哈希见 Git 历史。
+- 用户已验收聊天、代码引用、Diff 讲解和上下文圆环等界面改动；本轮未追加页面验收或付费模型调用。
+- [最终远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38853633972)
+  全绿：350 个文件、3921 项测试通过，无失败或跳过；类型检查、文件预算、构建、VSIX 校验通过。
+- 修复了后台回合 ID 未持久化、同会话重连提前清除失败状态两处缺陷，既有回归已覆盖。
+  旧测试夹具已同步共享组件、只读历史、全工作区快照、真实停止确认与独立 Git 测试环境。
+- [正式发行构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38854246013)
+  成功；下载正式附件后再次核对源码、版本、SHA256 和 172 项包内容及扩展入口加载。
+  各渠道使用同一份正式 VSIX，没有逐渠道重建。
+- BTW 隔离示例、只读策略与双传输工具活动此前已做针对性验证；真实模型回答质量、
+  长期运行及全部模型服务不属于本轮本地测试的结论范围。
 
 ## 未完成与使用限制
 
