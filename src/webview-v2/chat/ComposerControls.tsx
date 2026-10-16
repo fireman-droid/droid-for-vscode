@@ -108,14 +108,16 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
     {!editorOwner ? button('settings', t('Session controls'), <Plus />, 'v2-composer-add w-6 shrink-0 p-0') : null}
     {input}
     {button('mode', t('Mode: {mode}', { mode: modeLabel }), <><span>{modeLabel}</span><ChevronDown className="dvx-select-icon size-3" aria-hidden="true" /></>, editorOwner ? 'ml-auto shrink-0' : 'v2-composer-mode shrink-0')}
+    <div className={editorOwner ? 'contents' : 'v2-composer-actions'}>
     {!editorOwner ? button('context', getContextLabel(state.context, t),
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg className="block" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity=".25" />
         {state.context.value && hasUsableContextRatio(state.context.value) ? <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"
           pathLength="100" strokeDasharray={`${percent} 100`} transform="rotate(-90 12 12)" /> : null}
-      </svg>, 'v2-composer-context w-[22px] shrink-0 p-0') : null}
+      </svg>, 'v2-composer-context w-[22px] shrink-0 p-0 [&_svg]:size-[18px]') : null}
     {button('model', t('Model: {model}', { model: `${model}${effort ? `, ${t(formatReasoningLabel(effort))}` : ''}${override ? `, ${t('Spec drafting')}` : ''}` }),
-      <><span className="truncate">{model}{effort ? <span> {t(formatReasoningLabel(effort))}</span> : null}{override ? ' spec' : ''}</span><ChevronDown className="dvx-select-icon size-3 shrink-0" aria-hidden="true" /></>, editorOwner ? 'max-w-[56%]' : 'v2-composer-model')}
+      <><span className="truncate">{model}{effort ? <span> {t(formatReasoningLabel(effort))}</span> : null}{override ? ' spec' : ''}</span><ChevronDown className="dvx-select-icon size-3 shrink-0" aria-hidden="true" /></>, editorOwner ? 'max-w-[56%]' : 'v2-composer-model shrink')}
     {action}
+    </div>
   </div></ThemeContext.Provider>;
 }

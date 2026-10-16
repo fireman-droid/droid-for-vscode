@@ -1,5 +1,5 @@
 import { useI18n } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEventHandler, type DragEventHandler, type KeyboardEventHandler, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEventHandler, type DragEventHandler, type KeyboardEventHandler, type ReactNode } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/input';
@@ -64,6 +64,8 @@ export function ComposerView({
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
   const richInput = useRef<InlineInputHandle>(null);
+  const widths = useRef({ row: 0, input: 0 });
+  const rich = codeDraft !== undefined;
   const focusInput = () => (richInput.current ?? input.current)?.focus({ preventScroll: true });
   const surface = useRef<HTMLFormElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -73,33 +75,33 @@ export function ComposerView({
   useEffect(() => {
     if (focusSignal > 0) focusInput();
   }, [focusSignal]);
+  const resize = useCallback(() => {
+    const element = richInput.current?.element ?? input.current;
+    if (element === null) return;
+    const row = element.parentElement!;
+    const { multiline, height, scrollable } = measureComposerInput(row, element, expanded, value);
+    const previousHeight = element.getBoundingClientRect().height;
+    const previousMultiline = row.dataset.multiline === 'true';
+    if (row.dataset.multiline !== String(multiline)) row.dataset.multiline = String(multiline);
+    if (element.style.height !== `${height}px`) element.style.height = `${height}px`;
+    element.style.overflowY = scrollable ? 'auto' : 'hidden';
+    widths.current = { row: row.getBoundingClientRect().width, input: element.getBoundingClientRect().width };
+    if (previousMultiline !== multiline || Math.abs(previousHeight - height) > 0.5)
+      onLayout?.({ width: row.clientWidth, previousHeight, height, previousMultiline, multiline });
+  }, [value, expanded, onLayout]);
   useLayoutEffect(() => {
     const element = richInput.current?.element ?? input.current;
     if (element === null) return;
     const row = element.parentElement!;
-    let rowWidth = 0;
-    let inputWidth = 0;
-    const resize = () => {
-      const { multiline, height, scrollable } = measureComposerInput(row, element, expanded, value);
-      const previousHeight = element.getBoundingClientRect().height;
-      const previousMultiline = row.dataset.multiline === 'true';
-      if (row.dataset.multiline !== String(multiline)) row.dataset.multiline = String(multiline);
-      if (element.style.height !== `${height}px`) element.style.height = `${height}px`;
-      element.style.overflowY = scrollable ? 'auto' : 'hidden';
-      rowWidth = row.getBoundingClientRect().width;
-      inputWidth = element.getBoundingClientRect().width;
-      if (previousMultiline !== multiline || Math.abs(previousHeight - height) > 0.5)
-        onLayout?.({ width: row.clientWidth, previousHeight, height, previousMultiline, multiline });
-    };
-    resize();
+    if (!rich) resize();
     const observer = new ResizeObserver(() => {
-      if (row.getBoundingClientRect().width === rowWidth && element.getBoundingClientRect().width === inputWidth) return;
+      if (row.getBoundingClientRect().width === widths.current.row && element.getBoundingClientRect().width === widths.current.input) return;
       resize();
     });
     observer.observe(row);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [value, expanded, inputReplacement, placeholder, assistantName, onLayout]);
+  }, [resize, rich, inputReplacement, placeholder, assistantName]);
   const submit = () => { if (!sendDisabled) onSend(); };
   const keyDown: KeyboardEventHandler<HTMLElement> = event => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -114,7 +116,7 @@ export function ComposerView({
     : codeDraft ? <CodeReferenceInput draft={codeDraft} ref={richInput} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
       aria-autocomplete={suggestionsListId ? 'list' : undefined} aria-controls={suggestionsOpen ? suggestionsListId : undefined}
       aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
-      placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} onChange={onChange} onKeyDown={keyDown} onPaste={onPaste}
+      placeholder={placeholder ?? t("Message {p0}", { p0: assistantName })} onChange={onChange} onKeyDown={keyDown} onPaste={onPaste} onContentLayout={resize}
       className="min-h-[20px] max-h-42 rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px]" />
     : <Textarea variant="plain" ref={input} data-composer-input="" aria-label={t("Message {p0}", { p0: assistantName })}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
