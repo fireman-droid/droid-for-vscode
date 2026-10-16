@@ -12,8 +12,8 @@
 - [GitHub v0.8.13](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.13)
   已正式公开，VSIX 从标签的干净源码构建，包内容与入口校验通过。
   SHA256：`a303015bb85b4df21a9fa19a7c44386f999534ed8b1ce6b16e6244196afb1d9d`。
-- Open VSX 自动发布成功，发布者后台列出 `0.8.13` 为 Latest / Public；
-  公开页面与下载接口尚不可用新版，不能据此确认 Cursor 已可更新；等待市场处理，具体原因未确认。
+- [Open VSX 0.8.13](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.13) 已公开可下载，
+  下载后的 VSIX SHA256 与 GitHub 正式包一致。Cursor 客户端更新仍取决于其市场同步。
 - Microsoft Marketplace 已选择同一正式 VSIX 并点击上传，当前被图片验证码阻止，
   尚未确认提交成功或公开上架；已请求用户当次验证码授权。未重复上传。
   微软自动发布保持关闭，未配置 `VSCE_PAT`。
