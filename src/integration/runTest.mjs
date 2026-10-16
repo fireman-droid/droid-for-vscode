@@ -14,6 +14,9 @@ mkdirSync(integrationRoot, { recursive: true });
 
 try {
   await runTests({
+    // Optional local binary; the separate user-data/extensions directories below
+    // still isolate this run from the user's editor profile.
+    vscodeExecutablePath: process.env.DROID_TEST_VSCODE_EXECUTABLE || undefined,
     version: '1.108.2',
     platform: 'win32-x64-archive',
     cachePath: path.join(integrationRoot, 'cache'),
