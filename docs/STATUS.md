@@ -19,8 +19,8 @@
   微软 `0.8.13` 尚未发布，需 Marketplace 支持核查占用记录；保留扩展 ID，不改名或覆盖已发布包。
   微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - Microsoft VS Code 与 Cursor 已在用户授权后安装 `codex/text-selection` 分支的 `0.8.13` 试用包，
-  源码提交 `b94fdcd9`（暖橙版）；两端安装成功，安装后样式文件 SHA256 与构建产物一致。
-  用户随后选定石墨灰预览，当前源码已替换，石墨灰版本尚未安装。
+  源码提交 `64b6a626`（用户选定的石墨灰版）；两端安装成功，安装后样式文件 SHA256 与构建产物一致，
+  待 Reload Window 后使用新选中色。
   该包尚未正式发布，不替代上述 `v0.8.13` 正式发行附件。
   官方 Droid CLI 当前为 `0.241.1`。宣传与文档站为
   https://fireman-droid.github.io/droid-for-vscode/ 。
