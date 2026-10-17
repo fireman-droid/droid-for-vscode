@@ -17,7 +17,8 @@
 - Microsoft Marketplace 本次管理页被 Azure DevOps 的 VSID 并发限流拦截，未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 已按本次授权安装 `0.8.14` 本地验收包，CLI 与已安装入口文件核对通过，需 Reload Window。
+- Microsoft VS Code 已按本次授权安装 `codex/activity-gutter-fix` 的 `0.8.14` 本地修正版，CLI 报告安装成功，需 Reload Window。
+  修复思考行箭头与图标重叠，标题、展开内容与正文共用正常布局的文字起点；尚未合并或正式发布，不覆盖上述正式产物。
   Cursor 本次未安装，仍为此前的 `0.8.13` 石墨灰选区试用包。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
@@ -43,7 +44,8 @@
 - Node 24／pnpm 10.2.0 下类型检查、文件预算、生产构建与 172 项 VSIX 内容及入口加载校验通过。
   [远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026259774) 的 354 个文件、3950 项测试全部通过。
   [正式标签构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026741401) 成功，各渠道复用其同一附件。
-- Activity 已在连接真实 VS Code Host 的 Browser Dev Client 核对文字基线，用户认可精简与对齐方案。
+- Activity 原对齐实现出现图标重叠与展开内容错位，当前分支已修正；类型检查、文件预算、构建与 VSIX 校验通过。
+  按用户要求停止追加页面验收并安装修正版，修正后的真实页面效果尚未验证。
   石墨灰色值采用用户选择的方案；保留终端卡片与既有交互，没有添加配色或 CSS 文本测试。
 - 自动恢复以模拟时钟覆盖长时间断线、订阅恢复失败、进程退出、并发重试、认证阻塞和关闭清理。
   未做真实整日挂机／休眠验收，未调用付费模型；真实 daemon 中途引导及断线组合场景仍待实测。
