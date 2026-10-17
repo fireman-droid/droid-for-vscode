@@ -6,25 +6,21 @@
 
 ## 版本与交付
 
-- `0.8.14` 汇集用户认可的 Activity 精简与对齐、等待／引导队列、自动恢复和石墨灰选区。
-  当前为发布候选，待最终 CI、合并与标签构建后发布；不包含目录整理、超长输入等其他分支。
-- `0.8.13` 已通过 [PR #4](https://github.com/fireman-droid/droid-for-vscode/pull/4)
-  合入 `main`，提交 `79053b47`；标签 `v0.8.13` 与版本号、CHANGELOG 一致。
-  扩展 ID 保持 `droidvisx.droidvisx`，包含已验收的 BTW、聊天、引用、Diff、模型选择与恢复修复。
-- [GitHub v0.8.13](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.13)
-  已正式公开，VSIX 从标签的干净源码构建，包内容与入口校验通过。
-  SHA256：`a303015bb85b4df21a9fa19a7c44386f999534ed8b1ce6b16e6244196afb1d9d`。
-- [Open VSX 0.8.13](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.13) 已公开可下载，
-  下载后的 VSIX SHA256 与 GitHub 正式包一致。Cursor 客户端更新仍取决于其市场同步。
-- Microsoft Marketplace 的验证码已在用户授权后完成，但上传被拒绝：`The extension 'droidvisx' already exists in the Marketplace`。
-  当前账号在发布者下显示 Owner，刷新后扩展列表仍为空，公开详情页返回 404；没有可用的更新入口。
-  微软 `0.8.13` 尚未发布，需 Marketplace 支持核查占用记录；保留扩展 ID，不改名或覆盖已发布包。
-  微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 与 Cursor 已安装 `0.8.13` 石墨灰选区试用包，本次自动恢复改动尚未安装。
-  官方 Droid CLI 当前为 `0.241.1`。宣传与文档站为
-  https://fireman-droid.github.io/droid-for-vscode/ 。
-- 主工作区暂停中的 BYOK 未提交改动保留原样，未进入本次发行。
-
+- `0.8.14` 已通过 [PR #10](https://github.com/fireman-droid/droid-for-vscode/pull/10) 合入 `main`，
+  提交 `1257cc01`；版本、CHANGELOG 与 `v0.8.14` 标签一致。包含用户认可的 Activity 精简与对齐、
+  等待／引导队列、会话自动恢复和石墨灰选区，不包含目录整理、超长输入或暂停中的 BYOK 草稿。
+- [GitHub v0.8.14](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.14) 已正式公开。
+  正式包来自标签的干净源码，下载后再次核对版本、源码提交、172 项包内容与扩展入口加载。
+  SHA256：`e28c7dcd1e73b7a89ab0f1ff2be8c065026bd96d84e197ec6737f267bf88816d`。
+- [Open VSX 发布工作流](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026927831) 成功，平台已接受同一份 `0.8.14` 正式包。
+  公开版本 API 暂时返回 404，尚未确认可公开下载；不把上传成功当作市场已同步，Cursor 可见性仍待平台处理。
+- Microsoft Marketplace 本次管理页被 Azure DevOps 的 VSID 并发限流拦截，未提交。
+  此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
+  未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
+- Microsoft VS Code 已按本次授权安装 `0.8.14` 本地验收包，CLI 与已安装入口文件核对通过，需 Reload Window。
+  Cursor 本次未安装，仍为此前的 `0.8.13` 石墨灰选区试用包。
+  官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
+- 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
 ## 当前源码
 
 | 范围 | 当前实现与边界 |
@@ -44,7 +40,8 @@
 - `0.8.14` 合并后的针对性回归 10 个文件、110 项通过；覆盖队列／引导、自动恢复、后台发现、转录与 Activity 展示。
   前端测试首次与共享包构建并行时缺少中间产物，构建完成后单独重跑通过。
 - Node 24／pnpm 10.2.0 下类型检查、文件预算、生产构建与 172 项 VSIX 内容及入口加载校验通过。
-  当前结果对应发布候选；远端 CI 和正式标签构建仍待执行。
+  [远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026259774) 的 354 个文件、3950 项测试全部通过。
+  [正式标签构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026741401) 成功，各渠道复用其同一附件。
 - Activity 已在连接真实 VS Code Host 的 Browser Dev Client 核对文字基线，用户认可精简与对齐方案。
   石墨灰色值采用用户选择的方案；保留终端卡片与既有交互，没有添加配色或 CSS 文本测试。
 - 自动恢复以模拟时钟覆盖长时间断线、订阅恢复失败、进程退出、并发重试、认证阻塞和关闭清理。
