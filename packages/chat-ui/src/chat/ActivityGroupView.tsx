@@ -17,8 +17,8 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
   const summary = [t(presentation.action), presentation.target].filter(Boolean).join(' ');
   const id = useId();
   return <Collapsible open={disclosure.expanded} className="v2-activity-group">
-    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: summary })} aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure flex min-h-6 w-full min-w-0 select-none items-center gap-1.5 py-0.5 text-left text-xs leading-[18px] text-muted-foreground hover:text-foreground">
-      <ChevronRight className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${disclosure.expanded ? 'rotate-90' : ''}`} />
+    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: summary })} aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure v2-activity-row flex min-h-6 w-full min-w-0 select-none items-center gap-1.5 py-0.5 text-left text-xs leading-[18px] text-muted-foreground hover:text-foreground">
+      <ChevronRight className={`v2-activity-chevron transition-transform motion-reduce:transition-none ${disclosure.expanded ? 'rotate-90' : ''}`} />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <SlidingText text={summary} />
       </span>
@@ -27,11 +27,11 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
     {!disclosure.expanded ? attention : null}
     <AnimatedCollapsibleContent id={id} ref={disclosure.contentRef} open={disclosure.expanded} visible={disclosure.visible}
       className={`transition-[grid-template-rows,opacity] motion-reduce:transition-none ${disclosure.visible ? 'opacity-100' : 'opacity-0'}`}>
-      {disclosure.mounted ? <div className="v2-activity-items min-w-0">
+      {disclosure.mounted ? <div className="v2-activity-items min-w-0 pl-[22px]">
         {children}
         {reasoningCount > 0 ? <ActivityItem id={`${groupId}:reasoning`} messageId={messageId} icon={<Brain />}
           title={t('Thinking history ({count})', { count: reasoningCount })}>{reasoning}</ActivityItem> : null}
-        {presentation.detailFacts?.length ? <p className="py-1 pl-6 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
+        {presentation.detailFacts?.length ? <p className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
       </div> : null}
     </AnimatedCollapsibleContent>
   </Collapsible>;

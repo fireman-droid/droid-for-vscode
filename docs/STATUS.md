@@ -6,8 +6,8 @@
 
 ## 版本与交付
 
-- `codex/activity-presentation` 是独立待验收分支，尚未合并、安装或发布。
-  保留终端及工具卡片样式，精简 Activity 摘要并集中展示思考记录；是否合并由用户看过实际效果后决定。
+- Activity 精简与统一对齐已获用户认可，纳入 `0.8.14` 发布整理，尚未正式发布。
+  正文、思考与过程标题共用文字基线，展开项统一缩进，保留终端卡片样式。
 - `0.8.13` 已通过 [PR #4](https://github.com/fireman-droid/droid-for-vscode/pull/4)
   合入 `main`，提交 `79053b47`；标签 `v0.8.13` 与版本号、CHANGELOG 一致。
   扩展 ID 保持 `droidvisx.droidvisx`，包含已验收的 BTW、聊天、引用、Diff、模型选择与恢复修复。
@@ -44,7 +44,7 @@
 - Activity 针对性回归 4 个文件、32 项通过，覆盖失败命令输出、思考记录展开、流式追加与虚拟重挂载；
   类型检查、文件预算、构建及 172 项 VSIX 内容与扩展入口加载校验通过。
   分支试用包 SHA256：`b876e5fc35a186a40b4b5171ab3f22e16cf327dbb37fa7d6794f81b2fda02936`。
-  当前 Browser Dev Client 未启动，真实浏览器样式和交互仍待验收，没有调用付费模型。
+  已在连接真实 VS Code Host 的 Browser Dev Client 核对文字对齐；对齐修改后的类型检查与文件预算通过，最终整包随发行分支构建。没有调用付费模型。
 - 用户已验收聊天、代码引用、Diff 讲解和上下文圆环等界面改动；本轮未追加页面验收或付费模型调用。
 - [最终远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38853633972)
   全绿：350 个文件、3921 项测试通过，无失败或跳过；类型检查、文件预算、构建、VSIX 校验通过。
