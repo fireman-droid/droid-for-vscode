@@ -12,8 +12,8 @@
 - [GitHub v0.8.14](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.14) 已正式公开。
   正式包来自标签的干净源码，下载后再次核对版本、源码提交、172 项包内容与扩展入口加载。
   SHA256：`e28c7dcd1e73b7a89ab0f1ff2be8c065026bd96d84e197ec6737f267bf88816d`。
-- [Open VSX 发布工作流](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026927831) 成功，平台已接受同一份 `0.8.14` 正式包。
-  公开版本 API 暂时返回 404，尚未确认可公开下载；不把上传成功当作市场已同步，Cursor 可见性仍待平台处理。
+- [Open VSX 0.8.14](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.14) 已公开可下载，
+  下载包的 SHA256 与上述 GitHub 正式包一致；Cursor 客户端更新仍取决于其市场同步。
 - Microsoft Marketplace 本次管理页被 Azure DevOps 的 VSID 并发限流拦截，未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
@@ -21,6 +21,7 @@
   Cursor 本次未安装，仍为此前的 `0.8.13` 石墨灰选区试用包。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
+
 ## 当前源码
 
 | 范围 | 当前实现与边界 |
