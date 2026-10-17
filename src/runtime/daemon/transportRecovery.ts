@@ -1,9 +1,9 @@
 import type { DaemonSessionController } from '@factory/droid-sdk';
 
 export type DaemonTransportState = 'connected' | 'recovering' | 'failed';
-export const DAEMON_RECOVERY_TIMEOUT_MS = 45_000;
+export const DAEMON_RECONNECT_INTERVAL_MS = 30_000;
 
-/** One bounded recovery owns the authenticated socket and its session subscriptions. */
+/** SDK fast retries are followed by slow retries for the lifetime of this connection. */
 export class DaemonTransportRecovery {
   private state: DaemonTransportState = 'connected';
   private pending: Promise<void> | undefined;
@@ -12,6 +12,7 @@ export class DaemonTransportRecovery {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private generation = 0;
   private restoring = false;
+  private connecting = false;
   private disposed = false;
   private readonly listeners = new Set<() => void>();
 
@@ -21,6 +22,7 @@ export class DaemonTransportRecovery {
     private readonly suspendSessions: () => void,
     private readonly failSessions: (error: Error) => void,
     private readonly onState?: (state: DaemonTransportState) => void,
+    private readonly hasRetainedSessions: () => boolean = () => true,
   ) {
     controller.on('disconnected', this.disconnected);
     controller.on('connectionStatusChanged', this.changed);
@@ -36,11 +38,11 @@ export class DaemonTransportRecovery {
         this.reject = reject;
       });
       void this.pending.catch(() => undefined);
-      this.timer = setTimeout(() => this.fail(), DAEMON_RECOVERY_TIMEOUT_MS);
       this.state = 'recovering';
       this.suspendSessions();
       this.onState?.(this.state);
     }
+    this.scheduleRetry();
     // The SDK schedules its retry after emitting the first disconnected state.
     queueMicrotask(this.changed);
   };
@@ -48,8 +50,7 @@ export class DaemonTransportRecovery {
   private readonly changed = (): void => {
     if (this.disposed || this.state !== 'recovering') return;
     const status = this.controller.getConnectionStatus();
-    if (status.lastConnectionFailure?.retryable === false ||
-        status.recovery?.isReconnecting === false && status.transport === 'disconnected') {
+    if (status.lastConnectionFailure?.retryable === false) {
       this.fail();
     } else if (status.transport === 'connected' && status.isAuthenticated && !this.restoring) {
       this.restoring = true;
@@ -67,10 +68,42 @@ export class DaemonTransportRecovery {
         this.onState?.(this.state);
         for (const listener of this.listeners) listener();
       }, () => {
-        if (this.generation === generation && this.state === 'recovering') this.fail();
+        if (this.generation === generation && this.state === 'recovering') {
+          this.restoring = false;
+          this.scheduleRetry();
+        }
       });
     }
   };
+
+  private scheduleRetry(): void {
+    if (this.disposed || this.state !== 'recovering' || this.timer !== undefined) return;
+    this.timer = setTimeout(() => { this.timer = undefined; void this.retry(); }, DAEMON_RECONNECT_INTERVAL_MS);
+    this.timer.unref?.();
+  }
+
+  private async retry(): Promise<void> {
+    if (this.disposed || this.state !== 'recovering') return;
+    if (!this.hasRetainedSessions()) { this.fail(); return; }
+    const status = this.controller.getConnectionStatus();
+    if (!this.connecting && !this.restoring && !status.recovery?.isReconnecting) {
+      this.connecting = true;
+      try {
+        await this.controller.attemptInitialConnection();
+      } catch {
+        // Inspect the structured status below; never resend a turn or log auth payloads.
+      } finally {
+        this.connecting = false;
+      }
+      this.changed();
+    }
+    this.scheduleRetry();
+  }
+
+  releaseUnused(): void {
+    if (this.state === 'recovering' && !this.hasRetainedSessions() &&
+        this.controller.getConnectionStatus().transport !== 'connected') this.fail();
+  }
 
   private fail(): void {
     if (this.disposed || this.state === 'failed') return;

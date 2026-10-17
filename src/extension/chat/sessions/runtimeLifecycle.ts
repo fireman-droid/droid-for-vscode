@@ -209,7 +209,7 @@ export async function replaceRuntime(
   const previousRuntime = ctl.sessionState.runtime;
   if (previousRuntime) {
     try {
-      await closeRuntime(ctl, previousRuntime, detachedSessionId !== null);
+      await closeRuntime(ctl, previousRuntime, detachedSessionId !== null || options.preserveBackendTurn === true);
     } catch {
       if (
         isCurrentRuntimeGeneration(ctl, generation) &&

@@ -4,7 +4,7 @@ import { AutonomyLevel, DroidInteractionMode, ReasoningEffort, ToolConfirmationO
   type DaemonSessionController, type SessionSettings } from '@factory/droid-sdk';
 import { retainDaemonController } from './connectPublicDaemon';
 import { DaemonStreamRecoveryError } from './sessionStream';
-import { DAEMON_RECOVERY_TIMEOUT_MS } from './transportRecovery';
+import { DAEMON_RECONNECT_INTERVAL_MS } from './transportRecovery';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -26,6 +26,7 @@ function fixture() {
   const controller = Object.assign(new EventEmitter(), {
     loadSession: vi.fn(async (_options: object) => snapshot()),
     initializeSession: vi.fn(async (_options: object) => ({ settings })),
+    attemptInitialConnection: vi.fn<() => Promise<void>>(async () => { throw new Error('still offline'); }),
     getConnectionStatus: () => status,
     getSessionStateManager: () => state,
     addUserMessage: vi.fn(async (_id: string, input: { messageId: string }) => { messages.push({ id: input.messageId }); }),
@@ -49,10 +50,15 @@ function fixture() {
     status = { ...status, transport: 'connected' as Status['transport'], isAuthenticated: true, recovery: null };
     controller.emit('connectionStatusChanged', status);
   };
+  const exhausted = (fatal = false) => {
+    status = { ...status, recovery: { isReconnecting: false },
+      lastConnectionFailure: fatal ? { retryable: false } as Status['lastConnectionFailure'] : null };
+    controller.emit('connectionStatusChanged', status);
+  };
   const notify = (notification: object) => controller.emit('sessionNotification', { sessionId: 'session', notification });
   const complete = (turnId: string) => notify({ type: 'agent_turn_completed', turnId, reason: 'completed',
     tokenUsage: { inputTokens: 7, outputTokens: 3, cacheCreationTokens: 0, cacheReadTokens: 0, thinkingTokens: 0 } });
-  return { api, controller, snapshot, messages, onConnectionState, onError, disconnect, reconnect, notify, complete };
+  return { api, controller, snapshot, messages, onConnectionState, onError, disconnect, reconnect, exhausted, notify, complete };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -149,17 +155,81 @@ describe('daemon transport recovery', () => {
     f.api.disconnect();
   });
 
-  it('bounds a broken transport without cancelling the still owned remote task', async () => {
+  it('recovers after hours offline without resending or cancelling the original task', async () => {
     const f = fixture();
     const session = await f.api.sessions.resume('session');
     const next = session.stream('once').next().catch(error => error);
     await vi.waitFor(() => expect(f.controller.addUserMessage).toHaveBeenCalledOnce());
     vi.useFakeTimers();
     f.disconnect();
-    await vi.advanceTimersByTimeAsync(DAEMON_RECOVERY_TIMEOUT_MS);
-    expect(await next).toBeInstanceOf(Error);
-    expect(f.onConnectionState).toHaveBeenLastCalledWith('failed');
+    f.exhausted();
+    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1000);
+    expect(f.controller.attemptInitialConnection).toHaveBeenCalledTimes(360);
+    expect(f.onConnectionState).toHaveBeenLastCalledWith('recovering');
+    f.controller.attemptInitialConnection.mockImplementation(async () => { f.reconnect(); });
+    await vi.advanceTimersByTimeAsync(DAEMON_RECONNECT_INTERVAL_MS);
+    const handoff = await next as DaemonStreamRecoveryError;
+    expect(handoff).toBeInstanceOf(DaemonStreamRecoveryError);
+    f.complete(handoff.messageId);
+    expect(handoff.recovery.completion).toMatchObject({ success: true });
+    expect(f.onConnectionState).toHaveBeenLastCalledWith('connected');
+    expect(f.controller.addUserMessage).toHaveBeenCalledOnce();
     expect(f.controller.interruptSession).not.toHaveBeenCalled();
+    f.api.disconnect();
+  });
+
+  it('does not overlap the SDK reconnect loop or an outstanding slow reconnect', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    await f.api.sessions.resume('session');
+    f.disconnect();
+    await vi.advanceTimersByTimeAsync(DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.controller.attemptInitialConnection).not.toHaveBeenCalled();
+    f.exhausted();
+    const attempt = deferred<void>();
+    f.controller.attemptInitialConnection.mockImplementation(() => attempt.promise);
+    await vi.advanceTimersByTimeAsync(5 * DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.controller.attemptInitialConnection).toHaveBeenCalledOnce();
+    f.api.disconnect();
+    attempt.reject(new Error('closed'));
+    await vi.advanceTimersByTimeAsync(5 * DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.controller.attemptInitialConnection).toHaveBeenCalledOnce();
+  });
+
+  it('stops retrying non-retryable authentication failures', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    f.disconnect(); f.exhausted(true);
+    await expect(f.api.waitUntilReady!()).rejects.toThrow('unavailable');
+    await vi.advanceTimersByTimeAsync(5 * DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.onConnectionState).toHaveBeenLastCalledWith('failed');
+    expect(f.controller.attemptInitialConnection).not.toHaveBeenCalled();
+    f.api.disconnect();
+  });
+
+  it('retries a failed subscription restore and cancels scheduled retries on disposal', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    await f.api.sessions.resume('session');
+    f.controller.loadSession.mockRejectedValueOnce(new Error('temporary load failure'));
+    f.disconnect(); f.reconnect();
+    f.controller.attemptInitialConnection.mockResolvedValue(undefined);
+    await vi.advanceTimersByTimeAsync(DAEMON_RECONNECT_INTERVAL_MS);
+    await expect(f.api.waitUntilReady!()).resolves.toBeUndefined();
+    expect(f.controller.loadSession).toHaveBeenCalledTimes(3);
+    f.disconnect(); f.exhausted(); f.api.disconnect();
+    await vi.advanceTimersByTimeAsync(5 * DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.controller.attemptInitialConnection).toHaveBeenCalledOnce();
+  });
+
+  it('stops background reconnection when the last conversation detaches', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const session = await f.api.sessions.resume('session');
+    f.disconnect(); f.exhausted();
+    await session.detach();
+    await vi.advanceTimersByTimeAsync(5 * DAEMON_RECONNECT_INTERVAL_MS);
+    expect(f.controller.attemptInitialConnection).not.toHaveBeenCalled();
     f.api.disconnect();
   });
 
