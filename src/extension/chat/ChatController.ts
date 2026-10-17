@@ -104,6 +104,7 @@ export type {
   WorkspaceContextProvider,
 } from './hostTypes';
 export interface ChatControllerDependencies {
+  readonly readBusyMessageMode?: () => import('../../shared/protocol/queueProtocol').BusyMessageMode;
   readonly createRuntime: DroidRuntimeFactory;
   readonly getWorkspaceContext: WorkspaceContextProvider;
   readonly sessionCatalog?: SessionCatalog;
@@ -131,6 +132,7 @@ export interface ChatControllerDependencies {
   readonly sharedServices?: ChatSharedServices;
 }
 export class ChatController {
+  readonly readBusyMessageMode: () => import('../../shared/protocol/queueProtocol').BusyMessageMode;
   readonly sessionState: SessionLifecycleState;
   readonly catalogState = new SessionDirectoryState();
   readonly turnState = new TurnState();
@@ -191,6 +193,7 @@ export class ChatController {
   private readonly sharedServicesSubscription?: DisposableSubscription;
 
   constructor(dependencies: ChatControllerDependencies) {
+    this.readBusyMessageMode = dependencies.readBusyMessageMode ?? (() => 'wait');
     this.createRuntime = dependencies.createRuntime;
     this.getEditorWorkspaceContext = dependencies.getWorkspaceContext;
     this.sessionWorkspace = new SessionWorkspaceContext(dependencies.getWorkspaceContext);

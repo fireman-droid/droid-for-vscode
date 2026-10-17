@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { readBusyMessageMode } from '../chat/queue/busyMessageSettings';
 import type { CompletionPreferences, ManagementSettings } from '../../shared/protocol/managementPageProtocol';
 import {
   COMPLETION_SECTION, DEFAULT_ENDPOINT, completionNeedsKey, completionSecretKey, mercuryAlternateEndpoint,
@@ -25,6 +26,7 @@ export class ManagementSettingsService {
     if (!validateCompletionEndpoint(endpoint, protocol)) hasKey = Boolean(await readCompletionKey(this.secrets, endpoint));
     const nextEditHasKey = !validateCompletionEndpoint(nextEdit.endpoint, 'mercury-edit') && Boolean(await readCompletionKey(this.secrets, nextEdit.endpoint));
     return {
+      busyMessageMode: readBusyMessageMode(),
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey, nextEditHasKey,
       reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: this.questionModels() },

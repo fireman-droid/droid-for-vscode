@@ -44,6 +44,7 @@ export interface FactoryDroidSession {
     },
   ): AsyncIterable<DroidStreamEvent>;
   interrupt(): Promise<void>;
+  steer?(messageId: string, text: string, options: { images?: Base64ImageSource[]; files?: DocumentSource[] }): Promise<void>;
   /**
    * Raw backend working-state string for this session, or null when
    * the backend no longer lists the session. Daemon sessions implement

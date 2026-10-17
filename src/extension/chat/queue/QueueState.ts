@@ -1,6 +1,7 @@
 import { emptyQueuedPromptsState, type QueuedPromptsState } from './queuedPromptsState';
 import { type PendingAttachment } from '../internals';
 export class QueueState {
+  readonly steering = new Set<string>();
   queuedPrompts: QueuedPromptsState<PendingAttachment> = emptyQueuedPromptsState();
   queueSendNowIntent: {
     readonly sessionId: string;

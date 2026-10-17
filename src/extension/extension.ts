@@ -397,6 +397,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   } satisfies ChatSharedServices;
   controller = new ChatController({
+    readBusyMessageMode: () => vscode.workspace.getConfiguration('droidvisx').get('chat.busyMessageMode') === 'steer' ? 'steer' : 'wait',
     createRuntime: (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,

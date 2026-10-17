@@ -13,6 +13,7 @@ import {
   updatePromptText,
 } from './queuedPromptsState';
 import { isTurnActive } from '../internals';
+import { trySteerQueuedPrompt } from './steering';
 
 export const QUEUE_DISPATCH_BLOCKED_MESSAGE =
   'Droid is busy, so the queued messages are paused. Use "Send now" once it settles.';
@@ -77,7 +78,7 @@ export function handleQueueAdd(
   // The turn may have settled while the enqueue was in flight;
   // dispatch now instead of stranding the prompt until the next
   // terminal turn (design §4.3 race note).
-  maybeDispatchQueue(ctl);
+  if (!trySteerQueuedPrompt(ctl, queueId)) maybeDispatchQueue(ctl);
 }
 
 export function handleQueueUpdate(
@@ -86,6 +87,7 @@ export function handleQueueUpdate(
   queueId: string,
   text: string,
 ): void {
+  if (ctl.queueState.steering.has(queueId)) { emitQueueState(ctl, { queueId, text, reason: 'This message is already being delivered to Droid.' }); return; }
   if (
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
@@ -116,6 +118,7 @@ export function handleQueueRemove(
   sessionId: string,
   queueId: string,
 ): void {
+  if (ctl.queueState.steering.has(queueId)) { emitQueueState(ctl); return; }
   if (
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
@@ -163,6 +166,7 @@ export function handleQueuePromote(
   sessionId: string,
   queueId: string,
 ): void {
+  if (ctl.queueState.steering.has(queueId)) { emitQueueState(ctl); return; }
   if (
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
@@ -210,6 +214,7 @@ export function handleQueuePromote(
 }
 
 export function handleQueueClear(ctl: QueuePort, sessionId: string): void {
+  if (ctl.queueState.steering.size > 0) { emitQueueState(ctl); return; }
   if (
     ctl.sessionState.connection.status !== 'connected' ||
     sessionId !== ctl.sessionState.sessionId
@@ -237,6 +242,7 @@ export function handleQueueClear(ctl: QueuePort, sessionId: string): void {
  * state instead of silently losing the prompt.
  */
 export function maybeDispatchQueue(ctl: QueuePort): void {
+  if (ctl.queueState.steering.size > 0) return;
   if (ctl.ideReconnectInProgress) return;
   const decision = evaluateQueueDispatch(ctl.queueState.queuedPrompts, {
     turnActive: isTurnActive(ctl.turnState.turn),
@@ -359,6 +365,7 @@ export function projectQueueState(ctl: QueuePort): SessionQueueState {
     items: ctl.queueState.queuedPrompts.items.map((item) => ({
       queueId: item.queueId,
       text: item.text,
+      ...(ctl.queueState.steering.has(item.queueId) ? { steering: true } : {}),
       attachments: item.attachments.map(({ summary }) => ({
         kind: summary.kind,
         name: summary.name,

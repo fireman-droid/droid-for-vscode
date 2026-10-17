@@ -10,6 +10,7 @@ import {
 import { ProtocolError } from '@factory/droid-sdk/node';
 import type { DaemonNotification, DaemonStreamOptions } from './api';
 import { RecoveredDaemonTurn } from './recoveredTurn';
+import { SteeringMessages } from './steeringMessages';
 
 type InternalMessage = Parameters<StreamStateTracker['processMessage']>[0];
 export class DaemonStreamRecoveryError extends Error {
@@ -28,6 +29,7 @@ function isStreamEvent(message: InternalMessage): message is DroidStreamEvent {
 
 /** A single submission. SDK conversion and result tracking remain SDK-owned. */
 export class DaemonTurnStream {
+  private readonly steering: SteeringMessages;
   private readonly queue: DroidStreamEvent[] = [];
   private wake: (() => void) | undefined;
   private failure: unknown;
@@ -54,6 +56,7 @@ export class DaemonTurnStream {
     private readonly waitUntilReady: () => Promise<void> = async () => {},
     private readonly retainRecovery: (recovery: RecoveredDaemonTurn) => () => void = () => () => {},
   ) {
+    this.steering = new SteeringMessages(controller, sessionId);
     this.turnId = options.backendTurnId ?? randomUUID();
     this.tracker = new StreamStateTracker({
       sessionId,
@@ -71,6 +74,7 @@ export class DaemonTurnStream {
     const parsed = SessionNotificationPayloadSchema.safeParse(notification);
     if (!parsed.success) return;
     const inner = parsed.data;
+    this.steering.observe(inner);
     if (inner.type === 'agent_turn_completed') {
       if (inner.turnId === undefined) {
         this.fail(
@@ -118,7 +122,16 @@ export class DaemonTurnStream {
     this.wake?.();
   };
 
-  suspendTransport(): void { this.transportSuspended = true; }
+  suspendTransport(): void {
+    this.transportSuspended = true;
+    this.steering.close('Steering delivery could not be confirmed after a connection loss. Check the conversation before resending.');
+  }
+
+  steer(messageId: string, text: string, options: Pick<DaemonStreamOptions, 'images' | 'files'>): Promise<void> {
+    if (this.done || this.interrupted || this.interruptPromise || this.transportSuspended)
+      return Promise.reject(new Error('The current turn can no longer accept steering.'));
+    return this.steering.send(messageId, text, options);
+  }
 
   restoreTransport(messages?: readonly { readonly id: string }[]): void {
     if (!this.transportSuspended || this.done) return;
@@ -147,6 +160,7 @@ export class DaemonTurnStream {
   };
 
   private finish(): void {
+    this.steering.close('The turn ended before steering delivery was confirmed. Check the conversation before resending.');
     this.done = true;
     this.resolveDone();
     this.wake?.();

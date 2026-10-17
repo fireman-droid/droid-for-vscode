@@ -15,6 +15,8 @@ export interface QueuePort
     | 'emit'
     | 'recoveryStore'
   > {
+  readonly readBusyMessageMode: () => import('../../../shared/protocol/queueProtocol').BusyMessageMode;
+  readonly recoveryState: Pick<import('../recovery/ConversationRecoveryState').ConversationRecoveryState, 'transcript'>;
   readonly ideReconnectInProgress?: boolean;
   readonly sessionState: Readonly<
     Pick<
@@ -29,7 +31,7 @@ export interface QueuePort
     >
   >;
   readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;
-  readonly attachmentState: Pick<AttachmentStagingState, 'pendingAttachments'>;
-  readonly queueState: Pick<QueueState, 'queuedPrompts' | 'queueSendNowIntent'>;
-  readonly effects: Pick<ChatEffects, 'emitAttachments' | 'handleStop' | 'handleSend'>;
+  readonly attachmentState: Pick<AttachmentStagingState, 'pendingAttachments' | 'pendingSentAttachments'>;
+  readonly queueState: Pick<QueueState, 'queuedPrompts' | 'queueSendNowIntent' | 'steering'>;
+  readonly effects: Pick<ChatEffects, 'emitAttachments' | 'handleStop' | 'handleSend' | 'scheduleRecoveryCheckpoint' | 'retainSentAttachments' | 'echoUserImageAttachments'>;
 }

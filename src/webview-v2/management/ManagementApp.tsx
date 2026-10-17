@@ -20,6 +20,7 @@ import { ManagementSidebar } from './ManagementSidebar';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useWebviewLocale } from '../shell/locale';
 import { isLanguagePreference } from '../../shared/protocol/localeProtocol';
+import { isBusyMessageMode } from '../../shared/protocol/queueProtocol';
 
 declare const __DVX_BUILD_ID__: string;
 const statusLabels: Record<string, string> = { connected: '已连接', connecting: '连接中', idle: '空闲', disconnected: '已断开', unavailable: '不可用', error: '连接失败', reconnecting: '重连中', preparing: '准备中', 'reconnect-required': '需要重连' };
@@ -55,6 +56,12 @@ function ManagementContent({ transport }: { transport: ManagementTransport }) {
             options={[['auto', t('Follow editor')], ['en', 'English'], ['zh-CN', '简体中文'], ['zh-TW', '繁體中文']]} />
         </ManagementRow>
         <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></SettingsSection>
+        <SettingsSection title={t('Chat')}><ManagementRow label={t('Messages while working')}
+          detail={t((s.busyMessageMode ?? 'wait') === 'wait' ? 'Wait until the current task finishes.' : 'Guide the current task at the next model step.')}>
+          <ManagementChoice label={t('Messages while working')} value={s.busyMessageMode ?? 'wait'} disabled={state.busy}
+            options={[[ 'wait', t('Wait') ], ['steer', t('Steer')]]}
+            onChange={mode => { if (isBusyMessageMode(mode)) void state.run({ kind: 'chat.busyMessageMode.set', mode }); }} />
+        </ManagementRow></SettingsSection>
         <SettingsSection title={t("代码审阅问答")}><ManagementRow label={t("问答模型")} detail={t("用于 Review Changes 中的行内问答。")}>
           <SettingsModelPicker label={t('代码审阅问答模型')} modelId={s.reviewQuestion.modelId} disabled={state.busy}
             models={s.reviewQuestion.models}

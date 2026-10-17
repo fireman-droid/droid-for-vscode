@@ -57,6 +57,7 @@ export function createAgentChatController(options: {
     sessionViewer: options.sessionViewer,
   });
   controller = new ChatController({
+    readBusyMessageMode: parent.readBusyMessageMode,
     createRuntime: parent.createRuntime,
     getWorkspaceContext: () => ({ cwd: target.cwd, trusted: vscode.workspace.isTrusted }),
     sessionCatalog: parent.sessionCatalog,

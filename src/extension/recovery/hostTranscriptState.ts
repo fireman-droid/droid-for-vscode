@@ -506,6 +506,8 @@ function findLastTurnItemIndex(
 ): number {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];
+    // Steering can add a user message without changing the active runtime turn.
+    if (item?.kind === 'user') return -1;
     if (item !== undefined && 'turnId' in item && item.turnId === turnId) {
       return index;
     }

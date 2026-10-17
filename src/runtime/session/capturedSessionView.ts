@@ -24,6 +24,7 @@ export function createCapturedSessionView(
     interrupt() {
       return session.interrupt();
     },
+    ...(session.steer ? { steer: (id: string, text: string, options: Parameters<NonNullable<FactoryDroidSession['steer']>>[2]) => session.steer!(id, text, options) } : {}),
     updateSettings(params) {
       return session.updateSettings(params);
     },

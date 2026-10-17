@@ -256,6 +256,11 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     if (this.active) await this.active.interrupt();
     else await this.controller.interruptSession(this.id);
   }
+  steer(messageId: string, text: string, options: Pick<DaemonStreamOptions, 'images' | 'files'>): Promise<void> {
+    this.assertAttached();
+    if (!this.active) return Promise.reject(new Error('There is no active turn to steer.'));
+    return this.active.steer(messageId, text, options);
+  }
   async rename(title: string): Promise<void> {
     this.assertAttached();
     await this.controller.renameSession(this.id, title);

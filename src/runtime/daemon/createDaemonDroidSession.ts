@@ -489,6 +489,8 @@ function adaptDaemonSession(
     stream(prompt, streamOptions) {
       return session.stream(prompt, streamOptions);
     },
+    ...(session.steer ? { steer: (messageId: string, text: string, options: Parameters<NonNullable<FactoryDroidSession['steer']>>[2]) =>
+      session.steer!(messageId, text, options) } : {}),
     interrupt() {
       return session.interrupt();
     },

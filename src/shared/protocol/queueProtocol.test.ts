@@ -27,6 +27,11 @@ function queuedItem(
 }
 
 describe('queueProtocol webview messages', () => {
+  it('round trips native steering delivery state without accepting invalid flags', () => {
+    const value = { items: [queuedItem('q1', { steering: true })], paused: null };
+    expect(parseSessionQueueState(value)).toEqual(value);
+    expect(parseSessionQueueState({ ...value, items: [queuedItem('q1', { steering: 'true' })] })).toBeNull();
+  });
   it('accepts exact queue.add and queue.update shapes at the shared text limit', () => {
     const text = 'q'.repeat(MAX_TURN_TEXT_LENGTH);
     expect(
