@@ -1,6 +1,12 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ['Messages while working','任务进行中发送消息','任務進行中傳送訊息'],
+  ['Wait','等待','等待'],
+  ['Steer','引导','引導'],
+  ['Steering…','正在引导…','正在引導…'],
+  ['Wait until the current task finishes.','等待当前任务结束后依次发送。','等待目前任務結束後依次傳送。'],
+  ['Guide the current task at the next model step.','在模型下一步处理时补充指令，引导当前任务。','在模型下一步處理時補充指令，引導目前任務。'],
   ['Last model request failed to connect','上一次模型请求连接失败','上一次模型請求連線失敗'],
   ['The last model request failed to connect. The local Droid runtime is connected. Check your model service or network before trying again.','上一次模型请求连接失败，本地 Droid 运行时仍已连接。请检查模型服务或网络后重试。','上一次模型請求連線失敗，本機 Droid 執行階段仍已連線。請檢查模型服務或網路後重試。'],
   ['Can read, search and run isolated examples. Cannot modify the project.','可读代码、查资料、运行独立示例，不修改项目。','可讀程式碼、查資料、執行獨立範例，不修改專案。'],

@@ -48,7 +48,7 @@ export function QueueBar({ queue, flow }: {
           <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label={t("Queued message actions")}><Ellipsis aria-hidden="true" /></Button>
         </DropdownMenuTrigger><DropdownMenuContent align="end">
           {queue.paused !== null ? <DropdownMenuItem onSelect={flow.handleQueueResume}>{t("Resume sending")}</DropdownMenuItem> : null}
-          <DropdownMenuItem onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />{t("Clear queued messages")}</DropdownMenuItem>
+          <DropdownMenuItem disabled={queue.items.some(item => item.steering)} onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />{t("Clear queued messages")}</DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
       </div>
       <AnimatedCollapsibleContent id={id} open={expanded}>
@@ -65,7 +65,7 @@ export function QueueBar({ queue, flow }: {
                 </div>
                 {parsed ? <QuoteChips quotes={parsed.quotes} /> : null}
               </div>
-              {flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">{t("Editing")}</span> : <div className="v2-queue-actions">
+              {item.steering ? <span className="v2-queue-editing" role="status">{t('Steering…')}</span> : flow.queueEditingId === item.queueId ? <span className="v2-queue-editing">{t("Editing")}</span> : <div className="v2-queue-actions">
                 <Button variant="ghost" size="sm" className="v2-queue-send" aria-label={t("Send queued message now")} onClick={() => flow.handleQueuePromote(item.queueId)}><span>{t("Send Now")}</span><CornerDownLeft aria-hidden="true" /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label={t("Edit queued message")} onClick={() => flow.handleQueueEditBegin(item.queueId)}><Pencil aria-hidden="true" /></Button>
                 <Button variant="ghost" size="icon-sm" aria-label={t("Remove queued message")} onClick={() => flow.handleQueueRemove(item.queueId)}><Trash2 aria-hidden="true" /></Button>

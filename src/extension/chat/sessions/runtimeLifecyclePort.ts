@@ -11,6 +11,7 @@ import type { NativeIdeBackend } from '../ideIntegration';
 
 export interface RuntimeReplacementOptions {
   readonly preserveSessionWork?: boolean;
+  readonly preserveBackendTurn?: boolean;
   readonly acknowledgeFailedTurnId?: string;
 }
 
@@ -61,7 +62,7 @@ export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
   readonly sessionState: SessionGuardPort['sessionState'] &
     Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> & Pick<SessionLifecycleState,
     'runtime' | 'activeRuntimeCwd' | 'historyWorkspace' | 'connection' |
-    'closeRuntime' | 'managedRuntimes'>;
+    'closeRuntime' | 'managedRuntimes' | 'automaticRecoveryBlocked'>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly catalogState: Pick<SessionDirectoryState, 'sessions'>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;

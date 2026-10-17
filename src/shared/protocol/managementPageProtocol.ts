@@ -3,6 +3,7 @@ import { isSafeModelId } from '../validation/guards';
 import { isLanguagePreference, type LanguagePreference } from './localeProtocol';
 import { SESSION_REASONING_EFFORTS } from './bounds';
 import type { SessionReasoningEffort } from './settings';
+import { isBusyMessageMode, type BusyMessageMode } from './queueProtocol';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 
@@ -31,6 +32,7 @@ export interface CompletionPreferences {
   readonly model: string;
 }
 export interface ManagementSettings {
+  readonly busyMessageMode?: BusyMessageMode;
   readonly theme: 'auto' | 'light' | 'dark';
   readonly resolvedTheme: 'light' | 'dark';
   readonly version: string;
@@ -65,6 +67,7 @@ export type ManagementAction =
   | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
   | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
+  | { readonly kind: 'chat.busyMessageMode.set'; readonly mode: BusyMessageMode }
   | { readonly kind: 'language.set'; readonly language: LanguagePreference }
   | { readonly kind: 'reviewQuestion.model.set'; readonly modelId: string | null; readonly reasoningEffort?: SessionReasoningEffort | null }
   | { readonly kind: 'completion.save'; readonly preferences: CompletionPreferences; readonly setApiKey: boolean; readonly setNextEditApiKey: boolean }
@@ -116,6 +119,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   if (['ready', 'settings.read', 'defaults.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
   else if (a.kind === 'defaults.save') valid = hasExactKeys(a, ['kind', 'scope', 'patch']) && isDefaultsPatch(a.patch, a.scope);
   else if (a.kind === 'theme.set') valid = hasExactKeys(a, ['kind', 'theme']) && ['auto', 'light', 'dark'].includes(String(a.theme));
+  else if (a.kind === 'chat.busyMessageMode.set') valid = hasExactKeys(a, ['kind', 'mode']) && isBusyMessageMode(a.mode);
   else if (a.kind === 'language.set') valid = hasExactKeys(a, ['kind', 'language']) && isLanguagePreference(a.language);
   else if (a.kind === 'reviewQuestion.model.set') valid = hasExactKeys(a, ['kind', 'modelId'], ['reasoningEffort']) && (a.modelId === null || isSafeModelId(a.modelId))
     && (a.reasoningEffort === undefined || a.reasoningEffort === null || SESSION_REASONING_EFFORTS.some(e => e === a.reasoningEffort));
@@ -132,6 +136,7 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   if (!isStrictRecord(value) || value.version !== MANAGEMENT_VERSION) return undefined;
   if (value.type === 'management.navigate' && isManagementPage(value.page)) return value as unknown as ManagementHostMessage;
   const settings = (v: unknown): v is ManagementSettings => isStrictRecord(v) && isCompletionPreferences(v.completion)
+    && (v.busyMessageMode === undefined || isBusyMessageMode(v.busyMessageMode))
     && ['auto', 'light', 'dark'].includes(String(v.theme)) && ['light', 'dark'].includes(String(v.resolvedTheme))
     && typeof v.version === 'string' && (v.cwd === null || typeof v.cwd === 'string')
     && typeof v.connection === 'string' && typeof v.ide === 'string' && typeof v.completionHasKey === 'boolean' && typeof v.nextEditHasKey === 'boolean' && typeof v.sessionManagementAvailable === 'boolean'

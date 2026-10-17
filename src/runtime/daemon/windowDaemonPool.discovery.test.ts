@@ -96,6 +96,43 @@ afterEach(async () => {
 });
 
 describe('saved daemon owner recovery', () => {
+  it('reopens the original conversation after its recovering daemon has exited', async () => {
+    const original = record(0);
+    fake.records = [original]; fake.readOwner.mockResolvedValue(original.id);
+    fake.opened.set(original.port, [{ id: 'root-0', workingState: 'idle' }]);
+    const value = pool();
+    const entry = await value.forSession('root-0', true);
+    const wait = vi.fn(() => new Promise<void>(() => {}));
+    vi.spyOn(entry.connection, 'status').mockReturnValue('recovering');
+    entry.connection.waitUntilReady = wait;
+    fake.dead.add(original.pid);
+    fake.verification.set(original.port, { status: 'not-listening' });
+    expect(value.readTransport('root-0')).toBe('failed');
+    const restored = await value.forSession('root-0', true);
+    expect(restored.record.rootSessionId).toBe('root-0');
+    expect(restored.record.id).not.toBe(original.id);
+    expect(wait).not.toHaveBeenCalled();
+    expect(fake.spawn).toHaveBeenCalledOnce();
+    expect(fake.stop).not.toHaveBeenCalled();
+  });
+
+  it('waits for the original live recovering daemon instead of allocating a duplicate', async () => {
+    const original = record(0);
+    fake.records = [original]; fake.readOwner.mockResolvedValue(original.id);
+    fake.opened.set(original.port, [{ id: 'root-0', workingState: 'running' }]);
+    const value = pool();
+    const entry = await value.forSession('root-0', true);
+    const status = vi.spyOn(entry.connection, 'status').mockReturnValue('recovering');
+    let restore!: () => void;
+    entry.connection.waitUntilReady = () => new Promise<void>(resolve => { restore = resolve; });
+    const pending = value.forSession('root-0', true);
+    expect(value.readTransport('root-0')).toBe('recovering');
+    expect(fake.spawn).not.toHaveBeenCalled();
+    status.mockReturnValue('connected'); restore();
+    expect(await pending).toBe(entry);
+    expect(fake.stop).not.toHaveBeenCalled();
+  });
+
   it.each(['root', 'child'] as const)('restores a saved %s owner without probing an unrelated unverifiable daemon', async kind => {
     const original = record(0), unrelated = record(1);
     fake.records = [original, unrelated];

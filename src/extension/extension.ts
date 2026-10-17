@@ -397,6 +397,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   } satisfies ChatSharedServices;
   controller = new ChatController({
+    readBusyMessageMode: () => vscode.workspace.getConfiguration('droidvisx').get('chat.busyMessageMode') === 'steer' ? 'steer' : 'wait',
     createRuntime: (interactionHandler) =>
       new FactoryDroidRuntime({
         interactionHandler,
@@ -467,6 +468,7 @@ export function activate(context: vscode.ExtensionContext): void {
   if (windowDaemon) {
     controller.nativeIde = {
       read: (sessionId) => windowDaemon.pool.readIde(sessionId),
+      readTransport: (sessionId) => windowDaemon.pool.readTransport(sessionId),
       reconnect: (sessionId, current, onClosingSource, deferIfBlocked) =>
         windowDaemon.pool.reconnectIdle(sessionId, current, onClosingSource, deferIfBlocked),
     };
@@ -474,6 +476,9 @@ export function activate(context: vscode.ExtensionContext): void {
       dispose: windowDaemon.pool.onIdeChange(() => emitIdeState(controller)),
     });
   }
+  context.subscriptions.push(vscode.window.onDidChangeWindowState(state => {
+    if (state.focused) void controller.connectionMaintenance.check();
+  }));
   const missionControl = new MissionControlPanelController(
     context.extensionUri,
     {
@@ -559,6 +564,7 @@ export function activate(context: vscode.ExtensionContext): void {
         createSdkSession: daemonSessions.factory, target,
         ...(windowDaemon ? { nativeIde: {
           read: (sessionId: string | null) => windowDaemon.pool.readIde(sessionId, 'shared'),
+          readTransport: (sessionId: string) => windowDaemon.pool.readTransport(sessionId),
           subscribe: (listener: () => void) => windowDaemon.pool.onIdeChange(listener),
         } } : {}),
       }),

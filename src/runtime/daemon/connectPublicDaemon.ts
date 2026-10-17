@@ -97,7 +97,7 @@ export function retainDaemonController(
     for (const handle of handles.values()) handle.suspendTransport();
   }, (error) => {
     for (const handle of handles.values()) handle.failTransport(error);
-  }, options.onConnectionState);
+  }, options.onConnectionState, () => handles.size > 0);
   let disconnected = false;
   const assertConnected = (): void => {
     if (disconnected) throw new Error('Droid connection is disconnected');
@@ -142,6 +142,7 @@ export function retainDaemonController(
       () => {
         handles.delete(id);
         reloadOptions.delete(id);
+        recovery.releaseUnused();
       },
       (signal) => recovery.waitUntilReady(signal),
       missions,

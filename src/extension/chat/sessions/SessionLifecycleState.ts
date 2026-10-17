@@ -13,6 +13,7 @@ export class SessionLifecycleState {
   workspaceContextGeneration = 0;
   workspaceTransition: Promise<void> | null = null;
   sessionOperationInProgress = false;
+  automaticRecoveryBlocked = false;
   readonly managedRuntimes = new Set<DroidRuntime>();
   private readonly runtimeClosures = new Map<DroidRuntime, Promise<void>>();
   private readonly closedRuntimes = new WeakSet<DroidRuntime>();

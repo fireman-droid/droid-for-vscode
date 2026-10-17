@@ -52,7 +52,7 @@ describe('Activity state and grouping', () => {
     });
     const failed = tool('browser_click', 'failed', { action: 'Verified the interface', target: undefined });
     expect(present([snapshot, failed])).toMatchObject({
-      action: 'Inspect page, Click element', facts: ['1 failed'], running: false,
+      action: '2 operations', facts: ['1 failed'], running: false,
     });
   });
 
@@ -60,7 +60,7 @@ describe('Activity state and grouping', () => {
     const result = present([tool('Read'), tool('Execute', 'completed', { action: 'Ran a local command' }),
       tool('mcp__design__measure_layout', 'completed', { action: undefined })]);
     expect(result.summary).toBe('1 read, Run command, Measure layout');
-    expect(result.action).toBe(result.summary);
+    expect(result.action).toBe('3 operations');
   });
 
   it('retains specific actions extracted from browser input in the group summary', () => {
@@ -166,7 +166,8 @@ describe('Activity state and grouping', () => {
       }),
     ]);
     expect(view.action).toBe('1 read, 1 search');
-    expect(view.facts).toEqual(['1 failed', '1 result truncated']);
+    expect(view.facts).toEqual(['1 failed']);
+    expect(view.detailFacts).toEqual(['1 result truncated']);
     const stopped = present([tool('Read', 'running')], { incomplete: 'cancelled' });
     expect(stopped.running).toBe(false);
     expect(stopped.facts).toContain('stopped');

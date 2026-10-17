@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid - AI Coding Agent",
   "description": "Unofficial Factory Droid integration for VS Code and Cursor, with coding chat, code review, BYOK models, and independent code completion.",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
@@ -173,6 +173,14 @@
           "default": "",
           "scope": "machine",
           "description": "%droidvisx.browserDev.sourceRoot.description%"
+        },
+        "droidvisx.chat.busyMessageMode": {
+          "type": "string",
+          "enum": ["wait", "steer"],
+          "enumDescriptions": ["Wait until the current task finishes.", "Guide the current task at the next model step."],
+          "default": "wait",
+          "scope": "application",
+          "description": "How messages sent while Droid is working are delivered."
         },
         "droidvisx.theme": {
           "type": "string",

@@ -388,6 +388,8 @@ export interface DroidRuntime {
     attachments?: readonly RuntimeAttachment[],
   ): AsyncIterable<RuntimeEvent>;
   interrupt(): Promise<void>;
+  /** Deliver to the active daemon loop; resolves only when the message is consumed. */
+  steerTurn?(messageId: string, text: string, attachments?: readonly RuntimeAttachment[]): Promise<void>;
   /**
    * Reads the backend-side working state of the active session (see
    * `RuntimeSessionWorkingState`). Throws when the session backend

@@ -33,6 +33,7 @@ export type DaemonStreamOptions = Omit<
 };
 
 export interface DaemonSessionHandle extends ConnectedDroidSession {
+  steer?(messageId: string, text: string, options: Pick<DaemonStreamOptions, 'images' | 'files'>): Promise<void>;
   close(options?: Parameters<DaemonSessionController['closeSession']>[1]): Promise<void>;
   ensureLoaded(signal?: AbortSignal): Promise<void>;
   onNotification(listener: (notification: Record<string, unknown>) => void): () => void;

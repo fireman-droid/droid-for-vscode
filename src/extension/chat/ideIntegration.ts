@@ -10,6 +10,7 @@ import { maybeDispatchQueue, pauseQueueAsBlocked } from './queue/queue';
 
 export interface NativeIdeBackend {
   read(sessionId: string | null): Pick<IdeState, 'status' | 'message'>;
+  readTransport?(sessionId: string): 'connected' | 'recovering' | 'failed' | 'auth-error' | undefined;
   /** True means recovered; only onClosingSource requires replacing the runtime attachment. */
   reconnect(sessionId: string, isCurrent: () => boolean, onClosingSource: () => void, deferIfBlocked?: boolean): Promise<boolean>;
 }
@@ -68,6 +69,16 @@ export function readControllerIde(ctl: ChatController): IdeState {
     message: ctl.sessionState.connection.status === 'connecting'
       ? 'Restoring this conversation on its new IDE connection…'
       : 'Reconnecting this conversation to the IDE…',
+  };
+  const transport = ctl.sessionState.sessionId === null ? undefined : ctl.nativeIde.readTransport?.(ctl.sessionState.sessionId);
+  if (transport === 'recovering') return {
+    status: 'reconnecting', canReconnect: false, message: 'Restoring the connection to this conversation automatically…',
+  };
+  if (transport === 'auth-error') return {
+    status: 'error', canReconnect: eligible(ctl), message: 'Droid sign-in needs attention. Sign in with the Droid CLI, then reconnect.',
+  };
+  if (transport === 'failed') return {
+    status: 'disconnected', canReconnect: eligible(ctl), message: 'The conversation connection was lost. Droid will retry automatically.',
   };
   const state = ctl.nativeIde.read(ctl.sessionState.sessionId);
   if (state.status === 'connected' && ctl.sessionState.connection.status === 'connected') ctl.ideReconnectError = null;

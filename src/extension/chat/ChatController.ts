@@ -55,6 +55,7 @@ import { SessionMetadataState } from './capabilities/sessionMetadataState';
 import { createChatEffects } from './chatEffects';
 import { bindChatSharedServices, type ChatSharedServices } from './chatSharedServices';
 import { dispatchChatMessage } from './dispatchChatMessage';
+import { SessionConnectionMaintenance } from './sessions/sessionConnectionMaintenance';
 import { buildHostSnapshot } from './hostSnapshot';
 import { readControllerIde, type NativeIdeBackend } from './ideIntegration';
 import type {
@@ -104,6 +105,7 @@ export type {
   WorkspaceContextProvider,
 } from './hostTypes';
 export interface ChatControllerDependencies {
+  readonly readBusyMessageMode?: () => import('../../shared/protocol/queueProtocol').BusyMessageMode;
   readonly createRuntime: DroidRuntimeFactory;
   readonly getWorkspaceContext: WorkspaceContextProvider;
   readonly sessionCatalog?: SessionCatalog;
@@ -131,6 +133,7 @@ export interface ChatControllerDependencies {
   readonly sharedServices?: ChatSharedServices;
 }
 export class ChatController {
+  readonly readBusyMessageMode: () => import('../../shared/protocol/queueProtocol').BusyMessageMode;
   readonly sessionState: SessionLifecycleState;
   readonly catalogState = new SessionDirectoryState();
   readonly turnState = new TurnState();
@@ -151,7 +154,8 @@ export class ChatController {
   readonly metadata = new SessionMetadataState();
   sequence = -1;
   modelAvailability?: DisabledModelsStore;
-  nativeIde?: Pick<NativeIdeBackend, 'read'> & Partial<Pick<NativeIdeBackend, 'reconnect'>>;
+  nativeIde?: Pick<NativeIdeBackend, 'read'> & Partial<Pick<NativeIdeBackend, 'reconnect' | 'readTransport'>>;
+  readonly connectionMaintenance = new SessionConnectionMaintenance(this);
   ideReconnectInProgress = false;
   ideReconnectError: { sessionId: string; message: string } | null = null;
   readIdeState() { return readControllerIde(this); }
@@ -191,6 +195,7 @@ export class ChatController {
   private readonly sharedServicesSubscription?: DisposableSubscription;
 
   constructor(dependencies: ChatControllerDependencies) {
+    this.readBusyMessageMode = dependencies.readBusyMessageMode ?? (() => 'wait');
     this.createRuntime = dependencies.createRuntime;
     this.getEditorWorkspaceContext = dependencies.getWorkspaceContext;
     this.sessionWorkspace = new SessionWorkspaceContext(dependencies.getWorkspaceContext);
@@ -338,6 +343,7 @@ export class ChatController {
       return this.sessionState.disposal;
     }
     checkpointRecoveryTranscript(this);
+    this.connectionMaintenance.dispose();
     this.interactions.cancelAll();
     this.btwSideChat?.reset();
     this.sharedServicesSubscription?.dispose();

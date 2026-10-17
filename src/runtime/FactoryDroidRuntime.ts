@@ -58,6 +58,7 @@ import {
   updateSessionSetting,
 } from './session/metadata';
 import { projectStreamAttachments } from './session/projections';
+import { steerActiveSession } from './session/turnControls';
 import {
   compact,
   fork,
@@ -436,13 +437,12 @@ export class FactoryDroidRuntime implements DroidRuntime {
   }
 
   async interrupt(): Promise<void> {
-    if (this.disposed || !this.session || !this.activeTurn) {
-      return;
-    }
+    if (!this.activeTurn) return;
+    await this.interruptSession();
+  }
 
-    const cancellation = this.activeTurnAbort;
-    await this.session.interrupt();
-    cancellation?.abort();
+  async steerTurn(messageId: string, text: string, attachments?: readonly RuntimeAttachment[]): Promise<void> {
+    await steerActiveSession(this.requireSession(), this.activeTurn !== null && !this.activeTurnAbort?.signal.aborted, messageId, text, attachments);
   }
 
   async interruptSession(): Promise<void> {

@@ -58,6 +58,7 @@ it('keeps independent inline activity disclosures across eviction without moving
   rendered.rerender(view(true));
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Thinking history (1)' }));
   await user.click(screen.getByRole('button', { name: /Thought for 0\.8s/ }));
   expect(screen.getByText('Planning')).toBeTruthy();
   expect(screen.getByText('Outlining')).toBeTruthy();
@@ -125,16 +126,17 @@ it('retains explicit reasoning disclosure through appended text, completion and 
     </ProcessPresentationProvider>;
   };
   const rendered = render(view('Initial reasoning.'));
-  const activity = screen.getByRole('button', { name: /Activity/ });
+  const activity = screen.getByRole('button', { name: /^Process:/ });
   expect(activity.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByRole('button', { name: /^Thinking/ })).toBeNull();
   await user.click(activity);
   expect(activity.getAttribute('aria-expanded')).toBe('true');
-  expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
-  await user.click(screen.getByRole('button', { name: /^Thinking/ }));
+  await user.click(screen.getByRole('button', { name: 'Thinking history (1)' }));
+  expect(screen.getAllByRole('button', { name: /^Thinking(?! history)/ })).toHaveLength(1);
+  await user.click(screen.getByRole('button', { name: /^Thinking(?! history)/ }));
   expect(screen.getByText('Initial reasoning.')).toBeTruthy();
   rendered.rerender(view('Initial reasoning. More evidence.'));
-  expect(screen.getByRole('button', { name: /^Thinking/ }).getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('button', { name: /^Thinking(?! history)/ }).getAttribute('aria-expanded')).toBe('true');
   expect(rendered.container.textContent).toContain('Initial reasoning. More evidence.');
   rendered.rerender(view('Initial reasoning. More evidence.', false));
   expect(screen.getByRole('button', { name: /Thought for 2s/ }).getAttribute('aria-expanded')).toBe('true');
@@ -154,4 +156,45 @@ it('copies the whole reply and omits timestamps for already-settled history', as
   await user.click(screen.getByRole('button', { name: 'Copy reply' }));
   expect(clipboard).toHaveBeenCalledWith('First segment\n\nSecond segment');
   expect(container.querySelector('time')).toBeNull();
+});
+
+it('keeps failed commands and their output accessible while mixed activity is collapsed', async () => {
+  const user = userEvent.setup();
+  const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn', items: [
+    { kind: 'thinking', id: 'reason', turnId: 'turn', text: 'Inspect the failure.', status: 'complete', truncated: false },
+    { kind: 'tool', id: 'command', turnId: 'turn', toolUseId: 'command-call', toolName: 'Execute', action: 'Run fixture', status: 'failed',
+      progressCount: 1, latestUpdateKind: null, detailKind: 'command', detail: 'node missing.mjs', errorMessage: 'Module not found' },
+  ] };
+  render(<ProcessPresentationProvider messageIds={['reply']} followingRef={{ current: { following: true } }}>
+    <AssistantReply descriptor={descriptor} status={{ type: 'complete', reason: 'stop' }} waiting={null}
+      replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
+  </ProcessPresentationProvider>);
+  const process = screen.getByRole('button', { name: 'Process: 1 operation' });
+  expect(process.getAttribute('aria-expanded')).toBe('false');
+  await user.click(screen.getByRole('button', { name: /Run fixture/ }));
+  expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
+  await user.click(process);
+  expect(screen.getAllByRole('button', { name: /Run fixture/ })).toHaveLength(1);
+  expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
+});
+
+it('keeps a reader-opened thinking history open as new segments arrive', async () => {
+  const user = userEvent.setup();
+  const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn', items: [
+    { kind: 'thinking', id: 'first', turnId: 'turn', text: 'First observation.', status: 'complete', durationMs: 2_000, truncated: false },
+    { kind: 'tool', id: 'read', turnId: 'turn', toolUseId: 'read-call', toolName: 'Read', action: 'Read file', status: 'completed', progressCount: 0, latestUpdateKind: null },
+  ] };
+  const view = (next: boolean) => <ProcessPresentationProvider messageIds={['reply']} followingRef={{ current: { following: true } }}>
+    <AssistantReply descriptor={next ? { ...descriptor, items: [...descriptor.items,
+      { kind: 'thinking', id: 'next', turnId: 'turn', text: 'Next observation.', status: 'active', truncated: false }] } : descriptor}
+      status={{ type: 'running' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
+  </ProcessPresentationProvider>;
+  const { rerender } = render(view(false));
+  await user.click(screen.getByRole('button', { name: /^Process:/ }));
+  await user.click(screen.getByRole('button', { name: 'Thinking history (1)' }));
+  await user.click(screen.getByRole('button', { name: /Thought for 2s/ }));
+  rerender(view(true));
+  expect(screen.getByRole('button', { name: 'Thinking history (2)' }).getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByText('First observation.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Process:/ }).getAttribute('aria-expanded')).toBe('true');
 });

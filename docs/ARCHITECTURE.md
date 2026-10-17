@@ -246,10 +246,19 @@ flowchart TD
 | --- | --- |
 | `runtimeLifecycle.ts` | startup/ready，以及一次会话替换的完整编排 |
 | `runtimeActivation.ts` | 准备 Runtime/历史，复核后提交激活结果 |
+| `sessionConnectionMaintenance.ts` | 为打开的会话维护连接；每 30 秒检查，ready／窗口聚焦／侧栏重新可见时提前检查，关闭控制器后停止；只恢复已知 ID，不创建新聊天或重发消息 |
 | `sessionGuards.ts` | 只读检查当前 Runtime、工作区与代次 |
 | `workspaceLifecycle.ts` | 将工作区变化排成有序的切换流程 |
 | `sessionCleanup.ts` | 清理会话关联状态、关闭资源；Mission/模型发现的取消交回各自 state |
 | `SessionLifecycleState.ts` | 保存生命周期状态，并合并重复关闭、保留失败重试语义 |
+
+`transportRecovery.ts` 保留 SDK 的快速重连，失败后对仍有会话附着的连接每 30 秒继续尝试。
+恢复期间挂起原流，重新认证并加载原订阅后按消息 ID 验证投递；不会重新提交问题。
+订阅加载失败继续恢复；最后一个会话脱离或连接销毁后取消维护，明确的不可重试认证错误停止尝试。
+Host 只在连接恢复仍不可用或确认原 daemon 进程退出时重新附着同一会话，释放旧 Runtime 时
+保留后台回合。仍存活但身份不明的后台不能被替代；空闲 IDE 重连沿用任务树、终端和权限检查。
+CLI 未安装、未登录、凭据不可读及协议不兼容需要人工处理；临时凭据刷新失败仍可自动重试。
+健康连接的周期检查只读本地状态，不向模型发送保活消息；运行中的任务不会为了保持绿点被重启。
 
 <a id="state-replay"></a>
 

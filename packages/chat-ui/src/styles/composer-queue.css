@@ -19,7 +19,11 @@
   .v2-queue-item:is(:hover, :focus-within, [data-editing='true']) { background: var(--chat-message-surface, var(--soft-surface)); }
   .v2-queue-marker { width: 12px; height: 12px; flex: 0 0 auto; margin-top: 3px; color: var(--control-border-hover); stroke-width: 1.5; }
   .v2-queue-message { display: grid; flex: 1; min-width: 0; gap: 4px; }
-  .v2-queue-preview { overflow: hidden; color: var(--ink); font-size: 12px; line-height: var(--composer-panel-line-height); text-overflow: ellipsis; white-space: nowrap; }
+  .v2-queue-preview {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+    max-height: calc(3 * var(--composer-panel-line-height)); overflow: hidden; overflow-wrap: anywhere;
+    color: var(--ink); font-size: 12px; line-height: var(--composer-panel-line-height); white-space: pre-wrap;
+  }
   .v2-queue-attachment { margin-right: 4px; color: var(--muted-ink); font-size: 11px; }
   .v2-queue-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--motion-ease); }
   .v2-queue-item:is(:hover, :focus-within) .v2-queue-actions { opacity: 1; pointer-events: auto; }

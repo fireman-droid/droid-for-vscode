@@ -23,6 +23,10 @@ import { hasExactKeys } from '../validation/strictValidation';
 
 /** Most prompts the host queue holds; both sides enforce the cap. */
 export const MAX_QUEUED_MESSAGES = 10;
+export type BusyMessageMode = 'wait' | 'steer';
+export function isBusyMessageMode(value: unknown): value is BusyMessageMode {
+  return value === 'wait' || value === 'steer';
+}
 
 /**
  * Why automatic dispatch is suspended. `stopped` and `turn-failed`
@@ -48,6 +52,7 @@ export interface QueuedMessageSummary {
   readonly queueId: string;
   readonly text: string;
   readonly attachments: readonly SentAttachmentSummary[];
+  readonly steering?: boolean;
 }
 
 /** Whole-queue projection carried by `queue.state` and snapshots. */
@@ -268,7 +273,8 @@ function parseQueuedMessageSummary(
 ): QueuedMessageSummary | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['queueId', 'text', 'attachments']) ||
+    !hasExactKeys(value, ['queueId', 'text', 'attachments'], ['steering']) ||
+    (value.steering !== undefined && typeof value.steering !== 'boolean') ||
     !isId(value.queueId) ||
     seenIds.has(value.queueId) ||
     !isQueueText(value.text) ||
@@ -286,7 +292,8 @@ function parseQueuedMessageSummary(
     attachments.push(attachment);
   }
   seenIds.add(value.queueId);
-  return { queueId: value.queueId, text: value.text, attachments };
+  return { queueId: value.queueId, text: value.text, attachments,
+    ...(value.steering === undefined ? {} : { steering: value.steering }) };
 }
 
 function isQueuePausedReason(value: unknown): value is QueuePausedReason {
