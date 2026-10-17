@@ -1,9 +1,9 @@
-import { useId, type ReactNode } from 'react';
+import { useContext, useId, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '../ui/collapsible';
-import { useProcessDisclosure } from './processPresentation';
+import { ProcessGroupContext, useProcessDisclosure } from './processPresentation';
 
 export function ActivityItem({
   id,
@@ -29,6 +29,7 @@ export function ActivityItem({
   readonly textSelectable?: boolean;
 }) {
   const disclosure = useProcessDisclosure(messageId, `activity:${id}`);
+  const inline = useContext(ProcessGroupContext);
   const selectable = children !== undefined;
   const selected = disclosure.expanded;
   const detailsId = useId();
@@ -42,6 +43,12 @@ export function ActivityItem({
     <span className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
   </span> : <span className="flex min-w-0 items-center gap-1.5">{labels}</span>;
   const leadingIcon = <span className="grid size-3.5 place-items-center [&_svg]:size-3.5">{icon}</span>;
+  if (inline) return <div className="min-w-0">
+    <div className={cn('v2-activity-row v2-activity-row-flat min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
+      {leadingIcon}{content}{actions ? <div className="flex shrink-0 items-center">{actions}</div> : null}
+    </div>
+    {children !== undefined ? <div className="v2-activity-inline-detail min-w-0 pb-1">{children}</div> : null}
+  </div>;
   if (!selectable) return <div className={cn('v2-activity-row min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
     <span aria-hidden="true" />
     {leadingIcon}

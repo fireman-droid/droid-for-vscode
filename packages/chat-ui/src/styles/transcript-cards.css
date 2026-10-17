@@ -2,8 +2,11 @@
   /* Reserve real space for each control; never push icons outside the transcript. */
   .v2-assistant-reply { --activity-text-inset: 34px; }
   .v2-activity-row { display: grid; grid-template-columns: 12px 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
-  .v2-activity-row-compact { grid-template-columns: 12px minmax(0, 1fr) auto; }
+  .v2-activity-row-compact, .v2-activity-row-flat { grid-template-columns: 14px minmax(0, 1fr) auto; }
   .v2-activity-detail { padding-inline-start: var(--activity-text-inset, 34px); }
+  .v2-activity-items { display: grid; gap: 4px; }
+  .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
+  .v2-activity-inline-detail > .v2-thinking-detail { max-height: 256px; overflow: auto; overscroll-behavior: contain; }
   .dvx-agent-task {
     min-width: 0; margin-block: 2px; border-radius: 6px; background: transparent;
   }
@@ -124,6 +127,11 @@
   .v2-command-card:focus-within .v2-command-chevron,
   .v2-command-card[data-state='open'] .v2-command-chevron { display: block; }
   .v2-command-card[data-state='open'] .v2-command-chevron { transform: rotate(90deg); }
+  .v2-command-card[data-activity-inline='true'] { margin-block: 2px; }
+  .v2-command-card[data-activity-inline='true'] .v2-command-head { padding-inline-start: 0; }
+  .v2-command-card[data-activity-inline='true'] .v2-command-toggle { cursor: default; gap: 4px; }
+  .v2-command-card[data-activity-inline='true'] .v2-command-leading { width: 14px; flex-basis: 14px; }
+  .v2-command-card[data-activity-inline='true'] .v2-command-prompt-icon { display: inline; }
   .v2-command-title {
     min-width: 0;
     flex: 0 1 auto;
