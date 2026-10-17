@@ -36,6 +36,7 @@ export interface GroupSummary {
   readonly resultTruncatedCount: number;
   readonly unavailableCount: number;
   readonly countsLabel: string;
+  readonly compactLabel: string;
   readonly resultFacts: readonly string[];
   readonly failedCount: number;
   readonly stoppedCount: number;
@@ -174,6 +175,8 @@ export function summarizeActivityGroup(
     resultTruncatedCount,
     unavailableCount,
     countsLabel: segments.join(', '),
+    compactLabel: otherActions.size === 0 && segments.length <= 2 ? segments.join(', ')
+      : t(toolCount === 1 ? '{count} operation' : '{count} operations', { count: toolCount }),
     resultFacts,
     failedCount,
     stoppedCount,

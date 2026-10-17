@@ -29,7 +29,7 @@ function candidate(item: SessionTranscriptItem): GroupCandidatePart {
   return item.kind === 'tool' ? { type: 'tool-call', toolName: item.toolName, providerMetadata: { droidvisx: item } } : { type: item.kind };
 }
 
-export function ActivityGroup({ messageId, cluster, turnId, running, tail, incomplete, waiting, children }: {
+export function ActivityGroup({ messageId, cluster, turnId, running, tail, incomplete, waiting, renderItem }: {
   readonly messageId: string;
   readonly cluster: ActivityCluster;
   readonly turnId: string;
@@ -37,12 +37,19 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   readonly tail: boolean;
   readonly incomplete: string | null;
   readonly waiting: ProcessWaiting | null;
-  readonly children: ReactNode;
+  readonly renderItem: (item: SessionTranscriptItem, grouped: boolean) => ReactNode;
 }) {
   const { t } = useI18n();
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
-  if (members.length === 1 || cluster.items.every((item) => item.kind === 'thinking')) return <>{children}</>;
+  const render = (item: SessionTranscriptItem) => <div key={item.id}>{renderItem(item, true)}</div>;
+  if (members.length === 1 || cluster.items.every((item) => item.kind === 'thinking')) return <>{cluster.items.map(render)}</>;
+  const thinking = cluster.items.filter((item) => item.kind === 'thinking');
+  const foldThinking = thinking.length > 0;
   const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting, t });
   return <ActivityGroupView messageId={messageId} groupId={cluster.id} incomplete={incomplete}
-    presentation={presentation}>{children}</ActivityGroupView>;
+    presentation={presentation}
+    attention={cluster.items.filter((item) => item.kind === 'tool' && item.status === 'failed').map(render)}
+    reasoningCount={foldThinking ? thinking.length : 0} reasoning={foldThinking ? thinking.map(render) : undefined}>
+    {cluster.items.filter((item) => !foldThinking || item.kind !== 'thinking').map(render)}
+  </ActivityGroupView>;
 }

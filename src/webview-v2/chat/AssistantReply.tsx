@@ -41,7 +41,8 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
         key={cluster.id} messageId={descriptor.id} cluster={cluster} turnId={descriptor.turnId}
         running={status.type === 'running'} tail={index === clusters.length - 1}
         incomplete={status.type === 'incomplete' ? status.reason : null} waiting={waiting}
-      >{cluster.items.map((item) => <div key={item.id}>{render(item, true)}</div>)}</ActivityGroup>
+        renderItem={render}
+      />
     ) : <div key={cluster.id} className="contents">{render(cluster.items[0]!, false)}</div>)}
     {summarized ? <AiOperationSummary summary={operationSummary!} onInteract={onInteract} /> : null}
   </ReplyView>;
