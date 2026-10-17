@@ -81,17 +81,18 @@ export function presentActivity({
       ? activeTool ? resolveToolAction(active?.toolName ?? '', activeTool.action) : 'Thinking'
       : 'Processing';
   } else {
-    action = summary.toolCount === 0 ? 'Thought' : summaryLabel;
+    action = summary.toolCount === 0 ? 'Thought' : summary.compactLabel;
   }
   const facts: string[] = [];
+  const detailFacts = [...summary.resultFacts];
   const failed = summary.failedCount > 0 || (tail && incomplete === 'error');
   if (summary.failedCount > 0) facts.push(t('{count} failed', { count: summary.failedCount }));
   else if (failed) facts.push(t('failed'));
   if (summary.stoppedCount > 0 || (tail && incomplete === 'cancelled'))
     facts.push(t('stopped'));
-  if (summary.truncated) facts.push(t('reasoning truncated'));
+  if (summary.truncated) detailFacts.push(t('reasoning truncated'));
   if (summary.resultTruncatedCount > 0)
-    facts.push(
+    detailFacts.push(
       t(summary.resultTruncatedCount === 1 ? '{count} result truncated' : '{count} results truncated', { count: summary.resultTruncatedCount }),
     );
   if (wait !== null && summary.runningToolCount > 0)
@@ -109,6 +110,7 @@ export function presentActivity({
         ? (activeTool?.target ?? null)
         : null,
     facts,
+    detailFacts,
     failed,
   };
 }
