@@ -4,11 +4,10 @@ import { Check, Copy, GitBranch, LoaderCircle, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { MessageTimestamp } from './MessageTimestamp';
 import { useUiEnvironment } from '../environment';
-export function ReplyView({ children, replyText, running = false, completedAt, regenerate, fork, readOnly = false, diagnosticOnly = false, label, showTimestamp = true, processGutter = false }: {
+export function ReplyView({ children, replyText, running = false, completedAt, regenerate, fork, readOnly = false, diagnosticOnly = false, label, showTimestamp = true }: {
   readonly children: ReactNode; readonly replyText?: string; readonly running?: boolean;
   readonly completedAt?: number; readonly regenerate?: () => void; readonly fork?: () => void;
   readonly readOnly?: boolean; readonly diagnosticOnly?: boolean; readonly label?: string; readonly showTimestamp?: boolean;
-  readonly processGutter?: boolean;
 }) {
   const { t } = useI18n();
   const { copyText, assistantName } = useUiEnvironment();
@@ -18,7 +17,7 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
   useEffect(() => () => { if (reset.current) clearTimeout(reset.current); }, []);
   const showActions = replyText !== undefined && !running && (!diagnosticOnly || replyText.length > 0);
   const showTime = showTimestamp && !running && !diagnosticOnly && replyText !== undefined;
-  return <div className={`v2-assistant-reply flex min-w-0 flex-col gap-1${processGutter ? ' v2-process-reply' : ''}`} aria-label={label ?? assistantName}>
+  return <div className="v2-assistant-reply flex min-w-0 flex-col gap-1" aria-label={label ?? assistantName}>
     {children}
     {showActions || showTime ? (
       <div data-transcript-selection-exclude="" className="flex min-h-6 select-none items-center gap-0.5 text-[11px] text-muted-foreground [&_button]:size-6 [&_button]:p-0 [&_svg]:size-[13px] [&_.dvx-message-time]:pr-1.5 [&_.dvx-message-time]:text-[10.5px]">

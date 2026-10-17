@@ -34,7 +34,7 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
   const render = renderItem ?? ((item: SessionTranscriptItem, grouped: boolean) =>
     <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} hideConfirmedOperations={summarized} onInteract={onInteract} />);
   const diagnosticOnly = descriptor.items.every((item) => item.kind === 'diagnostic');
-  return <ReplyView label={diagnosticOnly ? t("System notice") : readOnly ? t("Subagent") : 'Droid'} diagnosticOnly={diagnosticOnly} processGutter={!diagnosticOnly}
+  return <ReplyView label={diagnosticOnly ? t("System notice") : readOnly ? t("Subagent") : 'Droid'} diagnosticOnly={diagnosticOnly}
     readOnly={readOnly} replyText={replyText} running={status.type === 'running'} completedAt={completedAt} regenerate={regenerate} fork={fork}>
     {clusters.map((cluster, index) => cluster.grouped ? (
       <ActivityGroup
