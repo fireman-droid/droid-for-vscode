@@ -26,7 +26,7 @@
     --chat-font-sans: var(--vscode-font-family, 'Segoe UI');
     --chat-font-mono: var(--vscode-editor-font-family, Consolas);
     --review-question-ink: #ff5a00;
-    --text-selection-background: light-dark(rgb(255 90 0 / 20%), rgb(255 140 76 / 28%));
+    --text-selection-background: light-dark(rgb(119 128 143 / 23%), rgb(174 181 194 / 28%));
   }
   :root[data-theme-preference='auto'] {
     /* Editor text and its background are a pair. Workbench descriptions and
