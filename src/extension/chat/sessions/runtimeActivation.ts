@@ -74,6 +74,7 @@ export async function createInitializedRuntime(
   | null
 > {
   let runtime: DroidRuntime;
+  ctl.sessionState.automaticRecoveryBlocked = false;
   try {
     runtime = ctl.createRuntime(ctl.interactions.createRuntimeHandler());
   } catch {
@@ -139,6 +140,9 @@ export async function createInitializedRuntime(
     !isSafeBridgeId(availability.sessionId) ||
     (target.kind === 'resume' && availability.sessionId !== target.sessionId)
   ) {
+    ctl.sessionState.automaticRecoveryBlocked = availability.status === 'unavailable' &&
+      ['cli-not-found', 'invalid-cwd', 'daemon-not-logged-in', 'daemon-credentials-unreadable',
+        'sdk-protocol-incompatible'].includes(availability.reason);
     releaseRecoveryContext();
     await closeRuntime(ctl, runtime).catch(() => undefined);
     if (

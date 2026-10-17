@@ -105,7 +105,8 @@ export function dispatchChatMessage(
     case 'capabilities.manage':
       return; // Routed to native management by the Webview owner.
     case 'webview.ready':
-      void handleReady(controller);
+      controller.connectionMaintenance.start();
+      void handleReady(controller).then(() => controller.connectionMaintenance.check());
       return;
     case 'turn.send':
       handleSend(controller, message.sessionId, message.turnId, message.text);

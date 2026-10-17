@@ -24,7 +24,7 @@ export function createAgentChatController(options: {
   readonly sessionViewer: SessionViewerPanelController;
   readonly createSdkSession: FactoryDroidSessionFactory;
   readonly target: { readonly sessionId: string; readonly cwd: string };
-  readonly nativeIde?: Pick<NativeIdeBackend, 'read'> & { subscribe(listener: () => void): () => void };
+  readonly nativeIde?: Pick<NativeIdeBackend, 'read' | 'readTransport'> & { subscribe(listener: () => void): () => void };
 }): {
   readonly controller: ChatController;
   openReview(message?: ReviewPanelOpen): void;
@@ -79,7 +79,7 @@ export function createAgentChatController(options: {
     sharedServices: parent.sharedServices,
   });
   if (options.nativeIde) {
-    controller.nativeIde = { read: options.nativeIde.read };
+    controller.nativeIde = { read: options.nativeIde.read, readTransport: options.nativeIde.readTransport };
     subscriptions.push({ dispose: options.nativeIde.subscribe(() => emitIdeState(controller)) });
   }
   const reviewPanel = new ReviewPanelController(

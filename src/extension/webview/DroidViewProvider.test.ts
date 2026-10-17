@@ -595,6 +595,7 @@ function createController() {
 
   return {
     value: {
+      connectionMaintenance: { check: vi.fn(async () => {}) },
       subscribe,
       handleMessage,
       replayTo,

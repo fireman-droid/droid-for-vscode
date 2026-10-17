@@ -172,6 +172,7 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
         attributes: { visible: webviewView.visible },
       });
       if (webviewView.visible) {
+        void this.controller.connectionMaintenance.check();
         postTheme();
         this.agentNavigation?.replay();
         delivery.onVisible();

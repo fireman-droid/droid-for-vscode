@@ -66,6 +66,12 @@ export class WindowDaemonPool {
 
   get preparation(): WindowDaemonBinding | undefined { return this.binding; }
 
+  readTransport(sessionId: string): ReturnType<DaemonConnection['status']> | undefined {
+    const entry = this.owners.get(sessionId);
+    const status = entry?.connection.status();
+    return status === 'recovering' && !isProcessAlive(entry!.record.pid) ? 'failed' : status;
+  }
+
   onIdeChange(listener: () => void): () => void {
     this.ideListeners.add(listener);
     return () => { this.ideListeners.delete(listener); };
@@ -180,7 +186,7 @@ export class WindowDaemonPool {
     }
     const pending = this.currentEntry;
     const entry = await pending;
-    if (entry.connection.status() === 'recovering') await entry.connection.waitUntilReady?.();
+    if (entry.connection.status() === 'recovering' && isProcessAlive(entry.record.pid)) await entry.connection.waitUntilReady?.();
     if (entry.connection.status() === 'connected') return entry;
     if (this.currentEntry !== pending) return this.current();
     const reconnect = this.existing(entry.record).then((restored) => restored ?? this.start());
@@ -191,7 +197,7 @@ export class WindowDaemonPool {
 
   async forSession(sessionId: string, attach = false): Promise<WindowDaemonEntry> {
     const cached = this.owners.get(sessionId);
-    if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
+    if (cached?.connection.status() === 'recovering' && isProcessAlive(cached.record.pid)) await cached.connection.waitUntilReady?.();
     if (cached && cached.connection.status() === 'connected') return attach ? this.attachIde(cached) : cached;
     const ownerId = await readSessionDaemon(sessionId);
     const owner = ownerId ? await readWindowDaemon(ownerId) : null;
@@ -233,7 +239,7 @@ export class WindowDaemonPool {
 
   private async findChildOwner(sessionId: string): Promise<WindowDaemonEntry | null> {
     const cached = this.owners.get(sessionId);
-    if (cached?.connection.status() === 'recovering') await cached.connection.waitUntilReady?.();
+    if (cached?.connection.status() === 'recovering' && isProcessAlive(cached.record.pid)) await cached.connection.waitUntilReady?.();
     if (cached?.connection.status() === 'connected') return cached;
     const ownerId = await readSessionDaemon(sessionId);
     const owner = ownerId ? await readWindowDaemon(ownerId) : null;
@@ -653,7 +659,7 @@ export class WindowDaemonPool {
     let ide: PersistentIdeRelay | undefined;
     if (cached) {
       const entry = await cached;
-      if (entry.connection.status() === 'recovering') await entry.connection.waitUntilReady?.();
+      if (entry.connection.status() === 'recovering' && isProcessAlive(entry.record.pid)) await entry.connection.waitUntilReady?.();
       if (entry.connection.status() === 'connected') return entry;
       ide = entry.ide;
       entry.connection.dispose();
