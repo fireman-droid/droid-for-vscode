@@ -109,6 +109,7 @@
     --control-border-focus: color-mix(in srgb, var(--ink) 24%, var(--surface));
     --control-surface-hover: color-mix(in srgb, var(--ink) 6%, var(--surface));
     --control-surface-active: color-mix(in srgb, var(--ink) 9%, var(--surface));
+    --text-selection-background: color-mix(in srgb, var(--link-ink) 24%, transparent);
     --panel-edge: color-mix(in srgb, var(--edge) 75%, var(--surface));
     --overlay-shadow: 0 2px 5px rgb(0 0 0 / 4%), 0 8px 24px rgb(0 0 0 / 8%);
     --surface: #fafafa;
@@ -178,6 +179,11 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--edge) transparent;
+  }
+  ::selection {
+    background-color: var(--text-selection-background);
+    color: inherit;
+    text-shadow: none;
   }
   button, input, textarea, select { font: inherit; }
   button { cursor: pointer; }

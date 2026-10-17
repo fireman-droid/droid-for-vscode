@@ -19,7 +19,6 @@
     --diff-word-remove: color-mix(in srgb, var(--diff-remove-ink) 17%, var(--diff-remove));
   }
   .review-diff-content { min-width: 100%; }
-  .review-diff-content ::selection { background: color-mix(in srgb, var(--link-ink) 32%, transparent); color: inherit; }
   .review-diff [data-reference-highlight] { background: color-mix(in srgb, var(--link-ink) 12%, transparent); outline: 1px solid color-mix(in srgb, var(--link-ink) 55%, transparent); outline-offset: -1px; }
   .review-diff[data-layout='unified'] .review-diff-content { min-width: max(100%, calc((var(--diff-code-columns) + 13) * 1ch + 16px)); }
   .review-diff[data-layout='split'] .review-diff-content { width: 100%; }
