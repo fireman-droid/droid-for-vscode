@@ -75,6 +75,7 @@ describe('Script evidence from native notifications and saved results', () => {
     const longParts = JSON.stringify({ part: 1, result: Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n') });
     expect(extractResultPreview(longParts, source)).toMatchObject({ availability: 'available', text: longParts, truncated: false });
     expect(extractResultPreview('{"part":0,"result":"api_key = \\u0073k-secretvalue123456789"}', source)).toEqual({ availability: 'unavailable', reason: 'restricted' });
+    expect(extractResultPreview('{"part":0,"result":{"output":"api_key = \\u0073k-secretvalue123456789","exitCode":0}}', source)).toEqual({ availability: 'unavailable', reason: 'restricted' });
     expect(extractResultPreview('Job failed: Script completed unexpectedly', source)).toMatchObject({ text: 'Job failed: Script completed unexpectedly' });
     expect(readReceipt('Read C:/workspace/a.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes')).toEqual({ start: '1', end: '37', size: '1.3 KiB' });
     expect(readReceipt('const text = "Read a.ts";')).toBeUndefined();

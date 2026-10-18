@@ -91,6 +91,8 @@ export function presentActivity({
   if (summary.stoppedCount > 0 || (tail && incomplete === 'cancelled'))
     facts.push(t('stopped'));
   if (summary.truncated) detailFacts.push(t('reasoning truncated'));
+  if (summary.unavailableCount > 0) detailFacts.push(t(summary.unavailableCount === 1
+    ? '{count} result preview unavailable' : '{count} result previews unavailable', { count: summary.unavailableCount }));
   if (summary.resultTruncatedCount > 0)
     detailFacts.push(
       t(summary.resultTruncatedCount === 1 ? '{count} result truncated' : '{count} results truncated', { count: summary.resultTruncatedCount }),

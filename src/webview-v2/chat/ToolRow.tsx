@@ -22,6 +22,7 @@ import { ActivityResult } from './ActivityResult';
 import { parsePlanSteps } from './transcript/planAnchor';
 import { PlanSteps } from './PlanLine';
 import { isFoldableFileOperation } from './operationSummary';
+import { isScriptTool, readReceipt, scriptBackgroundReceipt } from '../../shared/transcript/scriptOutput';
 
 function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
   if (category === 'file') return <FileText />;
@@ -60,10 +61,17 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const output = command !== undefined && item.status === 'failed' && errorMessage
     ? commandOutput ? `${commandOutput}\n${errorMessage.split(/\r?\n/, 1)[0]}` : errorMessage
     : commandOutput;
-  const hasDetails = command !== undefined || available !== null || unavailable !== null || !!output || !!errorMessage || (!exploration && !!item.detail);
+  const receipt = available && !available.truncated && resultPresentation?.target === 'file' ? readReceipt(available.text) : undefined;
+  const background = available && !available.truncated && isScriptTool(item.toolName) ? scriptBackgroundReceipt(available.text) : undefined;
+  const compactResult = receipt ? t('Read lines {start}–{end} ({size})', receipt)
+    : background ? t('Started in background · PID {pid}', background) : undefined;
+  const previewBody = available !== null && compactResult === undefined;
+  const resultNotice = !output && !errorMessage ? unavailable : null;
+  const hasDetails = command !== undefined || previewBody || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
-  const status = [t(state), item.durationMs === undefined ? '' : formatDuration(item.durationMs)].filter(Boolean).join(' · ');
+  const status = [t(state), item.durationMs === undefined ? '' : formatDuration(item.durationMs), compactResult,
+    resultNotice ? t(resultNotice.label) : ''].filter(Boolean).join(' · ');
   const title = `${t(action)}${target ? ` · ${target}` : ''}`;
   const activityActions = <>
     {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")}
@@ -72,11 +80,10 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const fileActions = <>
     {currentFile && actions.openPath ? <Button variant="link" size="sm" className="h-auto select-none px-1 text-[11px]" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")} onClick={() => actions.openPath!({ path: currentFile })}>{currentFile.split(/[\\/]/).at(-1)}</Button> : null}
   </>;
-  const activityDetail = available !== null || unavailable !== null || !!output || !!errorMessage ? <>
-    {available ? <ActivityResult preview={available} /> : null}
+  const activityDetail = previewBody || !!output || !!errorMessage ? <>
+    {previewBody ? <ActivityResult preview={available!} /> : null}
     {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--panel-edge)] bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
     {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
-    {unavailable ? <p className="text-[11px] text-muted-foreground">{t(unavailable.detail)}</p> : null}
   </> : undefined;
   if (item.subagent) {
     const delegationFailed = item.status === 'failed' && item.subagent.status !== 'failed';
@@ -111,9 +118,9 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="text-destructive">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
+  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
     <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
-      status={status || undefined} description={resultSummary || undefined} actions={activityActions}>
+      status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
@@ -128,11 +135,10 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       </div>
       {resultSummary ? <p className="truncate pl-4 text-[11px] text-muted-foreground" title={resultSummary}>{resultSummary}</p> : null}
       <ToolContent className="space-y-1 pb-1">
-        {available ? <ActivityResult preview={available} /> : null}
+        {previewBody ? <ActivityResult preview={available!} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
         {output ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{output}</pre> : null}
         {errorMessage ? <p role="status" className="whitespace-pre-wrap break-words text-destructive">{errorMessage}</p> : null}
-        {unavailable ? <p className="text-[11px] text-muted-foreground">{t(unavailable.detail)}</p> : null}
       </ToolContent>
     </Tool>}
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}

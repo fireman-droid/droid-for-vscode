@@ -15,6 +15,7 @@ export function ActivityItem({
   actions,
   children,
   textSelectable = false,
+  failed = false,
 }: {
   readonly id: string;
   readonly messageId: string;
@@ -26,6 +27,7 @@ export function ActivityItem({
   readonly actions?: ReactNode;
   readonly children?: ReactNode;
   readonly textSelectable?: boolean;
+  readonly failed?: boolean;
 }) {
   const inline = useContext(ProcessGroupContext);
   const disclosure = useProcessDisclosure(messageId, `activity:${id}`, inline, inline);
@@ -35,7 +37,7 @@ export function ActivityItem({
   const labels = <>
     <span className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
     {target ? <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={target}>{target}</span> : <span className="min-w-0 flex-1" />}
-    {status ? <span className="shrink-0 text-[11px] text-muted-foreground">{status}</span> : null}
+    {status ? <span title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
   </>;
   const content = description ? <span className="min-w-0 flex-1">
     <span className="flex min-w-0 items-center gap-1.5">{labels}</span>

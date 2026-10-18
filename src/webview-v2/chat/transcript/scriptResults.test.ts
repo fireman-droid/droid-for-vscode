@@ -8,6 +8,27 @@ const parent = (text: string): ToolTranscriptItem => ({ id: 'p', turnId: 'turn',
   resultPreview: { availability: 'available', source: { tool: 'Script', path: 'Tool result', callId: 'script' }, text, truncated: false } });
 const child: ToolTranscriptItem = { id: 'c', turnId: 'turn', kind: 'tool', toolUseId: 'command', scriptParentId: 'script', toolName: 'Execute', action: 'Verify changes', detailKind: 'command', detail: 'node test.js', status: 'completed', progressCount: 0, latestUpdateKind: null, outputTail: 'PASS: saved\nPASS: conflict\n\n[Process exited with code 0]' };
 describe('Script result presentation', () => {
+  it('deduplicates linked object results including failures while preserving unique and partial output', () => {
+    const failed = { ...child, id: 'failed', toolUseId: 'failed', status: 'failed' as const, outputTail: undefined,
+      errorMessage: 'Command failed (exit code: 1)\nfetch failed\n[Process exited with code 1]' };
+    const text = [JSON.stringify({ part: 0, result: { output: 'fetch failed\n', exitCode: 1 } }),
+      JSON.stringify({ part: 1, result: { output: 'PASS: saved\nPASS: conflict\n', exitCode: 0 } }),
+      JSON.stringify({ part: 2, result: 'Supplemental result' })].join('\n');
+    expect(presentScriptResults([parent(text), failed, child])).toMatchObject([
+      { resultPreview: { text: '[2]\nSupplemental result' } }, failed, child,
+    ]);
+    const preview = parent(text).resultPreview as Extract<NonNullable<ToolTranscriptItem['resultPreview']>, { availability: 'available' }>;
+    expect(presentScriptResults([{ ...parent(text), resultPreview: { ...preview, text: text.slice(0, -4), truncated: true } }, failed, child])[0])
+      .toMatchObject({ resultPreview: { truncated: true, text: expect.stringContaining('Supplemental res') } });
+    expect(presentScriptResults([parent(text), { ...failed, scriptParentId: 'unrelated' }, child])[0])
+      .toMatchObject({ resultPreview: { text: expect.stringContaining('fetch failed') } });
+  });
+  it('does not repeat a background launch receipt already shown by its linked command', () => {
+    const background = { ...child, backgroundHint: { fireAndForget: true as const }, outputTail: 'Background process started (PID: 123)\nStatus: Running in background' };
+    const receipt = parent('exit null · pid 123 · outputFile C:/temp/job.out');
+    expect(presentScriptResults([receipt, background])).toEqual([background]);
+    expect(presentScriptResults([receipt, { ...background, scriptParentId: 'other' }])).toEqual([receipt, { ...background, scriptParentId: 'other' }]);
+  });
   it('preserves the disclosure identity when a redundant Script row disappears', () => {
     const p = parent('exit 0\nPASS: saved\nPASS: conflict');
     expect(clusterActivity([p, child])[0]!.id).toBe(clusterActivity(presentScriptResults([p, child]))[0]!.id);

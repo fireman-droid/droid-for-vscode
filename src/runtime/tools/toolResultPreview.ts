@@ -182,7 +182,7 @@ export function extractResultPreview(
     }
   } else unsupported = true;
   if (unsupported) return unavailableResult('unsupported');
-  if (SENSITIVE_TEXT.test(isScriptTool(source.tool) ? readableScriptOutput(text) : text)) return unavailableResult('restricted');
+  if (SENSITIVE_TEXT.test(isScriptTool(source.tool) ? readableScriptOutput(text, truncated) : text)) return unavailableResult('restricted');
   if (text.trim().length === 0)
     return unavailableResult(truncated ? 'unsupported' : 'empty');
   // A truncated UTF-16 string must not end with an unmatched high surrogate.

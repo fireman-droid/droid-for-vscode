@@ -1,6 +1,10 @@
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import type { ToolTranscriptItem } from '../../../shared/protocol/toolProtocol';
-import { isScriptTool, stripScriptTrailer } from '../../../shared/transcript/scriptOutput';
+import { formatScriptParts, isScriptTool, scriptOutputParts, stripScriptTrailer, scriptBackgroundReceipt } from '../../../shared/transcript/scriptOutput';
+
+const commandBody = (text: string) => text.replace(/\r\n?/gu, '\n')
+  .replace(/^(?:Error: )?Command failed \(exit code: -?\d+\)\n/u, '')
+  .replace(/\n*\[Process exited with code -?\d+\]\s*$/u, '').trim();
 
 /** Presentation only. The canonical transcript and original result stay intact. */
 export function presentScriptResults(items: readonly SessionTranscriptItem[]): readonly SessionTranscriptItem[] {
@@ -15,6 +19,16 @@ export function presentScriptResults(items: readonly SessionTranscriptItem[]): r
     const preview = item.resultPreview;
     let text = stripScriptTrailer(preview.text);
     const children = childrenByParent.get(item.toolUseId) ?? [];
+    const parts = scriptOutputParts(text, preview.truncated);
+    if (parts) text = formatScriptParts(parts.filter(part => part.partial || part.text.trim() !== 'TODO List Updated' && !children.some(child => {
+      const shown = child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : child.errorMessage);
+      if (!shown || !['completed', 'failed'].includes(child.status)) return false;
+      if (part.exitCode !== undefined && (part.exitCode === 0 ? child.status !== 'completed' : child.status !== 'failed')) return false;
+      return commandBody(part.text).length > 0 && commandBody(part.text) === commandBody(shown);
+    })));
+    const background = !preview.truncated ? scriptBackgroundReceipt(text) : undefined;
+    if (background && children.some(child => child.status === 'completed' && child.backgroundHint?.fireAndForget &&
+      (child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : '')).includes(`Background process started (PID: ${background.pid})`))) return [];
     for (const child of children) {
       if (child.status !== 'completed') continue;
       const shown = child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : undefined);

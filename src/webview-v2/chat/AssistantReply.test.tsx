@@ -64,7 +64,8 @@ it('keeps ordered individual disclosures without an intermediate thinking group'
   rendered.rerender(view(true));
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
-  expect(screen.getByText('**Planning****Outlining**')).toBeTruthy();
+  expect(screen.getByText('Planning')).toBeTruthy();
+  expect(screen.getByText('Outlining')).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(following.current.following).toBe(false);
   expect(screen.queryByRole('button', { name: /^Thinking history/ })).toBeNull();
@@ -78,7 +79,7 @@ it('keeps ordered individual disclosures without an intermediate thinking group'
   expect(screen.getByRole('button', { name: /^Read.*src\/app\.ts/ }).getAttribute('aria-expanded')).toBe('false');
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: /^Process:/ }));
-  await waitFor(() => expect(screen.queryByText('**Planning****Outlining**')).toBeNull());
+  await waitFor(() => expect(screen.queryByText('Planning')).toBeNull());
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
   expect(screen.getAllByRole('button', { name: /^List/ })).toHaveLength(1);
 });
@@ -299,7 +300,7 @@ it('keeps assistant prose in order and places earlier process groups entirely in
   expect(histories.every((history) => history.getAttribute('aria-expanded') === 'false')).toBe(true);
   expect(histories.every((history) => history.textContent?.includes('1 records'))).toBe(true);
   expect(screen.queryByText('Earlier reasoning.')).toBeNull();
-  expect(screen.queryByRole('button', { name: /^Read.*src\/earlier\.ts/ })).toBeNull();
+  expect(screen.queryByText('src/earlier.ts')).toBeNull();
   expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
   const first = screen.getByText('First, inspect the implementation.');
   const progress = screen.getByText('The source confirms the next step.');
@@ -312,7 +313,8 @@ it('keeps assistant prose in order and places earlier process groups entirely in
   await user.click(histories[0]!);
   expect(screen.getByText('Earlier reasoning.')).toBeTruthy();
   await user.click(histories[1]!);
-  expect(screen.getByRole('button', { name: /^Read.*src\/earlier\.ts/ })).toBeTruthy();
+  expect(screen.getByText('src/earlier.ts')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Read.*src\/earlier\.ts/ })).toBeNull();
   expect(screen.queryByText('Latest reasoning.')).toBeNull();
   await user.click(latest);
   expect(view.container.textContent).toContain('Latest reasoning.');

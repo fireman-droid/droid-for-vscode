@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const extraMessages: readonly MessageTranslations[] = [
+  ["Started in background · PID {pid}","已在后台启动 · PID {pid}","已在背景啟動 · PID {pid}"],
+  ["{count} result preview unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
+  ["{count} result previews unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
   ["Word wrap","自动换行","自動換行"],
   ["Enable word wrap","开启自动换行","開啟自動換行"],
   ["Disable word wrap","关闭自动换行","關閉自動換行"],
