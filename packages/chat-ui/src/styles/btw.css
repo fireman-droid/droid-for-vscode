@@ -192,6 +192,7 @@
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
   .v2-btw-send > svg { display: block; width: 14px; height: 14px; flex: none; }
+  .v2-btw-send[data-queue] { width: auto; min-width: 26px; gap: 3px; padding-inline: 6px; border-radius: 13px; font-size: 11px; }
   .v2-btw-send:hover:not(:disabled) { background: var(--control-surface-active); border-color: var(--control-border-hover); }
   .v2-btw-send:active:not(:disabled) { border-color: var(--control-border-focus); }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }

@@ -42,7 +42,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const running = item.status === 'running';
   const inline = useContext(ProcessGroupContext);
   const latest = useContext(ProcessLatestContext);
-  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && running && !inline && !latest, true);
+  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && (inline || (running && !latest)), inline);
   const category = classifyExploreTool(item.toolName);
   const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;

@@ -34,8 +34,6 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const quotePrefix = formatSelectionQuotes(quotedContext, '');
   const maxLength = Math.max(0, maxTextLength - quotePrefix.length);
-  const canSend = canAsk && !sendDisabled && (Boolean(draft.trim()) || hasAttachments) && draft.length <= maxLength;
-  const showStop = streaming && (!canSend || state.stopping);
   const references = useCodeReferenceDraft(draft, onDraftChange, maxLength);
   const pendingQuote = state.pendingQuestion ? parseSelectionQuotes(state.pendingQuestion) : null;
   const pendingBody = pendingQuote?.body ?? state.pendingQuestion;
@@ -141,9 +139,9 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           {!composerActions ?
           <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
             : composeHint}</span> : null}
-          {showStop ? <AnswerStopButton className="v2-btw-send" stopping={state.stopping} onStop={onStop} />
-            : <Button size="none" variant="plain" className="v2-btw-send" aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
-              title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canSend} onClick={send}><ArrowUp /></Button>}
+          {streaming ? <AnswerStopButton stopping={state.stopping} onStop={onStop} /> : null}
+          <Button size="none" variant="plain" className="v2-btw-send" data-queue={streaming || undefined} aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
+            title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canAsk || sendDisabled || (!draft.trim() && !hasAttachments) || draft.length > maxLength} onClick={send}><ArrowUp />{streaming ? <span>{t('Queue')}</span> : null}</Button>
         </div>
       </div>
     </footer>
