@@ -39,8 +39,8 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const inlineDiff = useContext(InlineDiffContext);
   const command = item.detailKind === 'command' ? item.detail : undefined;
   const running = item.status === 'running';
-  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && running);
   const inline = useContext(ProcessGroupContext);
+  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && (running || inline), inline);
   const category = classifyExploreTool(item.toolName);
   const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
