@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const extraMessages: readonly MessageTranslations[] = [
+  ["Word wrap","自动换行","自動換行"],
+  ["Enable word wrap","开启自动换行","開啟自動換行"],
+  ["Disable word wrap","关闭自动换行","關閉自動換行"],
   ["Copied result","已复制结果","已復制結果"],
   ["Copy result","复制结果","復制結果"],
   ["Files","文件","檔案"],

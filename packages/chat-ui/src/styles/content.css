@@ -4,6 +4,12 @@
     border-color: var(--panel-edge);
     background: color-mix(in srgb, var(--soft-surface) 55%, var(--surface));
   }
+  :is(.v2-code-block, .v2-activity-result) pre[data-code-wrap='true'],
+  :is(.v2-code-block, .v2-activity-result) pre[data-code-wrap='true'] code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
   .v2-media-preview > header, .v2-media-actions { border-color: var(--panel-edge); }
   .v2-media-toolbar {
     border-color: var(--panel-edge);

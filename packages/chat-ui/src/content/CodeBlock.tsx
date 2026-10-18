@@ -2,6 +2,7 @@ import { useI18n } from '../i18n';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { CodeSyntax } from './CodeSyntax';
+import { CodeWrapToggle } from './CodeWrapToggle';
 import { Button } from '../ui/button';
 import { MarkdownState } from './context';
 import { useUiEnvironment } from '../environment';
@@ -12,12 +13,15 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
   const { streaming } = useContext(MarkdownState);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
   return <div className="v2-code-block my-3 min-w-0 overflow-hidden rounded border border-border">
     <div className="v2-code-body">
     <header data-transcript-selection-exclude="" className="v2-code-toolbar flex select-none items-center justify-between border-b border-border bg-muted px-2 py-1">
       <span className="v2-code-language text-[11px] text-muted-foreground">{language ?? 'text'}</span>
+      <div className="flex items-center gap-0.5">
+      <CodeWrapToggle wrapped={wrapped} onChange={setWrapped} />
       <Button variant="ghost" size="icon-sm" aria-label={copied ? t("Copied") : t("Copy code")} onClick={() => {
         void copyText(text).then(() => {
           setCopied(true); setCopyError(false);
@@ -25,8 +29,9 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
           timer.current = setTimeout(() => setCopied(false), 1500);
         }, () => setCopyError(true));
       }}>{copied ? <Check /> : <Copy />}</Button>
+      </div>
     </header>
-    <pre tabIndex={0} role="region" aria-label={t("{p0} code", { p0: language ?? 'Plain text' })}
+    <pre tabIndex={0} role="region" data-code-wrap={wrapped || undefined} aria-label={t("{p0} code", { p0: language ?? 'Plain text' })}
       className="max-h-[480px] max-w-full overflow-auto overscroll-contain bg-muted/40 p-2.5 text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
       <CodeSyntax text={text} language={language} streaming={streaming} />
     </pre>
