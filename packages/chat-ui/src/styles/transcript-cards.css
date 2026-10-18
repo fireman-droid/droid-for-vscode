@@ -3,7 +3,8 @@
   .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
   .v2-activity-row-plain { grid-template-columns: minmax(0, 1fr) auto; }
   .v2-activity-detail { padding-inline-start: 0; }
-  .v2-activity-items { display: grid; gap: 4px; }
+  .v2-activity-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .v2-activity-items > * { min-width: 0; }
   .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
   .v2-tool-error {
     box-sizing: border-box; width: fit-content; min-width: 0; max-width: 100%; max-height: 128px;
