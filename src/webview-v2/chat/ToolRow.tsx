@@ -6,7 +6,7 @@ import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '..
 import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
 import { resolveToolAction } from '../../shared/transcript/toolActivity';
 import { classifyExploreTool } from './transcript/activityGrouping';
-import { ProcessGroupContext, useProcessDisclosure } from './transcript/processPresentation';
+import { ProcessGroupContext, ProcessLatestContext, useProcessDisclosure } from './transcript/processPresentation';
 import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
 import { formatDuration, formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
@@ -40,7 +40,8 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const command = item.detailKind === 'command' ? item.detail : undefined;
   const running = item.status === 'running';
   const inline = useContext(ProcessGroupContext);
-  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && (running || inline), inline);
+  const latest = useContext(ProcessLatestContext);
+  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && (inline || (running && !latest)), inline);
   const category = classifyExploreTool(item.toolName);
   const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
@@ -100,12 +101,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     </div>;
   }
   if (isFoldableFileOperation(item)) {
-    const operationTarget = target ?? (item.operationDiff?.status === 'ready'
-      ? item.operationDiff.files.map((file) => file.path).join(', ') : undefined);
-    return hideConfirmedOperations ? null : <ActivityItem id={item.id} messageId={messageId}
-      icon={<FileText />} title={action} target={operationTarget} status={status || undefined}>
-      <OperationDiff item={item} onInteract={onInteract} />
-    </ActivityItem>;
+    return <OperationDiff item={item} onInteract={onInteract} />;
   }
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);

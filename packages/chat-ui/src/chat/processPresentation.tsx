@@ -31,6 +31,7 @@ interface ProcessPresentation {
 }
 const ProcessPresentationContext = createContext<ProcessPresentation | null>(null);
 export const ProcessGroupContext = createContext(false);
+export const ProcessLatestContext = createContext(false);
 
 export function ProcessPresentationProvider({
   messageIds,

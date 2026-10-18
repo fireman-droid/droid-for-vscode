@@ -108,7 +108,7 @@ export function useSmoothFollowScroll<T extends HTMLElement>(): SmoothFollowScro
       });
       if (released) {
         cancelFrame();
-      }
+      } else schedule();
     };
     viewport.addEventListener('scroll', onScroll, { passive: true });
     viewport.addEventListener('wheel', onWheel, { passive: true });

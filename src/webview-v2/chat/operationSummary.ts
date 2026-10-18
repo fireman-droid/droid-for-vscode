@@ -32,7 +32,7 @@ export function operationFileStats(file: OperationDiffFile): ChangeFile {
   return stats;
 }
 
-/** Successful edit rows become the turn card; failures and commands retain their activity. */
+/** Successful file-only operations can render their recorded patches directly. */
 export function isFoldableFileOperation(item: SessionTranscriptItem): boolean {
   if (item.kind !== 'tool' || item.status !== 'completed' || item.errorMessage || item.subagent ||
     item.detailKind === 'command' || !['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase())) return false;

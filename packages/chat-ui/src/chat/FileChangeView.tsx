@@ -15,6 +15,8 @@ export interface FileChangeViewProps {
   readonly onSelect?: () => void;
   readonly label?: string;
   readonly compact?: boolean;
+  readonly alwaysExpanded?: boolean;
+  readonly metadata?: ReactNode;
 }
 
 export function ChangeLineStats({ additions, deletions }: Pick<ChangeFile, 'additions' | 'deletions'>) {
@@ -32,17 +34,27 @@ export function ChangeLineStats({ additions, deletions }: Pick<ChangeFile, 'addi
   );
 }
 
-export function FileChangeView({ file, children, onInteract, onSelect, label, compact = false }: FileChangeViewProps) {
+export function FileChangeView({ file, children, onInteract, onSelect, label, compact = false, alwaysExpanded = false, metadata }: FileChangeViewProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const hasDetails = !onSelect && children !== null && children !== undefined && children !== false;
   const contents = <>
-    {(onSelect || compact) && <ChangeFileIcon path={file.path} />}
-    {hasDetails && <ChevronRight className="dvx-change-chevron" aria-hidden="true" />}
+    {!alwaysExpanded && (onSelect || compact) && <ChangeFileIcon path={file.path} />}
+    {!alwaysExpanded && hasDetails && <ChevronRight className="dvx-change-chevron" aria-hidden="true" />}
     <span className="dvx-change-label">{label ?? file.kind ?? t("Edited")}</span>
     <span className="dvx-change-path" title={file.path}>{compact ? file.path.split(/[\\/]/u).pop() : file.path}</span>
     <ChangeLineStats additions={compact ? file.additions || null : file.additions} deletions={compact ? file.deletions || null : file.deletions} />
+    {metadata ? <span className="shrink-0 text-[11px] text-muted-foreground">{metadata}</span> : null}
   </>;
+  if (alwaysExpanded) return <div className="dvx-change-file operation-diff">
+    <div className="dvx-change-file-header border-b border-[var(--panel-edge)]">
+      <div className="dvx-change-row dvx-change-row-static">{contents}</div>
+      {onSelect ? <Button variant="plain" size="none" className="dvx-change-action mr-1"
+        aria-label={t("Review changes to {p0}", { p0: file.path })}
+        onClick={() => { onInteract?.(); onSelect(); }}>{t("Review")}</Button> : null}
+    </div>
+    {children}
+  </div>;
   return (
     <Collapsible className="dvx-change-file" open={open} onOpenChange={(nextOpen) => {
       onInteract?.();

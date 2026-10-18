@@ -1,16 +1,10 @@
 @layer components {
-  /* Reserve real space for each control; never push icons outside the transcript. */
-  .v2-assistant-reply { --activity-text-inset: 34px; }
-  .v2-activity-row { display: grid; grid-template-columns: 12px 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
-  .v2-activity-row-compact, .v2-activity-row-flat { grid-template-columns: 14px minmax(0, 1fr) auto; }
-  .v2-activity-detail { padding-inline-start: var(--activity-text-inset, 34px); }
+  /* Only disclosure controls reserve a column; prose and details share the same left edge. */
+  .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
+  .v2-activity-row-plain { grid-template-columns: minmax(0, 1fr) auto; }
+  .v2-activity-detail { padding-inline-start: 0; }
   .v2-activity-items { display: grid; gap: 4px; }
   .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
-  .v2-activity-inline-detail > .v2-thinking-detail { max-height: 256px; overflow: auto; overscroll-behavior: contain; }
-  .v2-activity-leading { display: grid; width: 14px; height: 14px; place-items: center; }
-  .v2-activity-chevron { display: none; }
-  .v2-activity-inline-toggle:is(:hover, :focus-visible, [data-state='open']) .v2-activity-symbol { display: none; }
-  .v2-activity-inline-toggle:is(:hover, :focus-visible, [data-state='open']) .v2-activity-chevron { display: grid; place-items: center; }
   .dvx-agent-task {
     min-width: 0; margin-block: 2px; border-radius: 6px; background: transparent;
   }
@@ -112,24 +106,12 @@
     place-items: center;
     color: var(--muted-ink);
   }
-  .v2-command-prompt-icon {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    line-height: 16px;
-    letter-spacing: -1px;
-  }
   .v2-command-chevron {
-    display: none;
+    display: block;
     width: 12px;
     height: 12px;
     transition: transform var(--motion-fast) var(--motion-ease);
   }
-  .v2-command-card:hover .v2-command-prompt-icon,
-  .v2-command-card:focus-within .v2-command-prompt-icon,
-  .v2-command-card[data-state='open'] .v2-command-prompt-icon { display: none; }
-  .v2-command-card:hover .v2-command-chevron,
-  .v2-command-card:focus-within .v2-command-chevron,
-  .v2-command-card[data-state='open'] .v2-command-chevron { display: block; }
   .v2-command-card[data-state='open'] .v2-command-chevron { transform: rotate(90deg); }
   .v2-command-card[data-activity-inline='true'] { margin-block: 2px; }
   .v2-command-card[data-activity-inline='true'] .v2-command-toggle { gap: 4px; }
