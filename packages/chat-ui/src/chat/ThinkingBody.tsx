@@ -78,7 +78,9 @@ export const ThinkingBody = memo(function ThinkingBody({ text, running, truncate
     previous.current = appendChunks(previous.current, displayed);
     return previous.current.chunks;
   }, [displayed]);
-  const { viewportRef, contentRef, followNewest } = useSmoothFollowScroll<HTMLDivElement>();
+  // Settled history is read from the start. Only a live stream needs observers
+  // and frame-by-frame tail following while the surrounding group opens.
+  const { viewportRef, contentRef, followNewest } = useSmoothFollowScroll<HTMLDivElement>(running);
   useEffect(() => followNewest(), [displayed, followNewest]);
 
   return <ScrollArea className="v2-thinking-detail select-none text-muted-foreground [&_*]:select-none"

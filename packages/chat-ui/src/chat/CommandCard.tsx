@@ -34,7 +34,7 @@ export function CommandCard({ title, target, chips, running, failed, statusLabel
     </header>
     <div id={bodyId} className="v2-command-body" data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open || undefined}>
       <div className="v2-command-body-inner">
-        <CommandOutput command={command} output={output} running={running} visible={open} />
+        {open ? <CommandOutput command={command} output={output} running={running} /> : null}
       </div>
     </div>
   </Tool>;

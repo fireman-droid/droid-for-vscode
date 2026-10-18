@@ -25,7 +25,7 @@ export interface SmoothFollowScroll<T extends HTMLElement> {
  * descends over animation frames, an intentional wheel gesture releases the
  * latch, and naturally reaching the bottom rejoins it.
  */
-export function useSmoothFollowScroll<T extends HTMLElement>(): SmoothFollowScroll<T> {
+export function useSmoothFollowScroll<T extends HTMLElement>(enabled = true): SmoothFollowScroll<T> {
   const viewportRef = useRef<T | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const followNewestRef = useRef<(force?: boolean) => void>(() => undefined);
@@ -34,6 +34,7 @@ export function useSmoothFollowScroll<T extends HTMLElement>(): SmoothFollowScro
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     const viewport = viewportRef.current;
     if (viewport === null) {
       return undefined;
@@ -126,7 +127,7 @@ export function useSmoothFollowScroll<T extends HTMLElement>(): SmoothFollowScro
       observer?.disconnect();
       cancelFrame();
     };
-  }, []);
+  }, [enabled]);
 
   return { viewportRef, contentRef, followNewest };
 }

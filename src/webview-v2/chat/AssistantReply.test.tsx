@@ -101,7 +101,7 @@ it('keeps a single command directly accessible and retains failures after the tu
   const rendered = render(view(true));
   expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
   expect(screen.getByRole('button', { name: /^Run fixture/ }).getAttribute('aria-expanded')).toBe('false');
-  expect(screen.getByLabelText('Command and output').closest('[aria-hidden="true"]')).not.toBeNull();
+  expect(screen.queryByLabelText('Command and output')).toBeNull();
   await user.click(screen.getByRole('button', { name: /^Run fixture/ }));
   expect(screen.getByLabelText('Command and output').textContent).toContain('Checking fixture');
   rendered.rerender(view(false));
@@ -110,6 +110,7 @@ it('keeps a single command directly accessible and retains failures after the tu
   const command = screen.getByRole('button', { name: /^Run fixture/ });
   await user.click(command);
   expect(command.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByLabelText('Command and output')).toBeNull();
   await user.click(command);
   expect(command.getAttribute('aria-expanded')).toBe('true');
 });

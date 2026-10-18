@@ -10,7 +10,7 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
   readonly children: ReactNode; readonly attention?: ReactNode; readonly latest?: ReactNode;
 }) {
   const { t } = useI18n();
-  const disclosure = useProcessDisclosure(messageId, groupId);
+  const disclosure = useProcessDisclosure(messageId, groupId, false, false, { surface: 'history', records: presentation.count });
   const id = useId();
   return <div className="v2-activity-group min-w-0">
     {presentation.count > 0 ? <Collapsible open={disclosure.expanded}>

@@ -113,3 +113,27 @@ it('pauses when reading upwards and follows appended text again after scrolling 
   frame();
   expect(viewport.scrollTop).toBe(944);
 });
+
+it('opens completed history at the start without starting follow work, and stops following when streaming finishes', () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0, height = 1_000;
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++nextFrame, callback); return nextFrame; });
+  vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame));
+  const frame = () => act(() => {
+    const callbacks = [...frames.values()]; frames.clear();
+    callbacks.forEach(callback => callback(0));
+  });
+  const view = render(<ThinkingBody text={longText} running={false} truncated={false} />);
+  const viewport = view.container.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')!;
+  Object.defineProperties(viewport, { scrollHeight: { get: () => height }, clientHeight: { get: () => 256 } });
+  frame();
+  expect(viewport.scrollTop).toBe(0);
+  view.rerender(<ThinkingBody text={longText} running truncated={false} />);
+  frame();
+  expect(viewport.scrollTop).toBe(744);
+  view.rerender(<ThinkingBody text={`${longText} Complete.`} running={false} truncated={false} />);
+  height = 1_200;
+  frame();
+  expect(viewport.scrollTop).toBe(744);
+  expect(textContent(view.container)?.textContent).toBe(`${visibleLongText} Complete.`);
+});
