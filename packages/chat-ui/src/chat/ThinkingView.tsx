@@ -23,9 +23,11 @@ export const ThinkingView = memo(function ThinkingView({ text, status, durationM
     return () => clearTimeout(timer);
   }, [running, text.length, truncated]);
   const title = running ? t('Thinking') : formatThinkingLabel(status, durationMs ?? null, t);
-  const body = <ThinkingBody text={text} running={running} truncated={truncated} />;
+  const hasDetails = running || truncated || /\S/u.test(text);
+  const body = hasDetails ? <ThinkingBody text={text} running={running} truncated={truncated} /> : undefined;
   if (activity) return <ActivityItem {...activity} textSelectable={false} icon={null} title={title}
     status={truncated ? t('Safety limit') : running ? waiting ? t('Waiting') : t('Receiving') : undefined}>{body}</ActivityItem>;
+  if (!hasDetails) return <p className="m-0 min-h-6 py-0.5 text-[13px] leading-[18px] text-muted-foreground">{title}</p>;
   return <Tool open={expanded} onOpenChange={setExpanded}>
     <ToolHeader className="select-none" title={title}
       status={truncated ? t('Safety limit reached') : running ? waiting ? t('Waiting for model') : t('Receiving') : ''} />

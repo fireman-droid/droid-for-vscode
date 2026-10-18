@@ -17,6 +17,18 @@ function textContent(container: HTMLElement) {
   return container.querySelector('[data-radix-scroll-area-viewport] > div > div');
 }
 
+it.each([undefined, { id: 'empty', messageId: 'reply' }])('does not mount an empty completed thought, while retaining an active waiting state (%j)', activity => {
+  const view = render(<ThinkingView text={' \n\t '} status="complete" durationMs={100} activity={activity} />);
+  expect(screen.getByText('Thought briefly')).toBeTruthy();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(textContent(view.container)).toBeNull();
+  view.rerender(<ThinkingView text=" " status="active" activity={activity} />);
+  fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
+  expect(screen.getByText('Waiting for thinking text…')).toBeTruthy();
+  view.rerender(<ThinkingView text="A real observation." status="complete" activity={activity} />);
+  expect(screen.getByText('A real observation.')).toBeTruthy();
+});
+
 it('separates adjacent short headings, removes repeated headings and keeps chunk-boundary emphasis intact', () => {
   const view = render(<ThinkingBody text="**Planning****Planning****Verify results**" running={false} truncated={false} />);
   expect(textContent(view.container)?.textContent).toBe('Planning\nVerify results');

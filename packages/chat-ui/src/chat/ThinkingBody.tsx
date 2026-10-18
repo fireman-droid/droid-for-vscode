@@ -84,7 +84,7 @@ export const ThinkingBody = memo(function ThinkingBody({ text, running, truncate
   return <ScrollArea className="v2-thinking-detail select-none text-muted-foreground [&_*]:select-none"
     viewportRef={viewportRef} viewportClassName="max-h-64" aria-label={t('Thinking')}>
     <div ref={contentRef} className="whitespace-pre-wrap break-words text-[13px] leading-[1.5]">
-      {displayed ? chunks.map((chunk, index) => <TextChunkView key={index} chunk={chunk} />)
+      {/\S/u.test(displayed) ? chunks.map((chunk, index) => <TextChunkView key={index} chunk={chunk} />)
         : <p role="status">{running ? t('Waiting for thinking text…') : t('No thinking text returned.')}</p>}
       {truncated ? <p role="note" className="mt-2 text-[11px]">{t('Thinking reached the local safety limit; later reasoning is not retained.')}</p> : null}
     </div>
