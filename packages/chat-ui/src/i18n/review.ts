@@ -1,6 +1,10 @@
 import type { MessageTranslations } from './translate';
 
 export const reviewMessages: readonly MessageTranslations[] = [
+  ["Show all changes","查看全部改动","查看全部改動"],
+  ["Collapse changes","收起改动","收起改動"],
+  ["Show all changes to {path}","查看 {path} 的全部改动","查看 {path} 的全部改動"],
+  ["Collapse changes to {path}","收起 {path} 的改动","收起 {path} 的改動"],
   ["Reveal {p0}","定位 {p0}","定位 {p0}"],
   ["This file is not in the current comparison.","当前比较中没有这个文件。","目前比較中沒有這個檔案。"],
   ["Before","修改前","修改前"],

@@ -140,6 +140,7 @@ it('keeps recorded file patches expanded through stopping and completion alongsi
   showProcessHistory();
   expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
   expect(screen.queryByRole('button', { name: /^(Show|Hide) changes to/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Show all changes to/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, toolUseId: 'edit-call', path });
   expect(screen.queryByRole('region', { name: 'Changes in 1 file' })).toBeNull();
@@ -165,6 +166,28 @@ it('keeps recorded file patches expanded through stopping and completion alongsi
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
   fireEvent.click(within(card).getByRole('button', { name: 'Undo changes in 1 file' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, action: 'undo' });
+  await expectNoWorkspaceDiff(current.port);
+});
+
+it('expands a long recorded edit inside its card and retains the choice when its result updates', async () => {
+  const patch = (count: number) => `@@ -0,0 +1,${count} @@\n${Array.from({ length: count }, (_, index) => `+ADDED_LINE_${index}`).join('\n')}`;
+  const evidence = (count: number): OperationDiff => ({ ...confirmed, status: 'ready', source: 'tool-result', files: [
+    { path, kind: 'added', outcome: 'applied', patch: patch(count) },
+  ] });
+  const current = fixture([user, tool(evidence(20)), answer]);
+  render(<Scene {...current} />);
+  showProcessHistory();
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_8');
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).not.toContain('ADDED_LINE_9');
+  current.port.postMessage.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: `Show all changes to ${path}` }));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_19');
+  expect(current.port.postMessage).not.toHaveBeenCalled();
+  receive(current.store, snapshot([user, tool(evidence(21)), answer], 2));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_20');
+  fireEvent.click(screen.getByRole('button', { name: `Collapse changes to ${path}` }));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).not.toContain('ADDED_LINE_9');
+  expect(screen.getByRole('button', { name: `Show all changes to ${path}` }).getAttribute('aria-expanded')).toBe('false');
   await expectNoWorkspaceDiff(current.port);
 });
 

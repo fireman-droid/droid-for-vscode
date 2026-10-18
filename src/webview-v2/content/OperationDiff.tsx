@@ -1,9 +1,9 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useContext } from 'react';
 import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
+import { FileDiffPreview } from '@droidvisx/chat-ui/chat/FileDiffPreview';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { InlineDiffContext } from '../review/useInlineDiff';
-import { DiffView } from '../review/DiffView';
 import { RecordedSource } from '../review/RecordedSource';
 import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { operationFileStats } from '../chat/operationSummary';
@@ -19,7 +19,10 @@ export const OPERATION_UNAVAILABLE = {
   'unchanged': 'No changes in this operation.',
 };
 
-function OperationFileDetails({ file, canReview }: { readonly file: OperationDiffFile; readonly canReview: boolean }) {
+function OperationFileDetails({ file, canReview, messageId, disclosureKey, onInteract }: {
+  readonly file: OperationDiffFile; readonly canReview: boolean; readonly messageId?: string;
+  readonly disclosureKey: string; readonly onInteract?: () => void;
+}) {
   const { t } = useI18n();
   return <>
     {file.scope === 'mission' ? <p className="operation-diff-note">{t("Mission artifact · Read-only")}</p> : null}
@@ -30,11 +33,13 @@ function OperationFileDetails({ file, canReview }: { readonly file: OperationDif
       <RecordedSource content={file.submittedContent} path={file.path} label={t("Submitted file")} />
     </> : file.bodyRef ? <p className="operation-diff-note">{canReview ? t("This edit is saved. Open Review to read its full content.") : t("Saved patch")}</p>
       : !file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p className="operation-diff-note">{t("No complete text Diff was recorded for this result.")}</p>
-      : <DiffView patch={file.patch} path={file.path} />}
+      : <FileDiffPreview patch={file.patch} path={file.path} messageId={messageId} disclosureKey={disclosureKey} onInteract={onInteract} />}
   </>;
 }
 
-export function OperationDiff({ item, hideConfirmed = false, onInteract }: { item: ToolTranscriptItem; readonly hideConfirmed?: boolean; readonly onInteract?: () => void }) {
+export function OperationDiff({ item, messageId, hideConfirmed = false, onInteract }: {
+  item: ToolTranscriptItem; readonly messageId?: string; readonly hideConfirmed?: boolean; readonly onInteract?: () => void;
+}) {
   const { t } = useI18n();
   const context = useContext(InlineDiffContext);
   const result = item.operationDiff ? operationDiffWithChanges(item.operationDiff) : undefined;
@@ -53,7 +58,8 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
         onSelect={isWorkspaceOperationFile(file) && context?.sessionId ? () => { context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
         }); } : undefined}>
-        <OperationFileDetails file={file} canReview={isWorkspaceOperationFile(file) && !!context?.sessionId} />
+        <OperationFileDetails file={file} canReview={isWorkspaceOperationFile(file) && !!context?.sessionId} messageId={messageId}
+          disclosureKey={JSON.stringify(['file-diff', item.toolUseId, file.scope ?? 'workspace', file.path])} onInteract={onInteract} />
       </FileChangeView>
       : <p key={`${file.scope ?? 'workspace'}:${file.path}`} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? t("Operation failed") : t("Changes unconfirmed")}{file.message ? ` · ${file.message}` : ''}</p>)}
   </div>;

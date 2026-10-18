@@ -308,6 +308,12 @@
     padding: 2px 5px; border-radius: 5px; color: var(--muted-ink); text-align: left;
   }
   .dvx-change-details { padding-block: 4px 8px; overflow-x: auto; }
+  .operation-diff .dvx-file-diff-preview .review-diff { max-height: none; }
+  .dvx-diff-preview-toggle {
+    justify-content: center; min-height: 32px; padding: 4px 8px;
+    border-top: 1px solid var(--panel-edge); border-radius: 0;
+  }
+  .dvx-diff-preview-toggle svg { width: 14px; height: 14px; }
   .dvx-change-summary .dvx-change-details { padding-inline: 8px; }
   .dvx-change-note { padding: 6px 10px; border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); color: var(--muted-ink); font-size: 12px; overflow-wrap: anywhere; }
   .dvx-change-action, .dvx-change-row:not(.dvx-change-row-static), .dvx-change-more {

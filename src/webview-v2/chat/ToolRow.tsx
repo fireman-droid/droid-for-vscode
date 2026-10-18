@@ -103,12 +103,12 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
           {activityDetail}
         </ToolContent>
       </Tool> : null}
-      {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+      {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
       {item.backgroundHint?.fireAndForget ? <p className="px-2 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
     </div>;
   }
   if (isFoldableFileOperation(item)) {
-    return <OperationDiff item={item} onInteract={onInteract} />;
+    return <OperationDiff item={item} messageId={messageId} onInteract={onInteract} />;
   }
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
@@ -123,7 +123,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
-    {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+    {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
   return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
@@ -141,7 +141,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
         {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
       </ToolContent>
     </Tool>}
-    {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+    {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-4 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
 }
