@@ -6,25 +6,24 @@
 
 ## 版本与交付
 
-- `0.8.15` 为当前待发布候选：最新操作原位更新、移除中间思考分组、保留单条折叠，以及正文／符号左边缘对齐。
-  本次变更在 `codex/activity-gutter-fix`，本地验证与真实预览已完成；仍须通过 PR 检查、合入主线并从正式标签构建发布附件。
-- `0.8.14` 已通过 [PR #10](https://github.com/fireman-droid/droid-for-vscode/pull/10) 合入 `main`，
-  提交 `1257cc01`；版本、CHANGELOG 与 `v0.8.14` 标签一致。包含用户认可的 Activity 精简与对齐、
-  等待／引导队列、会话自动恢复和石墨灰选区，不包含目录整理、超长输入或暂停中的 BYOK 草稿。
-- [GitHub v0.8.14](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.14) 已正式公开。
+- `0.8.15` 已通过 [PR #12](https://github.com/fireman-droid/droid-for-vscode/pull/12) 合入 `main`，
+  提交 `30268883`；版本、CHANGELOG 与 `v0.8.15` 标签一致。包含最新操作原位更新、移除中间思考分组、
+  保留单条独立折叠，以及正文／符号左边缘对齐；不包含目录整理、超长输入或暂停中的 BYOK 草稿。
+- [GitHub v0.8.15](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.15) 已正式公开。
   正式包来自标签的干净源码，下载后再次核对版本、源码提交、172 项包内容与扩展入口加载。
-  SHA256：`e28c7dcd1e73b7a89ab0f1ff2be8c065026bd96d84e197ec6737f267bf88816d`。
-- [Open VSX 0.8.14](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.14) 已公开可下载，
-  下载包的 SHA256 与上述 GitHub 正式包一致；Cursor 客户端更新仍取决于其市场同步。
-- Microsoft Marketplace 本次管理页被 Azure DevOps 的 VSID 并发限流拦截，未提交。
+  SHA256：`34245c268c8b2759364c2361dc96a18b94f0ed97ca19d0871369aecdebca6659`。
+- [Open VSX 0.8.15](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.15) 已公开可下载，
+  [发布流程](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39094529442) 成功；下载包的 SHA256 与上述 GitHub 正式包一致。
+  Cursor 客户端更新仍取决于其市场同步。
+- Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，本次未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 已按本次授权安装 `codex/activity-gutter-fix` 的 `0.8.14` 本地修正版，CLI 报告安装成功，需 Reload Window。
+- Microsoft VS Code 此前已安装 `codex/activity-gutter-fix` 的 `0.8.14` 本地修正版，CLI 报告安装成功，需 Reload Window。
   已安装 `eb01085` 对应的本地包：最新操作原位更新，外层展开后每条工具与思考各自保留展开／收起，手动选择保留；
   正文与符号左边缘对齐，展开列表没有额外缩进，内容区仍与 composer 共用外层宽度。
-  本次安装包含用户澄清的折叠修正：只移除“思考记录”中间分组，避免 thinking 内再包一组 thinking。
-  该分支尚未合并或正式发布，不覆盖上述正式产物。
-  Cursor 本次未安装，仍为此前的 `0.8.13` 石墨灰选区试用包。
+  该本地包包含用户澄清的折叠修正：只移除“思考记录”中间分组，避免 thinking 内再包一组 thinking。
+  相应产品改动已随 `0.8.15` 合并发布；本次发版未另外覆盖编辑器中的本地安装包。
+  Cursor 此前的手动安装仍为 `0.8.13` 石墨灰选区试用包；未声称市场发布已完成客户端更新。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
 
@@ -44,11 +43,9 @@
 
 ## 最近验证
 
-- `0.8.14` 合并后的针对性回归 10 个文件、110 项通过；覆盖队列／引导、自动恢复、后台发现、转录与 Activity 展示。
-  前端测试首次与共享包构建并行时缺少中间产物，构建完成后单独重跑通过。
 - Node 24／pnpm 10.2.0 下类型检查、文件预算、生产构建与 172 项 VSIX 内容及入口加载校验通过。
-  [远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026259774) 的 354 个文件、3950 项测试全部通过。
-  [正式标签构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39026741401) 成功，各渠道复用其同一附件。
+  [0.8.15 远端 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39093967549) 的 354 个文件、3951 项测试全部通过。
+  [正式标签构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39094350617) 成功，各渠道复用其同一附件。
 - 本次 Activity 独立折叠修正的 2 个针对性测试文件、24 项通过，覆盖外层与单条各自收起、没有中间思考分组、
   新增思考不重新打开旧条目、手动选择跨虚拟重挂载保留，以及命令输出与失败操作仍可查看。
   ChatApp 转录恢复的 5 项测试通过，明确区分过程摘要与实际命令卡片，并保留命令与后续正文不重复的断言。
