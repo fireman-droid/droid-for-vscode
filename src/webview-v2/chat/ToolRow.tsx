@@ -83,7 +83,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const activityDetail = previewBody || !!output || !!errorMessage ? <>
     {previewBody ? <ActivityResult preview={available!} /> : null}
     {output ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-[var(--panel-edge)] bg-muted/25 p-2.5 font-mono text-[11px] leading-[18px]">{output}</pre> : null}
-    {errorMessage ? <pre role="status" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-destructive/40 bg-destructive/5 p-2.5 font-mono text-[11px] leading-[18px] text-destructive">{errorMessage}</pre> : null}
+    {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
   </> : undefined;
   if (item.subagent) {
     const delegationFailed = item.status === 'failed' && item.subagent.status !== 'failed';
@@ -115,7 +115,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     return <ActivityItem id={item.id} messageId={messageId} icon={<ListChecks />} title={t("Task plan")}
       status={`${steps.filter((step) => step.status === 'completed').length} / ${steps.length}${state ? ` · ${state}` : ''}`}>
       <PlanSteps steps={steps} />
-      {errorMessage ? <p role="status" className="text-destructive">{errorMessage}</p> : null}
+      {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
   if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
@@ -138,7 +138,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
         {previewBody ? <ActivityResult preview={available!} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
         {output ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{output}</pre> : null}
-        {errorMessage ? <p role="status" className="whitespace-pre-wrap break-words text-destructive">{errorMessage}</p> : null}
+        {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
       </ToolContent>
     </Tool>}
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}

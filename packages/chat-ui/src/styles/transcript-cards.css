@@ -5,6 +5,13 @@
   .v2-activity-detail { padding-inline-start: 0; }
   .v2-activity-items { display: grid; gap: 4px; }
   .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
+  .v2-tool-error {
+    box-sizing: border-box; width: fit-content; min-width: 0; max-width: 100%; max-height: 128px;
+    margin: 0; padding: 4px 8px; overflow: auto; overscroll-behavior: contain;
+    border-inline-start: 2px solid color-mix(in srgb, var(--error-ink) 45%, transparent); border-radius: 3px;
+    background: color-mix(in srgb, var(--error-ink) 4%, transparent); color: var(--error-ink);
+    font: 11px/16px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
   .dvx-agent-task {
     min-width: 0; margin-block: 2px; border-radius: 6px; background: transparent;
   }
