@@ -14,12 +14,14 @@ export interface ActivityCluster { readonly id: string; readonly items: readonly
 
 export function clusterActivity(items: readonly SessionTranscriptItem[]): readonly ActivityCluster[] {
   const groups: { id: string; items: SessionTranscriptItem[]; grouped: boolean }[] = [];
+  let boundary = 'start';
   for (const item of items) {
     // Delegations outlive the parent reply and must remain visible outside folded activity.
     const grouped = item.kind === 'thinking' || item.kind === 'tool' && item.subagent === undefined;
     const prior = groups.at(-1);
     if (grouped && prior?.grouped) prior.items.push(item);
-    else groups.push({ id: item.id, items: [item], grouped });
+    else groups.push({ id: grouped ? `process:${boundary}` : item.id, items: [item], grouped });
+    if (!grouped) boundary = item.id;
   }
   return groups;
 }

@@ -1,3 +1,4 @@
+import { scriptParentFields } from '../../shared/transcript/scriptActivity';
 import { DroidWorkingState, type DroidStreamEvent } from '@factory/droid-sdk/node';
 
 import {
@@ -85,6 +86,7 @@ export function normalizeSdkEvent(
       }
       return {
         ...withToolInputContext(activity, event.input, workspaceRoot),
+        ...scriptParentFields(event),
         inputComplete: true,
         ...operationDiffFields({ operationDiff }),
       };
@@ -99,7 +101,7 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      return withToolInputContext(activity, event.toolUse.input, workspaceRoot, true);
+      return { ...withToolInputContext(activity, event.toolUse.input, workspaceRoot, true), ...scriptParentFields(event) };
     }
 
     case 'tool_progress': {

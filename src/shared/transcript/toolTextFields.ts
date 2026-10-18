@@ -1,3 +1,4 @@
+import { isScriptParentId, scriptParentFields } from './scriptActivity';
 import { MAX_TOOL_ERROR_MESSAGE_LENGTH } from '../protocol/bounds';
 import { MAX_TOOL_OUTPUT_TAIL_LENGTH } from '../bridgeMessages';
 import type { ToolTranscriptItem } from '../protocol/toolProtocol';
@@ -7,13 +8,14 @@ import { isOperationDiff, isToolExecutionPhase, operationDiffFields } from '../p
 
 type ToolTextFields = Pick<
   ToolTranscriptItem,
-  'target' | 'errorMessage' | 'outputTail' | 'resultPreview' | 'operationDiff' | 'executionPhase'
+  'scriptParentId' | 'target' | 'errorMessage' | 'outputTail' | 'resultPreview' | 'operationDiff' | 'executionPhase'
 >;
 
 export function hasValidToolTextFields(
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & ToolTextFields {
   return (
+    (value.scriptParentId === undefined || isScriptParentId(value.scriptParentId) && value.scriptParentId !== value.toolUseId) &&
     isValidToolTarget(value.target) &&
     optionalText(value.errorMessage, MAX_TOOL_ERROR_MESSAGE_LENGTH) &&
     optionalText(value.outputTail, MAX_TOOL_OUTPUT_TAIL_LENGTH) &&
@@ -30,6 +32,7 @@ export function toolTextFields(validated: Record<string, unknown>): ToolTextFiel
     ...(value.errorMessage === undefined ? {} : { errorMessage: value.errorMessage }),
     ...(value.outputTail === undefined ? {} : { outputTail: value.outputTail }),
     ...resultPreviewFields(value),
+    ...scriptParentFields(value),
     ...operationDiffFields(value),
     ...(value.executionPhase === undefined ? {} : { executionPhase: value.executionPhase }),
   };

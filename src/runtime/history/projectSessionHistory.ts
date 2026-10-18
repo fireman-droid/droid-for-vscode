@@ -1,3 +1,4 @@
+import { scriptParentFields } from '../../shared/transcript/scriptActivity';
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_IMAGE_DATA_LENGTH,
@@ -680,6 +681,7 @@ function appendTool(
     kind: 'tool',
     turnId,
     toolUseId,
+    ...scriptParentFields(block),
     toolName,
     action: extractToolAction(toolName, block.input) ?? summarizeToolAction(toolName),
     status: 'stopped',

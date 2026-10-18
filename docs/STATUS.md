@@ -4,6 +4,17 @@
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
+## 当前开发分支（未发布）
+
+- `codex/script-activity-results` 接通 Script 父子调用关联，按已展示的子工具结果去重，保留独有内容与错误。
+  读取回执使用简短说明，脚本分段输出转为可读文本，内部完成附注不作为当前状态；默认展开、单条折叠及现有对齐规则不变。
+- 实时修改结果缺少 Diff 时，按相同会话与调用 ID 从原始会话记录恢复；已完成工具接受差异证据补齐，保留原状态与耗时。
+  Execute 有界结果可在历史终端卡片恢复，PowerShell here-string 中的代码不再被误识别为命令标签。
+- 原会话离线重放：4 条 Script 汇总保留 1 条独有输出，2 份文件 Diff 与 2 条命令输出均保留，内部状态附注为 0。
+  相关回归覆盖调用关联、重复结果、历史恢复、Diff 补齐与折叠保持；类型检查、文件预算、构建及 172 项 VSIX 校验通过。
+  真实 Browser Dev Client 已核对读取回执、命令标签与默认展开；当前 Host 仍是已安装旧包，完整新 Runtime 未在编辑器重载验收。
+  本次未调用付费模型，尚未安装、合并或公开发布。
+
 ## 版本与交付
 
 - `0.8.15` 已通过 [PR #12](https://github.com/fireman-droid/droid-for-vscode/pull/12) 合入 `main`，

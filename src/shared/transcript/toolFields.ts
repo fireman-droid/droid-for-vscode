@@ -1,3 +1,4 @@
+import { scriptParentFields } from './scriptActivity';
 import {
   MAX_TOOL_DETAIL_LENGTH,
   MAX_TOOL_ERROR_MESSAGE_LENGTH,
@@ -25,6 +26,8 @@ export function projectToolFields(
   return {
     turnId: message.turnId,
     toolUseId: message.toolUseId,
+    ...scriptParentFields(existing),
+    ...scriptParentFields(message),
     toolName: message.toolName.slice(0, MAX_TOOL_NAME_LENGTH),
     action: message.action.slice(0, MAX_TOOL_ACTION_SUMMARY_LENGTH),
     status: message.status,

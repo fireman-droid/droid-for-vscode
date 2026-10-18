@@ -47,6 +47,7 @@ export function transcriptItemTextUnits(item: SessionTranscriptItem): number {
         item.kind.length +
         item.turnId.length +
         item.toolUseId.length +
+        (item.scriptParentId?.length ?? 0) +
         item.toolName.length +
         item.action.length +
         item.status.length +

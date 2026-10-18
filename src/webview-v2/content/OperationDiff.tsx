@@ -39,7 +39,7 @@ export function OperationDiff({ item, hideConfirmed = false, onInteract }: { ite
   const hasToolResult = result?.status === 'ready' && result.source === 'tool-result';
   if ((item.status === 'running' || item.status === 'stopping') && !hasToolResult) return null;
   if (result?.status === 'unavailable' && result.reason === 'unchanged') return null;
-  if (result?.status !== 'ready') return <p className="operation-diff-unavailable">{OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded']}</p>;
+  if (result?.status !== 'ready') return <p className="operation-diff-unavailable">{t(OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded'])}</p>;
   if (result.source !== 'tool-result') return <p className="operation-diff-unavailable" role="status">
     {operationLabel(result)}{t(". No confirmed changes were recorded.")}</p>;
   const files = result.files.filter((file) => !hideConfirmed || !isWorkspaceOperationFile(file) || !isConfirmedOperationFile(result, file));

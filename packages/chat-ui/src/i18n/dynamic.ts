@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const dynamicMessages: readonly MessageTranslations[] = [
+  ["Run script", "执行脚本", "執行腳本"],
+  ["Script output", "脚本补充输出", "腳本補充輸出"],
+  ["Read lines {start}–{end} ({size})", "已读取第 {start}–{end} 行（{size}）", "已讀取第 {start}–{end} 行（{size}）"],
   ["{count} Queued Message","{count} 条排队消息","{count} 條排隊訊息"],
   ["{count} Queued Messages","{count} 条排队消息","{count} 條排隊訊息"],
   ["paused after stop","停止后已暂停","停止後已暫停"],

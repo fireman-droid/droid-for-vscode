@@ -83,7 +83,7 @@ import {
   type SpecHandoffWatch,
 } from './session/specHandoffWatch';
 import { createToolResultCollector } from './tools/toolResultPreview';
-import { createOperationDiffCollector } from './tools/operationDiff';
+import { withScriptEvidence } from './tools/scriptEvidence';
 import { readOperationBody, type OperationBodyRequest } from './tools/operationBody';
 
 export interface FactoryDroidRuntimeOptions {
@@ -246,10 +246,6 @@ export class FactoryDroidRuntime implements DroidRuntime {
     let failureDetail: string | undefined;
     const startedTools = new Set<string>();
     const collectResult = createToolResultCollector(this.sessionTarget?.cwd);
-    const collectOperation = createOperationDiffCollector(
-      this.sessionTarget?.cwd,
-      session.id,
-    );
     this.toolExecutionPhases.reset();
     this.recordDiagnostic({
       level: 'info',
@@ -264,12 +260,12 @@ export class FactoryDroidRuntime implements DroidRuntime {
     try {
       const backendTurnId = typeof session.readTurnOutcome === 'function' ? randomUUID() : undefined;
       if (backendTurnId !== undefined) yield { type: 'turn-identity', backendTurnId };
-      for await (const sdkEvent of session.stream(text, {
+      for await (const { event: sdkEvent, operation } of withScriptEvidence(session.stream(text, {
         includePartialMessages: true,
         abortSignal: cancellation.signal,
         ...(backendTurnId === undefined ? {} : { backendTurnId }),
         ...projectStreamAttachments(attachments),
-      })) {
+      }), session, this.sessionTarget?.cwd)) {
         if (this.disposed || this.activeTurn !== turn) {
           outcome = 'stopped';
           return;
@@ -286,7 +282,7 @@ export class FactoryDroidRuntime implements DroidRuntime {
           sdkEvent,
           this.sessionTarget?.cwd,
           collectResult(sdkEvent),
-          collectOperation(sdkEvent),
+          operation,
         );
         if (event) {
           projectedEventCount += 1;

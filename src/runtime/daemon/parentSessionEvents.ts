@@ -1,5 +1,5 @@
+import { convertToolNotification } from '../events/convertToolNotification';
 import {
-  convertNotificationToStreamMessage,
   SessionNotificationPayloadSchema,
   StreamStateTracker,
   type DroidStreamEvent,
@@ -73,7 +73,7 @@ export class ParentSessionEvents {
       this.emit({ type: 'runtime', turnId: this.turnId, event: { type: 'subagent-started', ...started } });
     const phase = this.phases.observe({ params: { sessionId: this.sessionId, notification } }, this.sessionId);
     if (phase && this.turnId !== null) this.emit({ type: 'runtime', turnId: this.turnId, event: phase });
-    const converted = convertNotificationToStreamMessage(inner);
+    const converted = convertToolNotification(inner);
     for (const input of converted === null ? [] : Array.isArray(converted) ? converted : [converted]) {
       if (this.turnId === null) continue;
       const tracked = this.tracker.processMessage(input);

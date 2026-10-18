@@ -1,6 +1,6 @@
+import { convertToolNotification } from '../events/convertToolNotification';
 import type { DaemonApi } from './api';
 import {
-  convertNotificationToStreamMessage,
   type DroidStreamEvent,
 } from '@factory/droid-sdk';
 import { sanitizeNonAssistantText } from '../history/projectSessionHistory';
@@ -119,7 +119,7 @@ export function createSubagentEventSource() {
       });
       return;
     }
-    const converted = convertNotificationToStreamMessage(notification);
+    const converted = convertToolNotification(notification);
     // 0.7.0 types also include internal tool blocks; the normalizers ignore unsupported variants.
     const messages = (
       converted === null ? [] : Array.isArray(converted) ? converted : [converted]

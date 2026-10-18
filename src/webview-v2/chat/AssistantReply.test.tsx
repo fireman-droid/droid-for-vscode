@@ -231,7 +231,7 @@ it('shows the newest operation over an older running script without resetting an
       status={{ type: 'running' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>;
   const { rerender } = render(view(1));
-  await user.click(screen.getByRole('button', { name: 'Process: Script' }));
+  await user.click(screen.getByRole('button', { name: 'Process: Run script' }));
   rerender(view(2));
   const process = screen.getByRole('button', { name: 'Process: Read file src/latest.ts' });
   expect(process.getAttribute('aria-expanded')).toBe('true');

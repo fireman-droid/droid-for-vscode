@@ -1,3 +1,4 @@
+import { presentScriptResults } from './scriptResults';
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 
@@ -68,7 +69,7 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
       images.set(owner, group);
     }
   }
-  for (const item of transcript) {
+  for (const item of presentScriptResults(transcript)) {
     // Workspace snapshots include manual edits; they belong to Review, not an AI reply.
     if (item.kind === 'changes') continue;
     if (item.kind === 'user') {

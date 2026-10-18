@@ -119,6 +119,7 @@ export type RuntimeEvent =
     }
   | {
       type: 'tool-start';
+      scriptParentId?: string;
       toolName: string;
       toolUseId: string;
       action: string;

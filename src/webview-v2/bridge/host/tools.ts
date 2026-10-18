@@ -72,6 +72,7 @@ export function parseToolActivity(
         'operationDiff',
         'executionPhase',
         'backgroundHint',
+        'scriptParentId',
         'subagent',
       ],
     ) ||
@@ -239,6 +240,7 @@ export function parseToolTranscriptItem(
         'resultPreview',
         'operationDiff',
         'backgroundHint',
+        'scriptParentId',
         'executionPhase',
         'subagent',
       ],

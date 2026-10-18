@@ -45,7 +45,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
   const errorMessage = item.errorMessage?.replace(/^([ \t]*Error:[ \t]*)(?:Error:[ \t]*)+/i, '$1');
-  const target = item.filePath ?? item.target ?? item.resultPreview?.source?.path;
+  const target = item.filePath ?? item.target ?? (item.resultPreview?.source?.path === 'Tool result' ? undefined : item.resultPreview?.source?.path);
   const remoteResult = item.toolName === 'WebSearch' || item.toolName === 'github___get_file_contents';
   const action = exploration && category && target && !remoteResult ? CATEGORY_PRESENTATION[category].action : resolveToolAction(item.toolName, item.action);
   const resultSource = item.resultPreview?.source;
@@ -55,9 +55,10 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const unavailable = item.resultPreview?.availability === 'unavailable' ? RESULT_UNAVAILABLE_COPY[item.resultPreview.reason]
     : !item.resultPreview && item.status === 'completed' && !errorMessage && resultPreviewPolicy(item.toolName) !== 'none' ? RESULT_UNAVAILABLE_COPY['not-saved'] : null;
   const diff = item.operationDiff !== undefined || (inlineDiff !== null && canPreviewToolDiff(item.toolName, item.status, item.filePath, item.turnId));
+  const commandOutput = item.outputTail ?? (command !== undefined ? available?.text : undefined);
   const output = command !== undefined && item.status === 'failed' && errorMessage
-    ? item.outputTail ? `${item.outputTail}\n${errorMessage.split(/\r?\n/, 1)[0]}` : errorMessage
-    : item.outputTail;
+    ? commandOutput ? `${commandOutput}\n${errorMessage.split(/\r?\n/, 1)[0]}` : errorMessage
+    : commandOutput;
   const hasDetails = command !== undefined || available !== null || unavailable !== null || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
