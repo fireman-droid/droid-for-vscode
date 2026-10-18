@@ -38,7 +38,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
     </ol>}
     {!channelBound && <section className="models-add-stage space-y-5" hidden={step !== 'source'} aria-label={t("选择服务商和接口")}>
       {page.groups.length ? <>
-      <div className="models-form-intro"><h3>{t("复用已保存的连接")}</h3><p className="models-help">{t("同一接口的模型共用地址和密钥，不用重复配置。")}</p></div>
+      <div data-ui-notice="" className="models-form-intro"><h3>{t("复用已保存的连接")}</h3><p data-ui-notice="" className="models-help">{t("同一接口的模型共用地址和密钥，不用重复配置。")}</p></div>
       <div className="models-field">
         <label htmlFor={providerId}>{t("服务商")}</label>
         <Select value={page.group?.host} disabled={busy} onValueChange={(host) => {
@@ -63,7 +63,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
           </SelectItem>)}</SelectContent>
         </Select>
         {connection ? <p className="models-help break-all font-mono">{connection.baseUrl}</p> : null}
-      </div></> : <p className="models-help">{t("先添加模型服务的接口地址，下一步再选择具体模型。")}</p>}
+      </div></> : <p data-ui-notice="" className="models-help">{t("先添加模型服务的接口地址，下一步再选择具体模型。")}</p>}
       <Button variant="outline" className="models-new-source" disabled={busy} onClick={onNewConnection}><Plus />{t("添加服务商接口")}<ArrowRight className="ml-auto" /></Button>
       <div className="models-form-actions"><Button variant="ghost" disabled={busy} onClick={onDone}>{t("取消")}</Button>
         <Button disabled={busy || !connection} onClick={() => onStepChange('models')}>{t("下一步")} <ArrowRight /></Button>
@@ -74,7 +74,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
         <span className="models-connection-symbol"><Server aria-hidden /></span>
         <div className="min-w-0 flex-1"><div className="models-connection-title"><p className="models-connection-name">{connection.name}</p>
           <span className="models-credential-state"><KeyRound aria-hidden />{connection.hasKey ? t("密钥已保存") : t("未配置密钥")}</span></div>
-          <p className="models-help">{PROTOCOLS[connection.protocol].name}</p><p className="models-endpoint">{connection.baseUrl}</p>
+          <p data-ui-notice="" className="models-help">{PROTOCOLS[connection.protocol].name}</p><p className="models-endpoint">{connection.baseUrl}</p>
         </div>
         <Button variant="ghost" size="sm" aria-label={t("返回选择服务商和接口")} disabled={busy} onClick={() => onStepChange('source')}><Settings2 />{t("更换")}</Button>
       </div>}
@@ -84,8 +84,8 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
           <TabsTrigger value="manual" disabled={busy}>{t("手动填写 ID")}</TabsTrigger>
         </TabsList>
         <TabsContent value="discover" forceMount hidden={mode !== 'discover'}>
-          {discovered === null ? <div className="models-discover-empty">
-            <p className="models-help">{t("获取此渠道的模型列表，或手动填写 ID。")}</p>
+          {discovered === null ? <div data-ui-notice="" className="models-discover-empty">
+            <p data-ui-notice="" className="models-help">{t("获取此渠道的模型列表，或手动填写 ID。")}</p>
             <Button disabled={busy} onClick={() => void page.discoverModels(connection.id)}><Download />{busy ? t("正在获取…") : t("获取模型列表")}</Button>
             <Button variant="link" size="sm" disabled={busy} onClick={() => setMode('manual')}>{t("已有 Model ID？手动添加")}</Button>
           </div> : <ModelDiscovery key={connection.id} page={page} onDone={onDone} onManual={() => setMode('manual')} />}

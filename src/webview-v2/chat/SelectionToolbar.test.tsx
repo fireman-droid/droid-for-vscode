@@ -2,7 +2,7 @@
 import { createRef } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { SelectionToolbar } from './SelectionToolbar';
+import { SelectionToolbar } from '../../../packages/chat-ui/src/chat/SelectionToolbar';
 
 afterEach(() => { cleanup(); window.getSelection()?.removeAllRanges(); vi.restoreAllMocks(); });
 
@@ -28,4 +28,21 @@ it('leaves drag selection untouched and only offers quote actions after the poin
   fireEvent.click(screen.getByRole('button', { name: 'Add to Chat' }));
   expect(quote).toHaveBeenCalledExactlyOnceWith('Keep this selected text');
   expect(selection.isCollapsed).toBe(true);
+});
+
+it('quotes the selected prose around a status without including its UI text', async () => {
+  const root = createRef<HTMLDivElement>();
+  const quote = vi.fn();
+  render(<div ref={root}><p>First paragraph</p><p role="status">Restored three files</p><p>Last paragraph</p>
+    <SelectionToolbar viewport={root} onQuote={quote} /></div>);
+  vi.spyOn(root.current!, 'getBoundingClientRect').mockReturnValue({ left: 0, right: 480, top: 0, bottom: 400 } as DOMRect);
+  const first = screen.getByText('First paragraph'), last = screen.getByText('Last paragraph');
+  const range = document.createRange();
+  range.setStart(first.firstChild!, 0); range.setEnd(last.firstChild!, last.textContent!.length);
+  range.getBoundingClientRect = () => ({ left: 20, right: 200, top: 100, bottom: 160 }) as DOMRect;
+  act(() => { window.getSelection()!.addRange(range); document.dispatchEvent(new Event('selectionchange')); });
+  await waitFor(() => expect(screen.getByRole('toolbar')).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Add to Chat' }));
+  expect(quote).toHaveBeenCalledExactlyOnceWith('First paragraph\nLast paragraph');
+  expect(screen.getByRole('status').textContent).toBe('Restored three files');
 });

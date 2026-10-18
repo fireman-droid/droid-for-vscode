@@ -59,7 +59,7 @@
   .diff-empty { background: color-mix(in srgb, var(--soft-surface) 40%, transparent); }
   .review-muted { font-size: 11px; color: var(--muted-ink); }
   .review-empty { padding: 48px 24px; color: var(--muted-ink); font-size: 12px; text-align: center; }
-  .review-notice { flex-shrink: 0; min-width: 0; overflow-wrap: anywhere; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; border-left: 2px solid var(--panel-edge); font-size: 12px; line-height: 1.6; color: var(--muted-ink); background: var(--review-chrome, var(--soft-surface)); }
+  .review-notice { flex-shrink: 0; min-width: 0; overflow-wrap: anywhere; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 1.6; color: var(--muted-ink); background: var(--review-chrome, var(--soft-surface)); }
   .review-error, .review-empty[role='alert'] { color: var(--error-ink); }
   .review-agent-status { padding: 6px 16px; font-size: 11px; color: var(--muted-ink); border-top: 1px solid var(--panel-edge); background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface)); }
   .review-dialog-title { color: var(--strong-ink); }

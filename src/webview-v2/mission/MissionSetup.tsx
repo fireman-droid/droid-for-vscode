@@ -27,12 +27,12 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
         <SectionHeading icon={<Target />} title={t("Mission goal")} detail={t("What should be delivered? Include any constraints.")} />
         <Textarea ref={taskInput} aria-label={t("Mission task")} rows={4} className="v2-mission-task" value={flow.task} maxLength={MAX_MISSION_TASK_LENGTH} disabled={flow.controlsDisabled}
           onChange={(event) => flow.setTask(event.target.value)} placeholder={t("For example: build the onboarding flow, with empty states and error recovery.")} />
-        <p className="v2-mission-task-meta"><span>{t("A clear outcome helps Droid plan the work.")}</span><span>{flow.task.length.toLocaleString()} / {MAX_MISSION_TASK_LENGTH.toLocaleString()}</span></p>
+        <p data-ui-notice="" className="v2-mission-task-meta"><span>{t("A clear outcome helps Droid plan the work.")}</span><span>{flow.task.length.toLocaleString()} / {MAX_MISSION_TASK_LENGTH.toLocaleString()}</span></p>
       </section>
       <section className="v2-mission-setup-section v2-mission-orchestrator">
         <SectionHeading icon={<Network />} title={t("Orchestrator")} detail={t("Plans the work and coordinates Workers.")} />
         <PairFields name="Orchestrator" pair={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setOrchestrator} />
-        <p className="text-xs text-muted-foreground">{t("默认沿用当前聊天的模型和推理强度；可在这里分别调整，启动 Mission 时应用。")}</p>
+        <p data-ui-notice="" className="text-xs text-muted-foreground">{t("默认沿用当前聊天的模型和推理强度；可在这里分别调整，启动 Mission 时应用。")}</p>
       </section>
       <Collapsible className="v2-mission-execution" open={advanced} onOpenChange={setAdvanced} disabled={flow.controlsDisabled}>
         <CollapsibleTrigger asChild><Button variant="plain" className="v2-mission-settings-trigger flex items-center text-muted-foreground hover:text-foreground" aria-label={t("Advanced Mission settings")} disabled={flow.controlsDisabled}>
@@ -45,7 +45,7 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
             <ProfileFields name="Worker" profile={flow.worker} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setWorker} />
             <ProfileFields name="Validator" profile={flow.validator} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setValidator} />
             <fieldset className="v2-mission-checks min-w-0"><legend className="font-medium">{t("Validation checks")}</legend>
-              <p className="mt-1 mb-3 text-xs text-muted-foreground">{t("Both checks use the shared Validator profile configured above.")}</p>
+              <p data-ui-notice="" className="mt-1 mb-3 text-xs text-muted-foreground">{t("Both checks use the shared Validator profile configured above.")}</p>
               <MissionToggle label={t("Run Scrutiny")} description={t("Review the completed feature for implementation risks.")} checked={flow.scrutinyEnabled} disabled={flow.controlsDisabled} onChange={flow.setScrutinyEnabled} />
               <MissionToggle label={t("Run User Testing")} description={t("Validate the finished flow through its user-facing surface.")} checked={flow.userTestingEnabled} disabled={flow.controlsDisabled} onChange={flow.setUserTestingEnabled} />
             </fieldset>
@@ -65,7 +65,7 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
 
 function SectionHeading({ icon, title, detail }: { readonly icon: ReactNode; readonly title: string; readonly detail: string }) {
   return <header className="v2-mission-section-heading"><span aria-hidden="true" className="v2-mission-section-icon">{icon}</span>
-    <div className="min-w-0"><h2 className="font-medium">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
+    <div className="min-w-0"><h2 className="font-medium">{title}</h2><p data-ui-notice="" className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
   </header>;
 }
 
@@ -82,7 +82,7 @@ function PairFields({ name, pair, capabilities, disabled, onChange }: {
       other.displayName === item.displayName && other.isCustom === item.isCustom) ? item.id : undefined }));
   return <div className="mission-pair">
     <div className="grid min-w-0 gap-1.5 text-xs">
-    <span className="text-muted-foreground">{t('{p0} model', { p0: t(name) })}</span>
+    <span data-ui-notice="" className="text-muted-foreground">{t('{p0} model', { p0: t(name) })}</span>
     <ModelSourceSelect label={t("{p0} model", { p0: t(name) })} value={pair.modelId || undefined} models={modelOptions}
       disabled={disabled} onChange={(modelId) => {
         const selected = capabilities.catalog.find((item) => item.id === modelId);
@@ -104,7 +104,7 @@ function ProfileFields({ name, profile, orchestrator, capabilities, disabled, on
   const { t } = useI18n();
   return <fieldset className="v2-mission-profile min-w-0"><legend className="font-medium">{t(name)}</legend>
     <div className="v2-mission-profile-fields">
-    <p className="text-xs text-muted-foreground">{name === 'Worker' ? t("Executes one feature at a time under the Orchestrator.") : t("Provides the shared profile for all quality checks.")}</p>
+    <p data-ui-notice="" className="text-xs text-muted-foreground">{name === 'Worker' ? t("Executes one feature at a time under the Orchestrator.") : t("Provides the shared profile for all quality checks.")}</p>
     <MissionSelect label={t("{p0} inheritance", { p0: t(name) })} fieldLabel={t('Configuration')} value={profile.mode} disabled={disabled}
       options={[{ value: 'same-as-orchestrator', label: t('Same as Orchestrator') }, { value: 'override', label: t('Choose independently') }]}
       onChange={(value) => onChange({ mode: value === 'same-as-orchestrator' ? value : 'override', ...orchestrator })} />

@@ -88,7 +88,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     <div ref={follow.viewportRef} aria-label={t("Side conversation")} className="v2-btw-viewport">
       <div ref={follow.contentRef} className="v2-btw-transcript">
         {preparing && !state.entries.length ? <p role="status" className="v2-btw-progress"><DroidActivity phase="loading" />{t('Preparing')}</p> : null}
-        {state.entries.length === 0 && !unavailable && !preparing ? <div className="v2-btw-empty">
+        {state.entries.length === 0 && !unavailable && !preparing ? <div data-ui-notice="" className="v2-btw-empty">
           <MessageSquare className="v2-btw-empty-mark" aria-hidden="true" />
           <p>{t("A question on the side.")}</p>
           <span>{t("Explore a detail without interrupting your main conversation.")}</span>
@@ -103,11 +103,11 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
                 <div role="region" aria-label={t("Your question")} tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
                   {entry.images?.length ? renderImages?.(entry.images) : null}
-                  <div className="select-text"><span className="v2-btw-speaker">{t('You')}</span><ReferencedText text={parsed?.body ?? entry.question} /></div>
+                  <div className="select-text"><span data-ui-notice="" className="v2-btw-speaker">{t('You')}</span><ReferencedText text={parsed?.body ?? entry.question} /></div>
                 </div>
             </div>
             <div aria-label={t("{p0} answer", { p0: assistantName })} className="v2-btw-answer">
-              <div className="v2-btw-author"><Aperture aria-hidden="true" />{assistantName}</div>
+              <div data-ui-notice="" className="v2-btw-author"><Aperture aria-hidden="true" />{assistantName}</div>
               <SideReply entry={entry} preparing={preparing} />
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
@@ -118,7 +118,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     <footer className="v2-btw-footer">
       {state.pendingQuestion !== null ? <div className="v2-btw-queued" role="status">
         <Clock3 aria-hidden="true" /><div className="min-w-0 flex-1 space-y-1">
-          <div><span>{t("Next question")}</span><p><ReferencedText text={pendingBody ?? ''} /></p></div>
+          <div><span>{t("Next question")}</span><p data-ui-copy-content=""><ReferencedText text={pendingBody ?? ''} /></p></div>
           {pendingQuote ? <QuoteChips quotes={pendingQuote.quotes} /> : null}
         </div>
       </div> : null}
@@ -135,11 +135,11 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
         </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
-        {composerActions && composeHint ? <div className="v2-btw-compose-hint">{composeHint}</div> : null}
+        {composerActions && composeHint ? <div data-ui-notice="" className="v2-btw-compose-hint">{composeHint}</div> : null}
         <div className="v2-btw-compose-actions">
           {composerActions}
           {!composerActions ?
-          <span className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
+          <span data-ui-notice="" className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
             : composeHint}</span> : null}
           {showStop ? <AnswerStopButton className="v2-btw-send" stopping={state.stopping} onStop={onStop} />
             : <Button size="none" variant="plain" className="v2-btw-send" aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}

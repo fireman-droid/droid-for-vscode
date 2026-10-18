@@ -9,7 +9,7 @@
   .v2-tool-error {
     box-sizing: border-box; width: fit-content; min-width: 0; max-width: 100%; max-height: 128px;
     margin: 0; padding: 4px 8px; overflow: auto; overscroll-behavior: contain;
-    border-inline-start: 2px solid color-mix(in srgb, var(--error-ink) 45%, transparent); border-radius: 3px;
+    border-radius: 4px;
     background: color-mix(in srgb, var(--error-ink) 4%, transparent); color: var(--error-ink);
     font: 11px/16px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere;
   }

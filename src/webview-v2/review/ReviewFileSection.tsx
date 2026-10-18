@@ -76,7 +76,7 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
           {!operation ? <DropdownMenuItem disabled={flow.scopePending || read.pending || !file || !!read.error || selectedEdit?.fullPatchUnavailableReason === 'unavailable'}
             onSelect={() => flow.openNative(entry.path)}>{t("Open Native Diff")}</DropdownMenuItem> : null}
           {!readOnly && review?.scopeKind === 'operations' ? <>
-            {!entry.restorable ? <p className="review-undo-hint">{entry.undoReason ?? t("This file does not have a complete, reversible record.")}</p> : null}
+            {!entry.restorable ? <p data-ui-notice="" className="review-undo-hint">{entry.undoReason ?? t("This file does not have a complete, reversible record.")}</p> : null}
             <DropdownMenuItem disabled={writing || flow.scopePending || read.pending || !!read.error || !entry.restorable}
               onSelect={() => actions.onPreviewRestore('file', entry.path)}><Undo2 />{t("Undo this file…")}</DropdownMenuItem>
             <DropdownMenuItem disabled={writing || flow.scopePending || review.files.length > MAX_REVIEW_UNDO_FILES ||
@@ -87,18 +87,18 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
       </DropdownMenu>
     </header>
     <CollapsibleContent>
-      {read.error && !operation ? <div className="review-notice review-error" role="status">{read.error}{file && !file.error ? t("Showing the previous diff.") : ''}
+      {read.error && !operation ? <div data-ui-notice="" className="review-notice review-error" role="status">{read.error}{file && !file.error ? t("Showing the previous diff.") : ''}
         <Button variant="ghost" size="sm" onClick={() => flow.retryFile(entry.path)}>{t("Retry")}</Button></div> : null}
       {!operation && !file ? <p className="review-file-placeholder" role="status">{read.error ? t("Diff unavailable.") : near ? t("Reading Diff…") : t("Diff loads as you scroll.")}</p>
-        : !operation && file?.error ? read.error ? null : <p className="review-empty">{file.error}</p>
+        : !operation && file?.error ? read.error ? null : <p data-ui-notice="" className="review-empty">{file.error}</p>
         : recordedEntries ? <RecordedFileReview entries={recordedEntries} content={recordedContent} path={entry.path}
           split={split} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}
           selectedToolUseId={read.toolUseId} onSelectEdit={toolUseId => flow.selectRecordedEdit(toolUseId, entry.path)} />
         : patch && patch !== '@@' ? <DiffView patch={patch} path={entry.path} split={split} source={file?.syntaxSource} />
         : operationFile?.contentRestricted ? null
-        : <p className="review-empty">{operationFile ? t("File {p0}. Text changes were not recorded.", { p0: operationFile.kind })
+        : <p data-ui-notice="" className="review-empty">{operationFile ? t("File {p0}. Text changes were not recorded.", { p0: operationFile.kind })
           : review?.scopeKind === 'operations' ? t("No text Diff evidence is available.") : t("No net text changes.")}</p>}
-      {file?.truncated && !operation ? <p className="review-notice">{t("Preview limit reached. Open Native Diff to read the complete comparison.")}</p> : null}
+      {file?.truncated && !operation ? <p data-ui-notice="" className="review-notice">{t("Preview limit reached. Open Native Diff to read the complete comparison.")}</p> : null}
     </CollapsibleContent>
   </Collapsible>;
 }

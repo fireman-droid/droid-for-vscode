@@ -18,7 +18,7 @@ export function RecordedSource({ content, path, label = 'Recorded version' }: {
     return { count, numbers: Array.from({ length: count }, (_, index) => index + 1).join('\n') };
   }, [content]);
   return <section className="review-recorded-source">
-    <header className="review-source-toolbar">
+    <header data-ui-notice="" className="review-source-toolbar">
       <span>{t(label)}</span><span className="review-source-size">{lines.count === 0 ? t("Empty file") : t("{p0} lines", { p0: lines.count })}</span>
       <Button variant="ghost" size="icon-sm" aria-label={copyState === 'copied' ? t("Copied recorded file") : t("Copy recorded file")} onClick={() => {
         void copyText(content).then(() => {

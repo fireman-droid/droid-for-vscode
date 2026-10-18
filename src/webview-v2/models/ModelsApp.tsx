@@ -57,14 +57,14 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
         </div>
       </header>
       {!panelOpen && <ModelsFeedback page={page} />}
-      {snapshot === null ? <div className="management-empty" role="status">{busy ? t("正在读取模型配置…") : <><p>{t("模型配置读取失败")}</p><Button variant="plain" onClick={() => void run({ kind: 'refresh' })}>{t("重新读取")}</Button></>}</div> : <>
+      {snapshot === null ? <div data-ui-notice="" className="management-empty" role="status">{busy ? t("正在读取模型配置…") : <><p>{t("模型配置读取失败")}</p><Button variant="plain" onClick={() => void run({ kind: 'refresh' })}>{t("重新读取")}</Button></>}</div> : <>
         <ListToolbar label={t('搜索已配置模型')} placeholder={t('搜索模型')} value={search} onChange={setSearch}>
           <ModelSourceSelect disabled={disabled} />
           <Select value={filter} onValueChange={setFilter} disabled={disabled}><SelectTrigger aria-label={t("渠道筛选")}><SelectValue /></SelectTrigger><SelectContent className="management-menu">
             <SelectItem value="all">{t("全部渠道")}</SelectItem>{snapshot.connections.map(c => <SelectItem value={c.id} key={c.id}>{c.name}</SelectItem>)}
           </SelectContent></Select>
         </ListToolbar>
-        {!snapshot.canApply && snapshot.applyMessage && <p id="models-apply-status" className="management-caption">{snapshot.applyMessage === 'Connect a chat before selecting a model here.' ? t("连接聊天后可切换当前模型。") : t("当前聊天暂时不能切换模型；仍可管理渠道和模型配置。")}</p>}
+        {!snapshot.canApply && snapshot.applyMessage && <p data-ui-notice="" id="models-apply-status" className="management-caption">{snapshot.applyMessage === 'Connect a chat before selecting a model here.' ? t("连接聊天后可切换当前模型。") : t("当前聊天暂时不能切换模型；仍可管理渠道和模型配置。")}</p>}
         {snapshot.connections.filter(c => filter === 'all' || filter === c.id).map(c => {
           const models = snapshot.models.filter(m => m.connectionId === c.id);
           const visible = models.filter(m => `${m.model} ${m.displayName}`.toLowerCase().includes(search.toLowerCase()));
@@ -80,10 +80,10 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
             </header>
             <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={action => { void run(action); }} onEdit={editModel}
               onRename={model => { page.setSelectedId(model.connectionId); manager.setNotice(null); setAlias({ kind: 'model', model }); }} />
-            {visible.length === 0 && <p className="management-caption">{models.length ? t("没有匹配的模型") : t("尚未添加模型")}</p>}
+            {visible.length === 0 && <p data-ui-notice="" className="management-caption">{models.length ? t("没有匹配的模型") : t("尚未添加模型")}</p>}
           </section>;
         })}
-        {snapshot.connections.length === 0 && <div className="management-empty"><p>{t("还没有渠道")}</p><Button variant="plain" disabled={disabled} onClick={createChannel}><Plus />{t("创建渠道")}</Button></div>}
+        {snapshot.connections.length === 0 && <div data-ui-notice="" className="management-empty"><p>{t("还没有渠道")}</p><Button variant="plain" disabled={disabled} onClick={createChannel}><Plus />{t("创建渠道")}</Button></div>}
       </>}
     </section>
     <DialogContent className="management-dialog models-panel" closeDisabled={busy} closeLabel={t('关闭')} onInteractOutside={event => event.preventDefault()}>

@@ -102,7 +102,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
       <ManagementChoice label={t('会话类型')} value={kind} onChange={value => changeFilter(() => setKind(value))} options={[[ 'all', t('聊天与 Exec') ], ['chat', t('聊天')], ['exec', 'Exec']]} />
       <ManagementChoice label={t('收藏与归档')} value={filter} onChange={value => changeFilter(() => setFilter(value))} options={[[ 'normal', t('未归档') ], ['favorites', t('收藏')], ['archived', t('已归档')]]} />
     </ListToolbar>
-    {state.settings && !state.settings.sessionManagementAvailable ? <p className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
+    {state.settings && !state.settings.sessionManagementAvailable ? <p data-ui-notice="" className="management-empty">{t("会话管理需要 daemon 运行模式。")}</p> : <>
       {error && <p role="alert" className="management-caption text-destructive">{t(error)}</p>}
       {pending && <p role="status" className="sr-only">{t("正在读取会话")}</p>}
       <div className="management-session-table" aria-busy={pending}>
@@ -132,7 +132,7 @@ export function SessionManagement({ state, active }: { state: ManagementState; a
           </DropdownMenu>
         </div>)}
       </div>
-      {loaded && !loading && visible.length === 0 && !error && <p className="management-empty">{t("没有匹配的会话")}</p>}
+      {loaded && !loading && visible.length === 0 && !error && <p data-ui-notice="" className="management-empty">{t("没有匹配的会话")}</p>}
       {loaded && (visible.length > 0 || cursor !== null) && <Pagination label={t('会话分页')} page={currentPage} pageSize={pageSize} count={visible.length}
         complete={loaded && cursor === null} loading={loading} disabled={disabled} onPageSize={size => changeFilter(() => setPageSize(size))}
         onPage={target => {

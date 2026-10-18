@@ -66,7 +66,7 @@ export function MissionDetails({ mission, result, inputNeeded, vscode }: {
     <Tabs defaultValue="features">
       <TabsList aria-label={t("Mission details")} className="mb-4"><TabsTrigger value="features">{t("Features (")}{total})</TabsTrigger><TabsTrigger value="validation">{t("Validation")}</TabsTrigger></TabsList>
       <TabsContent value="features" className="outline-none focus-visible:ring-1 focus-visible:ring-ring">
-        {total === 0 ? <p className="v2-mission-empty rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">{t("Droid has not published the feature plan yet. Planning and clarification happen in chat.")}</p> : null}
+        {total === 0 ? <p data-ui-notice="" className="v2-mission-empty rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">{t("Droid has not published the feature plan yet. Planning and clarification happen in chat.")}</p> : null}
         <ol className="space-y-2">{mission.features.map((feature) => <FeatureRow key={feature.id} feature={feature} current={feature.id === mission.currentFeatureId}
           onView={() => send({ type: 'mission.viewer.open', revision: mission.revision, featureId: feature.id })} />)}</ol>
       </TabsContent>

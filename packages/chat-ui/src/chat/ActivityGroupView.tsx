@@ -27,7 +27,7 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
       className={`transition-[grid-template-rows,opacity] motion-reduce:transition-none ${disclosure.visible ? 'opacity-100' : 'opacity-0'}`}>
       {disclosure.mounted ? <div className="v2-activity-items min-w-0">
         <ProcessGroupContext.Provider value={true}>{children}</ProcessGroupContext.Provider>
-        {presentation.detailFacts?.length ? <p className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
+        {presentation.detailFacts?.length ? <p data-ui-notice="" className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
       </div> : null}
     </AnimatedCollapsibleContent>
     </Collapsible> : null}

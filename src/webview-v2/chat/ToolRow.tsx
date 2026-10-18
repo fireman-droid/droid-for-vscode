@@ -97,14 +97,14 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
           {fileActions}
         </div>
         <ToolContent className="space-y-1 pb-1">
-          <p>{[title, status].filter(Boolean).join(' · ')}</p>
-          {resultSummary ? <p>{resultSummary}</p> : null}
+          <p data-ui-notice="">{[title, status].filter(Boolean).join(' · ')}</p>
+          {resultSummary ? <p data-ui-notice="">{resultSummary}</p> : null}
           {item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
           {activityDetail}
         </ToolContent>
       </Tool> : null}
       {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
-      {item.backgroundHint?.fireAndForget ? <p className="px-2 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
+      {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="px-2 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
     </div>;
   }
   if (isFoldableFileOperation(item)) {
@@ -124,16 +124,16 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
     {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
-    {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
+    {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
   return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
-      <div className="flex min-w-0 select-none items-center gap-1">
+      <div data-ui-notice="" className="flex min-w-0 select-none items-center gap-1">
         {hasDetails ? <ToolHeader title={title} status={status} /> : <div className="flex min-w-0 flex-1 items-center gap-2 py-1 text-xs text-muted-foreground"><span className="min-w-0 flex-1 truncate" title={title}>{title}</span><span className="shrink-0">{status}</span></div>}
         {fileActions}
       </div>
-      {resultSummary ? <p className="truncate pl-4 text-[11px] text-muted-foreground" title={resultSummary}>{resultSummary}</p> : null}
+      {resultSummary ? <p data-ui-notice="" className="truncate pl-4 text-[11px] text-muted-foreground" title={resultSummary}>{resultSummary}</p> : null}
       <ToolContent className="space-y-1 pb-1">
         {previewBody ? <ActivityResult preview={available!} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
@@ -142,6 +142,6 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       </ToolContent>
     </Tool>}
     {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
-    {item.backgroundHint?.fireAndForget ? <p className="pl-4 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
+    {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-4 text-[11px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
 }

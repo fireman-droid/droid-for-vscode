@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { cn } from './cn';
 import { useI18n } from '../i18n';
 import { Button } from './button';
+import { copyWithoutUiNotices } from './copySelection';
 
 const PortalContainerContext = createContext<HTMLElement | undefined>(undefined);
 
@@ -18,6 +19,10 @@ export function PortalContainerProvider({
   readonly container: HTMLElement;
   readonly children: ReactNode;
 }) {
+  useEffect(() => {
+    container.addEventListener('copy', copyWithoutUiNotices);
+    return () => container.removeEventListener('copy', copyWithoutUiNotices);
+  }, [container]);
   return <PortalContainerContext.Provider value={container}>{children}</PortalContainerContext.Provider>;
 }
 
@@ -84,7 +89,9 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 export const DialogTitle = DialogPrimitive.Title;
-export const DialogDescription = DialogPrimitive.Description;
+export function DialogDescription(props: ComponentProps<typeof DialogPrimitive.Description>) {
+  return <DialogPrimitive.Description data-ui-notice="" {...props} />;
+}
 
 export function DialogContent({
   children,

@@ -27,7 +27,7 @@ export function CommandCard({ title, target, chips, running, failed, statusLabel
         </span> : null}
   </>;
   return <Tool className="v2-command-card" data-activity-inline={inline || undefined} open={open} onOpenChange={onOpenChange}>
-    <header className="v2-command-head select-none">
+    <header data-ui-notice="" className="v2-command-head select-none">
       <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-command-toggle select-none" aria-controls={bodyId}>{heading}</Button></CollapsibleTrigger>
       {fileActions}
       <CommandActions command={command} running={running} />

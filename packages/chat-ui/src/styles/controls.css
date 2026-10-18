@@ -1,4 +1,6 @@
 @layer components {
+  :is([data-ui-notice], [role='status'], [role='alert'], [role='note'], [data-transcript-selection-exclude], label) { user-select: none; }
+  [data-ui-copy-content] { user-select: text; }
   .dvx-control {
     outline: none;
     user-select: none;

@@ -35,16 +35,16 @@ export function ActivityItem({
   const selected = disclosure.expanded;
   const detailsId = useId();
   const labels = <>
-    <span className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
+    <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
     {target ? <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={target}>{target}</span> : <span className="min-w-0 flex-1" />}
-    {status ? <span title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
+    {status ? <span data-ui-notice="" title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
   </>;
   const content = description ? <span className="min-w-0 flex-1">
     <span className="flex min-w-0 items-center gap-1.5">{labels}</span>
-    <span className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
+    <span data-ui-notice="" className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
   </span> : <span className="flex min-w-0 items-center gap-1.5">{labels}</span>;
   const chevron = <ChevronRight className={cn('size-3 transition-transform motion-reduce:transition-none', selected && 'rotate-90')} />;
-  if (!selectable) return <div className={cn('v2-activity-row v2-activity-row-plain min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
+  if (!selectable) return <div data-ui-notice={textSelectable ? undefined : ''} className={cn('v2-activity-row v2-activity-row-plain min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
     {content}
     {actions ? <div className="flex shrink-0 items-center">{actions}</div> : null}
   </div>;

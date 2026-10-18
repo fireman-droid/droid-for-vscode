@@ -27,7 +27,7 @@ export function SessionViewerApp({ vscode }: { readonly vscode: { postMessage(me
     </div>
     {snapshot === null || snapshot.status === 'unavailable' ? <section aria-label={t("Read-only session transcript")} className="v2-chat-rail overflow-auto py-6">
       {snapshot === null ? <DroidLoading label={t("Loading session…")} detail={t("Reading the saved conversation.")} />
-        : <p className="grid min-h-[180px] place-items-center text-center text-[11px] text-muted-foreground">{snapshot.reason}</p>}</section>
+        : <p data-ui-notice="" className="grid min-h-[180px] place-items-center text-center text-[11px] text-muted-foreground">{snapshot.reason}</p>}</section>
       : <ReadOnlyTranscript key={snapshot.target.mode === 'standard' ? snapshot.target.sessionId : snapshot.target.mode} items={snapshot.items} running={snapshot.running} truncated={snapshot.truncated} />}
   </main></ContentProvider>;
 }

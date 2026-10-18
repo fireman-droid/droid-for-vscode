@@ -17,7 +17,7 @@ export const ActivityResult = memo(function ActivityResult({ preview }: {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
   return <section aria-label={preview.label} className="v2-activity-result overflow-hidden rounded-md border border-[var(--panel-edge)] bg-muted/25">
-    <header className="flex min-h-7 select-none items-center gap-2 border-b border-[var(--panel-edge)] px-2">
+    <header data-ui-notice="" className="flex min-h-7 select-none items-center gap-2 border-b border-[var(--panel-edge)] px-2">
       <span className="min-w-0 flex-1 text-[10.5px] font-medium text-muted-foreground">{preview.label}</span>
       {preview.truncated ? <span className="text-[10px] text-muted-foreground">{t("truncated")}</span> : null}
       <CodeWrapToggle wrapped={wrapped} onChange={setWrapped} />

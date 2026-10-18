@@ -25,14 +25,14 @@ function OperationFileDetails({ file, canReview, messageId, disclosureKey, onInt
 }) {
   const { t } = useI18n();
   return <>
-    {file.scope === 'mission' ? <p className="operation-diff-note">{t("Mission artifact · Read-only")}</p> : null}
-    {file.previousPath ? <p className="operation-diff-note">{t("Moved from")} {file.previousPath}</p> : null}
-    {file.message ? <p role="status" className="operation-diff-note">{file.message}</p> : null}
+    {file.scope === 'mission' ? <p data-ui-notice="" className="operation-diff-note">{t("Mission artifact · Read-only")}</p> : null}
+    {file.previousPath ? <p data-ui-notice="" className="operation-diff-note">{t("Moved from")} {file.previousPath}</p> : null}
+    {file.message ? <p data-ui-notice="" role="status" className="operation-diff-note">{file.message}</p> : null}
     {file.submittedContent !== undefined ? <>
-      <p className="operation-diff-note">{t("Write succeeded. Showing submitted content; the previous version was not recorded.")}</p>
+      <p data-ui-notice="" className="operation-diff-note">{t("Write succeeded. Showing submitted content; the previous version was not recorded.")}</p>
       <RecordedSource content={file.submittedContent} path={file.path} label={t("Submitted file")} />
-    </> : file.bodyRef ? <p className="operation-diff-note">{canReview ? t("This edit is saved. Open Review to read its full content.") : t("Saved patch")}</p>
-      : !file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p className="operation-diff-note">{t("No complete text Diff was recorded for this result.")}</p>
+    </> : file.bodyRef ? <p data-ui-notice="" className="operation-diff-note">{canReview ? t("This edit is saved. Open Review to read its full content.") : t("Saved patch")}</p>
+      : !file.patch || file.patch === '@@' ? file.contentRestricted ? null : <p data-ui-notice="" className="operation-diff-note">{t("No complete text Diff was recorded for this result.")}</p>
       : <FileDiffPreview patch={file.patch} path={file.path} messageId={messageId} disclosureKey={disclosureKey} onInteract={onInteract} />}
   </>;
 }
@@ -46,8 +46,8 @@ export function OperationDiff({ item, messageId, hideConfirmed = false, onIntera
   const hasToolResult = result?.status === 'ready' && result.source === 'tool-result';
   if ((item.status === 'running' || item.status === 'stopping') && !hasToolResult) return null;
   if (result?.status === 'unavailable' && result.reason === 'unchanged') return null;
-  if (result?.status !== 'ready') return <p className="operation-diff-unavailable">{t(OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded'])}</p>;
-  if (result.source !== 'tool-result') return <p className="operation-diff-unavailable" role="status">
+  if (result?.status !== 'ready') return <p data-ui-notice="" className="operation-diff-unavailable">{t(OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded'])}</p>;
+  if (result.source !== 'tool-result') return <p data-ui-notice="" className="operation-diff-unavailable" role="status">
     {operationLabel(result)}{t(". No confirmed changes were recorded.")}</p>;
   const files = result.files.filter((file) => !hideConfirmed || !isWorkspaceOperationFile(file) || !isConfirmedOperationFile(result, file));
   if (!files.length) return null;
@@ -61,6 +61,6 @@ export function OperationDiff({ item, messageId, hideConfirmed = false, onIntera
         <OperationFileDetails file={file} canReview={isWorkspaceOperationFile(file) && !!context?.sessionId} messageId={messageId}
           disclosureKey={JSON.stringify(['file-diff', item.toolUseId, file.scope ?? 'workspace', file.path])} onInteract={onInteract} />
       </FileChangeView>
-      : <p key={`${file.scope ?? 'workspace'}:${file.path}`} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? t("Operation failed") : t("Changes unconfirmed")}{file.message ? ` · ${file.message}` : ''}</p>)}
+      : <p data-ui-notice="" key={`${file.scope ?? 'workspace'}:${file.path}`} role="status" className="operation-diff-note">{file.path} · {file.outcome === 'failed' ? t("Operation failed") : t("Changes unconfirmed")}{file.message ? ` · ${file.message}` : ''}</p>)}
   </div>;
 }

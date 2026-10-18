@@ -10,5 +10,5 @@ export function TransientNotice({ diagnostic, embedded = false }: { readonly dia
     const timer = setTimeout(() => setVisible(false), TRANSIENT_NOTICE_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [diagnostic.code]);
-  return visible ? <p role={embedded ? undefined : 'status'} className="m-0 text-xs text-muted-foreground">{t(diagnostic.message)}</p> : null;
+  return visible ? <p data-ui-notice="" role={embedded ? undefined : 'status'} className="m-0 text-xs text-muted-foreground">{t(diagnostic.message)}</p> : null;
 }
