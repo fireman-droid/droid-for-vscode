@@ -132,7 +132,6 @@
   .v2-command-card[data-state='open'] .v2-command-chevron { display: block; }
   .v2-command-card[data-state='open'] .v2-command-chevron { transform: rotate(90deg); }
   .v2-command-card[data-activity-inline='true'] { margin-block: 2px; }
-  .v2-command-card[data-activity-inline='true'] .v2-command-head { padding-inline-start: 0; }
   .v2-command-card[data-activity-inline='true'] .v2-command-toggle { gap: 4px; }
   .v2-command-card[data-activity-inline='true'] .v2-command-leading { width: 14px; flex-basis: 14px; }
   .v2-command-title {
