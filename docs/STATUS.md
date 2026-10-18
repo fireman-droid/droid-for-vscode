@@ -7,7 +7,7 @@
 ## 当前开发分支（未发布）
 
 - Execute 的 CLI 结果在缺少错误字段时，以头尾一致的非零退出码恢复失败状态；实时与历史使用同一规则，普通输出中的 error 字样不作为失败证据。
-  真实会话离线重放已确认该失败命令恢复为 failed，相应重复 Script 汇总被去除；本轮后续修复尚未安装。
+  真实会话离线重放已确认该失败命令恢复为 failed，相应重复 Script 汇总被去除；已随 `83ca8ca8` 试用包安装。
 - 前台与自动续轮按匹配的终态分配所有权，隐藏 Script 完成通知不会接管仍在运行的前台。
   重叠旁路改为历史对账，不重播旧增量；自动续轮丢失终态时，宽限 30 秒并连续三次确认 idle 后进入精确 outcome 恢复，缺少证据不伪造成功。
   两份定向测试 17 项与 Host 类型检查通过；本轮 Runtime 已随试用包安装，实际卡住会话尚未重载验证。
@@ -32,7 +32,7 @@
 - 原会话离线重放：4 条 Script 汇总保留 1 条独有输出，2 份文件 Diff 与 2 条命令输出均保留，内部状态附注为 0。
   相关回归覆盖调用关联、重复结果、历史恢复、Diff 补齐与折叠保持；类型检查、文件预算、构建及 172 项 VSIX 校验通过。
   真实 Browser Dev Client 已核对读取回执、命令标签、默认展开与终端标题 8px 内边距；完整新 Runtime 未在编辑器重载验收。
-  Microsoft VS Code 已安装并核对 `d0d1ec6` 试用包，包含最新活动／Thinking／Edit、运行状态修复和自动换行；扩展入口、聊天 JS 与 CSS 哈希一致，需 Reload Window，页面效果由用户验收。
+  Microsoft VS Code 已安装并核对 `83ca8ca8` 试用包，包含最新活动／Thinking／Edit、运行状态、Script 结果、自动换行及空白思考间距等后续修复；扩展入口、聊天 JS 与 CSS 和该 VSIX 的逐文件哈希一致，需 Reload Window，页面效果由用户验收。
   未调用付费模型，当前分支尚未合并或公开发布。
 
 ## 版本与交付
@@ -49,8 +49,8 @@
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，本次未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `d0d1ec6`，尚未正式发布。
-  包 SHA256 为 `02c671bc9daac4a0f704d1bd8af71f7610c0c9c2915db246a6b035e576e63c4d`；CLI 安装成功，需 Reload Window。
+- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `83ca8ca8`，尚未正式发布。
+  包 SHA256 为 `c161c5a08a350d63633641dcc7f56249753911548dff0734f1f9a716cae9cb3d`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
   Cursor 此前的手动安装仍为 `0.8.13` 石墨灰选区试用包；未声称市场发布已完成客户端更新。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
@@ -73,7 +73,7 @@
 
 - 本轮 12 个定向测试文件共 186 项通过，涵盖实时／历史失败状态、Script 解包与去重、长 Thinking 分块排版和滚动、紧凑缺失状态及既有 Edit／快照恢复。
   同一真实会话读取 2442 条消息、保留 2000 条记录后重放：原错误命令为 failed、对应重复汇总消失，剩余 14 条有内容的 Script 均无外层 part/result 传输包装直接展示。
-  本轮未安装或追加浏览器验收；用户指出的 Diff 方法提取行配对已按要求推后，见 PLAN。
+  后续空白思考修复的 6 项定向测试通过，并在用户指定的真实页面位置核对空正文与无效箭头已移除；最终包已安装，安装后未重载编辑器验收。用户指出的 Diff 方法提取行配对已按要求推后，见 PLAN。
 - 自动换行完成类型检查、文件预算、一次最终构建及 172 项 VSIX 内容／入口校验；按用户要求未追加页面验收或样式测试。
 - [PR #14 上一提交的 CI](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39113891055) 有 2505 项测试通过，
   `ReviewFiles.large.test.tsx` 的清空筛选后滚动复位断言失败（31720／预期 0）。相关文件不在本轮改动中，尚未确定根因；PR 保持草稿，未因本地安装绕过合并检查。
