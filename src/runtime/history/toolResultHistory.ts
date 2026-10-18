@@ -4,6 +4,7 @@ import { extractToolResultText } from '../events/normalizeSdkEvent';
 import { describeOperation, operationToolName } from '../tools/operationDiff';
 import { parseOperationResult } from '../tools/operationResult';
 import { operationDiffFields, type OperationDiff } from '../../shared/protocol/operationDiff';
+import { isFailedExecuteResult } from '../../shared/transcript/toolOutput';
 
 export function historyOperationDiff(
   name: string,
@@ -65,6 +66,7 @@ export function completeHistoryToolItem(
   source?: ResultSource,
   operationDiff?: OperationDiff,
 ): ToolTranscriptItem {
+  isError ||= isFailedExecuteResult(existing.toolName, content);
   const errorMessage = isError ? extractToolResultText(content) : undefined;
   const resultPreview =
     existing.resultPreview ??

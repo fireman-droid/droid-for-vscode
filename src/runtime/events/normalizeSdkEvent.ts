@@ -16,6 +16,7 @@ import {
 } from '../../shared/transcript/toolActivity';
 import {
   isExecuteToolName,
+  isFailedExecuteResult,
   stripTerminalNoise,
   toToolOutputTail,
 } from '../../shared/transcript/toolOutput';
@@ -131,10 +132,11 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      const errorText = event.isError ? extractToolResultText(event.content) : undefined;
+      const isError = event.isError || isFailedExecuteResult(activity.toolName, event.content);
+      const errorText = isError ? extractToolResultText(event.content) : undefined;
       return {
         ...activity,
-        isError: event.isError,
+        isError,
         ...(errorText === undefined ? {} : { errorText }),
         ...(resultPreview === undefined ? {} : { resultPreview }),
         ...operationDiffFields({ operationDiff }),

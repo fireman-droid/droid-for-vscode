@@ -31,6 +31,19 @@ export function isExecuteToolName(toolName: string): boolean {
   );
 }
 
+/** Persisted Execute results can omit is_error. Require both CLI boundary
+ * markers and matching nonzero codes, not an arbitrary error in command output. */
+export function isFailedExecuteResult(toolName: string, content: unknown): boolean {
+  if (!isExecuteToolName(toolName)) return false;
+  const blocks = typeof content === 'string' ? [content] : Array.isArray(content)
+    ? content.flatMap(block => block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string' ? [block.text as string] : []) : [];
+  const first = stripTerminalNoise(blocks.find(block => block.trim())?.slice(0, 256) ?? '').trimStart();
+  const last = stripTerminalNoise([...blocks].reverse().find(block => block.trim())?.slice(-256) ?? '').trimEnd();
+  const start = /^(?:Error: )?Command failed \(exit code: (-?\d+)\)(?:\r?\n|$)/u.exec(first);
+  const end = /\[Process exited with code (-?\d+)\]$/u.exec(last);
+  return !!start && !!end && Number(start[1]) !== 0 && start[1] === end[1];
+}
+
 /**
  * Terminal-noise cleanup shared by live output tails and failed-tool
  * error excerpts: carriage-return overwrites applied (progress bars

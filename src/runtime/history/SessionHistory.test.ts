@@ -17,6 +17,16 @@ import { SESSION_HISTORY_UNAVAILABLE_MESSAGE } from './SessionHistory';
 import { projectSessionHistory, projectSessionMessages } from './projectSessionHistory';
 
 describe('projectSessionHistory', () => {
+  it('retains a failed Execute outcome when persisted history omitted isError', () => {
+    const content = 'Command failed (exit code: 1)\nfetch failed\n\n[Process exited with code 1]';
+    const result = projectSessionHistory(response([
+      message('call', 'assistant', [{ type: 'tool_use', id: 'execute', name: 'Execute', input: { command: 'node verify.js' } }]),
+      message('result', 'tool', [{ type: 'tool_result', toolUseId: 'execute', content }]),
+    ]));
+    expect(result).toMatchObject({ status: 'available', state: { transcript: [
+      { kind: 'tool', status: 'failed', errorMessage: expect.stringContaining('fetch failed') },
+    ] } });
+  });
   it('preserves the recorded creation time of user and assistant message blocks', () => {
     const userTime = Date.parse('2026-09-26T10:01:02.000Z');
     const assistantTime = userTime + 30_000;

@@ -16,6 +16,16 @@ import {
 import { normalizeSdkEvent, normalizeSdkEventImages } from './normalizeSdkEvent';
 
 describe('normalizeSdkEvent', () => {
+  it('recovers Execute failures with omitted error flags from matching CLI boundaries', () => {
+    const content = 'Command failed (exit code: 1)\nfetch failed\n\n[Process exited with code 1]';
+    expect(normalizeSdkEvent(sdkEvent('tool_result', { toolName: 'Execute', toolUseId: 'execute', content, isError: false })))
+      .toMatchObject({ type: 'tool-result', isError: true, errorText: expect.stringContaining('fetch failed') });
+    for (const output of [content.replace('code 1]', 'code 0]'), 'Test printed an expected error\n[Process exited with code 0]', content.slice(0, -1)])
+      expect(normalizeSdkEvent(sdkEvent('tool_result', { toolName: 'Execute', toolUseId: 'execute', content: output, isError: false })))
+        .toMatchObject({ isError: false });
+    expect(normalizeSdkEvent(sdkEvent('tool_result', { toolName: 'Read', toolUseId: 'read', content, isError: false })))
+      .toMatchObject({ isError: false });
+  });
   it('marks only the SDK provider connection failure for live and terminal errors', () => {
     for (const message of ['Connection error.', 'Connection timed out.', 'Request cancelled', 'The operation failed.']) {
       const expected = message === 'Connection error.' ? true : undefined;
