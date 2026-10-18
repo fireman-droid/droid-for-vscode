@@ -2,6 +2,10 @@ import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
   ["Droid status","Droid 状态","Droid 狀態"],
+  ["Show execution history","查看执行过程","查看執行過程"],
+  ["Hide execution history","收起执行过程","收起執行過程"],
+  ["Show recorded changes to {path}","定位 {path} 的文件改动","定位 {path} 的檔案改動"],
+  ["View changes","查看改动","查看改動"],
   ['Messages while working','任务进行中发送消息','任務進行中傳送訊息'],
   ['Wait','等待','等待'],
   ['Steer','引导','引導'],

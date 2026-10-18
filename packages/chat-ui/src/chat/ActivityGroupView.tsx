@@ -17,7 +17,7 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
     <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: t('Execution history') })} aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure v2-activity-row min-h-6 w-full min-w-0 select-none py-0.5 text-left text-xs leading-[18px] text-muted-foreground hover:text-foreground">
       <ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${disclosure.expanded ? 'rotate-90' : ''}`} />
       <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-        <span>{t('Execution history')}</span>
+        <span>{t(disclosure.expanded ? 'Hide execution history' : 'Show execution history')}</span>
         <span className="text-[10.5px]">{t('{count} records', { count: presentation.count })}</span>
         {presentation.facts.length ? <span className={`text-[10.5px] ${presentation.failed ? 'text-destructive' : ''}`}>{presentation.facts.join(' · ')}</span> : null}
       </span>

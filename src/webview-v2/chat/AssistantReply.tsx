@@ -32,7 +32,7 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
     return item.kind !== 'assistant' || item.text.trim().length > 0;
   }), [descriptor.items]);
   const renderDefault = useCallback((item: SessionTranscriptItem, grouped: boolean) =>
-    <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} onInteract={onInteract} />,
+    <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} hideConfirmedOperations={grouped} onInteract={onInteract} />,
   [descriptor.id, status.type, readOnly, onInteract]);
   const render = renderItem ?? renderDefault;
   const diagnosticOnly = descriptor.items.every((item) => item.kind === 'diagnostic');
@@ -44,6 +44,7 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
         running={status.type === 'running'} tail={index === clusters.length - 1}
         incomplete={status.type === 'incomplete' ? status.reason : null} waiting={waiting}
         renderItem={render}
+        onInteract={onInteract}
       />
     ) : <div key={cluster.id} className="contents">{render(cluster.items[0]!, false)}</div>)}
     {summarized ? <AiOperationSummary summary={operationSummary!} onInteract={onInteract} /> : null}

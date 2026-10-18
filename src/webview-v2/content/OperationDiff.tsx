@@ -37,8 +37,8 @@ function OperationFileDetails({ file, canReview, messageId, disclosureKey, onInt
   </>;
 }
 
-export function OperationDiff({ item, messageId, hideConfirmed = false, onInteract }: {
-  item: ToolTranscriptItem; readonly messageId?: string; readonly hideConfirmed?: boolean; readonly onInteract?: () => void;
+export function OperationDiff({ item, messageId, hideConfirmed = false, confirmedOnly = false, onInteract }: {
+  item: ToolTranscriptItem; readonly messageId?: string; readonly hideConfirmed?: boolean; readonly confirmedOnly?: boolean; readonly onInteract?: () => void;
 }) {
   const { t } = useI18n();
   const context = useContext(InlineDiffContext);
@@ -49,7 +49,9 @@ export function OperationDiff({ item, messageId, hideConfirmed = false, onIntera
   if (result?.status !== 'ready') return <p className="operation-diff-unavailable">{t(OPERATION_UNAVAILABLE[result?.reason ?? 'not-recorded'])}</p>;
   if (result.source !== 'tool-result') return <p className="operation-diff-unavailable" role="status">
     {operationLabel(result)}{t(". No confirmed changes were recorded.")}</p>;
-  const files = result.files.filter((file) => !hideConfirmed || !isWorkspaceOperationFile(file) || !isConfirmedOperationFile(result, file));
+  const files = result.files.filter((file) => confirmedOnly
+    ? isWorkspaceOperationFile(file) && isConfirmedOperationFile(result, file)
+    : !hideConfirmed || !isWorkspaceOperationFile(file) || !isConfirmedOperationFile(result, file));
   if (!files.length) return null;
   return <div aria-label={t("File operations")} className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
