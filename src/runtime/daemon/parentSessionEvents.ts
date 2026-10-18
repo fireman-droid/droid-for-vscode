@@ -35,12 +35,17 @@ export class ParentSessionEvents {
     this.collectOperation = createOperationDiffCollector(cwd, sessionId);
   }
 
-  resync(): void { this.emit({ type: 'resync' }); }
+  resync(): void {
+    // A transport gap may have hidden the foreground terminal boundary. The
+    // Host reconciles overlaps instead of replaying their passive deltas.
+    if (!this.automatic) this.turnId = null;
+    this.emit({ type: 'resync' });
+  }
 
   observe(notification: Record<string, unknown>): void {
     // Foreground traffic already has a stream owner. Inspect only message
     // boundaries until an automatic system request starts a passive turn.
-    if (!this.automatic) {
+    if (!this.automatic && notification.type !== 'agent_turn_completed') {
       if (notification.type !== 'create_message') return;
       const message = notification.message;
       if (typeof message !== 'object' || message === null ||
@@ -51,8 +56,10 @@ export class ParentSessionEvents {
     const inner = parsed.data;
     if (inner.type === 'agent_turn_completed') {
       if (this.turnId === null || inner.turnId !== this.turnId) return;
-      const event = normalizeSdkEvent(this.tracker.completeTurn(inner), this.cwd);
-      if (event) this.emit({ type: 'runtime', turnId: this.turnId, event });
+      if (this.automatic) {
+        const event = normalizeSdkEvent(this.tracker.completeTurn(inner), this.cwd);
+        if (event) this.emit({ type: 'runtime', turnId: this.turnId, event });
+      }
       this.turnId = null;
       this.automatic = false;
       this.tracker = new StreamStateTracker();
@@ -61,12 +68,16 @@ export class ParentSessionEvents {
       this.phases.reset();
       return;
     }
-    // Background completions enter as an llm_only system message whose
-    // requestId is the daemon turn id; its preceding context user row is empty.
-    if (inner.type === 'create_message' && typeof inner.requestId === 'string' &&
-        inner.message.role === 'system') this.start(inner.requestId, true);
-    if (inner.type === 'create_message' && inner.message.role === 'user' &&
-        inner.message.content.some((block) => block.type === 'text')) this.start(inner.message.id, false);
+    // Hidden Script completions can be consumed by the current foreground
+    // request. Their system requestId does not acquire a second stream owner.
+    // Only the matching terminal notification releases the existing owner;
+    // queued/steering user messages must not replace its id either.
+    if (this.turnId === null && inner.type === 'create_message') {
+      if (typeof inner.requestId === 'string' && inner.message.role === 'system' &&
+          inner.message.visibility === 'llm_only') this.start(inner.requestId, true);
+      else if (inner.message.role === 'user' && inner.message.visibility !== 'llm_only' &&
+          inner.message.content.some((block) => block.type === 'text')) this.start(inner.message.id, false);
+    }
     if (!this.automatic) return;
     const started = readSubagentStartedNotification({ params: { notification } });
     if (started && this.turnId !== null)

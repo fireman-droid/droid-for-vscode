@@ -6,11 +6,14 @@ import type { ChatController } from '../ChatController';
 import { isTurnActive } from '../internals';
 import { handleRuntimeEvent } from '../turns/turnRuntimeEvents';
 import { handleTurnComplete } from '../turns/turnSettlement';
+import { TURN_IDLE_CONFIRM_READS, TURN_IDLE_GRACE_MS, TURN_WATCHDOG_POLL_MS } from '../turns/turnWatchdog';
 
 type Completion = Extract<RuntimeEvent, { type: 'turn-complete' }>;
 interface ObservedTurn {
   readonly backendId: string | null;
   readonly turnId: string;
+  readonly startedAt: number;
+  idleReads: number;
   recovering: boolean;
   completion?: Completion;
 }
@@ -26,7 +29,8 @@ export class ParentFollowup {
   private ignoredTurnId: string | null = null;
   private resyncing = false;
   private disposed = false;
-  private pending: { turnId: string; generation: number; events: ParentSessionEvent[]; overflow: boolean } | null = null;
+  private probe: ReturnType<typeof setInterval> | undefined;
+  private pending: { backendId: string | null; generation: number } | null = null;
 
   constructor(private readonly ctl: ChatController, private readonly source: ParentSessionEventSource) {
     this.subscription = ctl.subscribe(() => { this.synchronize(); queueMicrotask(() => this.drainPending()); });
@@ -35,16 +39,23 @@ export class ParentFollowup {
 
   dispose(): void {
     this.disposed = true;
+    this.clearProbe();
     this.unsubscribe?.();
     this.subscription.dispose();
   }
 
   private synchronize(): void {
     const state = this.ctl.sessionState;
-    if (this.disposed || state.disposed) { this.unsubscribe?.(); return; }
+    if (this.disposed || state.disposed) { this.clearProbe(); this.unsubscribe?.(); return; }
+    const turn = this.ctl.turnState.turn;
+    if (this.active !== null && (turn?.turnId !== this.active.turnId || !isTurnActive(turn))) {
+      this.active = null;
+      this.clearProbe();
+    }
     if (this.sessionId === state.sessionId && this.generation === state.runtimeGeneration && this.cwd === state.activeRuntimeCwd) return;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.clearProbe();
     this.sessionId = state.sessionId;
     this.generation = state.runtimeGeneration;
     this.cwd = state.activeRuntimeCwd;
@@ -66,24 +77,26 @@ export class ParentFollowup {
   }
 
   private observe(message: ParentSessionEvent): void {
-    if (message.type === 'resync') { void this.resync(); return; }
     const turn = this.ctl.turnState.turn;
-    if (this.active !== null && (turn?.turnId !== this.active.turnId || !isTurnActive(turn))) this.active = null;
+    if (message.type === 'resync') {
+      if (this.ctl.sessionState.sessionOperationInProgress || (isTurnActive(turn) && turn?.turnId !== this.active?.turnId))
+        this.pending = { backendId: null, generation: this.ctl.turnState.turnGeneration };
+      else void this.resync();
+      return;
+    }
     if (message.type === 'turn-start') {
       if (!message.automatic) { this.ignoredTurnId = message.turnId; return; }
       // A submitted foreground turn already has its own stream and projection.
       if (isTurnActive(turn) || this.ctl.sessionState.sessionOperationInProgress) {
-        this.pending = { turnId: message.turnId, generation: this.ctl.turnState.turnGeneration, events: [], overflow: this.pending !== null };
+        this.pending = { backendId: this.pending === null ? message.turnId : null, generation: this.ctl.turnState.turnGeneration };
         return;
       }
       this.adopt(message.turnId);
       return;
     }
-    if (this.pending?.turnId === message.turnId) {
-      if (this.pending.events.length < 512) this.pending.events.push(message);
-      else this.pending.overflow = true;
-      return;
-    }
+    // Overlap is reconciled from authoritative history after foreground release.
+    // Never replay cached deltas that the foreground stream may have consumed.
+    if (this.pending !== null && message.turnId !== this.active?.backendId) return;
     if (message.turnId === this.ignoredTurnId) return;
     const active = this.active;
     if (active === null || active.backendId !== message.turnId) return;
@@ -93,6 +106,7 @@ export class ParentFollowup {
       this.ctl.effects.flushPendingThinking(this.sessionId!, active.turnId);
       handleTurnComplete(this.ctl, this.sessionId!, active.turnId, message.event);
       this.active = null;
+      this.clearProbe();
     } else if (!active.recovering && this.ctl.turnState.turn?.status !== 'stopping') {
       handleRuntimeEvent(this.ctl, this.sessionId!, active.turnId, message.event);
     }
@@ -102,14 +116,12 @@ export class ParentFollowup {
     const pending = this.pending;
     if (!pending || this.disposed || this.ctl.sessionState.disposed || isTurnActive(this.ctl.turnState.turn) || this.ctl.sessionState.sessionOperationInProgress) return;
     this.pending = null;
-    if (pending.generation !== this.ctl.turnState.turnGeneration || pending.overflow) { void this.resync(); return; }
-    this.adopt(pending.turnId);
-    for (const event of pending.events) this.observe(event);
+    void this.resync(false, pending.generation === this.ctl.turnState.turnGeneration ? pending.backendId : null);
   }
 
   private adopt(backendId: string | null): ObservedTurn {
     const ctl = this.ctl;
-    const active: ObservedTurn = { backendId, turnId: randomUUID(), recovering: false };
+    const active: ObservedTurn = { backendId, turnId: randomUUID(), startedAt: Date.now(), idleReads: 0, recovering: false };
     this.active = active;
     ctl.effects.beginTurn({
       turnId: active.turnId, status: 'streaming', recovery: true,
@@ -125,24 +137,39 @@ export class ParentFollowup {
     ctl.effects.scheduleRecoveryCheckpoint();
     // An unsolicited turn must be adopted before the webview accepts its deltas.
     ctl.emitSnapshot();
+    this.clearProbe();
+    this.probe = setInterval(() => { void this.resync(true); }, TURN_WATCHDOG_POLL_MS);
     ctl.recordHost({ level: 'info', name: 'host.subagent.parent-turn-adopted', attributes: { sessionId: this.sessionId! } });
     return active;
   }
 
-  private async resync(): Promise<void> {
+  private clearProbe(): void {
+    if (this.probe !== undefined) clearInterval(this.probe);
+    this.probe = undefined;
+  }
+
+  private async resync(probe = false, backendId: string | null = null): Promise<void> {
     const ctl = this.ctl;
     const { runtime, runtimeGeneration, sessionId, activeRuntimeCwd: cwd } = ctl.sessionState;
+    if (this.disposed || ctl.sessionState.disposed || this.sessionId !== sessionId || this.generation !== runtimeGeneration) { this.clearProbe(); return; }
     if (this.resyncing || !runtime || !sessionId || !cwd || ctl.sessionState.sessionOperationInProgress) return;
     if (isTurnActive(ctl.turnState.turn) && ctl.turnState.turn?.turnId !== this.active?.turnId) return;
+    if (probe && (this.active === null || this.active.recovering || Date.now() - this.active.startedAt < TURN_IDLE_GRACE_MS)) return;
     this.resyncing = true;
     const turnGeneration = ctl.turnState.turnGeneration;
+    const observed = this.active;
     try {
       const working = await runtime.readSessionWorkingState?.();
-      if (!this.current(sessionId, runtimeGeneration) || ctl.turnState.turnGeneration !== turnGeneration) return;
+      if (!this.current(sessionId, runtimeGeneration) || ctl.turnState.turnGeneration !== turnGeneration || this.active !== observed) return;
+      if (probe && this.active !== null) {
+        this.active.idleReads = working === 'idle' ? this.active.idleReads + 1 : 0;
+        if (this.active.idleReads < TURN_IDLE_CONFIRM_READS) return;
+      }
       if (this.active !== null || working === 'running' || working === 'waiting-for-user') {
-        const active = this.active ?? this.adopt(null);
+        const active = this.active ?? this.adopt(backendId);
         if (active.recovering) return;
         active.recovering = true;
+        this.clearProbe();
         // The existing recovery path owns gap reconciliation and final settlement;
         // continued notifications only supply the matching terminal outcome.
         ctl.effects.reconcileDaemonTurn(runtime, runtimeGeneration, sessionId, cwd);
