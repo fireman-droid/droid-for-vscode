@@ -5,6 +5,7 @@ import { ThinkingBody } from '../../../packages/chat-ui/src/chat/ThinkingBody';
 import { ThinkingView } from '../../../packages/chat-ui/src/chat/ThinkingView';
 
 const longText = ('Review the current code.\n\n**Keep this exact text**: 中文🙂\n').repeat(700);
+const visibleLongText = longText.replaceAll('**', '');
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -16,18 +17,30 @@ function textContent(container: HTMLElement) {
   return container.querySelector('[data-radix-scroll-area-viewport] > div > div');
 }
 
+it('separates adjacent short headings, removes repeated headings and keeps chunk-boundary emphasis intact', () => {
+  const view = render(<ThinkingBody text="**Planning****Planning****Verify results**" running={false} truncated={false} />);
+  expect(textContent(view.container)?.textContent).toBe('Planning\nVerify results');
+  const prefix = 'x'.repeat(4093);
+  view.rerender(<ThinkingBody text={`${prefix}**Read the full file** tail`} running={false} truncated={false} />);
+  expect(textContent(view.container)?.textContent).toBe(`${prefix}Read the full file tail`);
+  expect(screen.getByText('Read the full file').tagName).toBe('STRONG');
+  view.rerender(<ThinkingBody text={`${prefix}**Pending`} running truncated={false} />);
+  view.rerender(<ThinkingBody text={`${prefix}**Pending heading**`} running={false} truncated={false} />);
+  expect(textContent(view.container)?.textContent).toBe(`${prefix}Pending heading`);
+});
+
 it('mounts the complete long thinking only when opened and removes it when collapsed', () => {
   const view = render(<ThinkingView text={longText} status="active" />);
   expect(textContent(view.container)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
-  expect(textContent(view.container)?.textContent).toBe(longText);
+  expect(textContent(view.container)?.textContent).toBe(visibleLongText);
   fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
   expect(textContent(view.container)).toBeNull();
   view.rerender(<ThinkingView text={`${longText}Additional text while closed.`} status="active" />);
   act(() => vi.advanceTimersByTime(200));
   expect(textContent(view.container)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /Thinking/ }));
-  expect(textContent(view.container)?.textContent).toBe(`${longText}Additional text while closed.`);
+  expect(textContent(view.container)?.textContent).toBe(`${visibleLongText}Additional text while closed.`);
 });
 
 it('coalesces stream updates, retains existing text nodes and flushes the complete final value', () => {
@@ -37,12 +50,12 @@ it('coalesces stream updates, retains existing text nodes and flushes the comple
     view.rerender(<ThinkingBody text={`${longText}${suffix}`} running truncated={false} />);
     act(() => vi.advanceTimersByTime(20));
   }
-  expect(textContent(view.container)?.textContent).toBe(longText);
+  expect(textContent(view.container)?.textContent).toBe(visibleLongText);
   act(() => vi.advanceTimersByTime(40));
-  expect(textContent(view.container)?.textContent).toBe(`${longText}123`);
+  expect(textContent(view.container)?.textContent).toBe(`${visibleLongText}123`);
   expect(textContent(view.container)?.firstChild).toBe(firstNode);
   view.rerender(<ThinkingBody text={`${longText}123 final🙂`} running={false} truncated={false} />);
-  expect(textContent(view.container)?.textContent).toBe(`${longText}123 final🙂`);
+  expect(textContent(view.container)?.textContent).toBe(`${visibleLongText}123 final🙂`);
   view.rerender(<ThinkingBody text="A different reasoning segment." running truncated={false} />);
   expect(textContent(view.container)?.textContent).toBe('A different reasoning segment.');
 });
