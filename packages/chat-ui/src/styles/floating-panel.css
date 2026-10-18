@@ -5,8 +5,7 @@
   .dvx-floating-panel-header button:hover { color: var(--ink); background: var(--control-surface-hover); }
   .dvx-floating-panel-header .dvx-floating-panel-move { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; height: 24px; padding-inline: 4px; border-radius: var(--control-radius); cursor: grab; touch-action: none; }
   .dvx-floating-panel-header .dvx-floating-panel-move:hover { background: transparent; }
-  .dvx-floating-panel-move:focus-visible { outline: none; }
-  .dvx-floating-panel-move:focus-visible span { text-decoration: underline; text-underline-offset: 3px; }
+  .dvx-floating-panel-move:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .dvx-floating-panel-move span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; font-weight: 400; }
   .dvx-floating-panel-header > button:not(.dvx-floating-panel-move) { width: 24px; height: 24px; min-height: 24px; }
   .dvx-floating-panel-move:active { cursor: grabbing; }
