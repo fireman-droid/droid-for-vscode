@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { ZipFile } from 'yazl';
 import * as vscode from 'vscode';
+import { LOCAL_ANALYTICS_DIRECTORY } from '../analytics/LocalFrontendAnalytics';
 
 const LOG_FILE_PATTERN = /^droidvisx-\d{8}\.jsonl$/u;
 
@@ -34,15 +35,17 @@ export async function exportDiagnosticsBundle(
 
   const zip = new ZipFile();
   let logCount = 0;
-  try {
-    for (const entry of (await readdir(logDirectory)).sort()) {
-      if (LOG_FILE_PATTERN.test(entry)) {
-        zip.addFile(join(logDirectory, entry), `logs/${entry}`);
-        logCount += 1;
+  for (const folder of ['', LOCAL_ANALYTICS_DIRECTORY]) {
+    try {
+      for (const entry of (await readdir(join(logDirectory, folder))).sort()) {
+        if (LOG_FILE_PATTERN.test(entry)) {
+          zip.addFile(join(logDirectory, folder, entry), ['logs', folder, entry].filter(Boolean).join('/'));
+          logCount += 1;
+        }
       }
+    } catch {
+      // A new installation can have no logs yet; the bundle still carries metadata.
     }
-  } catch {
-    // No log directory yet; the bundle still carries metadata.
   }
 
   const packageJson = context.extension.packageJSON as {

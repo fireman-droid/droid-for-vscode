@@ -483,6 +483,20 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 
 ### 页面状态和性能
 
+- 前端本地统计沿现有 `webview.diagnostic` 进入 Host：`LocalDiagnostics.onHostRecord`
+  将 Host 诊断交给 `extension/analytics/projectFrontendEvent.ts`，仅提取已知枚举和数值；
+  不转发 SDK 原始日志或诊断 `detail`。当前事件为 `frontend.ready`（启动耗时）、
+  `frontend.error`（error／unhandledrejection／boot-timeout／handshake-timeout 分类）、
+  `frontend.longtask`（数量、总耗时、最长耗时）与 `activity.expand`（展开响应耗时、记录数）。
+  展开测量当前接通历史记录入口，`durationMs` 表示用户操作到绘制响应的延迟，不是独立 CPU
+  渲染时间；没有对所有点击、单条工具或单条思考自动埋点。
+- `LocalFrontendAnalytics` 复用本地日志写入与保留机制，在扩展 `globalStorageUri` 的
+  `logs/local-analytics/droidvisx-YYYYMMDD.jsonl` 单独保存结构化统计。应用级
+  `droidvisx.localAnalytics.enabled` 默认开启，配置变化立即停止或恢复新事件记录；
+  不依赖远程遥测开关，不提供网络上传、GA4 端点或账号配置。统计中没有聊天正文、代码、
+  文件路径、错误原文或凭据，原完整本地诊断保持独立。命令 `droidvisx.openLocalAnalytics`
+  （“Droid：查看本地统计”）打开当前窗口的统计输出；既有 `droidvisx.exportDiagnostics`
+  在写入队列完成后，将统计文件和原诊断一起打入用户手动选择的本地 ZIP。
 - `webview-v2/state/` 是根 reducer 的唯一实现；`host/` 是生产 Host 消息接线。
   附件、交互、队列等 reducer/helper 位于 `chat/` 对应业务目录，各页面按需复用，
   不保留旧页面、复制状态实现或反向兼容导出桶。

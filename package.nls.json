@@ -1,4 +1,6 @@
 {
+  "droidvisx.localAnalytics.enabled.description": "Record frontend usage, response timings and error categories in a separate local log. Never uploads data and excludes chat text, code, file paths, error messages and credentials. View with Droid: Open Local Analytics; included in manually exported diagnostics bundles.",
+  "droidvisx.openLocalAnalytics.title": "Droid: Open Local Analytics",
   "droidvisx.autocomplete.fimEnabled.description": "Enable FIM code completion independently of Next Edit.",
   "droidvisx.autocomplete.nextEdit.enabled.description": "Enable edit predictions alongside code completion. Sends editing context to the configured Next Edit service.",
   "droidvisx.autocomplete.nextEdit.endpoint.description": "Full Next Edit endpoint. Requires an edit prediction service, such as Mercury /v1/edit/completions.",

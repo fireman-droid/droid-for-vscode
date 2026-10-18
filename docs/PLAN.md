@@ -4,10 +4,6 @@
 能力边界见 [CAPABILITIES](CAPABILITIES.md)，当前构建和验证状态见 [STATUS](STATUS.md)。
 旧计划不自动触发重新实施、全仓审计或真实模型调用。
 
-## 下一轮界面修复
-
-- [ ] 评估并接入可选的前端埋点 SDK／GA4 上报：用于功能使用、记录展开耗时及异常分类统计，优先复用已有 `webview.diagnostic` 与长任务观测；卡死根因仍通过本地性能日志定位。下一轮确定适合 Webview 的接入路径、事件清单和 GA4 属性配置；默认不上传，尊重 VS Code 遥测开关并提供用户选择，不采集聊天正文、代码、文件路径或凭据。Measurement Protocol 单独使用存在报表限制，`api_secret` 不放进客户端包。参考 [GA4 官方说明](https://developers.google.com/analytics/devguides/collection/protocol/ga4)、[VS Code 遥测要求](https://code.visualstudio.com/api/extension-guides/telemetry)。本轮只记录，未安装 SDK、配置账号或上报数据。
-
 ## 暂停中的工作
 
 | 工作 | 当前情况 | 继续时的范围 |

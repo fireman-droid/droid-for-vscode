@@ -36,6 +36,7 @@
     "onView:droidvisx.chat",
     "onCommand:droidvisx.focusView",
     "onCommand:droidvisx.openLogs",
+    "onCommand:droidvisx.openLocalAnalytics",
     "onCommand:droidvisx.exportDiagnostics",
     "onCommand:droidvisx.openMissionControl",
     "onCommand:droidvisx.openModels",
@@ -66,6 +67,10 @@
       {
         "command": "droidvisx.openLogs",
         "title": "%droidvisx.openLogs.title%"
+      },
+      {
+        "command": "droidvisx.openLocalAnalytics",
+        "title": "%droidvisx.openLocalAnalytics.title%"
       },
       {
         "command": "droidvisx.exportDiagnostics",
@@ -137,6 +142,12 @@
     "configuration": {
       "title": "Droid",
       "properties": {
+        "droidvisx.localAnalytics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%droidvisx.localAnalytics.enabled.description%"
+        },
         "droidvisx.language": {
           "type": "string",
           "enum": [

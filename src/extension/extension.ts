@@ -29,6 +29,7 @@ import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
 import { LocalDiagnostics } from './diagnostics/LocalDiagnostics';
+import { registerLocalFrontendAnalytics } from './analytics/registerLocalFrontendAnalytics';
 import { createOfficialIdeConnection } from './ide/officialIdeConnection';
 import { createWindowDaemonSidecar } from './daemon/WindowDaemonSidecar';
 import {
@@ -142,11 +143,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // globalStorage survives Cursor's per-boot log directory cleanup and
   // aggregates all windows into one per-day file set.
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;
+  let frontendAnalytics: ReturnType<typeof registerLocalFrontendAnalytics> | undefined;
   const diagnostics = new LocalDiagnostics({
     directory: logDirectory,
     output: vscode.window.createOutputChannel('Droid Logs'),
     workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
+    onHostRecord: event => frontendAnalytics?.record(event),
   });
+  frontendAnalytics = registerLocalFrontendAnalytics(context, logDirectory);
   registerAutocomplete(context, diagnostics);
   diagnostics.record({
     level: 'info',
@@ -695,6 +699,7 @@ export function activate(context: vscode.ExtensionContext): void {
         name: 'diagnostics.exported',
       });
       await diagnostics.flush();
+      await frontendAnalytics?.flush();
       try {
         await exportDiagnosticsBundle(context, logDirectory);
       } catch (error) {
