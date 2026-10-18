@@ -39,6 +39,7 @@ export function Transcript({
   onQuote,
   onBtwQuote,
   interaction,
+  statusNotice,
   onEditBegin,
   onDraftSuggestion,
   historyEditable = true,
@@ -53,6 +54,7 @@ export function Transcript({
   readonly onQuote?: (text: string) => void;
   readonly onBtwQuote?: (text: string) => void;
   readonly interaction?: ReactNode;
+  readonly statusNotice?: ReactNode;
   readonly onEditBegin?: () => void;
   readonly onDraftSuggestion?: (prompt: string) => void;
   readonly historyEditable?: boolean;
@@ -150,11 +152,15 @@ export function Transcript({
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
       {interaction}</>}
-    statusContent={running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
+    statusContent={statusNotice || running && state.interactions.length === 0 ? <div role="status" aria-label={t('Droid status')} aria-live="polite"
+      className="grid min-w-0 gap-1 py-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+      {running && state.interactions.length === 0 ? <div className="flex select-none items-center gap-2">
       <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
       <span>{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
         ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
         : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
+      </div> : null}
+      {statusNotice}
     </div> : null}
     renderMessage={(id, presentation) => {
       const message = byId.get(id)!;

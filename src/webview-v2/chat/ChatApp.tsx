@@ -57,6 +57,10 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   // Stream text has its own subscriber; controls observe arrivals and domain state.
   useStore(store, useShallow(selectChatShell));
   const state = store.getState().state;
+  const noticeOwner = JSON.stringify([state.conversationId, state.sessionId]);
+  const [composerNotice, setComposerNotice] = useState<{ owner: string; text: string | null } | null>(null);
+  const reportComposerNotice = useCallback((text: string | null) => setComposerNotice({ owner: noticeOwner, text }), [noticeOwner]);
+  const composerNoticeText = composerNotice?.owner === noticeOwner ? composerNotice.text : null;
   const agentNavigation = useAgentChatNavigation(state.sessionId, port);
   const childChat = role === 'child';
   const capabilities = getChatSurfaceCapabilities(role);
@@ -166,6 +170,13 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
   const notice = selectVisibleNotice(host.transientDiagnostic, state.sessionId, state.turn?.turnId ?? null, running || state.turn?.status === 'stopping');
   const statusMessage = getStatusMessage(state, composer.draft);
+  const idleStatus = statusMessage && !running && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
+    ? statusMessage : null;
+  const statusNotice = notice || idleStatus || composerNoticeText ? <>
+    {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} embedded /> : null}
+    {idleStatus ? <p className="m-0">{t(idleStatus)}</p> : null}
+    {composerNoticeText && composerNoticeText !== idleStatus ? <p className="m-0">{t(composerNoticeText)}</p> : null}
+  </> : null;
   const sessionActionsDisabled = operationsBlocked || state.connection.status !== 'connected' ||
     ((running || state.turn?.status === 'stopping') && !state.backgroundTurnsAvailable) || state.interactions.length > 0;
   const interaction = useMemo(() => <InteractionPanel requests={state.interactions} actions={{
@@ -200,9 +211,6 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
-        {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} /> : null}
-        {statusMessage && !running && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
-          ? <p role="status" className="text-xs text-muted-foreground">{t(statusMessage)}</p> : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
         {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
@@ -212,6 +220,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
           <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
         </div>}
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
+          onNoticeChange={reportComposerNotice}
           capabilities={capabilities}
           onFileSearch={workspace.handleFileSearch} onNavigate={setNavigation} onBtwOpen={openBtw}
           renderInputRow={(input, action) => <ComposerControls input={input} action={action} state={state} port={port} blocked={operationsBlocked} page={navigation.page} navigationId={navigation.id} onPageChange={setNavigation} onCompact={capabilities.compactSession ? compact : undefined} compactPending={sessions.compactPending} theme={theme.context} onNewSession={capabilities.navigateSessions ? sessions.handleNewSession : undefined}
@@ -228,6 +237,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
             <SubagentActivityStoreContext.Provider value={subagents.activityStore}>
               <SelectSessionContext.Provider value={capabilities.navigateSessions ? sessions.handleSelectSession : null}>
               <LiveTranscript ref={transcript} store={store} port={port} blocked={operationsBlocked} sendSignal={composer.sendSignal} onFork={capabilities.navigateSessions ? sessions.handleForkCurrentSession : undefined}
+                statusNotice={statusNotice}
                 historyEditable={capabilities.editHistory}
                 onEditBegin={composer.queueEditingId === null ? undefined : composer.handleQueueEditCancel}
                 onDraftSuggestion={!operationsBlocked && !composer.draft.trim() && composer.queueEditingId === null && !running && state.interactions.length === 0

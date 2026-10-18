@@ -15,12 +15,13 @@ import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/
 import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
 import { useCodeReferenceDraft } from '@droidvisx/chat-ui/chat/useCodeReferenceDraft';
 
-export function Composer({ state, port, flow, blocked, quoteNotice, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
+export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChange, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: AssistantWebviewState;
   readonly port: ChatPort;
   readonly flow: ReturnType<typeof useComposerFlow>;
   readonly blocked: boolean;
   readonly quoteNotice?: string | null;
+  readonly onNoticeChange?: (notice: string | null) => void;
   readonly renderInputRow: (input: ReactNode, action: ReactNode) => ReactNode;
   readonly onFileSearch: (id: string, query: string) => void;
   readonly onNavigate: (page: SlashNavTarget) => void;
@@ -61,6 +62,11 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
+  const currentNotice = ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice ?? null;
+  useEffect(() => {
+    onNoticeChange?.(currentNotice);
+    return () => onNoticeChange?.(null);
+  }, [onNoticeChange, currentNotice]);
   const submit = () => { if (!flow.callbacks.isSendDisabled && !ingress.isPreparing()) void flow.callbacks.onSend(flow.draft); };
   return <ComposerView value={body} codeDraft={references} quotes={quote?.quotes}
     onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), quote.body)); } : undefined}
@@ -69,7 +75,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, renderInputR
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
     placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={references.maxLength}
-    focusSignal={flow.draftCommand.id} notice={ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice} onLayout={reportLayout}
+    focusSignal={flow.draftCommand.id} notice={onNoticeChange ? null : currentNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t("Answer Droid’s request to continue.")}</p> : undefined}
     attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
     suggestionsOpen={suggestions.open} onSuggestionsOpenChange={(open) => { if (!open) suggestions.dismiss(); }}

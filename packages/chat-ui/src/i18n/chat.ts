@@ -1,6 +1,7 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ["Droid status","Droid 状态","Droid 狀態"],
   ['Messages while working','任务进行中发送消息','任務進行中傳送訊息'],
   ['Wait','等待','等待'],
   ['Steer','引导','引導'],

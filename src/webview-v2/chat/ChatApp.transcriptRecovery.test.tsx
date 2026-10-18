@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +50,7 @@ function snapshot(overrides: Partial<HostSnapshotMessage> = {}): HostSnapshotMes
   return {
     type: 'host.snapshot', sequence: 1, conversationId: 'conversation-recovery', sessionId,
     connection: { status: 'connected' }, turn: { turnId, status: 'streaming' },
-    sessions: { status: 'ready', items: [{ id: sessionId, title: 'Current session', messageCount: 1,
+    sessions: { status: 'ready', items: [{ id: overrides.sessionId ?? sessionId, title: 'Current session', messageCount: 1,
       modifiedTime: '2026-09-21T00:00:00.000Z', active: true, isFavorite: false }] },
     settings: initial.settings, context: initial.context, modelCatalog: initial.modelCatalog,
     transcript: [question], historyStatus: 'complete', truncated: false, interactions: [],
@@ -79,6 +79,32 @@ function mountChat(role: ChatSurfaceRole = 'main') {
 }
 
 describe('ChatApp transcript delivery recovery', () => {
+  it('places restore receipts and running or failed status in one region without changing the draft', async () => {
+    mountChat();
+    receive(snapshot({ turn: { turnId, status: 'completed' } }));
+    await screen.findByText(question.text);
+    const receipt = 'Droid restored 3 file(s) and deleted 1 newly created file(s).';
+    receive({ type: 'rewind.result', sequence: 2, sessionId, messageId: 'message-1',
+      files: { restoredCount: 3, deletedCount: 1, failedRestoreCount: 0, failedDeleteCount: 0 } });
+    await screen.findByText(receipt);
+    const status = screen.getByRole('status', { name: 'Droid status' });
+    expect(within(status).getByText(receipt)).toBeTruthy();
+    expect(screen.getAllByText(receipt)).toHaveLength(1);
+    const input = screen.getByRole('textbox', { name: 'Message Droid' });
+    expect(input.textContent).toBe(draft);
+    expect(input.closest('form')!.textContent).not.toContain(receipt);
+    receive(snapshot({ sequence: 3, turn: { turnId: 'resumed-turn', status: 'streaming' } }));
+    receive({ ...tool(4, 'running'), turnId: 'resumed-turn' });
+    await waitFor(() => expect(within(status).getByText('Droid is working')).toBeTruthy());
+    expect(within(status).getByText(receipt)).toBeTruthy();
+    receive({ type: 'turn.state', sequence: 5, sessionId, turnId: 'resumed-turn', status: 'failed' });
+    await waitFor(() => expect(within(status).getByText('Reply failed. No error details are available.')).toBeTruthy());
+    expect(within(status).queryByText('Droid is working')).toBeNull();
+    receive(snapshot({ sequence: 6, sessionId: 'next-session', conversationId: 'next-conversation', turn: null }));
+    await waitFor(() => expect(screen.queryByText(receipt)).toBeNull());
+    expect(screen.queryByText('Reply failed. No error details are available.')).toBeNull();
+  });
+
   it('keeps a connected child chat usable without exposing parent actions when navigation is absent or removed', async () => {
     const port = mountChat('child');
     receive(snapshot({ turn: { turnId, status: 'completed' } }));
