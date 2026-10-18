@@ -30,6 +30,13 @@ const result: DroidStreamEvent = {
 };
 
 describe('bounded native tool result extraction', () => {
+  it('checks decoded file/result content before retaining a Script preview', () => {
+    const scriptSource = { tool: 'Script', path: 'Tool result', callId: 'script' };
+    const text = '{"file":"config.json","result":"\\u0061\\u0070\\u0069\\u005f\\u006b\\u0065\\u0079: fake-secret-value-for-test"}';
+    expect(extractResultPreview(text, scriptSource)).toEqual({ availability: 'unavailable', reason: 'restricted' });
+    expect(extractResultPreview(text.slice(0, -2) + 'x'.repeat(MAX_TOOL_RESULT_TEXT_UNITS), scriptSource))
+      .toEqual({ availability: 'unavailable', reason: 'restricted' });
+  });
   it('uses actual complete call input and produces the same snippet in live and history paths', () => {
     const collect = createToolResultCollector(root);
     collect(call);

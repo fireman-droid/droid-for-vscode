@@ -4,12 +4,13 @@ export const isScriptTool = (name: string): boolean => !/__+/u.test(name) && too
 
 /** Only the CLI's final diagnostic trailer, never arbitrary lines mentioning status. */
 export function stripScriptTrailer(text: string): string {
-  return text.replace(/(?:\r?\n)?\[Script completed · [\d.]+ s elapsed · \d+ calls?(?: · \d+ background executes? running)?(?: · [\d.]+ (?:B|KiB|MiB|GiB) passed through unfiltered)? · log: [^\r\n]+\]\s*$/u, '').trimEnd();
+  return text.replace(/(?:\r?\n)?\[Script completed · [\d.]+ s elapsed · \d+ calls?(?: · (?:\d+ background executes? running|[\d.]+ (?:B|KiB|MiB|GiB) passed through unfiltered)){0,2} · log: [^\r\n]+\]\s*$/u, '').trimEnd();
 }
 
-export interface ScriptOutputPart { readonly part: number; readonly text: string; readonly exitCode?: number; readonly partial?: boolean }
+export type ScriptOutputPart = ({ readonly part: number; readonly file?: never } | { readonly file: string; readonly part?: never }) &
+  { readonly text: string; readonly exitCode?: number; readonly partial?: boolean };
 
-function resultText(value: unknown): string {
+export function resultText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) return value.map(resultText).join('\n');
   if (value && typeof value === 'object' && 'path' in value && typeof value.path === 'string' &&
@@ -41,14 +42,16 @@ function partialArray(text: string): string {
 /** Read only complete JSON escapes from a truncated string; never invent the
  * missing end of a result, exit code, or subsequent part. */
 function partialResult(line: string): ScriptOutputPart | undefined {
-  const prefix = /^\s*\{\s*"part"\s*:\s*(\d+)\s*,\s*"result"\s*:\s*/u.exec(line);
-  if (!prefix || !Number.isSafeInteger(Number(prefix[1]))) return undefined;
+  const prefix = /^\s*\{\s*(?:"(?:part|i)"\s*:\s*(\d+)|"file"\s*:\s*("(?:[^"\\]|\\.)*"))\s*,\s*"result"\s*:\s*/u.exec(line);
+  if (!prefix || prefix[1] !== undefined && !Number.isSafeInteger(Number(prefix[1]))) return undefined;
+  let identity: { part: number } | { file: string };
+  try { identity = prefix[1] === undefined ? { file: JSON.parse(prefix[2]!) as string } : { part: Number(prefix[1]) }; } catch { return undefined; }
   const raw = line.slice(prefix[0].length);
   const input = raw.replace(/^\{\s*"output"\s*:\s*/u, '');
-  if (input[0] !== '"') return { part: Number(prefix[1]), text: raw.startsWith('[') ? partialArray(raw) : raw, partial: true };
+  if (input[0] !== '"') return { ...identity, text: raw.startsWith('[') ? partialArray(raw) : raw, partial: true };
   let index = 1;
   for (; index < input.length; index++) {
-    if (input[index] === '"') return { part: Number(prefix[1]), text: JSON.parse(input.slice(0, index + 1)) as string, partial: true };
+    if (input[index] === '"') return { ...identity, text: JSON.parse(input.slice(0, index + 1)) as string, partial: true };
     if (input[index] === '\\') {
       if (input[index + 1] === 'u') {
         if (!/^[0-9a-f]{4}$/iu.test(input.slice(index + 2, index + 6))) break;
@@ -58,10 +61,10 @@ function partialResult(line: string): ScriptOutputPart | undefined {
     } else if (input.charCodeAt(index) < 32) return undefined;
   }
   const decoded = JSON.parse(input.slice(0, index) + '"') as string;
-  return { part: Number(prefix[1]), text: decoded.replace(/[\uD800-\uDBFF]$/u, ''), partial: true };
+  return { ...identity, text: decoded.replace(/[\uD800-\uDBFF]$/u, ''), partial: true };
 }
 
-/** Script's printed part/result bundles remain supplemental output, not file attribution. */
+/** Printed bundle labels remain supplemental output, never file attribution by themselves. */
 export function scriptOutputParts(text: string, truncated = false): readonly ScriptOutputPart[] | undefined {
   const body = stripScriptTrailer(text);
   const lines = body.trim().split(/\r?\n/u);
@@ -75,28 +78,31 @@ export function scriptOutputParts(text: string, truncated = false): readonly Scr
       return undefined;
     }
     if (typeof value !== 'object' || value === null || Array.isArray(value) ||
-      Object.keys(value).length !== 2 || !('part' in value) || !('result' in value) ||
-      !Number.isSafeInteger(value.part) || Number(value.part) < 0) return undefined;
-    if (typeof value.result === 'string') parts.push({ part: Number(value.part), text: value.result });
+      Object.keys(value).length !== 2 || !('result' in value)) return undefined;
+    const indexValue = 'part' in value ? value.part : 'i' in value ? value.i : undefined;
+    const identity = Number.isSafeInteger(indexValue) && Number(indexValue) >= 0 ? { part: Number(indexValue) }
+      : 'file' in value && typeof value.file === 'string' && value.file.length > 0 ? { file: value.file } : undefined;
+    if (!identity) return undefined;
+    if (typeof value.result === 'string') parts.push({ ...identity, text: value.result });
     else if (typeof value.result === 'object' && value.result !== null && !Array.isArray(value.result) &&
       'output' in value.result && typeof value.result.output === 'string' &&
       Object.keys(value.result).every(key => ['output', 'exitCode'].includes(key)) &&
       (!('exitCode' in value.result) || value.result.exitCode === null || Number.isSafeInteger(value.result.exitCode))) {
-      parts.push({ part: Number(value.part), text: value.result.output,
+      parts.push({ ...identity, text: value.result.output,
         ...('exitCode' in value.result && typeof value.result.exitCode === 'number' ? { exitCode: value.result.exitCode } : {}) });
-    } else parts.push({ part: Number(value.part), text: resultText(value.result) });
+    } else parts.push({ ...identity, text: resultText(value.result) });
   }
   return parts;
 }
 
 export function formatScriptParts(parts: readonly ScriptOutputPart[]): string {
-  return parts.map(part => `[${part.part}]\n${part.text.trimEnd()}${part.exitCode === undefined ? '' : `\n[Process exited with code ${part.exitCode}]`}`).join('\n\n');
+  return parts.map(part => `[${part.file ?? part.part}]\n${part.text.trimEnd()}${part.exitCode === undefined ? '' : `\n[Process exited with code ${part.exitCode}]`}`).join('\n\n');
 }
 
 export function readableScriptOutput(text: string, truncated = false): string {
   const parts = scriptOutputParts(text, truncated);
   if (!parts) return stripScriptTrailer(text);
-  const content = parts.filter(part => part.text.trim() !== 'TODO List Updated');
+  const content = parts.filter(part => part.file !== undefined || part.text.trim() !== 'TODO List Updated');
   return content.length ? formatScriptParts(content) : 'TODO List Updated';
 }
 
