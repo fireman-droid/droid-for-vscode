@@ -18,9 +18,9 @@
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - Microsoft VS Code 已按本次授权安装 `codex/activity-gutter-fix` 的 `0.8.14` 本地修正版，CLI 报告安装成功，需 Reload Window。
-  已安装 `f202afb` 对应的本地包：最新操作原位更新，展开一次显示完整过程，保留手动展开状态；
+  已安装 `eb01085` 对应的本地包：最新操作原位更新，外层展开后每条工具与思考各自保留展开／收起，手动选择保留；
   正文与符号左边缘对齐，展开列表没有额外缩进，内容区仍与 composer 共用外层宽度。
-  当前源码按用户澄清恢复单条独立折叠，只移除“思考记录”中间分组；修正版待本次安装。
+  本次安装包含用户澄清的折叠修正：只移除“思考记录”中间分组，避免 thinking 内再包一组 thinking。
   该分支尚未合并或正式发布，不覆盖上述正式产物。
   Cursor 本次未安装，仍为此前的 `0.8.13` 石墨灰选区试用包。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
