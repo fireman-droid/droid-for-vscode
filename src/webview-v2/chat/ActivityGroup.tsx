@@ -4,6 +4,10 @@ import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
 import { type GroupCandidatePart } from './transcript/activityGrouping';
+import { commandCardTitle } from './composer/commandCard';
+import { formatDuration, formatToolLifecycle } from './thread/readers';
+import { resolveToolAction } from '../../shared/transcript/toolActivity';
+import { formatThinkingLabel } from '@droidvisx/chat-ui/chat/thinkingLabel';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;
 export interface ActivityCluster { readonly id: string; readonly items: readonly SessionTranscriptItem[]; readonly grouped: boolean }
@@ -42,14 +46,22 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   const { t } = useI18n();
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
   const render = (item: SessionTranscriptItem) => <div key={item.id}>{renderItem(item, true)}</div>;
-  if (members.length === 1 || cluster.items.every((item) => item.kind === 'thinking')) return <>{cluster.items.map(render)}</>;
-  const thinking = cluster.items.filter((item) => item.kind === 'thinking');
-  const foldThinking = thinking.length > 0;
   const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting, t });
+  const item = cluster.items.at(-1)!;
+  const latest = item.kind === 'tool' ? {
+    label: [t(item.detailKind === 'command' ? commandCardTitle(item.action, item.toolName, item.detail ?? null)
+      : resolveToolAction(item.toolName, item.action)), item.filePath ?? item.target].filter(Boolean).join(' '),
+    status: [t(incomplete && (item.status === 'running' || item.status === 'stopping') ? ''
+      : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status)),
+      item.durationMs === undefined ? '' : formatDuration(item.durationMs)].filter(Boolean).join(' · '),
+  } : item.kind === 'thinking' ? {
+    label: item.status === 'active' && running ? t('Thinking')
+      : formatThinkingLabel(item.status === 'complete' ? 'complete' : 'incomplete', item.durationMs ?? null, t),
+    status: '',
+  } : undefined;
   return <ActivityGroupView messageId={messageId} groupId={cluster.id} incomplete={incomplete}
-    presentation={presentation}
-    attention={cluster.items.filter((item) => item.kind === 'tool' && item.status === 'failed').map(render)}
-    reasoningCount={foldThinking ? thinking.length : 0} reasoning={foldThinking ? thinking.map(render) : undefined}>
-    {cluster.items.filter((item) => !foldThinking || item.kind !== 'thinking').map(render)}
+    presentation={{ ...presentation, latest: presentation.waiting ? undefined : latest, count: cluster.items.length }}
+    attention={cluster.items.filter((item) => item.kind === 'tool' && item.status === 'failed').map(render)}>
+    {cluster.items.map(render)}
   </ActivityGroupView>;
 }

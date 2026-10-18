@@ -99,10 +99,15 @@ export function presentActivity({
     facts.push(
       t(summary.runningToolCount === 1 ? '{count} tool running' : '{count} tools running', { count: summary.runningToolCount }),
     );
-  else if (running && summary.runningToolCount > 1)
-    facts.push(t('{count} other running', { count: summary.runningToolCount - 1 }));
+  else if (running) {
+    const latest = members.at(-1);
+    const latestStatus = latest?.type === 'tool-call' ? readToolActivity(latest).status : null;
+    const otherRunning = summary.runningToolCount - (latestStatus === 'running' || latestStatus === 'stopping' ? 1 : 0);
+    if (otherRunning > 0) facts.push(t('{count} other running', { count: otherRunning }));
+  }
   return {
     running,
+    waiting: wait !== null,
     action,
     summary: summaryLabel,
     target:

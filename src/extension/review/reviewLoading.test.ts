@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TurnSnapshotStore } from '../changes/turnSnapshots';
@@ -79,13 +79,18 @@ it('rejects old scope results after another comparison opens', async () => {
   f.change(); await f.open(); gate.resolve(Buffer.from('old\n')); await rejected;
 });
 
-it('changes the live display revision when contents change with identical length and line counts', async () => {
+it('changes the live display revision for same-size saves with distinct file timestamps', async () => {
   const f = await fixture(); const path = 'same.ts'; await writeFile(join(f.root, path), 'before\n');
+  const savedAt = new Date('2026-01-01T00:00:00Z');
+  await utimes(join(f.root, path), savedAt, savedAt);
   const scope = createActiveScope({ type: 'review.open', sessionId: 's', scopeKind: 'workspace' }, 'head:worktree', 'HEAD',
     [{ path, additions: 1, deletions: 1 }], new Map());
   const source = { snapshots: f.snapshots, getWorkspaceRoot: () => f.root };
   const first = await reviewDisplayVersion(source, scope, path);
   await writeFile(join(f.root, path), 'after!\n');
+  // Display versions use file metadata; two fast writes can share a filesystem clock tick.
+  const nextSave = new Date(savedAt.getTime() + 1_000);
+  await utimes(join(f.root, path), nextSave, nextSave);
   expect(await reviewDisplayVersion(source, scope, path)).not.toBe(first);
 });
 

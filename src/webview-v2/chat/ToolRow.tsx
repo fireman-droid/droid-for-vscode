@@ -6,7 +6,7 @@ import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '..
 import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
 import { resolveToolAction } from '../../shared/transcript/toolActivity';
 import { classifyExploreTool } from './transcript/activityGrouping';
-import { useProcessDisclosure } from './transcript/processPresentation';
+import { ProcessGroupContext, useProcessDisclosure } from './transcript/processPresentation';
 import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
 import { formatDuration, formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
@@ -39,7 +39,8 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const inlineDiff = useContext(InlineDiffContext);
   const command = item.detailKind === 'command' ? item.detail : undefined;
   const running = item.status === 'running';
-  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && running);
+  const inline = useContext(ProcessGroupContext);
+  const disclosure = useProcessDisclosure(messageId, `tool:${item.toolUseId}`, command !== undefined && (running || inline), inline);
   const category = classifyExploreTool(item.toolName);
   const exploration = item.detailKind === undefined && !item.subagent && !item.backgroundHint?.fireAndForget;
   const available = item.resultPreview?.availability === 'available' ? item.resultPreview : null;
@@ -113,10 +114,10 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="text-destructive">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if (grouped && exploration) return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
+  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
       status={status || undefined} description={resultSummary || undefined} actions={activityActions}>
-      {activityDetail}
+      {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
     {diff ? <OperationDiff item={item} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}

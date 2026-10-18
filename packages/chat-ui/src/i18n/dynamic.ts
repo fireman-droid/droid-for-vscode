@@ -20,6 +20,8 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["Thought","已思考","已思考"],
   ["Thinking history ({count})","思考记录（{count} 段）","思考記錄（{count} 段）"],
   ["Process: {action}","执行过程：{action}","執行過程：{action}"],
+  ["Execution history","执行过程","執行過程"],
+  ["{count} records","{count} 条记录","{count} 條記錄"],
   ["{count} operation","{count} 次操作","{count} 次操作"],
   ["{count} operations","{count} 次操作","{count} 次操作"],
   ["Thought briefly","已短暂思考","已短暫思考"],

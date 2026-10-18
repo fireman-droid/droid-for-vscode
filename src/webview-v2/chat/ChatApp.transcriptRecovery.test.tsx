@@ -127,7 +127,9 @@ describe('ChatApp transcript delivery recovery', () => {
     receive({ type: 'turn.state', sequence: 5, sessionId, turnId, status: 'completed' });
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull());
     expect(screen.getAllByText(answer)).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: /Run checks/ })).toHaveLength(1);
+    const process = screen.getByRole('button', { name: 'Process: Run checks' });
+    fireEvent.click(process);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /^Run checks/ })).toHaveLength(1));
     expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLElement).textContent).toBe(draft);
   });
 
