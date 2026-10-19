@@ -1,6 +1,6 @@
 # 当前状态
 
-核对日期：2026-10-18。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-10-19。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
@@ -9,7 +9,7 @@
 - 前端统计按用户选择实现为纯本地：记录页面启动、异常分类、长任务及历史展开响应；默认开启，可通过 `droidvisx.localAnalytics.enabled` 关闭。`Droid: Open Local Analytics` 查看，现有诊断导出包含 `logs/local-analytics/`；不含 GA4／网络上报，也不收集正文、代码、路径或错误原文。真实文件写入、开关、查看注册及 ZIP 导出共 4 项测试通过；当前正在运行的旧 Extension Host 尚未加载此新增模块。
 - 界面提示通过共享标记及复制／引用过滤统一排除，Chat、BTW、Review、设置、Mission 与 Viewer 的直接消费者已接通；保留正文、代码、真实工具输出、输入编辑和 Diff 结构化复制。真实页面跨段框选复制只得到正文，54 个已挂载提示均不可选；命令／输出换行及其他复制边界共 10 项针对性测试通过。工具与 Review 提示已移除装饰左侧色条。
 - 记录展开优化：收起的终端卡不再挂载／分词正文，已结束的 thinking 从顶部打开，不启动流式跟随监听和动画帧；保持 `ccf4b302` 分组布局与单条折叠。真实原生会话包含 2,811 条消息，保留投影 2,000 条；Browser Dev Client 实测 13／15／20／43 条记录组展开响应为 48／46／46–52／162ms，未出现卡死。该数值是点击到绘制的响应延迟，不是 CPU 渲染耗时；不能据此保证所有长会话不会卡顿。4 个针对性测试文件 40 项通过，补充展开事件进入现有本地性能日志。
-- 执行过程与文件卡片保持 `ccf4b302` 布局，不恢复新的过程／文件结果分层。仅按用户要求恢复 BTW 单图标操作：发送／停止在同一位置切换，按钮不显示 Stop／Queue 文字；共用的代码问答停止按钮同样保留纯图标。保留 Diff 省略预览、统一状态区域和卡片宽度修复；本轮静态检查、构建及 172 项 VSIX 校验通过，已安装 `bc22a1e6`，不发版，未追加回归测试或页面验收。
+- 执行过程与文件卡片保持 `ccf4b302` 布局，不恢复新的过程／文件结果分层。仅按用户要求恢复 BTW 单图标操作：发送／停止在同一位置切换，按钮不显示 Stop／Queue 文字；共用的代码问答停止按钮同样保留纯图标。保留 Diff 省略预览、统一状态区域和卡片宽度修复；相关静态检查、构建及 172 项 VSIX 校验通过；当前安装状态见下方，不发版。
 - Execute 的 CLI 结果在缺少错误字段时，以头尾一致的非零退出码恢复失败状态；实时与历史使用同一规则，普通输出中的 error 字样不作为失败证据。
   真实会话离线重放已确认该失败命令恢复为 failed，相应重复 Script 汇总被去除；已随 `bc22a1e6` 试用包安装。
 - 前台与自动续轮按匹配的终态分配所有权，隐藏 Script 完成通知不会接管仍在运行的前台。
@@ -40,12 +40,12 @@
 - 原会话离线重放：4 条 Script 汇总保留 1 条独有输出，2 份文件 Diff 与 2 条命令输出均保留，内部状态附注为 0。
   相关回归覆盖调用关联、重复结果、历史恢复、Diff 补齐与折叠保持；类型检查、文件预算、构建及 172 项 VSIX 校验通过。
   真实 Browser Dev Client 已核对读取回执、命令标签、默认展开与终端标题 8px 内边距；完整新 Runtime 未在编辑器重载验收。
-  Microsoft VS Code 已安装并核对 `bc22a1e6` 试用包，包含最新活动／Thinking／Edit、运行状态、Script 结果、自动换行及空白思考间距等后续修复；扩展入口、聊天 JS 与 CSS 和该 VSIX 的逐文件哈希一致，需 Reload Window，页面效果由用户验收。
+  Microsoft VS Code 已安装并核对 `9b50956d` 试用包，包含最新活动／Thinking／Edit、运行状态、Script 结果、自动换行及空白思考间距等后续修复；扩展入口、聊天 JS 与 CSS 和该 VSIX 的逐文件哈希一致，需 Reload Window，页面效果由用户验收。
   未调用付费模型，当前分支尚未合并或公开发布。
 
 ## 版本与交付
 
-- 本轮已打包 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，产物 `artifacts/script-activity-results/droid-0.8.15-9b50956d.vsix`；SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`。类型检查、文件预算、生产构建与 172 项 VSIX 校验通过；尚未安装、合并或公开发布。真实 Browser Dev Client 已使用这次前端源码，当前编辑器仍为下述旧试用包。
+- 本轮已打包 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，产物 `artifacts/script-activity-results/droid-0.8.15-9b50956d.vsix`；SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`。类型检查、文件预算、生产构建与 172 项 VSIX 校验通过；2026-10-19 已按用户要求安装到 Microsoft VS Code 当前用户目录，扩展入口、聊天 JS 与 CSS 的 SHA256 均与该包一致；需 Reload Window 加载。未追加构建、测试或安装后页面验收，未合并或公开发布。
 - `0.8.15` 已通过 [PR #12](https://github.com/fireman-droid/droid-for-vscode/pull/12) 合入 `main`，
   提交 `30268883`；版本、CHANGELOG 与 `v0.8.15` 标签一致。包含最新操作原位更新、移除中间思考分组、
   保留单条独立折叠，以及正文／符号左边缘对齐；不包含目录整理、超长输入或暂停中的 BYOK 草稿。
@@ -58,8 +58,8 @@
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，本次未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `bc22a1e6`，尚未正式发布。
-  包 SHA256 为 `44f94b3c5ba7a24109d99a116c34cfe8ab5069979e90d5ef2294fcabb4f85045`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
+- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，尚未正式发布。
+  包 SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
   Cursor 此前的手动安装仍为 `0.8.13` 石墨灰选区试用包；未声称市场发布已完成客户端更新。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
