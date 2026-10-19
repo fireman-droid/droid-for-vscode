@@ -60,7 +60,7 @@
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，尚未正式发布。
   包 SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
-  Cursor 此前的手动安装仍为 `0.8.13` 石墨灰选区试用包；未声称市场发布已完成客户端更新。
+  Cursor 已于 2026-10-19 按用户要求安装同一个 `9b50956d`／`0.8.15` 本地试用包，替换旧 `0.8.13`。已核对 Cursor 产品身份及当前用户扩展登记，扩展入口、聊天 JS 与 CSS 的 SHA256 均与 VSIX 一致；需在 Cursor 执行 Reload Window，未追加安装后页面验收。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
 
