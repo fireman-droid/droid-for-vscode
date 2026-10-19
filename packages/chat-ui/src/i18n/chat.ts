@@ -1,6 +1,7 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ["The queued message is no longer waiting. Your unsaved edits were restored to the draft.","该消息已离开队列，未保存的修改已保留到草稿。","該訊息已離開佇列，未儲存的修改已保留到草稿。"],
   ["subagent","子代理","子代理"],
   ["Agents","子代理","子代理"],
   ["Could not copy result.","无法复制结果。","無法復制結果。"],

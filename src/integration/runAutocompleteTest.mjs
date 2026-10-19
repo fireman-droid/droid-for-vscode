@@ -59,7 +59,7 @@ const args = [
   `--extensionDevelopmentPath=${path.join(extracted, 'extension')}`,
   `--extensionDevelopmentPath=${notebookFixture}`,
   `--extensionTestsPath=${path.join(repository, nextEditQuality ? 'src/integration/suite/nextEditQuality.cjs' : quality ? 'src/integration/suite/autocompleteQuality.cjs'
-    : process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
+    : process.argv.includes('--next-edit-only') ? 'src/integration/suite/nextEdit.cjs' : process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
 ];
 function quote(argument) {
   return '"' + argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';

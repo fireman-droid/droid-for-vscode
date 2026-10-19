@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import path from 'node:path';
 import type { CompletionContextService, ContextSnippet } from './context/CompletionContextService';
-import { completionDocumentBlockReason, readCompletionSettings, type CompletionSettings } from './settings';
+import { completionDocumentBlockReason, nextEditSettings, readCompletionSettings, type CompletionSettings } from './settings';
 import { EditHistoryTracker } from './kilo/next-edit/editHistoryTracker';
 import { NextEditSuggestionManager } from './kilo/next-edit/NextEditSuggestionManager';
 import { NextEditPresenter } from './kilo/next-edit/NextEditPresenter';
@@ -17,7 +17,8 @@ export class NextEditSupport implements vscode.Disposable {
   private chainTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly context: CompletionContextService, onError: (error: unknown) => void,
-    onSuggestion: (event: { shown: boolean; latencyMs: number; status: string }) => void) {
+    onSuggestion: (event: { shown: boolean; latencyMs: number; status: string }) => void,
+    private readonly onAccepted: () => void = () => {}) {
     this.presenter = new NextEditPresenter({ suggestionManager: this.manager, onSuggestion });
     this.history = new EditHistoryTracker({ onError, isFileAllowed: async fsPath => {
       if (this.lifetime.signal.aborted) return false;
@@ -59,11 +60,12 @@ export class NextEditSupport implements vscode.Disposable {
   accepted(): void {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
+    this.onAccepted();
     const { document } = editor, version = document.version, position = editor.selection.active;
     if (this.chainTimer) clearTimeout(this.chainTimer);
     this.chainTimer = setTimeout(() => {
       const current = vscode.window.activeTextEditor, settings = readCompletionSettings(document.uri);
-      if (!this.lifetime.signal.aborted && settings.enabled && settings.autoTrigger !== false && (settings.snoozeUntil ?? 0) <= Date.now() && settings.protocol === 'mercury-edit' &&
+      if (!this.lifetime.signal.aborted && settings.enabled && settings.autoTrigger !== false && (settings.snoozeUntil ?? 0) <= Date.now() && nextEditSettings(settings) &&
           current?.document === document && document.version === version &&
           current.selection.isEmpty && current.selection.active.isEqual(position)) {
         void vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');

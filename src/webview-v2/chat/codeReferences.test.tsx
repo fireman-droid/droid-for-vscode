@@ -34,6 +34,29 @@ function DraftInput({ owner }: { owner: string }) {
   return <><CodeReferenceInput aria-label="Draft" draft={draft} /><output>{value}</output></>;
 }
 
+it.each(['<br>', '<div><br></div>'])('clears the draft after browser deletion leaves a caret filler: %s', html => {
+  render(<Draft />);
+  const input = screen.getByRole('textbox');
+  input.focus(); input.innerHTML = html;
+  fireEvent.input(input, { inputType: 'deleteContentBackward' });
+  expect(screen.getByRole('status').textContent).toBe('');
+  expect(inlineText(input)).toBe('');
+  expect(input.dataset.empty).toBe('true');
+});
+
+it.each([
+  ['one<br>two<br>', 'one\ntwo'],
+  ['one<div><br></div>', 'one\n'],
+  ['<br><br>', '\n'],
+  ['\n', '\n'],
+])('preserves intentional line breaks while omitting the final caret filler: %s', (html, expected) => {
+  render(<Draft />);
+  const input = screen.getByRole('textbox');
+  input.focus(); input.innerHTML = html;
+  fireEvent.input(input, { inputType: 'deleteContentBackward' });
+  expect(screen.getByRole('status').textContent).toBe(expected);
+});
+
 it('folds only matching code metadata, opens the exact reference and removes it without losing the question', () => {
   render(<Draft />);
   const input = screen.getByRole('textbox') as HTMLElement;

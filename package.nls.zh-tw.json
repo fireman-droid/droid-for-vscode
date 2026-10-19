@@ -1,4 +1,8 @@
 {
+  "droidvisx.autocomplete.fimEnabled.description": "獨立啟用 FIM 程式碼續寫，不影響 Next Edit。",
+  "droidvisx.autocomplete.nextEdit.enabled.description": "同時啟用編輯預測，將編輯上下文傳送至獨立設定的 Next Edit 服務。",
+  "droidvisx.autocomplete.nextEdit.endpoint.description": "完整的 Next Edit 介面位址，需支援編輯預測，例如 Mercury /v1/edit/completions。",
+  "droidvisx.autocomplete.nextEdit.model.description": "編輯預測使用的模型，獨立於 FIM 續寫和聊天模型。",
   "droidvisx.reviewQuestion.reasoningEffort.description": "程式碼審閱行內問答的推理強度。留空使用所選模型預設值；未指定模型時跟隨主聊天。可用等級由 Droid 模型目錄提供。",
   "droidvisx.openManagement.title": "Droid：打開管理",
   "droidvisx.manageCapabilities.title": "Droid：管理功能",

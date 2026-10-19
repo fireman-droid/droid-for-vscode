@@ -3,7 +3,7 @@ import type { DroidRuntime } from '../../../runtime/DroidRuntime';
 
 const pendingCaptures = new WeakMap<TurnSnapshotStore, Map<string, Promise<string | undefined>>>();
 
-/** Opening a session and retrying a send can recover the same durable owner. */
+/** Completion, recovery and the next send share the same final capture. */
 export function finishPendingSnapshot(
   store: TurnSnapshotStore,
   scope: TurnSnapshotScope,
@@ -33,10 +33,16 @@ export async function captureSnapshotBeforeSend(
     // A rejected retry may have replaced the display checkpoint. Recover the
     // durable capture owner, never infer it from the latest displayed turn.
     signal?.throwIfAborted();
-    if (await runtime?.readSessionWorkingState?.() !== 'idle')
+    // The terminal event has already released the runtime slot, but the final
+    // disk capture can still be running. Join that capture instead of asking
+    // the daemon's eventually updated registry whether the reply is done.
+    const settling = pendingCaptures.get(host.turnSnapshots)?.get(`${pending.sessionId}:${pending.turnId}`);
+    const recorded = host.turnSnapshots.read(pending.sessionId, pending.turnId)?.after;
+    if (!settling && !recorded && await runtime?.readSessionWorkingState?.() !== 'idle')
       throw new Error('The previous reply is still running or its state could not be confirmed. Wait for it to finish, then retry.');
     signal?.throwIfAborted();
-    const after = await finishPendingSnapshot(host.turnSnapshots, pending, signal);
+    const after = await (settling ?? finishPendingSnapshot(host.turnSnapshots, pending, signal));
+    signal?.throwIfAborted();
     if (!after) throw new Error('The previous reply finished, but its changes could not be recorded. The new request was not sent. Retry to continue.');
   }
   const before = await host.turnSnapshots.capture({ sessionId, turnId }, 'before', signal);

@@ -6,6 +6,7 @@ import {
   ReasoningEffort,
   ToolConfirmationOutcome,
   type DaemonSessionController,
+  type PendingAskUserRequest,
   type SessionSettings,
 } from '@factory/droid-sdk';
 import { retainDaemonController } from './connectPublicDaemon';
@@ -19,6 +20,7 @@ const settings = {
 } as SessionSettings;
 
 function setup() {
+  const pendingQuestions = new Map<string, PendingAskUserRequest>();
   const state = {
     getSessionManager: vi.fn(() => null),
     markSessionLoading: vi.fn(),
@@ -34,10 +36,12 @@ function setup() {
     forkSession: vi.fn(async () => ({ newSessionId: 'fork-1' })),
     respondToPermission: vi.fn(async (_params: object) => undefined),
     respondToAskUser: vi.fn(async (_params: object) => undefined),
+    getPendingAskUserRequests: () => [...pendingQuestions.values()],
     ensureChildSessionAttached: vi.fn(async () => undefined),
     getSessionStateManager: () => state,
     destroy: vi.fn(),
   });
+  controller.on('askUserRequested', (request: PendingAskUserRequest) => pendingQuestions.set(request.requestId, request));
   const onError = vi.fn();
   const api = retainDaemonController(controller as unknown as DaemonSessionController, {
     url: 'ws://127.0.0.1:1',

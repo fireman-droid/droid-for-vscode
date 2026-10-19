@@ -22,6 +22,11 @@
   }
   .v2-chat-footer { padding-block: 4px 12px; }
   .v2-composer-dock { min-width: 0; }
+  :is(.v2-composer-queue, .v2-composer-changes) {
+    --composer-panel-heading-height: 22px;
+    --composer-panel-row-height: 24px;
+    --composer-panel-line-height: 18px;
+  }
   /* All three panels share one height budget; the editor stays outside their scroll area. */
   .v2-composer-panels {
     min-height: 0; max-height: min(240px, 30vh); overflow-y: auto; overscroll-behavior-y: contain;
@@ -70,6 +75,8 @@
   }
   .v2-composer-input-row [data-composer-input] { flex: 1 1 0; min-width: 60px; }
   .v2-composer-input-row [data-composer-input]:focus-visible { box-shadow: none; }
+  .v2-composer-input-row .dvx-inline-input { position: relative; }
+  .v2-composer-input-row .dvx-inline-input[data-empty]::before { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .v2-composer-input-row .v2-composer-add { border-radius: 50%; background: var(--soft-surface); }
   .v2-composer-input-row .v2-composer-add:hover:not(:disabled),
   .v2-composer-input-row .v2-composer-add[data-state='open'] { background: var(--soft-surface); }
@@ -86,19 +93,6 @@
   .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-mode { display: inline-flex; padding-inline: 2px; }
   .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-context { margin-left: auto; }
   .v2-composer-input-row:is([data-multiline='true'], :has(> .v2-composer-replacement)) .v2-composer-model { max-width: 45%; }
-  @container (max-width: 520px) {
-    .v2-composer-input-row { flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
-    .v2-composer-input-row > :is([data-composer-input], .v2-composer-replacement) {
-      order: -1;
-      flex: 1 0 100%;
-      width: 100%;
-      min-width: 0;
-      margin-bottom: 0;
-    }
-    .v2-composer-input-row .v2-composer-mode { display: inline-flex; padding-inline: 2px; }
-    .v2-composer-input-row .v2-composer-context { margin-left: auto; }
-    .v2-composer-input-row .v2-composer-model { max-width: 45%; }
-  }
   @container (max-width: 360px) {
     .v2-composer-input-row { gap: 4px; }
     .v2-composer-input-row .v2-composer-model { flex: 1 1 0; }

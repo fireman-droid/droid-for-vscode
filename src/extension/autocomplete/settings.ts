@@ -14,6 +14,8 @@ export const DEFAULT_EXCLUSIONS = [
 
 export interface CompletionSettings {
   enabled: boolean;
+  fimEnabled?: boolean;
+  nextEdit?: { enabled: boolean; endpoint: string; model: string };
   autoTrigger?: boolean;
   snoozeUntil?: number;
   protocol: CompletionProtocol;
@@ -38,6 +40,12 @@ export function readCompletionSettings(uri?: vscode.Uri): CompletionSettings {
   const protocol = userValue('protocol', 'fim');
   return {
     enabled: config.get<boolean>('enabled', false),
+    fimEnabled: userConfig.inspect<boolean>('fimEnabled')?.globalValue ?? protocol !== 'mercury-edit',
+    nextEdit: {
+      enabled: userConfig.inspect<boolean>('nextEdit.enabled')?.globalValue ?? protocol === 'mercury-edit',
+      endpoint: userValue('nextEdit.endpoint', protocol === 'mercury-edit' ? userValue('endpoint', MERCURY_EDIT_ENDPOINT) : MERCURY_EDIT_ENDPOINT).trim(),
+      model: userValue('nextEdit.model', protocol === 'mercury-edit' ? userValue('model', 'mercury-edit-2') : 'mercury-edit-2').trim(),
+    },
     autoTrigger: config.get<boolean>('autoTrigger', true),
     snoozeUntil: userConfig.inspect<number>('snoozeUntil')?.globalValue ?? 0,
     protocol: protocol === 'ollama' || protocol === 'siliconflow-fim' || protocol === 'mercury-edit' ? protocol : 'fim',
@@ -52,6 +60,11 @@ export function readCompletionSettings(uri?: vscode.Uri): CompletionSettings {
     maxTokens: boundedNumber(config.get('maxTokens'), 256, 32, 1024),
     excludePatterns: config.get<string[]>('excludePatterns', DEFAULT_EXCLUSIONS),
   };
+}
+
+export function nextEditSettings(settings: CompletionSettings): CompletionSettings | undefined {
+  if (settings.nextEdit) return settings.nextEdit.enabled ? { ...settings, ...settings.nextEdit, enabled: settings.enabled, protocol: 'mercury-edit' } : undefined;
+  return settings.protocol === 'mercury-edit' ? settings : undefined;
 }
 
 function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -105,16 +118,6 @@ export function mercuryAlternateEndpoint(endpoint: string): string | undefined {
   try { normalized = new URL(endpoint).toString().replace(/\/$/, ''); } catch { return undefined; }
   return normalized === MERCURY_FIM_ENDPOINT ? MERCURY_EDIT_ENDPOINT
     : normalized === MERCURY_EDIT_ENDPOINT ? MERCURY_FIM_ENDPOINT : undefined;
-}
-
-export async function switchMercuryMode(): Promise<boolean> {
-  const current = readCompletionSettings();
-  const endpoint = mercuryAlternateEndpoint(current.endpoint);
-  if (!endpoint || !current.model.toLowerCase().includes('mercury')) return false;
-  const config = vscode.workspace.getConfiguration(COMPLETION_SECTION);
-  await config.update('endpoint', endpoint, vscode.ConfigurationTarget.Global);
-  await config.update('protocol', endpoint === MERCURY_EDIT_ENDPOINT ? 'mercury-edit' : 'fim', vscode.ConfigurationTarget.Global);
-  return true;
 }
 
 export async function removeCompletionKey(secrets: vscode.SecretStorage, endpoint: string): Promise<void> {
@@ -181,9 +184,26 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
     const alternate = mercuryAlternateEndpoint(target);
     if (alternate) await secrets.store(completionSecretKey(alternate), key.trim());
   }
-  await config.update('endpoint', target, vscode.ConfigurationTarget.Global);
-  await config.update('model', model.trim(), vscode.ConfigurationTarget.Global);
-  await config.update('protocol', preset.protocol, vscode.ConfigurationTarget.Global);
+  if (preset.protocol === 'mercury-edit') {
+    // A fresh edit-only setup must not also enable an unconfigured default FIM service.
+    if (config.inspect('endpoint')?.globalValue === undefined && config.inspect('model')?.globalValue === undefined) {
+      await config.update('fimEnabled', false, vscode.ConfigurationTarget.Global);
+    }
+    await config.update('nextEdit.endpoint', target, vscode.ConfigurationTarget.Global);
+    await config.update('nextEdit.model', model.trim(), vscode.ConfigurationTarget.Global);
+    await config.update('nextEdit.enabled', true, vscode.ConfigurationTarget.Global);
+  } else {
+    // Preserve the old edit-only service when its shared slot becomes a FIM slot.
+    if (current.protocol === 'mercury-edit' && current.nextEdit) {
+      for (const key of ['endpoint', 'model', 'enabled'] as const) {
+        await config.update('nextEdit.' + key, current.nextEdit[key], vscode.ConfigurationTarget.Global);
+      }
+    }
+    await config.update('endpoint', target, vscode.ConfigurationTarget.Global);
+    await config.update('model', model.trim(), vscode.ConfigurationTarget.Global);
+    await config.update('protocol', preset.protocol, vscode.ConfigurationTarget.Global);
+    if (current.fimEnabled === false) await config.update('fimEnabled', true, vscode.ConfigurationTarget.Global);
+  }
   return true;
 }
 

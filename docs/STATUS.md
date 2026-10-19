@@ -6,12 +6,15 @@
 
 ## 版本与交付
 
-- 源码版本 `0.8.11`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
-  [GitHub v0.8.11](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.11) 已正式发布。
-  [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38374358655) 已成功，
-  注册中心返回 `Published droidvisx.droidvisx v0.8.11`；公开目录 latest 已确认返回 `0.8.11`。
-  Microsoft Marketplace 的 `0.8.11` 已通过验证，管理页状态为 `Public`，
-  [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 已可用。
+- 源码版本 `0.8.12`，扩展 ID `droidvisx.droidvisx`，显示名 `Droid - AI Coding Agent`。
+  [GitHub v0.8.12](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.12) 已正式发布，
+  [云端构建](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527079175) 从干净版本标签完成类型、预算、构建与包校验。
+  [Open VSX 发布流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527425293) 已成功，
+  注册中心返回 `Published droidvisx.droidvisx v0.8.12`；公开目录仍在同步，最新查询的 latest 为 `0.8.11`。
+  Microsoft Marketplace 已上传同一份正式 `0.8.12` 包，管理页显示 `Verifying 0.8.12`，验证通过尚未确认；
+  [公开安装页](https://marketplace.visualstudio.com/items?itemName=droidvisx.droidvisx) 保持可用。
+  [宣传与文档站](https://fireman-droid.github.io/droid-for-vscode/) 已完成部署，
+  [部署流水线](https://github.com/fireman-droid/droid-for-vscode/actions/runs/38527081121) 成功。
   Microsoft 自动发布工作流已实现，复用并校验 GitHub Release 原始附件；
   用户选择暂时保留 Microsoft Marketplace 手动上传；自动工作流保留备用，
   `VSCE_PAT` 未配置，`MARKETPLACE_AUTO_PUBLISH` 保持关闭，Open VSX 仍自动发布。
@@ -19,13 +22,66 @@
   尚无法进入 PAT 创建流程，需提供已有组织或先由账号持有人完成订阅开通。
   当前账号无法访问 Entra 管理入口；PAT 方案须在微软 2026-12-01 停用全局 PAT 前迁移。
   安装版不能仅凭版本号判断。
-- 当前本地补全优化及开发评估入口包仍为 `0.8.11`，已安装到 Microsoft VS Code 当前用户目录。
-  VSIX SHA256 为 `fef82c114c9877a6d85455a548abe22b9e4621a0c586656bd72ea3adf57c1238`。
-  已核对 Microsoft VS Code 安装入口 SHA256 与构建入口一致：
-  `86953e53b1d046b0fe8c8a24402167c6db9208c52390fc105f8f83b54f54aa2e`。
-  独立测试进程已加载此包；用户当前窗口未强制重载，将在下次正常重载时使用新包。
-  模型网关可自动启动，测试不再依赖用户窗口的旧连接。
-  此包包含下述补全改动，未重新发布到 GitHub Release 或插件市场；线上正式包仍为前述发布产物。
+- Microsoft VS Code 与 Cursor 当前用户目录均已安装含新 Diff 讲解规则的本地 `0.8.12`（源码提交 `48d2e915`），
+  当时安装包 SHA256 为 `00b08db5ff850b4b64ac68dfa24b517ae43f79e0742e99f7ce1035e70e9d2c2d`。
+  两个编辑器安装后的扩展入口、Review 脚本与 Webview 样式均逐字节匹配本地包；用户窗口未强制重载，需 Reload Window。
+  GitHub 正式发布附件保留在 `dist/release/v0.8.12/droid-0.8.12.vsix`，
+  SHA256 为 `923b41ddd261370ffa461906f7d6c11d5e2d195243c7cfbef91e8ebc4a2d1d9a`；新讲解规则尚未公开发布。
+  Cursor 已按本次明确授权安装同一份 VSIX，市场更新另取决于 Open VSX 同步。独立 FIM／Next Edit 与开发评估入口已包含在正式包，
+  未改变现有补全配置或自动开启 Next Edit；模型网关可自动启动，不依赖用户窗口的旧连接。
+- BTW 源码已收紧为只读工具：Process／Daemon 仅在隐藏 fork 限制编辑、命令、委派、自动化变更
+  及未确认只读的 MCP 工具，保留代码与网页读取／搜索；切模型和每次追问重新附带禁用列表。
+  权限设置失败不发送问题，Review 保持无执行工具。真实 CLI `0.241.1` 无模型调用核对确认
+  278 个工具标识被禁用，Read／LS／Glob／Grep／WebSearch／FetchUrl 等读取入口保留。
+  模型设置更新后再查目录，读取仍可用、写入未恢复；32 项相关回归通过。
+  主工作区 `pnpm run typecheck` 仍因既有 BYOK `createManagementServices.ts:29` TS18048 失败；
+  `pnpm run lint:budgets` 通过。排除两份无关 BYOK 草稿后，从 main 对齐的隔离目录执行
+  `pnpm run package:vsix`，完整类型、预算、构建及 `verifyVsix.mjs` 的 171 项包条目校验通过。
+  此次只读修复已包含在下述最新本地包中。
+  新实现尚未安装或公开发布，当前编辑器仍使用上文 Diff 讲解包；未调用真实模型或做付费攻防评估。
+- 连续发送已修复上一轮收尾与新消息发送的竞争：改动记录、恢复和下一次发送复用最终快照，
+  新消息等待正在进行的收尾，避免被滞后的后台状态误判为上一轮仍在运行；取消新消息不取消旧记录。
+  12 项发送／队列／快照恢复定向回归通过，覆盖排队后只发送一次、快照失败、取消及未知后台状态保护。
+  真实文件集成检查另有 4 项通过、2 项失败；失败断言仍要求忽略文件和子模块内容缺席，
+  与现行全工作区快照行为不符，本次未修改文件收集实现或放宽这两项断言。
+  现有 Browser Dev Client 页面为空，未做真实窗口发消息验证或调用模型；修复尚未安装。
+- 本机官方 Droid CLI 已按用户要求重新安装最新版 `0.241.1`；此前 `bin/droid.exe` 文件截断，
+  导致 Windows 拒绝启动，扩展已正常加载但新后台无法启动。新文件通过官方 SHA256、
+  Authenticode 签名、`--version` 和本地 daemon 监听检查，未发送模型请求；
+  SHA256 为 `54db3ee07bc6c41832fb0c79b57bd0b6ab8ef8e9dbb5db740f76e1c9c6453856`。
+  原有后台未强制终止，仍需编辑器重连验证聊天。用户要求删除的 `bin/droid.exe.old`
+  和 `.factory/updates/droid.exe` 因自动审批拒绝尚未删除，不代表仍使用旧版安装文件。
+- 当前源码已将 FIM 续写和 Next Edit 拆为独立模型、地址、密钥和开关，保留旧版编辑预测配置。
+  续写优先 FIM，已有文本修改和接受后优先 Next Edit，有效空续写可继续请求编辑预测；
+  待接受建议互斥，两套服务各自失败冷却。135 项相关本地检查通过；最终 VSIX 在真实 VS Code
+  的 19 项合成编辑检查全部通过，覆盖双服务删除／替换、Tab、Esc、Undo、取消与旧配置。
+  Browser Dev Client 已连接临时真实 Host，确认展开、保存后 Codestral 与 Mercury 配置各自保留。
+  从 main 的隔离工作目录完成全量类型检查、预算检查、构建及 171 项包内条目校验；主工作区
+  类型检查仍受既有 BYOK `createManagementServices.ts:29` 的 TS18048 阻挡，未将该未完成改动带入包。
+  新包 `dist/droidvisx.vsix` 已安装并核对入口哈希，见上文；此轮未发布、未调用真实模型。
+  下文模型质量数据仍属于此前评估，未在双服务配置下重测。
+- Composer 清空后的多余空行已在共享行内输入组件修复：忽略浏览器末尾光标占位，
+  主动换行仍保留可定位的空行；默认及清空后整条输入栏保持一行，不再因窄于 520px
+  强制拆行，也不把占位文字计入多行测高。Auto 等模式入口仅在展开后显示，单行隐藏；
+  占位文字超宽时截断。本次模式入口显示修正已通过隔离构建的类型、预算及 171 项包条目校验，
+  包 SHA256 为 `4999380a19197f9ed2686f5ab7efb2ad83a97aad079f5c1d5ba0b5bcf720f415`；已获授权安装到
+  Cursor 当前用户扩展目录，聊天 JS／CSS 与 VSIX 一致，待重载窗口后界面验收。
+  前一轮 29 项草稿／引用／Composer 检查通过；Browser Dev Client
+  连接临时真实 Host，在 480px 窄面板确认逐字删除、长文本清空、多行一次全选删除后均恢复
+  20px 输入高度，Shift+Enter 后可继续在第二行输入。未发送模型请求。
+  扩展抽查的旧 SideChatSheet／QuestionCard 测试另有 7 项失败，涉及旧 textarea 断言、
+  队列标题及缺少 TooltipProvider；未把这些旧用例记为通过。隔离构建的类型、预算检查和
+  VSIX 校验通过。最新默认单行布局已通过隔离构建的类型、预算检查及 171 项包条目校验，
+  包 SHA256 为 `1ddb9d6ae363e9f2dd2fcbfd6bbbaae55cff34417e2137df2494358cfabf8f5b`。
+  现有 Browser Dev Client 页面为空，本轮不另启测试 Host。修复包已获授权安装到 Cursor 当前用户
+  扩展目录，已核对安装后的聊天 JS／CSS 与 VSIX 一致；未强制重载窗口，仍待重载后界面验收。
+  Microsoft VS Code 尚未安装此修复包，本轮未发布。
+- 输入框上方的消息队列与文件变更面板已对齐 Agent 面板：共用 22px 标题行、
+  24px 普通条目及 18px 正文行高；队列菜单与悬停操作不会再额外撑高行，
+  引用与活动详情仍可展开。隔离构建的类型、预算检查及 171 项 VSIX 条目校验通过，
+  包 SHA256 为 `f7e3b6d8f3cd27dac2a1d8c059189487cc1f9f72b387d8976aad69d7090477bc`。
+  此高度调整已获授权安装到 Cursor 当前用户扩展目录，安装后的聊天 JS／CSS 与 VSIX 一致。
+  未强制重载窗口，界面效果待重载后验收；Microsoft VS Code 未更新，本轮未发布。
 - 当前源码包含行内代码引用、Mission 创建面板整改，以及主聊天模型弹层的计划跟随按钮：
   “计划”行右侧一键跟随主模型，重复点击不解除跟随、不切换聊天模式；推理强度仍独立设置。
   主聊天、计划与 BTW 的模型搜索栏聚焦时保持分隔线原色。
@@ -71,6 +127,32 @@
 
 ## 最近验证
 
+- Diff 讲解专用指令已接入生产 Host：先解释具体情况与后果，默认短段、少量代码名，核对分支方向，
+  区分代码证据与外部注释；保留原有只读 fork、模型选择和工具禁用策略。
+  使用已配置的 DeepSeek V4.1 Flash（high）经生产 `createBtwSidecar` 和实际提示词完成 8 次真实调用，
+  样本为 113 行 AskUser 断线恢复逻辑，覆盖已答去重、请求编号变化、微任务保留草稿与重试。
+  最终规则的 3 次样本均返回讲解，未输出工具调用文本；仍有术语偏多、超过目标篇幅的问题，
+  易读性待用户判断，不能据此宣称复杂代码解释始终正确。原始回答与输入保留在本地忽略目录
+  `artifacts/review-explanation-deepseek-20261014/`；这是实际 Droid SDK 子会话验证，未声称完成界面验收。
+  现有模型／强度选择 4 项回归通过，主工作区预算检查通过；类型检查仍被既有 BYOK 可空错误阻断。
+  基于 main、排除上述未完成 BYOK 改动的独立构建已通过类型检查、预算、生产构建及 171 项 VSIX 校验。
+  新讲解规则打包在本地 `dist/droidvisx.vsix`；同版本正式发布附件保留在 `dist/release/v0.8.12/`，两者不同。
+  已分别获用户本次授权安装到 Microsoft VS Code 与 Cursor，并核对两者扩展入口、Review 脚本及样式匹配本地包；需 Reload Window 生效。
+  未改变用户的模型默认设置，未公开发布新讲解规则。
+- Diff 代码问答已采用用户选定的代码批注布局：以“你 / Droid”区分角色、柔和底色代码块、底部同排追问与发送，
+  不保留左侧竖线；代码引用、发送与历史跟随的 6 项现有回归通过。
+  标题拖动区已取消整条焦点框和悬停底色，键盘焦点改为标题下划线；移动／缩放 2 项既有回归通过。
+  共享 ScrollArea 静态隐藏原生滚动条，避免 Webview CSP 阻止 Radix 注入样式后出现双滑块和原生箭头。
+  界面修改与下述 AskUser 修复使用同一安装包，基于 main 的独立构建通过类型、预算、生产构建及 171 项 VSIX 校验。
+  主工作区类型检查仍仅报告既有 BYOK `createManagementServices.ts:29` 可空错误，未将该未完成改动带入包。
+  正式 `0.8.12` 发布附件保存在 `dist/release/v0.8.12/droid-0.8.12.vsix`；当前本地安装包及分发状态见上文。
+  现有 Browser Dev Client 页面为空，未另启 Host 或将模拟页面当作验收；浅色／深色的真实编辑器效果待安装后确认。
+- AskUser 按会话与工具调用保持同一提问身份，恢复时更新请求 ID；SDK 已缓存或已处理的回答不再重新弹卡。
+  后台撤销／处理提问时同步关闭本地表单，不伪造“用户取消”；仍未回答的恢复提问保留原卡片和草稿。
+  新增 11 项跨 Runtime 回调与 Host 协调器的本地回归，相关 5 个文件共 56 项通过，无真实模型调用。
+  基于 main 源码的独立构建目录通过类型检查、文件预算、生产构建与 171 项 VSIX 校验，未带入无关 BYOK 改动。
+  原有聊天快照 4 项测试在修改前后均无法进入提问状态；主工作区类型检查另有既存 BYOK 可空错误，
+  两项缺口未计为通过。本轮修复已随 `0.8.12` 安装与分发，真实长时间闲置后的编辑器操作仍待验证。
 - 补全生产优化按用户要求暂停，另行授权的模型对照结果见下文。FIM 上下文准备已与防抖并行，
   两者完成后才发送；文档与光标未变、已发送请求仅被编辑器取消时，交接窗口从 100ms 延至
   250ms，替代调用接入后恢复普通窗口。保留配置变化、上下文失效和过期调用的取消行为。

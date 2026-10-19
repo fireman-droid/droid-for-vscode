@@ -10,7 +10,8 @@ export function measureComposerInput(row: HTMLElement, input: HTMLElement, expan
   });
   shadow.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
   const measured = shadow.querySelector<HTMLTextAreaElement>('[data-composer-input]')!;
-  measured.removeAttribute('data-composer-input');
+  // Keep the layout selector: the measuring input must flex and wrap exactly
+  // like the live input, especially after switching to the full-width row.
   // Height is capped: lay out only enough text to reach the cap. The live input
   // keeps the complete value; laying out a second full draft is unnecessary.
   const text = value ?? (input as HTMLTextAreaElement).value;
@@ -34,9 +35,9 @@ export function measureComposerInput(row: HTMLElement, input: HTMLElement, expan
       }
       return contentHeight;
     };
-    const multiline = expanded || text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight);
+    const multiline = expanded || (text.length > 0 && (text.includes('\n') || measureUntil(Math.ceil(lineHeight)) > Math.ceil(lineHeight)));
     shadow.dataset.multiline = String(multiline);
-    const contentHeight = measureUntil(maxHeight);
+    const contentHeight = text.length > 0 ? measureUntil(maxHeight) : lineHeight;
     const height = Math.min(maxHeight, Math.max(multiline ? lineHeight * 2 : lineHeight, contentHeight));
     return { multiline, height, scrollable: contentHeight > maxHeight };
   } finally {

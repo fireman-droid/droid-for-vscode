@@ -51,6 +51,7 @@ export function useComposerFlow(
   const lastQueueRejection = useRef(-1);
   const lastRewindResult = useRef(-1);
   const previousDraft = useRef<string | null>(null);
+  const queueEditOriginal = useRef<string | null>(null);
   const currentSession = useRef(state.sessionId);
   if (currentSession.current !== state.sessionId) {
     currentSession.current = state.sessionId;
@@ -99,12 +100,16 @@ export function useComposerFlow(
       writeDraft(sent.text, true);
     }
   }), [writeDraft, vscode]);
-  const finishQueueEdit = useCallback(() => {
+  const finishQueueEdit = useCallback((recoverChanges = false) => {
     dispatch({ type: 'queue.editEnd' });
     if (previousDraft.current === null) return;
     const original = previousDraft.current;
+    const edited = draftValue.current;
+    const recover = recoverChanges && edited.length > 0 && edited !== queueEditOriginal.current;
     previousDraft.current = null;
-    writeDraft(original, true);
+    queueEditOriginal.current = null;
+    writeDraft(recover && edited !== original ? (original ? `${original}\n\n${edited}` : edited) : original, true);
+    if (recover) setCommandNotice('The queued message is no longer waiting. Your unsaved edits were restored to the draft.');
   }, [dispatch, writeDraft]);
   useEffect(() => {
     const result = state.rewindResult;
@@ -123,7 +128,7 @@ export function useComposerFlow(
     dispatch({ type: 'rewind.resultConsumed', sequence: result.sequence });
   }, [state.rewindResult, state.sessionId, writeDraft, vscode, dispatch]);
   useEffect(() => {
-    if (state.queueEditing === null && previousDraft.current !== null) finishQueueEdit();
+    if (state.queueEditing === null && previousDraft.current !== null) finishQueueEdit(true);
   }, [state.queueEditing, finishQueueEdit]);
   const handleDraftChange = useCallback((text: string) => writeDraft(text), [writeDraft]);
   const appendCanvasDraft = useCallback(
@@ -265,6 +270,7 @@ export function useComposerFlow(
       const item = state.queue.items.find((entry) => entry.queueId === queueId);
       if (sessionId === null || item === undefined) return;
       if (previousDraft.current === null) previousDraft.current = draftValue.current;
+      queueEditOriginal.current = item.text;
       dispatch({ type: 'queue.editBegin', queueId });
       setSendSignal((value) => value + 1);
       writeDraft(item.text, true);

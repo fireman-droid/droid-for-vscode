@@ -3,7 +3,10 @@ export function inlineText(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
   if (!(node instanceof HTMLElement)) return '';
   if (node.dataset.inlineToken) return node.dataset.inlineToken;
-  if (node.tagName === 'BR') return '\n';
+  if (node.hasAttribute('data-inline-caret')) return (node.textContent ?? '').replace('\u200b', '');
+  // Chromium leaves a trailing BR to keep the caret visible after deletion.
+  // Earlier BRs still delimit lines; the final caret filler is not draft text.
+  if (node.tagName === 'BR') return node.nextSibling ? '\n' : '';
   return Array.from(node.childNodes, (child, index) => {
     const block = child instanceof HTMLElement && /^(DIV|P)$/.test(child.tagName);
     return (block && index > 0 ? '\n' : '') + inlineText(child);
@@ -25,12 +28,23 @@ export function inlineSelection(root: HTMLElement) {
 }
 
 export function setInlineSelection(root: HTMLElement, start: number, end = start, direction = 'forward') {
+  const editablePoint = (node: Node, offset: number): [Node, number] | null => {
+    if (node.nodeType === Node.TEXT_NODE) return [node, offset];
+    if (node instanceof HTMLElement && node.hasAttribute('data-inline-caret') && node.firstChild)
+      return [node.firstChild, offset + (node.textContent?.startsWith('\u200b') ? 1 : 0)];
+    return null;
+  };
   const point = (position: number): [Node, number] => {
     let remaining = Math.max(0, position);
     for (const [index, node] of Array.from(root.childNodes).entries()) {
       const length = inlineText(node).length;
       if (remaining <= length) {
-        if (node.nodeType === Node.TEXT_NODE) return [node, remaining];
+        const editable = editablePoint(node, remaining);
+        if (editable) return editable;
+        if (remaining === length && node.nextSibling) {
+          const after = editablePoint(node.nextSibling, 0);
+          if (after) return after;
+        }
         return [root, index + (remaining ? 1 : 0)];
       }
       remaining -= length;

@@ -81,6 +81,8 @@ export interface RuntimeAskUserQuestion {
 export interface RuntimeAskUserRequest {
   readonly toolCallId: string;
   readonly questions: readonly RuntimeAskUserQuestion[];
+  /** Withdraw the local form when the daemon resolves or removes its request. */
+  readonly signal?: AbortSignal;
 }
 
 export interface RuntimeAskUserAnswer {
@@ -115,9 +117,14 @@ export interface RuntimeInteractionHandler {
   onAutoCancelled?(event: RuntimeInteractionAutoCancel): void;
 }
 
+export type RuntimeAskUserHandler = (
+  params: AskUserRequestParams,
+  signal?: AbortSignal,
+) => ReturnType<ClientAskUserHandler>;
+
 export interface RuntimeInteractionCallbacks {
   readonly permissionHandler: ClientPermissionHandler;
-  readonly askUserHandler: ClientAskUserHandler;
+  readonly askUserHandler: RuntimeAskUserHandler;
 }
 
 export const cancellingRuntimeInteractionHandler: RuntimeInteractionHandler = {
@@ -134,7 +141,7 @@ export function createRuntimeInteractionCallbacks(
 ): RuntimeInteractionCallbacks {
   return {
     permissionHandler: async (params) => handlePermissionRequest(handler, params),
-    askUserHandler: async (params) => handleAskUserRequest(handler, params),
+    askUserHandler: async (params, signal) => handleAskUserRequest(handler, params, signal),
   };
 }
 
@@ -210,6 +217,7 @@ async function handlePermissionRequest(
 async function handleAskUserRequest(
   handler: RuntimeInteractionHandler,
   params: AskUserRequestParams,
+  signal?: AbortSignal,
 ): Promise<AskUserResult> {
   let request: RuntimeAskUserRequest | null;
   try {
@@ -224,7 +232,7 @@ async function handleAskUserRequest(
   }
 
   try {
-    const result = await handler.askUser(request);
+    const result = await handler.askUser({ ...request, ...(signal ? { signal } : {}) });
     if (
       !isRecord(result) ||
       (result.cancelled !== undefined && typeof result.cancelled !== 'boolean') ||
