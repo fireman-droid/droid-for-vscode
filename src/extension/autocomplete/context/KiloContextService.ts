@@ -47,6 +47,38 @@ export class KiloContextService implements vscode.Disposable {
     invalidateLspCaches(); this.retrieval.invalidate(changedFile);
     if (!changedFile || /(?:^|\/)\.(?:gitignore|droidignore)$/.test(changedFile)) this.ide.invalidate();
   }
+  /** Next Edit needs imported contracts even when their files have never been viewed. */
+  async collectDefinitions(input: { document: vscode.TextDocument; text: string; offset: number;
+    settings: CompletionSettings; signal: AbortSignal }): Promise<ContextSnippet[]> {
+    if (!input.settings.relatedFiles) return [];
+    return this.ide.run(input.signal, () => withParserResources(async () => {
+      const { document, settings, signal } = input, filepath = document.uri.toString();
+      signal.throwIfAborted();
+      await this.retrieval.initializeForFile(filepath);
+      const prefix = input.text.slice(0, input.offset).split('\n');
+      const helper = await HelperVars.create({ filepath, completionId: String(document.version),
+        isUntitledFile: document.isUntitled, languageId: document.languageId,
+        pos: { line: prefix.length - 1, character: prefix.at(-1)!.length }, manuallyPassFileContents: input.text,
+        recentlyVisitedRanges: [], recentlyEditedRanges: [],
+      }, { ...DEFAULT_AUTOCOMPLETE_OPTS, useImports: true, useRecentlyOpened: false,
+        experimental_enableStaticContextualization: false, experimental_includeClipboard: false }, settings.model, this.ide);
+      const payload = await getAllSnippetsWithoutRace({ helper, ide: this.ide, contextRetrievalService: this.retrieval });
+      const candidates = [...payload.importDefinitionSnippets, ...payload.rootPathSnippets];
+      const access = await Promise.all(candidates.map(snippet => this.ide.allowed(snippet.filepath)));
+      signal.throwIfAborted();
+      const snippets: ContextSnippet[] = [];
+      let remaining = Math.floor(settings.maxContextCharacters * 0.4);
+      for (const [index, candidate] of candidates.entries()) {
+        const content = candidate.content.trim();
+        if (!access[index] || candidate.filepath === filepath || !content || content.length > remaining ||
+          snippets.some(s => s.uri === candidate.filepath && s.content.includes(content))) continue;
+        snippets.push({ uri: candidate.filepath, filepath: this.ide.relative(candidate.filepath), content, source: 'definition' });
+        remaining -= content.length;
+        if (snippets.length === 5) break;
+      }
+      return snippets;
+    }));
+  }
   async build(input: { document: vscode.TextDocument; text: string; offset: number; filepath: string;
     settings: CompletionSettings; signal: AbortSignal; snippets: readonly ContextSnippet[]; comments?: LanguageComments }) {
     return this.ide.run(input.signal, () => withParserResources(async () => {
@@ -64,15 +96,19 @@ export class KiloContextService implements vscode.Disposable {
         experimental_enableStaticContextualization: settings.relatedFiles && settings.staticContext === true,
         experimental_includeClipboard: settings.includeClipboard === true }, settings.model, this.ide);
       const payload = await getAllSnippetsWithoutRace({ helper, ide: this.ide, contextRetrievalService: this.retrieval });
+      // The current buffer already supplies these edits. Stale snapshots of it
+      // waste reference space and can disagree with the actual cursor context.
+      payload.recentlyEditedRangeSnippets = payload.recentlyEditedRangeSnippets.filter(s => s.filepath !== filepath);
+      payload.recentlyVisitedRangesSnippets = payload.recentlyVisitedRangesSnippets.filter(s => s.filepath !== filepath);
       const supplemental = settings.relatedFiles ? input.snippets : [];
       const asKilo = (snippet: ContextSnippet): AutocompleteSnippet => ({
         filepath: snippet.uri, content: snippet.content, type: AutocompleteSnippetType.Code,
       });
       // Keep direct definitions and recent edits ahead of general opened-file context.
       const candidates = [
-        ...supplemental.filter(s => s.source !== 'openFile').map(asKilo),
+        ...supplemental.filter(s => s.source === 'definition').map(asKilo),
         ...getSnippets(helper, payload),
-        ...supplemental.filter(s => s.source === 'openFile').map(asKilo),
+        ...supplemental.filter(s => s.source !== 'definition').map(asKilo),
       ];
       const access = await Promise.all(candidates.map(s => 'filepath' in s && s.filepath ? this.ide.allowed(s.filepath) : Promise.resolve(settings.includeClipboard === true)));
       const snippets: AutocompleteSnippet[] = [];
@@ -80,6 +116,7 @@ export class KiloContextService implements vscode.Disposable {
         const content = candidate.content.trim();
         if (!access[index] || !content) continue;
         const filepath = 'filepath' in candidate ? candidate.filepath : undefined;
+        if (filepath === helper.filepath && helper.prunedCaretWindow.includes(content)) continue;
         const duplicate = snippets.some(existing => ('filepath' in existing ? existing.filepath : undefined) === filepath
           && (existing.content.trim().includes(content) || content.includes(existing.content.trim())));
         if (!duplicate) snippets.push(candidate);

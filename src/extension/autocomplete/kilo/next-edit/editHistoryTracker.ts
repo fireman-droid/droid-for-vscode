@@ -15,6 +15,7 @@ type Options = {
 type Diff = {
   key: string
   patch: string
+  order: number
 }
 
 /**
@@ -30,6 +31,8 @@ export class EditHistoryTracker implements vscode.Disposable {
   private disposed = false
   private readonly snapshots = new Map<string, string>()
   private readonly pendingTimers = new Map<string, NodeJS.Timeout>()
+  private readonly pendingEdits = new Map<string, number>()
+  private editOrder = 0
   private readonly diffs: Diff[] = []
   private readonly subscriptions: vscode.Disposable[] = []
 
@@ -65,6 +68,7 @@ export class EditHistoryTracker implements vscode.Disposable {
         const t = this.pendingTimers.get(key)
         if (t) clearTimeout(t)
         this.pendingTimers.delete(key)
+        this.pendingEdits.delete(key)
         this.snapshots.delete(key)
       }),
     )
@@ -89,6 +93,12 @@ export class EditHistoryTracker implements vscode.Disposable {
 
   /** Workspace-wide oldest to newest, matching the Mercury prompt-history convention. */
   public async getRecentDiffs(): Promise<string[]> {
+    // A request can follow a cross-file edit before that file's debounce fires.
+    // Flush all pending sources, then order by when edits occurred, not by when
+    // policy checks, active-file flushes or timers happened to finish.
+    await Promise.all(vscode.workspace.textDocuments
+      .filter(document => this.pendingEdits.has(document.uri.fsPath))
+      .map(document => this.flush(document)))
     const kept = (
       await Promise.all(this.diffs.map(async (diff) => ((await this.allowed(diff.key)) ? diff : undefined)))
     ).filter((diff): diff is Diff => diff !== undefined)
@@ -102,6 +112,7 @@ export class EditHistoryTracker implements vscode.Disposable {
     this.diffs.length = 0
     for (const t of this.pendingTimers.values()) clearTimeout(t)
     this.pendingTimers.clear()
+    this.pendingEdits.clear()
     for (const s of this.subscriptions) s.dispose()
     this.subscriptions.length = 0
   }
@@ -118,15 +129,19 @@ export class EditHistoryTracker implements vscode.Disposable {
 
   private async scheduleSnapshotDiff(document: vscode.TextDocument, debounceMs: number): Promise<void> {
     const key = document.uri.fsPath
+    const order = ++this.editOrder
+    this.pendingEdits.set(key, order)
     if (!(await this.allowed(key))) {
       this.reject(key)
       return
     }
+    if (this.pendingEdits.get(key) !== order) return
     if (!this.snapshots.has(key)) {
       // Fallback seed for documents we never saw open (e.g. opened before the
       // tracker existed). The triggering change is lost, but subsequent edits
       // produce useful diffs.
       this.snapshots.set(key, document.getText())
+      this.pendingEdits.delete(key)
       return
     }
     const existing = this.pendingTimers.get(key)
@@ -147,13 +162,16 @@ export class EditHistoryTracker implements vscode.Disposable {
     const previous = this.snapshots.get(key)
     if (previous === undefined) return
     const current = document.getText()
-    if (current === previous) return
+    const order = this.pendingEdits.get(key)
+    this.pendingEdits.delete(key)
+    if (current === previous || order === undefined) return
 
     const filename = vscode.workspace.asRelativePath(document.uri, false)
     const patch = createPatch(filename, previous, current, undefined, undefined, { context: 1 })
     // `createPatch` returns "" for identical inputs; guard anyway.
     if (patch && patch.length <= 8000 && patch.trim().length > 0) {
-      this.diffs.push({ key, patch })
+      this.diffs.push({ key, patch, order })
+      this.diffs.sort((a, b) => a.order - b.order)
       const maxDiffs = this.options.maxDiffs ?? DEFAULT_MAX_DIFFS
       if (this.diffs.length > maxDiffs) this.diffs.shift()
     }
@@ -172,6 +190,7 @@ export class EditHistoryTracker implements vscode.Disposable {
     const timer = this.pendingTimers.get(key)
     if (timer) clearTimeout(timer)
     this.pendingTimers.delete(key)
+    this.pendingEdits.delete(key)
     this.snapshots.delete(key)
     const kept = this.diffs.filter((diff) => diff.key !== key)
     this.diffs.splice(0, this.diffs.length, ...kept)

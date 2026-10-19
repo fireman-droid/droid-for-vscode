@@ -85,7 +85,6 @@ export const getAllSnippetsWithoutRace = async ({
 }): Promise<SnippetPayload> => {
   const results = await Promise.allSettled([
     contextRetrievalService.getRootPathSnippets(helper),
-    contextRetrievalService.getSnippetsFromImportDefinitions(helper),
     helper.options.experimental_includeClipboard ? getClipboardSnippets(ide) : [],
     getSnippetsFromRecentlyOpenedFiles(helper, ide),
     helper.options.experimental_enableStaticContextualization
@@ -95,8 +94,9 @@ export const getAllSnippetsWithoutRace = async ({
 
   const error = results.find(result => result.status === 'rejected' && !(result.reason instanceof ContextLookupTimeout));
   if (error?.status === 'rejected') throw error.reason;
-  const [root, imports, clipboard, opened, staticSnippet] = results.map(result => result.status === 'fulfilled' ? result.value : []) as
-    [AutocompleteCodeSnippet[], AutocompleteCodeSnippet[], AutocompleteClipboardSnippet[], AutocompleteCodeSnippet[], AutocompleteStaticSnippet[]];
+  const [root, clipboard, opened, staticSnippet] = results.map(result => result.status === 'fulfilled' ? result.value : []) as
+    [AutocompleteCodeSnippet[], AutocompleteClipboardSnippet[], AutocompleteCodeSnippet[], AutocompleteStaticSnippet[]];
+  const imports = await contextRetrievalService.getSnippetsFromImportDefinitions(helper, root);
   return {
     rootPathSnippets: root,
     importDefinitionSnippets: imports,

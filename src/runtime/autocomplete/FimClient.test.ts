@@ -45,6 +45,43 @@ afterEach(() => {
 });
 
 describe('requestFimCompletion', () => {
+  it.each(['\n', '\r\n'])('separates Mercury nested closures at a blank caret line (%j)', async newline => {
+    const prefix = ['function run() {', '  if (ready) {', '    '].join(newline);
+    const suffix = ['  }', '}', ''].join(newline);
+    const generated = ['if (value) {', '      use(value);', '    }'].join(newline);
+    const fetcher = mockResponse(Response.json({ choices: [{ text: generated }] }));
+    const insertion = await requestFimCompletion(request({ model: 'mercury-edit-2', prefix, suffix }));
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).suffix).toBe(newline + suffix);
+    expect(prefix + insertion + suffix).toBe(prefix + generated + newline + suffix);
+  });
+
+  it.each([
+    { prefix: 'const x = call(', suffix: ');', model: 'mercury-edit-2' },
+    { prefix: 'const x = call(\n', suffix: ');', model: 'mercury-edit-2' },
+    { prefix: 'function run() {\n  const value =\n', suffix: '}', model: 'mercury-edit-2' },
+    { prefix: 'switch (event) {\ncase "REFUND":\n', suffix: '}', model: 'mercury-edit-2' },
+    { prefix: 'function run() {\n', suffix: '\n}', model: 'mercury-edit-2' },
+    { prefix: 'function run() {\n', suffix: '  return result;\n}', model: 'mercury-edit-2' },
+    { prefix: 'function run() {\n', suffix: '}', model: 'codestral-latest' },
+  ])('keeps midline, already separated, substantive suffixes and other models unchanged %#', async context => {
+    const fetcher = mockResponse(Response.json({ choices: [{ text: 'value' }] }));
+    await expect(requestFimCompletion(request(context))).resolves.toBe('value');
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).suffix).toBe(context.suffix);
+  });
+
+  it('uses the caret line ending rather than a reference file line ending', async () => {
+    const fetcher = mockResponse(Response.json({ choices: [{ text: 'return 1;' }] }));
+    await expect(requestFimCompletion(request({ model: 'mercury-edit-2',
+      prefix: '// Reference file\r\n\r\nfunction run() {\n', suffix: '}' }))).resolves.toBe('return 1;\n');
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).suffix).toBe('\n}');
+  });
+
+  it.each(['', '  ', 'return 1;\n'])('does not add whitespace to empty results or duplicate a returned newline (%j)', async text => {
+    mockResponse(Response.json({ choices: [{ text }] }));
+    await expect(requestFimCompletion(request({ model: 'mercury-edit-2', prefix: 'function run() {\n', suffix: '}' })))
+      .resolves.toBe(text);
+  });
+
   it('decodes UTF-8 and CRLF split across network chunks, then cancels unread stream data at DONE', async () => {
     const source = ': keep-alive\r\n\r\n' +
       event({ delta: { content: '你好' } }).replaceAll('\n', '\r\n') +

@@ -1,6 +1,9 @@
 // Keep the live Host only as a credential-owning model gateway. Never persist its URL.
 function createHostClient() {
-  const bridge = new URL(process.env.DROID_AUTOCOMPLETE_BRIDGE_URL ?? '');
+  const supplied = process.env.DROID_AUTOCOMPLETE_GATEWAY_FILE
+    ? JSON.parse(require('node:fs').readFileSync(process.env.DROID_AUTOCOMPLETE_GATEWAY_FILE, 'utf8')).url
+    : process.env.DROID_AUTOCOMPLETE_BRIDGE_URL;
+  const bridge = new URL(supplied ?? '');
   if (bridge.protocol !== 'http:' || bridge.hostname !== '127.0.0.1') throw new Error('A local Browser Dev link is required');
   const fragment = new URLSearchParams(bridge.hash.slice(1));
   const token = fragment.get('token'), port = fragment.get('bridgePort');

@@ -5,7 +5,7 @@ import { completionDocumentBlockReason, readCompletionSettings, type CompletionS
 import { EditHistoryTracker } from './kilo/next-edit/editHistoryTracker';
 import { NextEditSuggestionManager } from './kilo/next-edit/NextEditSuggestionManager';
 import { NextEditPresenter } from './kilo/next-edit/NextEditPresenter';
-import { computeEditableRegion } from './kilo/next-edit/editableRegion';
+import { nextEditRegion } from './NextEditRegion';
 import type { MercuryEditContext } from '../../runtime/autocomplete/kilo/editPrompt';
 
 /** Adapts Kilo's prediction/history/rendering to Droid's workspace policy and editor lifetime. */
@@ -37,8 +37,9 @@ export class NextEditSupport implements vscode.Disposable {
   async capture(document: vscode.TextDocument, position: vscode.Position, text: string,
     snippets: readonly ContextSnippet[], settings: CompletionSettings): Promise<MercuryEditContext> {
     const lines = text.replace(/\r\n/g, '\n').split('\n');
-    const region = computeEditableRegion({ cursorLine: position.line, totalLines: lines.length });
-    await this.history.flush(document);
+    const [region] = await Promise.all([
+      nextEditRegion(document.fileName, text, position.line), this.history.flush(document),
+    ]);
     return {
       currentFilePath: vscode.workspace.getWorkspaceFolder(document.uri)
         ? vscode.workspace.asRelativePath(document.uri, false) : path.basename(document.fileName || 'untitled'),

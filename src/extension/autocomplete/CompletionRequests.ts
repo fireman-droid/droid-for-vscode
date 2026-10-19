@@ -1,7 +1,7 @@
 import { findCoveringPendingRequest } from './kilo/inline-utils';
 import type { PendingRequest } from './kilo/types';
 type Request = PendingRequest & {
-  controller: AbortController; promise: Promise<string>; readers: number;
+  controller: AbortController; promise: Promise<string>; readers: number; handoffMs: number;
   cancelTimer?: ReturnType<typeof setTimeout>;
 };
 /** Shares compatible context preparation and transport across consecutive editor invocations. */
@@ -13,6 +13,7 @@ export class CompletionRequests {
       this.current && !this.current.controller.signal.aborted ? [this.current] : []) as Request | null;
     if (!request || signal.aborted) return undefined;
     if (request.cancelTimer) clearTimeout(request.cancelTimer);
+    request.handoffMs = 100;
     request.readers++;
     let released = false;
     const release = () => {
@@ -31,8 +32,10 @@ export class CompletionRequests {
     // Resolving during a reader change must not discard a reusable completion.
     request.cancelTimer = setTimeout(() => {
       if (request.readers === 0 && this.current === request) this.clear();
-    }, 100);
+    }, request.handoffMs);
   }
+  /** VS Code may cancel an unchanged invocation before scheduling its replacement. */
+  retainForEditorRefresh(): void { if (this.current) this.current.handoffMs = 250; }
   async run(scope: string, prefix: string, suffix: string, signal: AbortSignal,
     start: (signal: AbortSignal) => Promise<string>): Promise<string> {
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
@@ -41,7 +44,7 @@ export class CompletionRequests {
     if (!request) {
       this.clear();
       const controller = new AbortController();
-      request = { scope, prefix, suffix, controller, readers: 0, promise: Promise.resolve('') };
+      request = { scope, prefix, suffix, controller, readers: 0, handoffMs: 100, promise: Promise.resolve('') };
       const created = request;
       created.promise = start(controller.signal).catch((error: unknown) => {
         // Failed work is retried by the provider, never shared with a later reader.
@@ -52,6 +55,7 @@ export class CompletionRequests {
       this.current = created;
     }
     if (request.cancelTimer) clearTimeout(request.cancelTimer);
+    request.handoffMs = 100;
     request.readers++;
     const captured = request;
     let rejectCancelled: (() => void) | undefined;

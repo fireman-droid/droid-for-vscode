@@ -145,6 +145,10 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
   cancel(reason = 'cancelled'): void {
     if (!this.active) return;
     this.trace('cancelled', { id: this.active.id, phase: this.active.phase, reason, durationMs: Date.now() - this.active.startedAt });
+    const editor = vscode.window.activeTextEditor;
+    if (reason === 'editor-token' && this.active.phase === 'request' &&
+        this.active.document.version === this.active.version && editor?.document === this.active.document &&
+        editor.selection.isEmpty && editor.selection.active.isEqual(this.active.position)) this.requests.retainForEditorRefresh();
     this.active.controller.abort();
     this.active = undefined;
     this.changed.fire();
@@ -227,10 +231,10 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     if (explicit && !isNextEdit && this.history.find(scope, prefix, suffix) === '') this.requests.clear();
     // Keywords, partial identifiers and closing parentheses can all need a continuation.
     // Coalesce automatic input instead of permanently suppressing these positions.
-    const leading = !isNextEdit && Date.now() - this.lastAutomaticRequestAt >= 1000;
+    const leading = Date.now() - this.lastAutomaticRequestAt >= 1000;
     if (!explicit) this.lastAutomaticRequestAt = Date.now();
     const debounceMs = explicit ? 0 : settings.adaptiveDebounce === false ? settings.debounceMs
-      : isNextEdit ? 250 : leading ? 0 : this.latencies.length < 10 ? 150 : Math.min(250, calcDebounceDelay(this.latencies));
+      : leading ? 0 : isNextEdit ? 250 : this.latencies.length < 10 ? 150 : Math.min(250, calcDebounceDelay(this.latencies));
     const pending: PendingCompletion = {
       id, startedAt: Date.now(), phase: 'debounce',
       controller: new AbortController(), document, version: document.version, position, contextRevision, documentScope: autocompleteScope(document),
@@ -266,9 +270,16 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       }
       if (isNextEdit) {
         pending.phase = 'context';
-        const snippets = settings.relatedFiles ? await this.context.collectRecentlyViewed(document, {
-          maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal,
-        }) : [];
+        const [viewed, definitions] = settings.relatedFiles ? await Promise.all([
+          this.context.collectRecentlyViewed(document, {
+            maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal,
+          }),
+          this.kiloContext!.collectDefinitions({ document, text, offset: originalOffset, settings, signal }),
+        ]) : [[], []];
+        // Fresh definitions take priority over older views of the same code. The
+        // prompt builder bounds the combined context and retains the newest five.
+        const snippets = [...viewed.filter(s => !definitions.some(d => d.uri === s.uri && d.content.includes(s.content.trim()))),
+          ...definitions].slice(-5);
         if (!this.isCurrent(pending, token)) return [];
         const support = this.nextEdit!;
         const editContext = await support.capture(document, position, text, snippets, settings);
@@ -310,24 +321,32 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
           if (this.disposed || document.isClosed || autocompleteScope(document) !== pending.documentScope ||
               this.context.revisionFor(document.uri) !== contextRevision) throw new DOMException('Context changed', 'AbortError');
         };
-        phase('debounce');
-        if (debounceMs) await delay(debounceMs, undefined, { signal: requestSignal });
+        const prepareContext = async () => {
+          assertContextCurrent();
+          phase('context');
+          const contextStarted = Date.now();
+          const [snippets, comments] = settings.relatedFiles ? await Promise.all([
+            this.context.collect(document, position, { maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
+              excludePatterns: settings.excludePatterns, signal: requestSignal }),
+            readLanguageComments(document.languageId, requestSignal),
+          ]) : [[], undefined] as const;
+          assertContextCurrent();
+          const prepared = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri),
+            () => this.trace('context.timeout', { source: 'language-service' }))).build({
+            document, text: inputText, offset, settings, signal: requestSignal,
+            filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled', snippets, comments,
+          });
+          assertContextCurrent();
+          generation.contextMs = Date.now() - contextStarted;
+          phase('debounce');
+          return prepared;
+        };
+        // Prepare locally during the send delay. Both gates must finish, and the
+        // shared request still owns cancellation and compatible typing handoffs.
+        const [contextText] = await Promise.all([
+          prepareContext(), debounceMs ? delay(debounceMs, undefined, { signal: requestSignal }) : undefined,
+        ]);
         assertContextCurrent();
-        phase('context');
-        const contextStarted = Date.now();
-        const [snippets, comments] = settings.relatedFiles ? await Promise.all([
-          this.context.collect(document, position, { maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
-            excludePatterns: settings.excludePatterns, signal: requestSignal }),
-          readLanguageComments(document.languageId, requestSignal),
-        ]) : [[], undefined] as const;
-        assertContextCurrent();
-        const contextText = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri),
-          () => this.trace('context.timeout', { source: 'language-service' }))).build({
-          document, text: inputText, offset, settings, signal: requestSignal,
-          filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled', snippets, comments,
-        });
-        assertContextCurrent();
-        generation.contextMs = Date.now() - contextStarted;
         generation.relatedFiles = contextText.relatedFiles;
         phase('request');
         this.trace('request', { id, protocol: settings.protocol, debounceMs, contextMs: generation.contextMs,

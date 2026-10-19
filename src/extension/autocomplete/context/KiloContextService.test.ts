@@ -208,6 +208,32 @@ describe('Mercury reference context', () => {
 
 
 describe('merged Kilo and editor context', () => {
+  it('keeps imported types ahead of unrelated opened files under a small budget', async () => {
+    state.config.model = 'mercury-edit-2'; state.config.maxContextCharacters = 1400;
+    const text = "import { User } from './types';\nfunction greet(user: User) {\n  return \n}";
+    const main = await document('main.ts', text);
+    const target = await document('types.ts', 'export type User = { requiredAccountName: string };', 'typescript', false);
+    for (let index = 0; index < 8; index++) await document(`old-${index}.ts`, `// unrelated-${index}\n` + 'const previousWork = 1;\n'.repeat(30));
+    state.definitions.mockImplementation(async (_name, _uri, position) => position?.line === 0
+      ? [{ uri: target.uri, range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } } }] : []);
+    const prompt = await build(main, text.indexOf('return ') + 7);
+    expect(prompt.prefix).toContain('requiredAccountName');
+    expect(prompt.prefix.indexOf('requiredAccountName')).toBeLessThan(prompt.prefix.indexOf('unrelated-'));
+    expect(prompt.prefix.length + prompt.suffix.length).toBeLessThanOrEqual(1400);
+  });
+
+  it('uses enclosing signature imports when the cursor is below the nearby-line window', async () => {
+    state.config.model = 'mercury-edit-2';
+    const text = "import { DomainUser } from './types';\nfunction sync(user: DomainUser) {\n" +
+      '  // work continues below\n'.repeat(45) + '  const assignedRoles = \n}';
+    const main = await document('main.ts', text);
+    const target = await document('types.ts', 'export type DomainUser = { requiredRoles: string[] };', 'typescript', false);
+    state.definitions.mockImplementation(async (_name, _uri, position) => position?.line === 0
+      ? [{ uri: target.uri, range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } } }] : []);
+    const prompt = await build(main, text.length - 2);
+    expect(prompt.prefix).toContain('requiredRoles');
+  });
+
   it.each(['codestral-latest', 'mercury-edit-2'])('keeps direct definitions and recent edits alongside Kilo results for %s', async model => {
     state.config.model = model;
     const text = 'function answer() {\n  return \n}';
@@ -267,6 +293,38 @@ describe('context lookup quality regressions', () => {
       range: new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line, 0)), text,
     }] });
   }
+
+  it('retains resolved imports when a later lookup times out, then resumes missing bindings', async () => {
+    const main = await document('main.ts', "import { User, Other } from './types';\nconst pair: [User, Other] = ");
+    const types = await document('types.ts', 'export type User = { readyDefinition: string };\nexport type Other = { laterDefinition: number };', 'typescript', false);
+    let stalled = true;
+    state.definitions.mockImplementation(async (_name, _uri, position) => {
+      if (position.character === 9) return definition(types);
+      if (stalled) return new Promise(() => {});
+      return [{ uri: types.uri, range: { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } } }];
+    });
+    expect((await build(main)).prefix).toContain('readyDefinition');
+    stalled = false;
+    expect((await build(main)).prefix).toContain('laterDefinition');
+  });
+
+  it.each(['Local', 'toString'])('looks up a renamed type import once using the %s binding', async binding => {
+    const main = await document('main.ts', `import { type Source as ${binding} } from './types';\nconst value: ${binding} = `);
+    const types = await document('types.ts', 'export type Source = { aliasedDefinition: string };', 'typescript', false);
+    state.definitions.mockResolvedValue(definition(types));
+    expect((await build(main)).prefix).toContain('aliasedDefinition');
+    expect(state.definitions.mock.calls.filter(call => call[2]?.line === 0)).toHaveLength(1);
+  });
+
+  it('includes a referenced imported type dependency outside nearby cursor lines', async () => {
+    const main = await document('main.ts', "import { User, Role } from './types';\nfunction roles(user: User) {\n" +
+      '  // body line\n'.repeat(30) + '  return \n}');
+    const types = await document('types.ts', 'export interface User { roles: Role[] }\nexport type Role = "EDITOR" | "READER";', 'typescript', false);
+    state.definitions.mockImplementation(async (_name, _uri, position) => position.line === 0
+      ? [{ uri: types.uri, range: { start: { line: position.character === 9 ? 0 : 1, character: 0 },
+        end: { line: position.character === 9 ? 0 : 1, character: 80 } } }] : []);
+    expect((await build(main, main.getText().length - 2)).prefix).toContain('"EDITOR" | "READER"');
+  });
 
   it.each(['codestral-latest', 'mercury-edit-2'])('preserves closed imported definitions at EOF for %s', async model => {
     state.config.model = model;

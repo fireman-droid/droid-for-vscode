@@ -11,7 +11,7 @@ interface FileInfo {
 export class ImportDefinitionsService {
   static N = 10
 
-  private readonly cache = new Map<string, { signature: string; info: FileInfo }>()
+  private readonly cache = new Map<string, { signature: string; info: FileInfo; complete: boolean }>()
   private generation = 0
   private readonly disposable: Disposable | void
 
@@ -116,34 +116,46 @@ export class ImportDefinitionsService {
     }))
     if (generation !== this.generation) throw new DOMException('Import context changed.', 'AbortError')
     const cached = this.cache.get(filepath)
-    if (cached?.signature === signature) {
+    if (cached?.signature === signature && cached.complete) {
       this.cache.delete(filepath); this.cache.set(filepath, cached)
       return cached.info
     }
     this.cache.delete(filepath)
 
     const fileInfo: FileInfo = {
-      imports: {},
+      imports: cached?.signature === signature ? { ...cached.info.imports } : {},
     }
+    let complete = true
     for (const match of matches) {
-      const startPosition = match.captures[0].node.startPosition
-      const defs = await this.ide.gotoDefinition({
+      const node = match.captures[0].node
+      if (Object.hasOwn(fileInfo.imports, node.text)) continue
+      const startPosition = node.startPosition
+      let defs: RangeInFileWithContents[]
+      try {
+      const locations = await this.ide.gotoDefinition({
         filepath,
         position: {
           line: startPosition.row,
           character: startPosition.column,
         },
       })
-      fileInfo.imports[match.captures[0].node.text] = await Promise.all(
-        defs.map(async (def) => ({
+      defs = await Promise.all(
+        locations.map(async (def) => ({
           ...def,
           contents: await this.ide.readRangeInFile(def.filepath, def.range),
         })),
       )
+      } catch (error) {
+        if (!(error instanceof ContextLookupTimeout)) throw error
+        complete = false
+        break // Keep ready definitions; resume only unfinished bindings next time.
+      }
+      if (defs.length) fileInfo.imports[node.text] = defs
+      else complete = false // An unavailable language server must not pin empty bindings.
     }
 
     if (generation === this.generation) {
-      this.cache.set(filepath, { signature, info: fileInfo })
+      this.cache.set(filepath, { signature, info: fileInfo, complete })
       if (this.cache.size > ImportDefinitionsService.N) this.cache.delete(this.cache.keys().next().value!)
     }
     return fileInfo

@@ -3,7 +3,14 @@
   (import_clause
     (named_imports
         (import_specifier
-            (identifier) @import))))
+            !alias
+            name: (identifier) @import))))
+
+(import_statement
+  (import_clause
+    (named_imports
+        (import_specifier
+            alias: (identifier) @import))))
 
 (import_statement
     (import_clause

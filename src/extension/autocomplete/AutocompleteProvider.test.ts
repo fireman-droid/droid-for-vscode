@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { setImmediate } from 'node:timers/promises';
+import { setImmediate, setTimeout as wait } from 'node:timers/promises';
 
 const mocks = vi.hoisted(() => ({
   editor: undefined as unknown,
@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (event?: unknown) => void>(),
   config: {} as Record<string, unknown>,
   request: vi.fn(),
+  nextRequest: vi.fn(),
+  definitions: vi.fn(),
+  capture: vi.fn(),
   secretGet: vi.fn(),
   record: vi.fn(),
   contextRevision: 0,
@@ -69,6 +72,13 @@ vi.mock('vscode', () => {
 });
 
 vi.mock('../../runtime/autocomplete/requestCompletion', () => ({ requestCompletion: mocks.request }));
+vi.mock('../../runtime/autocomplete/nextEdit', () => ({ requestNextEdit: mocks.nextRequest }));
+vi.mock('./NextEditSupport', () => ({ NextEditSupport: class {
+  manager = { isPending: () => false };
+  presenter = { toCompletionItems: () => [] };
+  capture = mocks.capture;
+  clear() {} dispose() {}
+} }));
 vi.mock('./context/CompletionContextService', () => ({
   CompletionContextService: class {
     onDidChangeContext(listener: () => void) {
@@ -78,6 +88,7 @@ vi.mock('./context/CompletionContextService', () => ({
     revisionFor() { return mocks.contextRevision; }
     isAllowed = mocks.allowed;
     collect = mocks.collect;
+    collectRecentlyViewed = mocks.collect;
     dispose = mocks.contextDispose;
   },
 }));
@@ -85,6 +96,7 @@ vi.mock('./context/KiloContextService', async () => {
   const { buildCompletionPrompt } = await import('./context/CompletionPrompt');
   return { KiloContextService: class {
     invalidate() {} dispose() {}
+    collectDefinitions = mocks.definitions;
     async build(input: any) { return { ...buildCompletionPrompt({ ...input, model: input.settings.model,
       maxCharacters: input.settings.maxContextCharacters }), relatedFiles: input.snippets.length }; }
   } };
@@ -164,6 +176,9 @@ beforeEach(() => {
   mocks.comments.mockReset().mockResolvedValue({ line: '//' });
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
+  mocks.nextRequest.mockReset().mockResolvedValue('const answer = 42;');
+  mocks.definitions.mockReset().mockResolvedValue([]);
+  mocks.capture.mockReset().mockResolvedValue({});
   mocks.record.mockReset();
   mocks.secretGet.mockReset().mockResolvedValue('synthetic-provider-key');
   provider = new AutocompleteProvider({
@@ -190,6 +205,90 @@ async function requesting(
 }
 
 describe('AutocompleteProvider', () => {
+
+  it.each([true, false])('sends closed-file definitions to Next Edit only with relatedFiles=%s', async relatedFiles => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', relatedFiles,
+      endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
+    const definition = { uri: 'file:///types.ts', filepath: 'types.ts', content: 'export type Value = { size: number };', source: 'definition' };
+    mocks.definitions.mockResolvedValue([definition]);
+    const file = document();
+    await (await requesting(file)).pending;
+    expect(mocks.capture.mock.calls[0][3]).toEqual(relatedFiles ? [definition] : []);
+    expect(mocks.definitions).toHaveBeenCalledTimes(relatedFiles ? 1 : 0);
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+  });
+
+  it('starts Next Edit immediately after idle, but coalesces further automatic input', async () => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    try {
+      const file = document(), automatic = { ...context, triggerKind: 1 };
+      const first = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      await first.pending;
+      file.state.text += '4'; Object.assign(file.value, { version: 2 });
+      const second = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      second.cancel.cancel(); expect(await second.pending).toEqual([]);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
+      clock.mockReturnValue(12_000);
+      const afterIdle = await requesting(file, undefined, automatic);
+      expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
+      await afterIdle.pending;
+    } finally { clock.mockRestore(); }
+  });
+
+  it('retains a configured fixed Next Edit delay and cancels it before transport', async () => {
+    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions',
+      adaptiveDebounce: false, debounceMs: 350 });
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+    request.cancel.cancel(); expect(await request.pending).toEqual([]);
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
+
+  it('prepares FIM context during debounce and waits for both before sending', async () => {
+    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 100 });
+    const snippets = deferred<[]>();
+    mocks.collect.mockReturnValue(snippets.promise);
+    mocks.request.mockResolvedValue('42;');
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+    await wait(120);
+    expect(mocks.request).not.toHaveBeenCalled();
+    snippets.resolve([]);
+    expect((await request.pending)[0].insertText).toBe('42;');
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the FIM send delay when context is fast and abandons cancelled preparation', async () => {
+    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 350 });
+    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+    request.cancel.cancel();
+    expect(await request.pending).toEqual([]);
+    await wait(380);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  it('reuses transport across a delayed editor-token refresh without repeating context', async () => {
+    const response = deferred<string>(), file = document();
+    mocks.request.mockReturnValue(response.promise);
+    const first = await requesting(file);
+    const transport = mocks.request.mock.calls[0][0].signal as AbortSignal;
+    first.cancel.cancel();
+    expect(await first.pending).toEqual([]);
+    // The native editor can wait longer than the ordinary typing handoff.
+    await wait(180);
+    expect(transport.aborted).toBe(false);
+    const second = await requesting(file);
+    response.resolve('42;');
+    expect((await second.pending)[0].insertText).toBe('42;');
+    expect(mocks.collect).toHaveBeenCalledOnce();
+    expect(mocks.request).toHaveBeenCalledOnce();
+  });
 
   it.each([0, 1])('offers an if body inside an existing function for trigger %i', async (triggerKind) => {
     const prefix = 'function calculateCartTotal(items: CartItem[]): number {\n  // Empty cart\n  if';
@@ -354,8 +453,8 @@ describe('AutocompleteProvider', () => {
     const request = await requesting(document());
     request.cancel.cancel();
     await request.pending;
-    // A 100ms handoff lets the next editor invocation share the same transport.
-    await new Promise(resolve => setTimeout(resolve, 120));
+    // An unchanged editor refresh has a bounded 250ms transport handoff.
+    await wait(270);
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     response.resolve('late');
     expect(await request.pending).toEqual([]);

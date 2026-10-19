@@ -6,8 +6,8 @@ import hostClient from './autocomplete-quality/hostClient.cjs';
 import { loadProductionPostprocess } from './autocomplete-quality/production.mjs';
 
 const { values } = parseArgs({ options: { corpus: { type: 'string' }, output: { type: 'string' } } });
-if (!values.corpus || !values.output || !process.env.DROID_AUTOCOMPLETE_BRIDGE_URL) {
-  throw new Error('Use --corpus file --output file with DROID_AUTOCOMPLETE_BRIDGE_URL set to the current Browser Dev link.');
+if (!values.corpus || !values.output || (!process.env.DROID_AUTOCOMPLETE_BRIDGE_URL && !process.env.DROID_AUTOCOMPLETE_GATEWAY_FILE)) {
+  throw new Error('Use --corpus file --output file through withAutocompleteGateway.mjs or with DROID_AUTOCOMPLETE_BRIDGE_URL.');
 }
 const request = hostClient.createHostClient();
 const production = await loadProductionPostprocess();

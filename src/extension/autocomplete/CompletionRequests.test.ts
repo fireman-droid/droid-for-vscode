@@ -55,6 +55,38 @@ describe('completion request handoffs', () => {
     expect(start).toHaveBeenCalledTimes(2); pool.clear();
   });
 
+  it('bounds an editor refresh handoff and restores the normal window after joining', async () => {
+    vi.useFakeTimers();
+    const pool = new CompletionRequests(), output = deferred<string>();
+    const firstReader = new AbortController(), nextReader = new AbortController();
+    let transport!: AbortSignal;
+    const start = vi.fn((signal: AbortSignal) => { transport = signal; return output.promise; });
+    const first = pool.run('file', 'x = ', ';', firstReader.signal, start).catch(error => error.name);
+    pool.retainForEditorRefresh(); firstReader.abort();
+    expect(await first).toBe('AbortError');
+    await vi.advanceTimersByTimeAsync(180);
+    expect(transport.aborted).toBe(false);
+    const next = pool.run('file', 'x = ', ';', nextReader.signal, start).catch(error => error.name);
+    nextReader.abort(); expect(await next).toBe('AbortError');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(transport.aborted).toBe(true);
+    expect(start).toHaveBeenCalledOnce(); pool.clear();
+  });
+
+  it('aborts an abandoned editor refresh after 250ms', async () => {
+    vi.useFakeTimers();
+    const pool = new CompletionRequests(), reader = new AbortController();
+    let transport!: AbortSignal;
+    const pending = pool.run('file', 'x = ', ';', reader.signal, signal => {
+      transport = signal; return new Promise(() => {});
+    }).catch(error => error.name);
+    pool.retainForEditorRefresh(); reader.abort();
+    expect(await pending).toBe('AbortError');
+    await vi.advanceTimersByTimeAsync(249); expect(transport.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); expect(transport.aborted).toBe(true);
+    pool.clear();
+  });
+
   it('does not preserve a failed request for a later reader', async () => {
     const pool = new CompletionRequests(), reader = new AbortController();
     const start = vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce('retry');
