@@ -108,6 +108,15 @@ describe('Script result presentation', () => {
     expect(presentScriptResults([parent(text), { ...failed, scriptParentId: 'unrelated' }, child])[0])
       .toMatchObject({ resultPreview: { text: expect.stringContaining('fetch failed') } });
   });
+  it('removes a plain-text Script copy of a failed linked command', () => {
+    const failed = { ...child, id: 'failed', toolUseId: 'failed', status: 'failed' as const, outputTail: undefined,
+      errorMessage: 'Command failed (exit code: 1)\nFAILED: literal unicode escapes leaked into html\n[Process exited with code 1]' };
+    expect(presentScriptResults([parent('FAILED: literal unicode escapes leaked into html'), failed])).toEqual([failed]);
+    expect(presentScriptResults([parent('FAILED: literal unicode escapes leaked into html'), { ...failed, scriptParentId: 'other' }]))
+      .toHaveLength(2);
+    expect(presentScriptResults([parent('A unique note\nFAILED: literal unicode escapes leaked into html'), failed]))
+      .toMatchObject([{ resultPreview: { text: 'A unique note' } }, failed]);
+  });
   it('does not repeat a background launch receipt already shown by its linked command', () => {
     const background = { ...child, backgroundHint: { fireAndForget: true as const }, outputTail: 'Background process started (PID: 123)\nStatus: Running in background' };
     const receipt = parent('exit null · pid 123 · outputFile C:/temp/job.out');

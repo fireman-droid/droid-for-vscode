@@ -74,10 +74,12 @@ export function presentScriptResults(items: readonly SessionTranscriptItem[]): r
     if (background && children.some(child => child.status === 'completed' && child.backgroundHint?.fireAndForget &&
       (child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : '')).includes(`Background process started (PID: ${background.pid})`))) return [];
     for (const child of parts ? [] : children) {
-      if (child.status !== 'completed') continue;
-      const shown = child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : undefined);
+      // Failed commands are matched too: the parent aggregates their output with the
+      // same prefix/trailer stripping, and skipping them left a duplicate copy on screen.
+      if (child.status !== 'completed' && child.status !== 'failed') continue;
+      const shown = child.outputTail ?? (child.resultPreview?.availability === 'available' ? child.resultPreview.text : undefined) ?? child.errorMessage;
       if (!shown) continue;
-      const body = shown.replace(/\r\n?/gu, '\n').replace(/\n*\[Process exited with code \d+\]\s*$/u, '').trim();
+      const body = commandBody(shown);
       if (!body) continue;
       // Match complete lines, not a substring of unrelated Script prose.
       const wrapped = '\n' + text.replace(/\r\n?/gu, '\n').trim() + '\n';
