@@ -304,6 +304,7 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["Could not load this diff. Try again.","无法加载差异，请重试。","無法載入差異，請重試。"],
   ["This comparison did not finish loading. Refresh or choose the scope again.","此对比尚未加载完成，请刷新或重新选择范围。","此對比尚未載入完成，請刷新或重新選擇范圍。"],
   ["The local Droid connection is unavailable.","本地 Droid 连接不可用。","本地 Droid 連接不可用。"],
+  ["This session is open in another window. Close it there, or start a new session here.","此会话已在另一个窗口打开。请关闭另一个窗口，或在此处新建会话。","此會話已在另一個窗口打開。請關閉另一個窗口，或在此處新建會話。"],
   ["Reply failed. No error details are available.","回答失败，没有可用的错误详情。","回答失敗，沒有可用的錯誤詳情。"],
   ["Updating session settings…","正在更新会话设置…","正在更新會話設置…"],
   ["Droid is working…","Droid 正在工作…","Droid 正在工作…"],

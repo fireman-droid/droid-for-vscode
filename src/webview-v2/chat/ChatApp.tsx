@@ -177,7 +177,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     {idleStatus ? <p className="m-0">{t(idleStatus)}</p> : null}
     {composerNoticeText && composerNoticeText !== idleStatus ? <p className="m-0">{t(composerNoticeText)}</p> : null}
   </> : null;
-  const sessionActionsDisabled = operationsBlocked || state.connection.status !== 'connected' ||
+  const sessionActionsDisabled = operationsBlocked || state.connection.status === 'connecting' || state.connection.status === 'idle' ||
     ((running || state.turn?.status === 'stopping') && !state.backgroundTurnsAvailable) || state.interactions.length > 0;
   const interaction = useMemo(() => <InteractionPanel requests={state.interactions} actions={{
     onPermission: messageActions.handlePermissionRespond,

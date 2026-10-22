@@ -13,7 +13,5 @@ export async function resolveStartupTarget(
     await ctl.sessionCatalog.canResumeSession?.(cwd, sessionId) === true
   );
   if (resumable) return { kind: 'resume', cwd, sessionId };
-  const selectedCwd = sessionId === null ? null : await ctl.sessionCatalog.resolveSessionCwd?.(sessionId);
-  return selectedCwd && sessionId !== null
-    ? { kind: 'resume', cwd: selectedCwd, sessionId } : { kind: 'new', cwd };
+  return { kind: 'new', cwd };
 }

@@ -42,6 +42,9 @@ export function classifyInitializationFailure(error: unknown): {
   if (isMissingCliError(error)) {
     return { reason: 'cli-not-found', message: 'The Droid CLI executable was not found.', level: 'warn' };
   }
+  if (error instanceof Error && /^Session is open in another window /u.test(error.message)) {
+    return { reason: 'session-in-use', message: error.message, level: 'warn', diagnosticError: error };
+  }
   return {
     reason: 'initialization-failed',
     message: 'The Droid SDK could not initialize a session.',

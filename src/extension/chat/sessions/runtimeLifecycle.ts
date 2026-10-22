@@ -69,19 +69,8 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
       ctl.effects.discardCatalogRequest(catalogRequest);
       continue;
     }
-    if (target.cwd !== workspace.cwd) {
-      ctl.selectSessionWorkspace(target.cwd);
-      const selectedRequest = ctl.effects.beginCatalogLoad(target.cwd);
-      const selectedCatalog = await ctl.effects.loadCatalog(target.cwd);
-      if (!ctl.effects.isCurrentCatalogRequest(selectedRequest, target.cwd)) {
-        ctl.effects.discardCatalogRequest(selectedRequest);
-        continue;
-      }
-      ctl.catalogState.sessions = selectedCatalog;
-      ctl.effects.seedBackgroundRunning(target.cwd);
-    }
     await activateInitialRuntime(ctl, target, target.kind === 'resume' ? target.sessionId : null);
-    if (isTargetWorkspaceCurrent(ctl, target.cwd)) {
+    if (isTargetWorkspaceCurrent(ctl, workspace.cwd)) {
       return;
     }
   }
@@ -360,6 +349,10 @@ export async function activateInitialRuntime(
     return;
   }
   if (activation.status === 'failed') {
+    if (!ctl.childSession && target.kind === 'resume' && activation.reason === 'session-in-use') {
+      await activateInitialRuntime(ctl, { kind: 'new', cwd: target.cwd }, null);
+      return;
+    }
     if (failedResumeId) {
       ctl.effects.commitSessionBinding({
         conversationId: ctl.recoveryStore.resolveConversationId(failedResumeId) ?? failedResumeId,

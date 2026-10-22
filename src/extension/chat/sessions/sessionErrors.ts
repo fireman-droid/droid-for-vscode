@@ -22,6 +22,8 @@ export function unavailableMessage(
       return 'The local droid daemon could not be reached. Retry the connection.';
     case 'sdk-protocol-incompatible':
       return 'The local Droid CLI returned session data that this extension\'s SDK cannot read. Update the Droid extension to a compatible version, then reconnect.';
+    case 'session-in-use':
+      return 'This session is open in another window. Close it there, or start a new session here.';
     case 'initialization-failed':
       return 'The local Droid runtime could not be initialized.';
   }

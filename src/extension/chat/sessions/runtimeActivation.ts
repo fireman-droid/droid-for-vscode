@@ -70,7 +70,11 @@ export async function createInitializedRuntime(
       readonly runtime: DroidRuntime;
       readonly id: string;
     }
-  | { readonly status: 'failed'; readonly message: string }
+  | {
+      readonly status: 'failed';
+      readonly message: string;
+      readonly reason?: Extract<RuntimeAvailability, { status: 'unavailable' }>['reason'];
+    }
   | null
 > {
   let runtime: DroidRuntime;
@@ -142,7 +146,7 @@ export async function createInitializedRuntime(
   ) {
     ctl.sessionState.automaticRecoveryBlocked = availability.status === 'unavailable' &&
       ['cli-not-found', 'invalid-cwd', 'daemon-not-logged-in', 'daemon-credentials-unreadable',
-        'sdk-protocol-incompatible'].includes(availability.reason);
+        'sdk-protocol-incompatible', 'session-in-use'].includes(availability.reason);
     releaseRecoveryContext();
     await closeRuntime(ctl, runtime).catch(() => undefined);
     if (
@@ -153,6 +157,7 @@ export async function createInitializedRuntime(
     }
     return {
       status: 'failed',
+      ...(availability.status === 'unavailable' ? { reason: availability.reason } : {}),
       message:
         availability.status === 'unavailable'
           ? unavailableMessage(availability.reason)
