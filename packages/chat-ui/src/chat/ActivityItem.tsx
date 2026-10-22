@@ -30,7 +30,7 @@ export function ActivityItem({
   readonly failed?: boolean;
 }) {
   const inline = useContext(ProcessGroupContext);
-  const disclosure = useProcessDisclosure(messageId, `activity:${id}`, inline, inline);
+  const disclosure = useProcessDisclosure(messageId, `activity:${id}`, false, inline);
   const selectable = children !== undefined;
   const selected = disclosure.expanded;
   const detailsId = useId();

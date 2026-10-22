@@ -25,6 +25,7 @@ export function clusterActivity(items: readonly SessionTranscriptItem[]): readon
 function candidate(item: SessionTranscriptItem): GroupCandidatePart {
   if (item.kind === 'thinking') return {
     type: 'reasoning',
+    text: item.text,
     status: { type: item.status === 'active' ? 'running' : item.status === 'stopped' || item.status === 'stopping' ? 'incomplete' : 'complete' },
     providerMetadata: { droidvisx: { durationMs: item.durationMs ?? null, truncated: item.truncated } },
   };
@@ -53,16 +54,14 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
   const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting, t });
   const latest = tail ? cluster.items.at(-1) : undefined;
-  const history = latest ? cluster.items.slice(0, -1) : cluster.items;
   const latestHasTerminal = latest?.kind === 'tool'
     ? incomplete === 'error' ? latest.status === 'failed' : latest.status === 'stopped' || latest.status === 'stopping'
     : latest?.kind === 'thinking' && incomplete === 'cancelled' && latest.status !== 'complete';
-  const notice = history.length === 0 && incomplete && !latestHasTerminal
+  const notice = cluster.items.length === 0 && incomplete && !latestHasTerminal
     ? t(incomplete === 'error' ? 'failed' : 'stopped') : undefined;
   return <ActivityGroupView messageId={messageId} groupId={cluster.id}
-    presentation={{ ...presentation, count: history.length, ...(notice ? { notice } : {}) }}
-    latest={latest ? <div key={latest.id}>{renderItem(latest, true)}</div> : null}
-    attention={<HistoryItems items={history.filter((item) => item.kind === 'tool' && item.status === 'failed')} renderItem={renderItem} />}>
-    <HistoryItems items={history} renderItem={renderItem} />
+    presentation={{ ...presentation, count: cluster.items.length, ...(notice ? { notice } : {}) }}
+    attention={<HistoryItems items={cluster.items.filter((item) => item.kind === 'tool' && item.status === 'failed')} renderItem={renderItem} />}>
+    <HistoryItems items={cluster.items} renderItem={renderItem} />
   </ActivityGroupView>;
 }

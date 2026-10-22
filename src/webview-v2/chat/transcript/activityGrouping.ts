@@ -98,6 +98,8 @@ export function summarizeActivityGroup(
   let failedCount = 0;
   let stoppedCount = 0;
   let truncated = false;
+  let thoughtCount = 0;
+  let commandCount = 0;
   const diagnosticFiles = new Set<string>();
   let diagnosticResults = 0;
   let checksWithDiagnostics = 0;
@@ -119,6 +121,10 @@ export function summarizeActivityGroup(
     if (status === 'failed') failedCount += 1;
     if (status === 'stopped' || status === 'incomplete') stoppedCount += 1;
     truncated ||= metadata.truncated;
+    if (part.type === 'reasoning') {
+      thoughtCount += 1;
+      continue;
+    }
     if (part.type !== 'tool-call') continue;
     toolCount += 1;
     if (isRunning(status)) runningToolCount += 1;
@@ -140,8 +146,12 @@ export function summarizeActivityGroup(
       }
     }
     if (category === null) {
-      const action = resolveToolAction(part.toolName ?? '', metadata.action);
       const toolName = part.toolName ?? '';
+      if (toolPresentation(toolName)?.resultLabel === 'Command output') {
+        commandCount += 1;
+        continue;
+      }
+      const action = resolveToolAction(toolName, metadata.action);
       const key = toolName + '\u0000' + action;
       otherActions.set(key, { toolName, action, count: (otherActions.get(key)?.count ?? 0) + 1 });
     }
@@ -153,6 +163,9 @@ export function summarizeActivityGroup(
       const nouns = CATEGORY_PRESENTATION[category].nouns;
       segments.push(t(`{count} ${count === 1 ? nouns[0] : nouns[1]}`, { count }));
     }
+  }
+  if (commandCount > 0) {
+    segments.push(t(commandCount === 1 ? 'ran {count} command' : 'ran {count} commands', { count: commandCount }));
   }
   if (diagnosticFiles.size > 0) segments.push(t(diagnosticFiles.size === 1 ? '{count} file' : '{count} files', { count: diagnosticFiles.size }));
   const resultFacts: string[] = [];
@@ -167,6 +180,9 @@ export function summarizeActivityGroup(
   for (const { action, toolName, count } of otherActions.values()) {
     const label = (owners.get(action)?.size ?? 0) > 1 ? t(action) + ' (' + toolName + ')' : t(action);
     segments.push(count > 1 ? label + ' × ' + count : label);
+  }
+  if (segments.length === 0 && thoughtCount > 0) {
+    segments.push(t(thoughtCount === 1 ? '{count} thought' : '{count} thoughts', { count: thoughtCount }));
   }
   return {
     toolCount,
