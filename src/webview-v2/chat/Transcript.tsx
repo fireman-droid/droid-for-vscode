@@ -2,7 +2,6 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { useStore } from 'zustand';
 import type { ChatStore } from './store';
-import { DroidActivity } from '../ui/droid-motion';
 import { useMessageEditor } from './editing/useMessageEditor';
 import { useMessageActions } from './editing/useMessageActions';
 import { useAttachmentActions } from './attachments/useAttachmentActions';
@@ -138,10 +137,6 @@ export function Transcript({
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);
-  const activeTools = useMemo(() => items.filter((item) =>
-    item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId), [items, state.turn?.turnId]);
-  const waitingForSubagents = activeTools.length > 0 && activeTools.every((item) => item.kind === 'tool' && item.subagent !== undefined &&
-    (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending'));
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
   const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
@@ -153,14 +148,8 @@ export function Transcript({
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
       {interaction}</>}
-    statusContent={statusNotice || running && state.interactions.length === 0 ? <div role="status" aria-label={t('Droid status')} aria-live="polite"
+    statusContent={statusNotice ? <div role="status" aria-label={t('Droid status')} aria-live="polite"
       className="grid min-w-0 gap-1 py-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-      {running && state.interactions.length === 0 ? <div className="flex select-none items-center gap-2">
-      <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
-      <span>{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
-        ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
-        : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
-      </div> : null}
       {statusNotice}
     </div> : null}
     renderMessage={(id, presentation) => {

@@ -14,6 +14,7 @@ import { ComposerSuggestions, useComposerSuggestions } from './ComposerSuggestio
 import { formatSelectionQuotes, parseSelectionQuotes } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { getChatSurfaceCapabilities, type ChatSurfaceCapabilities } from '../../shared/chatSurfacePolicy';
 import { useCodeReferenceDraft } from '@droidvisx/chat-ui/chat/useCodeReferenceDraft';
+import { DroidActivity } from '../ui/droid-motion';
 
 export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChange, renderInputRow, onFileSearch, onNavigate, onBtwOpen, capabilities = getChatSurfaceCapabilities('main') }: {
   readonly state: AssistantWebviewState;
@@ -62,6 +63,17 @@ export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChan
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
+  const turnRunning = (state.turn?.status === 'submitting' || state.turn?.status === 'streaming') && state.interactions.length === 0;
+  const activeTools = useMemo(() => turnRunning ? state.transcript.filter((item) =>
+    item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId) : [], [turnRunning, state.transcript, state.turn?.turnId]);
+  const waitingForSubagents = activeTools.length > 0 && activeTools.every((item) => item.kind === 'tool' && item.subagent !== undefined &&
+    (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending'));
+  const runningPlaceholder = turnRunning && flow.queueEditingId === null ? <span role="status" aria-label={t('Droid status')} aria-live="polite" className="inline-flex min-w-0 items-center gap-2">
+    <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
+    <span className="truncate">{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
+      ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
+      : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
+  </span> : undefined;
   const currentNotice = ingress.preparing > 0 ? 'Preparing attachments…' : notice ?? flow.commandNotice ?? quoteNotice ?? null;
   useEffect(() => {
     onNoticeChange?.(currentNotice);
@@ -74,7 +86,8 @@ export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChan
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
-    placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")} maxLength={references.maxLength}
+    placeholder={state.transcript.length ? t("Add a follow up") : t("Ask Droid about your workspace")}
+    placeholderContent={runningPlaceholder} maxLength={references.maxLength}
     focusSignal={flow.draftCommand.id} notice={onNoticeChange ? null : currentNotice} onLayout={reportLayout}
     inputReplacement={state.interactions.length ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t("Answer Droid’s request to continue.")}</p> : undefined}
     attachments={<StagedAttachments attachments={state.attachments} images={state.attachmentImages} actions={attachments} disabled={disabled} />}
