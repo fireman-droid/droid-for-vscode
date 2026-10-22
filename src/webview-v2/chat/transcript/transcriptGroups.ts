@@ -53,9 +53,20 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
     if (group === undefined) {
-      group = { kind: 'assistant', id: `assistant-turn:${key}`, turnId: key, items: [] };
-      groups.set(key, group);
-      descriptors.push(group);
+      const prior = descriptors.at(-1);
+      const priorTail = prior?.kind === 'assistant' ? prior.items.at(-1) : undefined;
+      if (
+        prior?.kind === 'assistant' &&
+        (item.kind === 'thinking' || item.kind === 'tool') &&
+        (priorTail?.kind === 'thinking' || priorTail?.kind === 'tool')
+      ) {
+        group = prior;
+        groups.set(key, group);
+      } else {
+        group = { kind: 'assistant', id: `assistant-turn:${key}`, turnId: key, items: [] };
+        groups.set(key, group);
+        descriptors.push(group);
+      }
     }
     group.items.push(item);
   };

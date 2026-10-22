@@ -16,7 +16,7 @@ import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../shell/statusMessage';
 import { isPlanLive, selectPlanAnchors } from './transcript/planAnchor';
-import { createOperationSummarySelector } from './operationSummary';
+import { createOperationSummarySelector, summarizeReplyOperations } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 import { useTranscriptReceipt } from './useTranscriptReceipt';
@@ -128,7 +128,8 @@ export function Transcript({
     }));
   }, [state.conversationId, stopFollowing]);
   const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
-  const { turns, lastTurnRows } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
+  const replySummaries = useMemo(() => summarizeReplyOperations(operationSummaries, descriptors), [operationSummaries, descriptors]);
+  const { turns } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.kind === 'user' ? item.item.id : item.id, item])), [descriptors]);
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
@@ -174,9 +175,11 @@ export function Transcript({
       }
       const replyPending = pendingIds.has(id);
       const status = resolveAssistantStatus(message.items, message.turnId, state.turn);
-      const summary = lastTurnRows.get(message.turnId) === message.id ? operationSummaries.get(message.turnId) : undefined;
-      const operationsLive = state.turn?.turnId === message.turnId
-        ? running || state.turn.status === 'stopping' : status.type === 'running';
+      const summary = replySummaries.get(message.id);
+      const operationsLive =
+        replyPending ||
+        status.type === 'running' ||
+        (status.type === 'incomplete' && status.reason === 'cancelled');
       return <AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}

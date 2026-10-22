@@ -56,7 +56,7 @@ import { HISTORY_NOTE_ID_PREFIX, MAX_HISTORY_NOTE_LENGTH } from '../../shared/pr
 
 const MAX_RAW_MESSAGES_TO_PROJECT = 10_000;
 const MAX_RAW_BLOCKS_PER_MESSAGE = 1_000;
-const MAX_RAW_BLOCKS_TO_PROJECT = 20_000;
+const MAX_RAW_BLOCKS_TO_PROJECT = 50_000;
 const MAX_IDENTITY_SOURCE_LENGTH = 2_048;
 const SYSTEM_REMINDER_START = '<system-reminder>';
 const SYSTEM_REMINDER_END = '</system-reminder>';
@@ -124,6 +124,17 @@ export function* projectSessionHistorySteps(
       return unavailableSessionHistory();
     }
 
+    const minMessage = Math.max(0, messages.length - MAX_RAW_MESSAGES_TO_PROJECT);
+    let firstMessage = messages.length;
+    let reservedBlocks = 0;
+    for (let index = messages.length - 1; index >= minMessage; index -= 1) {
+      const candidate = messages[index];
+      const count = isStrictRecord(candidate) && candidate.visibility !== 'llm_only' && Array.isArray(candidate.content)
+        ? Math.min(candidate.content.length, MAX_RAW_BLOCKS_PER_MESSAGE) : 0;
+      if (reservedBlocks + count > MAX_RAW_BLOCKS_TO_PROJECT && firstMessage < messages.length) break;
+      reservedBlocks += count;
+      firstMessage = index;
+    }
     const projection: Projection = {
       workspaceRoot: options?.workspaceRoot,
       sourceSessionId: options?.sourceSessionId,
@@ -140,9 +151,8 @@ export function* projectSessionHistorySteps(
       transcriptSize: 0,
       transcriptTextUnits: 0,
       rawBlocksProcessed: 0,
-      partial: messages.length > MAX_RAW_MESSAGES_TO_PROJECT,
+      partial: firstMessage > 0,
     };
-    const firstMessage = Math.max(0, messages.length - MAX_RAW_MESSAGES_TO_PROJECT);
     for (
       let messageIndex = firstMessage;
       messageIndex < messages.length;

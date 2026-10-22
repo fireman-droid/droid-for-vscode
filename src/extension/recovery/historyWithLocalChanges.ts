@@ -12,11 +12,16 @@ export function historyWithLocalChanges(
   currentTranscript: readonly SessionTranscriptItem[] = [],
 ): HostTranscriptState {
   const turns = new Map<string, ConversationTurnRecord>();
+  const turnIds = new Map<string, string>();
   for (const turn of conversation?.turns ?? []) {
-    if (turn.messageId !== undefined && turn.changesSettled) turns.set(turn.messageId, turn);
+    if (turn.messageId !== undefined) {
+      turnIds.set(turn.messageId, turn.turnId);
+      if (turn.changesSettled) turns.set(turn.messageId, turn);
+    }
   }
   const transcript: SessionTranscriptItem[] = [];
   let current: ConversationTurnRecord | undefined;
+  let activeTurnId: string | undefined;
   const finish = () => {
     if (current !== undefined && current.files.length > 0) {
       transcript.push({
@@ -34,9 +39,17 @@ export function historyWithLocalChanges(
     if (item.kind === 'user') {
       finish();
       current = item.messageId === undefined ? undefined : turns.get(item.messageId);
+      activeTurnId = current?.turnId ?? (item.messageId === undefined ? undefined : turnIds.get(item.messageId));
       transcript.push(item);
     } else if (item.kind !== 'changes') {
-      transcript.push(current === undefined ? item : { ...item, turnId: current.turnId });
+      if (activeTurnId === undefined && item.turnId !== null) {
+        activeTurnId = item.turnId;
+      }
+      transcript.push(
+        activeTurnId === undefined || item.turnId === null || item.turnId === activeTurnId
+          ? item
+          : { ...item, turnId: activeTurnId },
+      );
     }
   }
   finish();
