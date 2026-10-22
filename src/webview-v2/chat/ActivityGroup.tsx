@@ -12,6 +12,7 @@ export function clusterActivity(items: readonly SessionTranscriptItem[]): readon
   const groups: { id: string; items: SessionTranscriptItem[]; grouped: boolean }[] = [];
   let boundary = 'start';
   for (const item of items) {
+    if (item.kind === 'assistant' && item.text.trim().length === 0) continue;
     // Delegations outlive the parent reply and must remain visible outside folded activity.
     const grouped = item.kind === 'thinking' || item.kind === 'tool' && item.subagent === undefined;
     const prior = groups.at(-1);
@@ -60,8 +61,7 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
   const notice = cluster.items.length === 0 && incomplete && !latestHasTerminal
     ? t(incomplete === 'error' ? 'failed' : 'stopped') : undefined;
   return <ActivityGroupView messageId={messageId} groupId={cluster.id}
-    presentation={{ ...presentation, count: cluster.items.length, ...(notice ? { notice } : {}) }}
-    attention={<HistoryItems items={cluster.items.filter((item) => item.kind === 'tool' && item.status === 'failed')} renderItem={renderItem} />}>
+    presentation={{ ...presentation, count: cluster.items.length, ...(notice ? { notice } : {}) }}>
     <HistoryItems items={cluster.items} renderItem={renderItem} />
   </ActivityGroupView>;
 }

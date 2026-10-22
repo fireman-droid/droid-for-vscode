@@ -27,10 +27,20 @@ interface TranscriptProjection extends TranscriptDescription { readonly runs: Re
 const groupText = new WeakMap<AssistantGroupDescriptor, string>();
 const sameItems = <T>(before: readonly T[], after: readonly T[]) =>
   before.length === after.length && before.every((item, index) => item === after[index]);
+function isBlankAssistant(item: SessionTranscriptItem): boolean {
+  return item.kind === 'assistant' && item.text.trim().length === 0;
+}
+function lastNonBlankItem(items: readonly SessionTranscriptItem[]): SessionTranscriptItem | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!;
+    if (!isBlankAssistant(item)) return item;
+  }
+  return undefined;
+}
 function replyText(group: AssistantGroupDescriptor): string {
   const cached = groupText.get(group);
   if (cached !== undefined) return cached;
-  const text = group.items.flatMap((item) => item.kind === 'assistant' && item.text.length > 0 ? [item.text] : []).join('\n\n');
+  const text = group.items.flatMap((item) => item.kind === 'assistant' && item.text.trim().length > 0 ? [item.text] : []).join('\n\n');
   groupText.set(group, text);
   return text;
 }
@@ -54,10 +64,10 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
     let group = groups.get(key);
     if (group === undefined) {
       const prior = descriptors.at(-1);
-      const priorTail = prior?.kind === 'assistant' ? prior.items.at(-1) : undefined;
+      const priorTail = prior?.kind === 'assistant' ? lastNonBlankItem(prior.items) : undefined;
       if (
         prior?.kind === 'assistant' &&
-        (item.kind === 'thinking' || item.kind === 'tool') &&
+        (item.kind === 'thinking' || item.kind === 'tool' || isBlankAssistant(item)) &&
         (priorTail?.kind === 'thinking' || priorTail?.kind === 'tool')
       ) {
         group = prior;

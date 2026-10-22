@@ -25,22 +25,37 @@
   .v2-explored-summary[aria-expanded='true'] .v2-explored-chev { opacity: .8; }
   .v2-explored-summary[aria-expanded='true'] .v2-explored-chev { transform: rotate(90deg); }
   .v2-running-latest {
-    display: block; width: fit-content; min-width: 0; max-width: 100%; min-height: 24px;
-    padding: 1px 0 2px; border: 0; text-align: left; cursor: pointer;
-    font-size: 13px; line-height: 19.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: inline-flex; align-items: baseline; width: fit-content; min-width: 0; max-width: 100%; min-height: 24px;
+    padding: 1px 0 2px; border: 0; background: transparent; text-align: left; cursor: pointer;
+    font-size: 13px; line-height: 19.5px; white-space: nowrap; overflow: hidden;
+  }
+  .v2-running-slot {
+    display: inline-flex; min-width: 0;
+    animation: v2-running-push-up 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .v2-running-slot-action { flex: none; }
+  .v2-running-slot-target { flex: 1; margin-left: 6px; overflow: hidden; }
+  .v2-shimmer-text,
+  .v2-shimmer-sub {
+    display: inline-block;
     background-image: linear-gradient(90deg, var(--muted-ink) 0%, var(--muted-ink) 40%, var(--strong-ink) 50%, var(--muted-ink) 60%, var(--muted-ink) 100%);
     background-size: 250% 100%; -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent; color: transparent;
-    animation: v2-text-shimmer 1.8s linear infinite;
+    animation: v2-text-shimmer 1.8s linear var(--shimmer-delay, 0s) infinite;
   }
   .v2-shimmer-text { font-weight: 500; }
-  .v2-shimmer-sub { margin-left: 6px; font-weight: 400; }
+  .v2-shimmer-sub { min-width: 0; max-width: 100%; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+  @keyframes v2-running-push-up {
+    from { opacity: 0; transform: translateY(65%); }
+    to { opacity: 1; transform: translateY(0); }
+  }
   @keyframes v2-text-shimmer {
     0% { background-position: 100% 0; }
     100% { background-position: 0% 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .v2-running-latest { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--muted-ink); }
+    .v2-running-slot { animation: none; }
+    .v2-shimmer-text, .v2-shimmer-sub { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--muted-ink); }
     .v2-explored-verb, .v2-explored-counts, .v2-explored-chev { transition: none; }
   }
   .v2-tool-error {

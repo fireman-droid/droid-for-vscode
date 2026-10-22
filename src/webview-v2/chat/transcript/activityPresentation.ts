@@ -68,14 +68,6 @@ export function presentActivity({
     (summary.runningCount > 0 || (messageRunning && tail && wait === null));
   const active = members[activeActivityIndex(members)];
   const activeTool = active?.type === 'tool-call' ? readToolActivity(active) : null;
-  const activeReasoningTarget =
-    active?.type === 'reasoning' && typeof active.text === 'string'
-      ? (active.text
-          .split(/\r?\n/u)
-          .map((line) => line.replace(/\*\*/gu, '').trim())
-          .filter(Boolean)
-          .at(-1) ?? null)
-      : null;
   let action: string;
   if (wait !== null) {
     action =
@@ -122,7 +114,17 @@ export function presentActivity({
     summary: summaryLabel,
     target:
       running && wait === null && summary.runningCount > 0
-        ? (activeTool?.target ?? activeReasoningTarget)
+        ? (activeTool?.target ?? null)
+        : null,
+    latestAction:
+      running && wait === null && active !== undefined
+        ? activeTool
+          ? resolveToolAction(active.toolName ?? '', activeTool.action)
+          : 'Thinking'
+        : undefined,
+    latestTarget:
+      running && wait === null && active !== undefined
+        ? (activeTool?.target ?? null)
         : null,
     facts,
     detailFacts,

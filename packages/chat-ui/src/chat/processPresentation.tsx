@@ -112,7 +112,11 @@ export function useProcessDisclosure(
   const buttonRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const measurementFrame = useRef(0);
-  useEffect(() => () => cancelAnimationFrame(measurementFrame.current), []);
+  const expandScrollFrame = useRef(0);
+  useEffect(() => () => {
+    cancelAnimationFrame(measurementFrame.current);
+    cancelAnimationFrame(expandScrollFrame.current);
+  }, []);
 
   useEffect(() => {
     if (!expanded) {
@@ -147,6 +151,40 @@ export function useProcessDisclosure(
     }
     const next = !expanded;
     cancelAnimationFrame(measurementFrame.current);
+    cancelAnimationFrame(expandScrollFrame.current);
+    if (next) {
+      const startedAt = performance.now();
+      const durationMs = reducedMotion ? 32 : 240;
+      const keepVisible = () => {
+        const button = buttonRef.current;
+        const content = contentRef.current;
+        const scroller = button?.closest<HTMLElement>(
+          '[data-transcript-scrollbar], [aria-label="Read-only session transcript"]',
+        );
+        if (button && content && scroller && scroller.clientHeight > 0) {
+          const scrollerRect = scroller.getBoundingClientRect();
+          const buttonRect = button.getBoundingClientRect();
+          const contentRect = content.getBoundingClientRect();
+          const pinned = scroller.parentElement?.querySelector<HTMLElement>('[data-pinned-question]');
+          const pinnedBottom =
+            pinned && pinned.parentElement?.style.visibility !== 'hidden'
+              ? pinned.getBoundingClientRect().bottom
+              : scrollerRect.top;
+          const topCeiling = Math.max(scrollerRect.top + 12, pinnedBottom + 8);
+          const bottomLimit = scrollerRect.bottom - 16;
+          const overflow = Math.max(buttonRect.bottom, contentRect.bottom) - bottomLimit;
+          const maxUpwardPush = Math.max(0, buttonRect.top - topCeiling);
+          const delta = Math.min(overflow, maxUpwardPush);
+          if (delta > 0.5) scroller.scrollTop += delta;
+        }
+        if (performance.now() - startedAt < durationMs) {
+          expandScrollFrame.current = requestAnimationFrame(keepVisible);
+        } else {
+          expandScrollFrame.current = 0;
+        }
+      };
+      expandScrollFrame.current = requestAnimationFrame(keepVisible);
+    }
     if (next && measurement && presentation?.reportLayout) {
       const started = performance.now();
       const report = presentation.reportLayout;

@@ -174,13 +174,22 @@ export function Transcript({
           planChoice={plan && expanded !== undefined ? { id: plan.anchorToolUseId, expanded } : null} onPlanToggle={togglePlan} />;
       }
       const replyPending = pendingIds.has(id);
-      const status = resolveAssistantStatus(message.items, message.turnId, state.turn);
+      const isPendingTail = replyPending && message.id === lastReplyId;
+      const activeTurn =
+        isPendingTail && state.turn !== null
+          ? { ...state.turn, turnId: message.turnId }
+          : state.turn;
+      const activeWaiting =
+        isPendingTail && waiting !== null
+          ? { ...waiting, turnId: message.turnId }
+          : waiting;
+      const status = resolveAssistantStatus(message.items, message.turnId, activeTurn);
       const summary = replySummaries.get(message.id);
       const operationsLive =
         replyPending ||
         status.type === 'running' ||
         (status.type === 'incomplete' && status.reason === 'cancelled');
-      return <AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
+      return <AssistantReply descriptor={message} status={status} waiting={activeWaiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}
         regenerate={message.id === lastReplyId && canResend && actions.regenerateAnchor !== null ? actions.handleRegenerate : undefined}
