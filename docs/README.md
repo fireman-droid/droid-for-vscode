@@ -71,8 +71,10 @@ Host 管理编辑器、会话和文件，Runtime 负责适配 Droid。代码补�
 | 当前实现与验证缺口 | [STATUS](STATUS.md) |
 | 下一步工作与优先级 | [PLAN](PLAN.md) |
 | 交互、样式与设计约束 | [DESIGN](DESIGN.md) |
+| 开发、构建与发布统一入口 | [开发与交付流水线 skill](../.agents/skills/droid-dev-pipeline/SKILL.md) |
 | 让已有界面更简单、紧凑、实用 | [界面整改 skill](../.agents/skills/practical-ui-refinement/SKILL.md) · [模型选择器案例](../.agents/skills/practical-ui-refinement/references/droid-model-picker.md) |
 | 构建、打包与排查 VSIX 安装包 | [VSIX 打包 skill](../.agents/skills/vsix-packaging/SKILL.md) · [故障处理参考](../.agents/skills/vsix-packaging/references/troubleshooting.md) |
+| 分支管理、原子提交、PR 合并与发版 | [分支与发版 skill](../.agents/skills/git-branch-release/SKILL.md) · [发版与分支清理清单](../.agents/skills/git-branch-release/references/release-checklist.md) |
 | 按版本记录变化 | [CHANGELOG](../CHANGELOG.md) |
 | 开发、测试、提交与安装规则 | [AGENTS](../AGENTS.md) |
 
