@@ -1,11 +1,27 @@
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import type { AssistantWebviewState } from '../state/types';
 
-export function getStatusMessage(state: Pick<AssistantWebviewState, 'turn' | 'connection'>, draft: string): string | undefined {
+export function getStatusMessage(
+  state: Pick<AssistantWebviewState, 'turn' | 'connection'> & {
+    readonly transcript?: AssistantWebviewState['transcript'];
+  },
+  draft: string,
+): string | undefined {
   if (state.connection.status === 'unavailable') return state.connection.message ?? 'The local Droid connection is unavailable.';
-  if (state.turn?.error !== undefined) return state.turn.error;
-  if (state.turn?.status === 'failed' && state.connection.status === 'connected') {
-    return 'Reply failed. No error details are available.';
+  const turnErrorInTranscript =
+    state.turn !== null &&
+    state.transcript?.some(
+      (item) =>
+        item.kind === 'diagnostic' &&
+        item.severity === 'error' &&
+        (item.turnId === state.turn?.turnId ||
+          (state.turn?.error !== undefined && item.message === state.turn.error)),
+    ) === true;
+  if (!turnErrorInTranscript) {
+    if (state.turn?.error !== undefined) return state.turn.error;
+    if (state.turn?.status === 'failed' && state.connection.status === 'connected') {
+      return 'Reply failed. No error details are available.';
+    }
   }
   if (state.connection.message !== undefined) return state.connection.message;
   if (draft.length > MAX_TURN_TEXT_LENGTH) {
