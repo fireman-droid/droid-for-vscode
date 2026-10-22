@@ -59,7 +59,7 @@ describe('Activity state and grouping', () => {
   it('includes commands and unknown tools in mixed activity summaries', () => {
     const result = present([tool('Read'), tool('Execute', 'completed', { action: 'Ran a local command' }),
       tool('mcp__design__measure_layout', 'completed', { action: undefined })]);
-    expect(result.summary).toBe('1 read, Run command, Measure layout');
+    expect(result.summary).toBe('1 read, ran 1 command, Measure layout');
     expect(result.action).toBe('3 operations');
   });
 

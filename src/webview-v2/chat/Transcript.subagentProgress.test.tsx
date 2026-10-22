@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
+import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { initialAssistantWebviewState } from '../state/initialState';
 import type { AssistantWebviewState } from '../state/types';
-import { Transcript } from './Transcript';
+import { useComposerFlow } from './composer/useComposerFlow';
+import { Composer } from './Composer';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -18,8 +20,16 @@ const state: AssistantWebviewState = {
   sessionId: 'session-1', conversationId: 'conversation-1', connection: { status: 'connected' },
   turn: { turnId: 'turn-1', status: 'streaming', activity: 'working' }, transcript: [task],
 };
-const port = { postMessage: vi.fn() };
-const view = (value: AssistantWebviewState) => <Transcript state={value} port={port} blocked={false} sendSignal={0} onFork={undefined} />;
+const port = { postMessage: vi.fn(), getState: () => ({}), setState: vi.fn() };
+const routes = { blocked: false, compact: vi.fn(), navigate: vi.fn(), openBtw: vi.fn(), askBtw: vi.fn() };
+function Harness({ value }: { readonly value: AssistantWebviewState }) {
+  const flow = useComposerFlow(port, value, vi.fn(), routes);
+  return <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => undefined }}>
+    <Composer state={value} port={port} flow={flow} blocked={false} onFileSearch={vi.fn()} onNavigate={vi.fn()} onBtwOpen={vi.fn()}
+      renderInputRow={(input, action) => <div className="v2-composer-input-row">{input}{action}</div>} />
+  </UiEnvironmentProvider>;
+}
+const view = (value: AssistantWebviewState) => <Harness value={value} />;
 
 it('identifies foreground delegation waits and keeps parallel or subsequent parent work distinct', () => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));

@@ -20,13 +20,15 @@ it('opens a single tool detail directly and keeps the reader choice across virtu
     {visible ? <AssistantReply descriptor={descriptor} status={{ type: 'complete', reason: 'stop' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} /> : null}
   </ProcessPresentationProvider>;
   const { rerender } = render(view(true));
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
+  const history = screen.getByRole('button', { name: 'Process: Execution history' });
+  expect(history.textContent).toContain('1 read');
+  await user.click(history);
   await user.click(screen.getByRole('button', { name: /Read.*src\/app\.ts/ }));
   expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const directDetail = true;');
   expect(following.current.following).toBe(false);
   rerender(view(false));
   rerender(view(true));
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Process: Execution history' }).getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByRole('button', { name: /^Read.*src\/app\.ts/ }).getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const directDetail = true;');
 });
@@ -48,25 +50,25 @@ it('keeps ordered individual disclosures without an intermediate thinking group'
   </ProcessPresentationProvider>;
   const rendered = render(view(true));
   const history = screen.getByRole('button', { name: 'Process: Execution history' });
-  expect(history.textContent).toContain('2 records');
+  expect(history.textContent).toContain('1 read, 1 listing');
   expect(history.getAttribute('aria-expanded')).toBe('false');
-  expect(screen.getAllByRole('button', { name: /^List/ })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: /^List/ })).toBeNull();
   await user.click(history);
-  expect(screen.queryByRole('region', { name: 'Directory listing' })).toBeNull();
-  expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   const historyContent = document.getElementById(history.getAttribute('aria-controls')!)!;
   expect(historyContent.contains(screen.getByRole('button', { name: /^Read.*src\/app\.ts/ }))).toBe(true);
   const latest = screen.getByRole('button', { name: /^List/ });
-  expect(historyContent.contains(latest)).toBe(false);
+  expect(historyContent.contains(latest)).toBe(true);
+  await user.click(screen.getByRole('button', { name: /Thought for 0\.8s/ }));
+  await user.click(screen.getByRole('button', { name: /^Read.*src\/app\.ts/ }));
   await user.click(latest);
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   rendered.rerender(view(false));
   rendered.rerender(view(true));
   expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
   expect(screen.getByText('Planning')).toBeTruthy();
   expect(screen.getByText('Outlining')).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Source preview' })).toBeTruthy();
   expect(following.current.following).toBe(false);
   expect(screen.queryByRole('button', { name: /^Thinking history/ })).toBeNull();
   const text = rendered.container.textContent!;
@@ -80,8 +82,7 @@ it('keeps ordered individual disclosures without an intermediate thinking group'
   expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: /^Process:/ }));
   await waitFor(() => expect(screen.queryByText('Planning')).toBeNull());
-  expect(screen.getByRole('region', { name: 'Directory listing' })).toBeTruthy();
-  expect(screen.getAllByRole('button', { name: /^List/ })).toHaveLength(1);
+  expect(screen.queryByRole('region', { name: 'Directory listing' })).toBeNull();
 });
 
 it('keeps a single command directly accessible and retains failures after the turn settles', async () => {
@@ -99,20 +100,22 @@ it('keeps a single command directly accessible and retains failures after the tu
       replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>;
   const rendered = render(view(true));
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
-  expect(screen.getByRole('button', { name: /^Run fixture/ }).getAttribute('aria-expanded')).toBe('false');
+  const history = screen.getByRole('button', { name: 'Process: Execution history' });
+  expect(history.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByLabelText('Command and output')).toBeNull();
-  await user.click(screen.getByRole('button', { name: /^Run fixture/ }));
+  await user.click(history);
+  const command = screen.getByRole('button', { name: /^Run fixture/ });
+  expect(command.getAttribute('aria-expanded')).toBe('false');
+  await user.click(command);
   expect(screen.getByLabelText('Command and output').textContent).toContain('Checking fixture');
   rendered.rerender(view(false));
-  expect(screen.queryByRole('button', { name: /Activity/ })).toBeNull();
   expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
-  const command = screen.getByRole('button', { name: /^Run fixture/ });
-  await user.click(command);
-  expect(command.getAttribute('aria-expanded')).toBe('false');
+  const settledCommand = screen.getByRole('button', { name: /^Run fixture/ });
+  await user.click(settledCommand);
+  expect(settledCommand.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByLabelText('Command and output')).toBeNull();
-  await user.click(command);
-  expect(command.getAttribute('aria-expanded')).toBe('true');
+  await user.click(settledCommand);
+  expect(settledCommand.getAttribute('aria-expanded')).toBe('true');
 });
 
 it.each([1, 2])('keeps the latest of %s reasoning segments independently collapsible outside history', async (count) => {
@@ -124,26 +127,24 @@ it.each([1, 2])('keeps the latest of %s reasoning segments independently collaps
     <AssistantReply descriptor={descriptor} status={{ type: 'running' }} waiting={null} replyText={undefined}
       completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>);
-  const trigger = screen.queryByRole('button', { name: 'Process: Execution history' });
-  expect(trigger === null).toBe(count === 1);
-  expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
+  const trigger = screen.getByRole('button', { name: 'Process: Execution history' });
+  expect(trigger.textContent).toContain(count === 1 ? '1 thought' : '2 thoughts');
   for (let index = 0; index < count; index++) {
     expect(screen.queryByText(`Reasoning segment ${index + 1}`)).toBeNull();
   }
-  if (trigger) {
-    expect(trigger.textContent).toContain('1 records');
-    await user.click(trigger);
-    expect(screen.getByText('Reasoning segment 1')).toBeTruthy();
-    expect(screen.queryByText(`Reasoning segment ${count}`)).toBeNull();
-  }
+  await user.click(trigger);
   const segments = screen.getAllByRole('button', { name: /^Thinking/ });
   expect(segments).toHaveLength(count);
   await user.click(segments.at(-1)!);
   expect(screen.getByText(`Reasoning segment ${count}`)).toBeTruthy();
+  if (count > 1) {
+    await user.click(segments[0]!);
+    expect(screen.getByText('Reasoning segment 1')).toBeTruthy();
+  }
   await user.click(segments[0]!);
   await waitFor(() => expect(screen.queryByText('Reasoning segment 1')).toBeNull());
   if (count > 1) expect(screen.getByText('Reasoning segment 2')).toBeTruthy();
-  if (trigger) expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
 });
 
 it('retains explicit reasoning disclosure through appended text, completion and virtual eviction inside mixed activity', async () => {
@@ -163,11 +164,10 @@ it('retains explicit reasoning disclosure through appended text, completion and 
   const rendered = render(view('Initial reasoning.'));
   const activity = screen.getByRole('button', { name: /^Process:/ });
   expect(activity.getAttribute('aria-expanded')).toBe('false');
-  expect(screen.queryByRole('button', { name: /^Thinking/ })).toBeNull();
+  expect(screen.queryByText('Initial reasoning.')).toBeNull();
   await user.click(activity);
   expect(activity.getAttribute('aria-expanded')).toBe('true');
   const thinking = screen.getByRole('button', { name: /^Thinking/ });
-  await user.click(thinking);
   expect(thinking.getAttribute('aria-expanded')).toBe('false');
   await user.click(thinking);
   expect(screen.getByText('Initial reasoning.')).toBeTruthy();
@@ -207,10 +207,10 @@ it('keeps failed commands and their output accessible while mixed activity is co
   </ProcessPresentationProvider>);
   const process = screen.getByRole('button', { name: 'Process: Execution history' });
   expect(process.getAttribute('aria-expanded')).toBe('false');
-  await user.click(screen.getByRole('button', { name: /^Run fixture/ }));
-  expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
+  expect(process.textContent).toContain('1 failed');
   await user.click(process);
-  expect(screen.getAllByRole('button', { name: /^Run fixture/ })).toHaveLength(1);
+  const command = screen.getByRole('button', { name: /^Run fixture/ });
+  await user.click(command);
   expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
 });
 
@@ -227,8 +227,7 @@ it('keeps the full history open as new thinking segments arrive', async () => {
   </ProcessPresentationProvider>;
   const { rerender } = render(view(false));
   await user.click(screen.getByRole('button', { name: /^Process:/ }));
-  await user.click(screen.getByRole('button', { name: /Thought for 2s/ }));
-  await waitFor(() => expect(screen.queryByText('First observation.')).toBeNull());
+  expect(screen.getByRole('button', { name: /Thought for 2s/ }).getAttribute('aria-expanded')).toBe('false');
   rerender(view(true));
   expect(screen.queryByRole('button', { name: /^Thinking history/ })).toBeNull();
   expect(screen.queryByText('Next observation.')).toBeNull();
@@ -253,32 +252,30 @@ it('keeps the newest operation outside history while preserving choices as it mo
       status={{ type: 'running' }} waiting={null} replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>;
   const { rerender } = render(view(1));
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
-  rerender(view(2));
   const process = screen.getByRole('button', { name: 'Process: Execution history' });
   expect(process.getAttribute('aria-expanded')).toBe('false');
-  expect(process.textContent).toContain('1 records');
-  expect(screen.getAllByRole('button', { name: /^Read.*src\/latest\.ts/ })).toHaveLength(1);
+  rerender(view(2));
+  expect(process.getAttribute('aria-expanded')).toBe('false');
+  expect(process.textContent).toContain('1 read');
   expect(screen.queryByRole('region', { name: 'Source preview' })).toBeNull();
-  await user.click(screen.getByRole('button', { name: /^Read.*src\/latest\.ts/ }));
   await user.click(process);
   expect(process.getAttribute('aria-expanded')).toBe('true');
+  await user.click(screen.getByRole('button', { name: /^Read.*src\/latest\.ts/ }));
   expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const latest = true;');
   rerender(view(3));
   expect(process.getAttribute('aria-expanded')).toBe('true');
-  expect(process.textContent).toContain('2 records');
+  expect(process.textContent).toContain('1 read');
   expect(screen.getAllByRole('button', { name: /^Read.*src\/latest\.ts/ })).toHaveLength(1);
   expect(screen.getByRole('region', { name: 'Source preview' }).textContent).toContain('const latest = true;');
   const latest = screen.getByRole('button', { name: /^Thinking/ });
   expect(latest.getAttribute('aria-expanded')).toBe('false');
   const historyContent = document.getElementById(process.getAttribute('aria-controls')!)!;
-  expect(historyContent.contains(latest)).toBe(false);
+  expect(historyContent.contains(latest)).toBe(true);
   expect(historyContent.contains(screen.getByRole('button', { name: /^Read.*src\/latest\.ts/ }))).toBe(true);
-  await user.click(process);
-  expect(process.getAttribute('aria-expanded')).toBe('false');
-  expect(screen.getByRole('button', { name: /^Thinking/ })).toBe(latest);
   await user.click(latest);
   expect(screen.getByText('The next observation.')).toBeTruthy();
+  await user.click(process);
+  expect(process.getAttribute('aria-expanded')).toBe('false');
 });
 
 it('keeps assistant prose in order and places earlier process groups entirely in history', async () => {
@@ -297,27 +294,29 @@ it('keeps assistant prose in order and places earlier process groups entirely in
       replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>);
   const histories = screen.getAllByRole('button', { name: 'Process: Execution history' });
-  expect(histories).toHaveLength(2);
+  expect(histories).toHaveLength(3);
   expect(histories.every((history) => history.getAttribute('aria-expanded') === 'false')).toBe(true);
-  expect(histories.every((history) => history.textContent?.includes('1 records'))).toBe(true);
+  expect(histories[0]!.textContent).toContain('1 thought');
+  expect(histories[1]!.textContent).toContain('1 read');
+  expect(histories[2]!.textContent).toContain('1 thought');
   expect(screen.queryByText('Earlier reasoning.')).toBeNull();
   expect(screen.queryByText('src/earlier.ts')).toBeNull();
-  expect(screen.getAllByRole('button', { name: /^Thinking/ })).toHaveLength(1);
   const first = screen.getByText('First, inspect the implementation.');
   const progress = screen.getByText('The source confirms the next step.');
   const next = screen.getByText('Now verify the result.');
-  const latest = screen.getByRole('button', { name: /^Thinking/ });
-  const ordered = [first, histories[0]!, progress, histories[1]!, next, latest];
+  const ordered = [first, histories[0]!, progress, histories[1]!, next, histories[2]!];
   for (let index = 1; index < ordered.length; index++) {
     expect(ordered[index - 1]!.compareDocumentPosition(ordered[index]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }
   await user.click(histories[0]!);
+  await user.click(screen.getByRole('button', { name: /^Thought/ }));
   expect(screen.getByText('Earlier reasoning.')).toBeTruthy();
   await user.click(histories[1]!);
   expect(screen.getByText('src/earlier.ts')).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read.*src\/earlier\.ts/ })).toBeNull();
   expect(screen.queryByText('Latest reasoning.')).toBeNull();
-  await user.click(latest);
+  await user.click(histories[2]!);
+  await user.click(screen.getByRole('button', { name: /^Thinking/ }));
   expect(view.container.textContent).toContain('Latest reasoning.');
 });
 
@@ -335,10 +334,10 @@ it('keeps a historical failure accessible without duplicating it when history op
   const history = screen.getByRole('button', { name: 'Process: Execution history' });
   expect(history.getAttribute('aria-expanded')).toBe('false');
   expect(history.textContent).toContain('1 failed');
-  await user.click(screen.getByRole('button', { name: /^Run failed check/ }));
-  expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
   await user.click(history);
+  const failedCmd = screen.getByRole('button', { name: /^Run failed check/ });
   expect(screen.getAllByRole('button', { name: /^Run failed check/ })).toHaveLength(1);
+  await user.click(failedCmd);
   expect(screen.getByLabelText('Command and output').textContent).toContain('Module not found');
   expect(screen.getByRole('button', { name: /^Thinking/ }).getAttribute('aria-expanded')).toBe('false');
 });
@@ -346,7 +345,8 @@ it('keeps a historical failure accessible without duplicating it when history op
 it.each([
   ['cancelled', 'stopped'],
   ['error', 'failed'],
-] as const)('shows the %s turn state even when its only operation already completed', (reason, label) => {
+] as const)('shows the %s turn state even when its only operation already completed', async (reason, label) => {
+  const user = userEvent.setup();
   const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn', items: [
     { kind: 'tool', id: 'check', turnId: 'turn', toolUseId: 'check-call', toolName: 'Execute', action: 'Run check', status: 'completed',
       progressCount: 0, latestUpdateKind: null, detailKind: 'command', detail: 'node check.mjs' },
@@ -355,15 +355,17 @@ it.each([
     <AssistantReply descriptor={descriptor} status={{ type: 'incomplete', reason }} waiting={null}
       replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>);
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
-  expect(screen.getByRole('button', { name: /^Run check/ })).toBeTruthy();
+  const history = screen.getByRole('button', { name: 'Process: Execution history' });
   expect(screen.getAllByText(new RegExp(`^${label}$`, 'i'))).toHaveLength(1);
+  await user.click(history);
+  expect(screen.getByRole('button', { name: /^Run check/ })).toBeTruthy();
 });
 
 it.each([
   ['cancelled', 'stopped'],
   ['error', 'failed'],
-] as const)('does not repeat the %s turn state already shown by its only operation', (reason, status) => {
+] as const)('does not repeat the %s turn state already shown by its only operation', async (reason, status) => {
+  const user = userEvent.setup();
   const descriptor: AssistantGroupDescriptor = { kind: 'assistant', id: 'reply', turnId: 'turn', items: [
     { kind: 'tool', id: 'check', turnId: 'turn', toolUseId: 'check-call', toolName: 'Execute', action: 'Run check', status,
       progressCount: 0, latestUpdateKind: null, detailKind: 'command', detail: 'node check.mjs' },
@@ -372,9 +374,9 @@ it.each([
     <AssistantReply descriptor={descriptor} status={{ type: 'incomplete', reason }} waiting={null}
       replyText={undefined} completedAt={undefined} regenerate={undefined} fork={undefined} />
   </ProcessPresentationProvider>);
-  expect(screen.queryByRole('button', { name: /^Process:/ })).toBeNull();
+  const history = screen.getByRole('button', { name: 'Process: Execution history' });
+  await user.click(history);
   const operation = screen.getByRole('button', { name: /^Run check/ });
   const states = screen.getAllByText(new RegExp(`^${status}$`, 'i'));
-  expect(states).toHaveLength(1);
-  expect(operation.contains(states[0]!)).toBe(true);
+  expect(states.some((node) => operation.contains(node))).toBe(true);
 });

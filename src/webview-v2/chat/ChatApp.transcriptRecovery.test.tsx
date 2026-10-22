@@ -95,11 +95,11 @@ describe('ChatApp transcript delivery recovery', () => {
     expect(input.closest('form')!.textContent).not.toContain(receipt);
     receive(snapshot({ sequence: 3, turn: { turnId: 'resumed-turn', status: 'streaming' } }));
     receive({ ...tool(4, 'running'), turnId: 'resumed-turn' });
-    await waitFor(() => expect(within(status).getByText('Droid is working')).toBeTruthy());
+    await waitFor(() => expect(within(input.closest('form')!).getByText('Droid is working')).toBeTruthy());
     expect(within(status).getByText(receipt)).toBeTruthy();
     receive({ type: 'turn.state', sequence: 5, sessionId, turnId: 'resumed-turn', status: 'failed' });
     await waitFor(() => expect(within(status).getByText('Reply failed. No error details are available.')).toBeTruthy());
-    expect(within(status).queryByText('Droid is working')).toBeNull();
+    expect(within(input.closest('form')!).queryByText('Droid is working')).toBeNull();
     receive(snapshot({ sequence: 6, sessionId: 'next-session', conversationId: 'next-conversation', turn: null }));
     await waitFor(() => expect(screen.queryByText(receipt)).toBeNull());
     expect(screen.queryByText('Reply failed. No error details are available.')).toBeNull();
@@ -180,7 +180,7 @@ describe('ChatApp transcript delivery recovery', () => {
     await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
     await waitFor(() => expect(screen.getAllByText(answer)).toHaveLength(1));
     const history = screen.getByRole('button', { name: 'Process: Execution history' });
-    expect(history.textContent).toContain('1 records');
+    expect(history.textContent).toContain('ran 1 command');
     fireEvent.click(history);
     await waitFor(() => expect(screen.getAllByRole('button', { name: /^Run checks/ })).toHaveLength(1));
     expect((screen.getByRole('textbox', { name: 'Message Droid' }) as HTMLElement).textContent).toBe(draft);

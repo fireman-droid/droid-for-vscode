@@ -92,8 +92,8 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     const previous = previousFilter.current;
     if (previous.query !== query || previous.unreviewed !== unreviewed || previous.tree !== tree) {
       // Replace pending selected-row reconciliation when filters reset the list.
-      if (virtual) list.virtualizer.scrollToOffset(0);
-      else if (list.viewport.current) list.viewport.current.scrollTop = 0;
+      list.virtualizer.scrollToOffset(0);
+      if (list.viewport.current) list.viewport.current.scrollTop = 0;
       previousFilter.current = { query, unreviewed, tree };
     }
   }, [query, unreviewed, tree, virtual, list.viewport, list.virtualizer]);
