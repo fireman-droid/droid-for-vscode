@@ -1,12 +1,11 @@
 import { useI18n } from '../i18n';
-import { useEffect, useState } from 'react';
-import { Brain } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
-import { Markdown } from '../content/Markdown';
 import { ActivityItem } from './ActivityItem';
+import { ThinkingBody } from './ThinkingBody';
 import { formatThinkingLabel } from './thinkingLabel';
 
-export function ThinkingView({ text, status, durationMs, truncated = false, activity }: {
+export const ThinkingView = memo(function ThinkingView({ text, status, durationMs, truncated = false, activity }: {
   readonly text: string;
   readonly status: 'active' | 'complete' | 'incomplete';
   readonly durationMs?: number;
@@ -24,16 +23,14 @@ export function ThinkingView({ text, status, durationMs, truncated = false, acti
     return () => clearTimeout(timer);
   }, [running, text.length, truncated]);
   const title = running ? t('Thinking') : formatThinkingLabel(status, durationMs ?? null, t);
-  const body = <div className="v2-thinking-detail select-none text-muted-foreground [&_*]:select-none">
-    {text ? <Markdown text={text.replace(/(?<=\S)\*{4}(?=\S)/gu, '**\n\n**')} streaming={running} thinking />
-      : <p role="status">{running ? t("Waiting for thinking text…") : t("No thinking text returned.")}</p>}
-    {truncated ? <p role="note" className="mt-2 text-[11px]">{t("Thinking reached the local safety limit; later reasoning is not retained.")}</p> : null}
-  </div>;
-  if (activity) return <ActivityItem {...activity} textSelectable={false} icon={<Brain />} title={title}
+  const hasDetails = running || truncated || /\S/u.test(text);
+  const body = hasDetails ? <ThinkingBody text={text} running={running} truncated={truncated} /> : undefined;
+  if (activity) return <ActivityItem {...activity} textSelectable={false} icon={null} title={title}
     status={truncated ? t('Safety limit') : running ? waiting ? t('Waiting') : t('Receiving') : undefined}>{body}</ActivityItem>;
+  if (!hasDetails) return <p className="m-0 min-h-6 py-0.5 text-[13px] leading-[18px] text-muted-foreground">{title}</p>;
   return <Tool open={expanded} onOpenChange={setExpanded}>
     <ToolHeader className="select-none" title={title}
       status={truncated ? t('Safety limit reached') : running ? waiting ? t('Waiting for model') : t('Receiving') : ''} />
     <ToolContent className="pb-1">{body}</ToolContent>
   </Tool>;
-}
+});

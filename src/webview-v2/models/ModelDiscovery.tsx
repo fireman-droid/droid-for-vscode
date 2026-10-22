@@ -69,7 +69,7 @@ export function ModelDiscovery({ page, onDone, onManual }: {
         onClick={() => { if (connection) void page.discoverModels(connection.id); }}><RefreshCw /></Button>
     </div>
     <div className="models-selection-toolbar">
-      <span className="models-help">{t("显示")} {filtered.length} / {items.length} {t("个")}</span>
+      <span data-ui-notice="" className="models-help">{t("显示")} {filtered.length} / {items.length} {t("个")}</span>
       <Button variant="ghost" size="sm" disabled={busy || !unselected.length || chosen.size >= MAX_MODEL_CATALOG_ITEMS} onClick={chooseFiltered}>{t("选择筛选结果")}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !chosen.size} onClick={() => page.setChosen(new Set())}>{t("清空选择")}</Button>
     </div>
@@ -93,7 +93,7 @@ export function ModelDiscovery({ page, onDone, onManual }: {
                 {displayName(item).trim() && !aliasOpen ? <span className="models-model-alias">{displayName(item).trim()}</span> : null}
               </span>
             </label>
-            {exists ? <span className="models-added"><Check aria-hidden />{t("已添加")}</span> :
+            {exists ? <span data-ui-notice="" className="models-added"><Check aria-hidden />{t("已添加")}</span> :
               <Button variant="ghost" size="icon" aria-label={t("修改 {p0} 的导入别名", { p0: item.model })} aria-expanded={aliasOpen}
                 title={t("设置显示别名")} disabled={busy} onClick={() => setEditingAlias(aliasOpen ? null : item.model)}><Pencil /></Button>}
           </div>
@@ -103,12 +103,12 @@ export function ModelDiscovery({ page, onDone, onManual }: {
               placeholder={t("留空时使用 Model ID")} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
               onChange={(event) => setAliases((current) => ({ ...current, [item.model]: event.target.value }))} />
           </div> : null}
-          {error ? <p className="models-import-error" id={`${inputId}-error`}>{error}
+          {error ? <p role="alert" className="models-import-error" id={`${inputId}-error`}>{error}
             {!aliasOpen ? <Button variant="link" size="sm" disabled={busy} onClick={() => setEditingAlias(item.model)}>{t("设置别名")}</Button> : null}
           </p> : null}
         </div>;
       })}
-      {filtered.length === 0 ? <div className="models-discovery-no-results"><Search aria-hidden /><h3>{items.length ? t("没有符合筛选条件的模型") : t("这个接口没有返回模型列表")}</h3>
+      {filtered.length === 0 ? <div data-ui-notice="" className="models-discovery-no-results"><Search aria-hidden /><h3>{items.length ? t("没有符合筛选条件的模型") : t("这个接口没有返回模型列表")}</h3>
         <p className="models-help">{items.length ? t("已选项会保留，可以清除筛选继续查找。") : t("服务可能不支持模型发现，仍可使用已知的 Model ID 添加。")}</p>
         <Button variant="outline" size="sm" disabled={busy} onClick={items.length ? () => { setSearch(''); setHideAdded(false); setOnlyChosen(false); } : onManual}>{items.length ? t("清除筛选条件") : t("手动填写 ID")}</Button>
       </div> : null}

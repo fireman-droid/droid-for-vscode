@@ -2,7 +2,6 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { useStore } from 'zustand';
 import type { ChatStore } from './store';
-import { DroidActivity } from '../ui/droid-motion';
 import { useMessageEditor } from './editing/useMessageEditor';
 import { useMessageActions } from './editing/useMessageActions';
 import { useAttachmentActions } from './attachments/useAttachmentActions';
@@ -16,7 +15,7 @@ import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../shell/statusMessage';
 import { isPlanLive, selectPlanAnchors } from './transcript/planAnchor';
-import { createOperationSummarySelector } from './operationSummary';
+import { createOperationSummarySelector, summarizeReplyOperations } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 import { useTranscriptReceipt } from './useTranscriptReceipt';
@@ -39,6 +38,7 @@ export function Transcript({
   onQuote,
   onBtwQuote,
   interaction,
+  statusNotice,
   onEditBegin,
   onDraftSuggestion,
   historyEditable = true,
@@ -53,6 +53,7 @@ export function Transcript({
   readonly onQuote?: (text: string) => void;
   readonly onBtwQuote?: (text: string) => void;
   readonly interaction?: ReactNode;
+  readonly statusNotice?: ReactNode;
   readonly onEditBegin?: () => void;
   readonly onDraftSuggestion?: (prompt: string) => void;
   readonly historyEditable?: boolean;
@@ -126,7 +127,8 @@ export function Transcript({
     }));
   }, [state.conversationId, stopFollowing]);
   const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
-  const { turns, lastTurnRows } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
+  const replySummaries = useMemo(() => summarizeReplyOperations(operationSummaries, descriptors), [operationSummaries, descriptors]);
+  const { turns } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.kind === 'user' ? item.item.id : item.id, item])), [descriptors]);
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
@@ -135,10 +137,6 @@ export function Transcript({
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);
-  const activeTools = useMemo(() => items.filter((item) =>
-    item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId), [items, state.turn?.turnId]);
-  const waitingForSubagents = activeTools.length > 0 && activeTools.every((item) => item.kind === 'tool' && item.subagent !== undefined &&
-    (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending'));
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
   const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
@@ -150,11 +148,9 @@ export function Transcript({
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
       {interaction}</>}
-    statusContent={running && state.interactions.length === 0 ? <div role="status" aria-live="polite" className="flex select-none items-center gap-2 py-1 text-xs text-muted-foreground">
-      <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
-      <span>{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
-        ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
-        : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
+    statusContent={statusNotice ? <div role="status" aria-label={t('Droid status')} aria-live="polite"
+      className="grid min-w-0 gap-1 py-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+      {statusNotice}
     </div> : null}
     renderMessage={(id, presentation) => {
       const message = byId.get(id)!;
@@ -167,11 +163,22 @@ export function Transcript({
           planChoice={plan && expanded !== undefined ? { id: plan.anchorToolUseId, expanded } : null} onPlanToggle={togglePlan} />;
       }
       const replyPending = pendingIds.has(id);
-      const status = resolveAssistantStatus(message.items, message.turnId, state.turn);
-      const summary = lastTurnRows.get(message.turnId) === message.id ? operationSummaries.get(message.turnId) : undefined;
-      const operationsLive = state.turn?.turnId === message.turnId
-        ? running || state.turn.status === 'stopping' : status.type === 'running';
-      return <AssistantReply descriptor={message} status={status} waiting={waiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
+      const isPendingTail = replyPending && message.id === lastReplyId;
+      const activeTurn =
+        isPendingTail && state.turn !== null
+          ? { ...state.turn, turnId: message.turnId }
+          : state.turn;
+      const activeWaiting =
+        isPendingTail && waiting !== null
+          ? { ...waiting, turnId: message.turnId }
+          : waiting;
+      const status = resolveAssistantStatus(message.items, message.turnId, activeTurn);
+      const summary = replySummaries.get(message.id);
+      const operationsLive =
+        replyPending ||
+        status.type === 'running' ||
+        (status.type === 'incomplete' && status.reason === 'cancelled');
+      return <AssistantReply descriptor={message} status={status} waiting={activeWaiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}
         regenerate={message.id === lastReplyId && canResend && actions.regenerateAnchor !== null ? actions.handleRegenerate : undefined}

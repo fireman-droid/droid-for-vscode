@@ -259,7 +259,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
             {leadingContent}
             {hiddenMessageCount > 0 ? <Button variant="ghost" size="sm" className="mb-3 w-full text-xs text-muted-foreground" onClick={revealEarlier}>{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</Button> : null}
           </div>
-          <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow}>
+          <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow} reportLayout={reportLayout}>
           <div style={{ paddingTop: Math.max(0, (virtualItems[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {virtualItems.map((row, index) => (
               <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" className="flow-root"

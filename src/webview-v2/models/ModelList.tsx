@@ -30,19 +30,19 @@ export function ModelList({ models, snapshot, disabled, onAction, onEdit, onRena
         <span className="models-model-symbol"><Box aria-hidden /></span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h4 className="models-model-name">{model.displayName || model.model}</h4>
-            {!enabled ? <span className="rounded border border-border px-1.5 text-[11px] text-muted-foreground">{t("已禁用")}</span> : null}
+            {!enabled ? <span data-ui-notice="" className="rounded border border-border px-1.5 text-[11px] text-muted-foreground">{t("已禁用")}</span> : null}
           </div>
           <span className="models-model-id">{model.model}</span>
-          {!enabled ? <p className="models-help mt-2">{current
+          {!enabled ? <p data-ui-notice="" className="models-help mt-2">{current
             ? t("当前回复不会中断；下次发送前请切换模型或恢复此模型。")
-            : t("配置已保留，恢复后可选择或验证此模型。")}</p> : unavailable ? <p className="models-help mt-2">{unavailable}</p> : null}
-          {model.test ? <p className={`models-help mt-2 ${model.test.status === 'failed' ? 'text-destructive' : ''}`}>
+            : t("配置已保留，恢复后可选择或验证此模型。")}</p> : unavailable ? <p data-ui-notice="" className="models-help mt-2">{unavailable}</p> : null}
+          {model.test ? <p data-ui-notice="" className={`models-help mt-2 ${model.test.status === 'failed' ? 'text-destructive' : ''}`}>
             {model.test.status === 'passed' ? t("本窗口验证通过") : t("验证失败")} · {(model.test.latencyMs / 1000).toFixed(1)} {t("秒")}<span className="mt-0.5 block break-words">{model.test.message}</span>
           </p> : null}
         </div>
         <div className="models-row-actions">
           {!enabled ? <Button variant="outline" size="sm" className="models-use-button bg-transparent" disabled={disabled || !connection} onClick={setEnabled}>{t("恢复模型")}</Button>
-            : current ? <span className="models-state"><Check aria-hidden />{t("当前使用")}</span>
+            : current ? <span data-ui-notice="" className="models-state"><Check aria-hidden />{t("当前使用")}</span>
             : <Button variant="outline" size="sm" className="models-use-button bg-transparent" disabled={disabled || !loaded || !snapshot.canApply} aria-label={t("使用此模型")}
                 aria-describedby={!snapshot.canApply && snapshot.applyMessage ? 'models-apply-status' : undefined}
                 title={unavailable ?? undefined} onClick={() => act('useModel')}>{t("使用")}</Button>}

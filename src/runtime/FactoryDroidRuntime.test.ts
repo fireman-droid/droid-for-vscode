@@ -1428,8 +1428,8 @@ describe('FactoryDroidRuntime', () => {
     const events = await collect(runtime.sendTurn('draft a plan'));
     expect(events.some((event) => event.type === 'spec-handoff')).toBe(false);
     // No spec watch is armed without a proceed_new_session approval;
-    // the single subscription is the session-lifetime subagent watch.
-    expect(session.onNotification).toHaveBeenCalledTimes(1);
+    // the subscriptions are the session subagent watch and per-turn tool evidence.
+    expect(session.onNotification).toHaveBeenCalledTimes(2);
   });
 
   it('emits subagent-started before turn completion for child_session_available', async () => {

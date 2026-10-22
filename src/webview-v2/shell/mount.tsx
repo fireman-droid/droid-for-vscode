@@ -12,7 +12,7 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 
 function RenderFailure({ retry }: { readonly retry: () => void }) {
   const { t } = useI18n();
-  return <main className="space-y-3 p-4">
+  return <main data-ui-notice="" className="space-y-3 p-4">
     <h1 className="font-medium">{t('The view could not render')}</h1>
     <p className="text-muted-foreground">{t('Your saved data remains on the host.')}</p>
     <Button variant="outline" onClick={retry}>{t('Try again')}</Button>

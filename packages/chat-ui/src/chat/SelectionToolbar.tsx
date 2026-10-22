@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { usePortalContainer } from '../ui/overlays';
 import { useUiEnvironment } from '../environment';
 import { readTranscriptSelection } from './transcriptSelection';
+import { selectedContentText } from '../ui/copySelection';
 
 /** Plan text keeps native selection and scroll protection without quote actions. */
 function readQuoteSelection(root: HTMLElement | null): Selection | null {
@@ -35,7 +36,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
       if (dragging) return;
       const selected = readQuoteSelection(selectionRoot.current);
       const root = viewport.current;
-      const text = selected?.toString() ?? '';
+      const text = selectedContentText(selected);
       if (!root || !selected || !text.trim()) {
         setSelection(null);
         return;
@@ -83,8 +84,8 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
   if (!selection) return null;
   const choose = (action: (text: string) => void) => {
     const current = readQuoteSelection(selectionRoot.current);
-    if (!current || current.toString() !== selection.text) { setSelection(null); return; }
-    action(current.toString());
+    if (!current || selectedContentText(current) !== selection.text) { setSelection(null); return; }
+    action(selection.text);
     window.getSelection()?.removeAllRanges();
     setSelection(null);
   };
@@ -93,7 +94,7 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     style={{ left: selection.left, top: selection.top }} onMouseDown={(event) => event.preventDefault()}>
     <Button size="sm" variant="ghost" onClick={() => {
       const current = readQuoteSelection(selectionRoot.current);
-      if (!current || current.toString() !== selection.text) { setSelection(null); return; }
+      if (!current || selectedContentText(current) !== selection.text) { setSelection(null); return; }
       void copyText(selection.text).then(() => setCopyState('copied'), () => setCopyState('error'));
     }}>{copyState === 'copied' ? t("Copied") : t("Copy")}</Button>
     <Button size="sm" variant="ghost" onClick={() => choose(onQuote)}>{t("Add to Chat")}</Button>

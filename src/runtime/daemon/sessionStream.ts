@@ -1,6 +1,6 @@
+import { convertToolNotification } from '../events/convertToolNotification';
 import { randomUUID } from 'node:crypto';
 import {
-  convertNotificationToStreamMessage,
   SessionNotificationPayloadSchema,
   StreamStateTracker,
   type DaemonSessionController,
@@ -94,7 +94,7 @@ export class DaemonTurnStream {
       return;
     }
     if (this.done || this.transportSuspended) return;
-    const converted = convertNotificationToStreamMessage(inner);
+    const converted = convertToolNotification(inner);
     for (const input of converted === null
       ? []
       : Array.isArray(converted)

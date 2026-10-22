@@ -28,7 +28,20 @@ export type ChatStore = ReturnType<typeof createChatStore>;
 
 export function selectChatShell({ state }: ChatState) {
   const { sequence, transcript, turn, ...controls } = state;
+  let activeTools = 0;
+  let subagentTools = 0;
+  if (turn && (turn.status === 'submitting' || turn.status === 'streaming')) {
+    for (const item of transcript) {
+      if (item.kind === 'tool' && item.status === 'running' && item.turnId === turn.turnId) {
+        activeTools += 1;
+        if (item.subagent !== undefined && (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending')) {
+          subagentTools += 1;
+        }
+      }
+    }
+  }
   return { ...controls, transcriptLength: transcript.length, received: sequence >= 0,
     currentChanges: selectCurrentTurnChanges(state),
-    turnId: turn?.turnId, turnStatus: turn?.status, turnActivity: turn?.activity };
+    turnId: turn?.turnId, turnStatus: turn?.status, turnActivity: turn?.activity, turnCompacting: turn?.compacting,
+    activeTools, waitingForSubagents: activeTools > 0 && activeTools === subagentTools };
 }

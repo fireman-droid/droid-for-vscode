@@ -36,4 +36,4 @@ export function ProcessInteractionProvider({
   );
 }
 
-export { ProcessPresentationProvider, ProcessGroupContext, useReducedMotion, useProcessDisclosure, useProcessSelection } from '@droidvisx/chat-ui/chat/processPresentation';
+export { ProcessPresentationProvider, ProcessGroupContext, ProcessLatestContext, useReducedMotion, useProcessDisclosure, useProcessSelection } from '@droidvisx/chat-ui/chat/processPresentation';

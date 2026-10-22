@@ -2,6 +2,7 @@ import { useI18n } from '../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { CodeSyntax } from '../content/CodeSyntax';
+import { CodeWrapToggle } from '../content/CodeWrapToggle';
 import { useUiEnvironment } from '../environment';
 import { Button } from '../ui/button';
 
@@ -12,12 +13,14 @@ export const ActivityResult = memo(function ActivityResult({ preview }: {
   const { copyText } = useUiEnvironment();
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
   return <section aria-label={preview.label} className="v2-activity-result overflow-hidden rounded-md border border-[var(--panel-edge)] bg-muted/25">
-    <header className="flex min-h-7 select-none items-center gap-2 border-b border-[var(--panel-edge)] px-2">
+    <header data-ui-notice="" className="flex min-h-7 select-none items-center gap-2 border-b border-[var(--panel-edge)] px-2">
       <span className="min-w-0 flex-1 text-[10.5px] font-medium text-muted-foreground">{preview.label}</span>
       {preview.truncated ? <span className="text-[10px] text-muted-foreground">{t("truncated")}</span> : null}
+      <CodeWrapToggle wrapped={wrapped} onChange={setWrapped} />
       <Button variant="ghost" size="icon-sm" className="size-6" aria-label={copied ? t("Copied result") : t("Copy result")} onClick={() => {
         void copyText(preview.text).then(() => {
           setCopied(true); setCopyError(false);
@@ -26,7 +29,7 @@ export const ActivityResult = memo(function ActivityResult({ preview }: {
         }, () => setCopyError(true));
       }}>{copied ? <Check className="size-3" /> : <Copy className="size-3" />}</Button>
     </header>
-    <pre className="markdown-content max-h-64 overflow-auto overscroll-contain whitespace-pre p-2.5 font-mono text-[11px] leading-[18px] [scrollbar-gutter:stable]">
+    <pre data-code-wrap={wrapped || undefined} className="markdown-content max-h-64 overflow-auto overscroll-contain whitespace-pre p-2.5 font-mono text-[11px] leading-[18px] [scrollbar-gutter:stable]">
       <CodeSyntax text={preview.text} path={preview.sourcePath} detect={Boolean(preview.sourcePath)} />
     </pre>
     {copyError ? <p role="alert" className="border-t border-[var(--panel-edge)] px-2 py-1 text-[10.5px] text-destructive">{t("Could not copy result.")}</p> : null}

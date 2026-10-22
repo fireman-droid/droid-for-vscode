@@ -2,7 +2,6 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useContext, useEffect, useState } from 'react';
 import { ChangeSummaryView } from '@droidvisx/chat-ui/chat/ChangeSummaryView';
 import { InlineDiffContext } from '../review/useInlineDiff';
-import { OperationFileDetails } from '../content/OperationDiff';
 import type { OperationSummary } from './operationSummary';
 import { operationUndoUnavailable } from '../../shared/protocol/operationUndo';
 import type { ReviewScopeState } from '../../shared/protocol/reviewProtocol';
@@ -40,10 +39,6 @@ export function AiOperationSummary({ summary, onInteract }: { readonly summary: 
     undoDisabled={undoReason !== undefined}
     undoReason={undoReason}
     onSelectFile={connected ? (path) => open(path) : undefined}
-    renderFileDetails={(path) => summary.files.get(path)?.records.map((file, index) => <div key={index}>
-      {summary.files.get(path)!.records.length > 1 ? <p className="operation-diff-note">{t("Recorded operation")} {index + 1}</p> : null}
-      <OperationFileDetails file={file} />
-    </div>)}
     note={summary.unconfirmed || summary.delegated ? <>
       {summary.unconfirmed ? t("{p0} failed or unconfirmed file results are excluded. ", { p0: summary.unconfirmed }) : ''}
       {summary.delegated ? t("Delegated results are available in Review and excluded from these counts.") : ''}

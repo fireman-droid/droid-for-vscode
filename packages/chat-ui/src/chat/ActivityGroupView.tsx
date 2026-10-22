@@ -1,38 +1,90 @@
 import { useI18n } from '../i18n';
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { ProcessGroupContext, useProcessDisclosure } from './processPresentation';
+import { ProcessGroupContext, ProcessLatestContext, useProcessDisclosure } from './processPresentation';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
-import { SlidingText } from '../ui/sliding-text';
-export interface ActivityPresentation { readonly running: boolean; readonly action: string; readonly summary?: string; readonly target?: string | null; readonly facts: readonly string[]; readonly detailFacts?: readonly string[]; readonly failed: boolean; readonly waiting?: boolean; readonly latest?: { readonly label: string; readonly status: string }; readonly count?: number }
-export function ActivityGroupView({ messageId, groupId, presentation, children, attention }: {
+export interface ActivityPresentation {
+  readonly running: boolean;
+  readonly action: string;
+  readonly summary?: string;
+  readonly target?: string | null;
+  readonly latestAction?: string;
+  readonly latestTarget?: string | null;
+  readonly facts: readonly string[];
+  readonly detailFacts?: readonly string[];
+  readonly failed: boolean;
+  readonly waiting?: boolean;
+  readonly count: number;
+  readonly notice?: string;
+}
+export function ActivityGroupView({ messageId, groupId, presentation, children, latest }: {
   readonly messageId: string; readonly groupId: string; readonly presentation: ActivityPresentation;
-  readonly incomplete?: string | null; readonly children: ReactNode;
-  readonly attention?: ReactNode;
+  readonly children: ReactNode; readonly attention?: ReactNode; readonly latest?: ReactNode;
 }) {
   const { t } = useI18n();
-  const disclosure = useProcessDisclosure(messageId, groupId);
-  const summary = presentation.latest?.label ?? [t(presentation.action), presentation.target].filter(Boolean).join(' ');
-  const facts = [...(disclosure.expanded ? [t('{count} records', { count: presentation.count ?? 0 })]
-    : presentation.latest?.status ? [presentation.latest.status] : []),
-    ...(disclosure.expanded && presentation.waiting ? [t(presentation.action)] : []), ...presentation.facts];
+  const disclosure = useProcessDisclosure(messageId, groupId, false, false, { surface: 'history', records: presentation.count });
   const id = useId();
-  return <Collapsible open={disclosure.expanded} className="v2-activity-group">
-    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: summary })} aria-controls={id} onClick={disclosure.toggle} className="v2-chat-disclosure v2-activity-row v2-activity-row-compact min-h-6 w-full min-w-0 select-none py-0.5 text-left text-xs leading-[18px] text-muted-foreground hover:text-foreground">
-      <ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${disclosure.expanded ? 'rotate-90' : ''}`} />
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <SlidingText text={disclosure.expanded ? t('Execution history') : summary} />
-        {facts.length ? <span className={`ml-auto shrink-0 text-[10.5px] ${presentation.failed ? 'text-destructive' : ''}`}>{facts.join(' · ')}</span> : null}
-      </span>
+  const summaryText = presentation.summary || t('{count} records', { count: presentation.count });
+  const resolvedAction = presentation.latestAction ?? presentation.action;
+  const resolvedTarget = presentation.latestTarget ?? presentation.target ?? null;
+  const liveStep = useRef({
+    action: resolvedAction,
+    target: resolvedTarget,
+    actionVersion: 0,
+    targetVersion: 0,
+    shimmerDelay: '0s',
+  });
+  if (!presentation.running) {
+    liveStep.current = { action: 'Processing', target: null, actionVersion: 0, targetVersion: 0, shimmerDelay: '0s' };
+  } else {
+    const holdPrevious = resolvedAction === 'Processing' && liveStep.current.action !== 'Processing';
+    const incomingAction = holdPrevious ? liveStep.current.action : resolvedAction;
+    const incomingTarget = holdPrevious ? liveStep.current.target : resolvedTarget;
+    const actionChanged = incomingAction !== liveStep.current.action;
+    const targetChanged = incomingTarget !== liveStep.current.target;
+    if (actionChanged || targetChanged) {
+      const nowSeconds = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
+      liveStep.current = {
+        action: incomingAction,
+        target: incomingTarget,
+        actionVersion: liveStep.current.actionVersion + (actionChanged ? 1 : 0),
+        targetVersion: liveStep.current.targetVersion + (targetChanged ? 1 : 0),
+        shimmerDelay: `${-(nowSeconds % 1.8).toFixed(3)}s`,
+      };
+    }
+  }
+  const activeAction = liveStep.current.action;
+  const activeTarget = liveStep.current.target;
+  return <div className="v2-activity-group min-w-0">
+    {presentation.count > 0 ? <Collapsible open={disclosure.expanded}>
+    <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: t('Execution history') })} aria-controls={id} onClick={disclosure.toggle} className="v2-explored-summary select-none">
+      <span className="v2-explored-verb">{t('Explored')}</span>
+      <span className="v2-explored-counts" title={summaryText}>{summaryText}</span>
+      {presentation.facts.length ? <span className={`v2-explored-facts ${presentation.failed ? 'failed' : ''}`}>{presentation.facts.join(' · ')}</span> : null}
+      <ChevronRight className="v2-explored-chev" />
     </Button></CollapsibleTrigger>
-    {!disclosure.expanded ? attention : null}
     <AnimatedCollapsibleContent id={id} ref={disclosure.contentRef} open={disclosure.expanded} visible={disclosure.visible}
       className={`transition-[grid-template-rows,opacity] motion-reduce:transition-none ${disclosure.visible ? 'opacity-100' : 'opacity-0'}`}>
       {disclosure.mounted ? <div className="v2-activity-items min-w-0">
         <ProcessGroupContext.Provider value={true}>{children}</ProcessGroupContext.Provider>
-        {presentation.detailFacts?.length ? <p className="v2-activity-detail py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
+        {presentation.detailFacts?.length ? <p data-ui-notice="" className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
       </div> : null}
     </AnimatedCollapsibleContent>
-  </Collapsible>;
+    {presentation.running && !disclosure.expanded ? <Button variant="plain" size="none" aria-controls={id} aria-expanded={disclosure.expanded} onClick={disclosure.toggle}
+      style={{ '--shimmer-delay': liveStep.current.shimmerDelay } as CSSProperties} className="v2-running-latest select-none">
+      <span key={`action:${liveStep.current.actionVersion}`} className="v2-running-slot v2-running-slot-action">
+        <span className="v2-shimmer-text">{t(activeAction)}</span>
+      </span>
+      {activeTarget ? <span key={`target:${liveStep.current.targetVersion}`} className="v2-running-slot v2-running-slot-target">
+        <span className="v2-shimmer-sub" title={activeTarget}>{activeTarget}</span>
+      </span> : null}
+    </Button> : null}
+    </Collapsible> : null}
+    {presentation.waiting ? <p role="status" className="py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
+    {presentation.notice ? <p role="status" className={`py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
+    {latest ? <ProcessGroupContext.Provider value={false}>
+      <ProcessLatestContext.Provider value={true}>{latest}</ProcessLatestContext.Provider>
+    </ProcessGroupContext.Provider> : null}
+  </div>;
 }

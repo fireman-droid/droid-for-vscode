@@ -1,3 +1,4 @@
+import { isScriptTool, readableScriptOutput, stripScriptTrailer } from '../../shared/transcript/scriptOutput';
 import { fileURLToPath } from 'node:url';
 import { resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
 import { isToolResultSummary, type ToolResultSummary } from '../../shared/transcript/toolResultSummary';
@@ -135,9 +136,10 @@ export function extractResultPreview(
   let scanned = 0;
   let truncated = false;
   let unsupported = false;
-  const append = (value: string): void => {
-    const bounded = value.slice(0, Math.max(0, MAX_RESULT_SCAN_UNITS - scanned));
-    scanned += bounded.length;
+  const append = (value: string, formatScript = true): void => {
+    const raw = value.slice(0, Math.max(0, MAX_RESULT_SCAN_UNITS - scanned));
+    const bounded = formatScript && isScriptTool(source.tool) ? stripScriptTrailer(raw) : raw;
+    scanned += raw.length;
     const cleaned = stripTerminalNoise(bounded)
       .replace(/\r\n?/gu, '\n')
       .replace(/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/gu, '');
@@ -156,7 +158,7 @@ export function extractResultPreview(
       }
       text += char;
     }
-    truncated ||= bounded.length < value.length;
+    truncated ||= raw.length < value.length;
   };
   if (typeof content === 'string') append(content);
   else if (Array.isArray(content)) {
@@ -174,13 +176,13 @@ export function extractResultPreview(
         unsupported = true;
         break;
       }
-      if (text.length > 0) append('\n');
+      if (text.length > 0) append('\n', false);
       if (!truncated) append(block.text);
       if (truncated) break;
     }
   } else unsupported = true;
   if (unsupported) return unavailableResult('unsupported');
-  if (SENSITIVE_TEXT.test(text)) return unavailableResult('restricted');
+  if (SENSITIVE_TEXT.test(isScriptTool(source.tool) ? readableScriptOutput(text, truncated) : text)) return unavailableResult('restricted');
   if (text.trim().length === 0)
     return unavailableResult(truncated ? 'unsupported' : 'empty');
   // A truncated UTF-16 string must not end with an unmatched high surrogate.

@@ -2,6 +2,7 @@ import type { ChangeFile } from '@droidvisx/chat-ui/chat/changePresentation';
 import { inlineDiffLines } from '@droidvisx/chat-ui/review/inlineDiffLines';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { isConfirmedWorkspaceChange, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiff, type OperationDiffFile } from '../../shared/protocol/operationDiff';
+import type { AssistantGroupDescriptor, TranscriptDescriptor } from './transcript/transcriptGroups';
 
 export interface OperationSummaryFile extends ChangeFile {
   readonly records: readonly OperationDiffFile[];
@@ -32,7 +33,7 @@ export function operationFileStats(file: OperationDiffFile): ChangeFile {
   return stats;
 }
 
-/** Successful edit rows become the turn card; failures and commands retain their activity. */
+/** Successful file-only operations can render their recorded patches directly. */
 export function isFoldableFileOperation(item: SessionTranscriptItem): boolean {
   if (item.kind !== 'tool' || item.status !== 'completed' || item.errorMessage || item.subagent ||
     item.detailKind === 'command' || !['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase())) return false;
@@ -105,4 +106,66 @@ export function createOperationSummarySelector() {
       previousSummaries[index]?.[0] !== id || previousSummaries[index]?.[1] !== summary)) summaries = result;
     return summaries;
   };
+}
+
+export function selectReplyOperationSummary(
+  summaries: ReadonlyMap<string, OperationSummary>,
+  descriptors: readonly AssistantGroupDescriptor[],
+): OperationSummary | undefined {
+  const matched: OperationSummary[] = [];
+  const seen = new Set<string>();
+  const addTurn = (turnId: string | null) => {
+    if (turnId === null || seen.has(turnId)) return;
+    seen.add(turnId);
+    const summary = summaries.get(turnId);
+    if (summary !== undefined) matched.push(summary);
+  };
+  for (const descriptor of descriptors) {
+    addTurn(descriptor.turnId);
+    for (const item of descriptor.items) {
+      if (item.kind !== 'user') addTurn(item.turnId);
+    }
+  }
+  if (matched.length === 0) return undefined;
+  if (matched.length === 1) return matched[0];
+  const files = new Map<string, OperationSummaryFile>();
+  const calls = new Set<string>();
+  let unconfirmed = 0;
+  let delegated = false;
+  for (const summary of matched) {
+    if (summary.delegated) delegated = true;
+    unconfirmed += summary.unconfirmed;
+    for (const call of summary.calls) calls.add(call);
+    for (const [path, file] of summary.files) {
+      const previous = files.get(path);
+      files.set(path, previous === undefined ? file : {
+        ...file,
+        additions: previous.additions === null || file.additions === null ? null : previous.additions + file.additions,
+        deletions: previous.deletions === null || file.deletions === null ? null : previous.deletions + file.deletions,
+        records: [...previous.records, ...file.records],
+      });
+    }
+  }
+  return { turnId: matched[matched.length - 1]!.turnId, files, calls, unconfirmed, delegated };
+}
+
+export function summarizeReplyOperations(
+  summaries: ReadonlyMap<string, OperationSummary>,
+  descriptors: readonly TranscriptDescriptor[],
+): ReadonlyMap<string, OperationSummary> {
+  const byTailId = new Map<string, OperationSummary>();
+  let run: AssistantGroupDescriptor[] = [];
+  const flush = () => {
+    if (run.length === 0) return;
+    const tail = run[run.length - 1]!;
+    const summary = selectReplyOperationSummary(summaries, run);
+    if (summary !== undefined) byTailId.set(tail.id, summary);
+    run = [];
+  };
+  for (const descriptor of descriptors) {
+    if (descriptor.kind === 'assistant') run.push(descriptor);
+    else flush();
+  }
+  flush();
+  return byTailId;
 }

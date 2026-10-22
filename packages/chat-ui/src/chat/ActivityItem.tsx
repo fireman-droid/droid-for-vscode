@@ -8,7 +8,6 @@ import { ProcessGroupContext, useProcessDisclosure } from './processPresentation
 export function ActivityItem({
   id,
   messageId,
-  icon,
   title,
   target,
   status,
@@ -16,10 +15,11 @@ export function ActivityItem({
   actions,
   children,
   textSelectable = false,
+  failed = false,
 }: {
   readonly id: string;
   readonly messageId: string;
-  readonly icon: ReactNode;
+  readonly icon?: ReactNode;
   readonly title: string;
   readonly target?: string;
   readonly status?: string;
@@ -27,37 +27,32 @@ export function ActivityItem({
   readonly actions?: ReactNode;
   readonly children?: ReactNode;
   readonly textSelectable?: boolean;
+  readonly failed?: boolean;
 }) {
   const inline = useContext(ProcessGroupContext);
-  const disclosure = useProcessDisclosure(messageId, `activity:${id}`, inline, inline);
+  const disclosure = useProcessDisclosure(messageId, `activity:${id}`, false, inline);
   const selectable = children !== undefined;
   const selected = disclosure.expanded;
   const detailsId = useId();
   const labels = <>
-    <span className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
+    <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
     {target ? <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={target}>{target}</span> : <span className="min-w-0 flex-1" />}
-    {status ? <span className="shrink-0 text-[11px] text-muted-foreground">{status}</span> : null}
+    {status ? <span data-ui-notice="" title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
   </>;
   const content = description ? <span className="min-w-0 flex-1">
     <span className="flex min-w-0 items-center gap-1.5">{labels}</span>
-    <span className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
+    <span data-ui-notice="" className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
   </span> : <span className="flex min-w-0 items-center gap-1.5">{labels}</span>;
-  const leadingIcon = <span className="grid size-3.5 place-items-center [&_svg]:size-3.5">{icon}</span>;
   const chevron = <ChevronRight className={cn('size-3 transition-transform motion-reduce:transition-none', selected && 'rotate-90')} />;
-  if (!selectable) return <div className={cn('v2-activity-row min-h-6 min-w-0 py-0.5 text-muted-foreground', inline && 'v2-activity-row-flat', !textSelectable && 'select-none')}>
-    {!inline ? <span aria-hidden="true" /> : null}
-    {leadingIcon}
+  if (!selectable) return <div data-ui-notice={textSelectable ? undefined : ''} className={cn('v2-activity-row v2-activity-row-plain min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
     {content}
     {actions ? <div className="flex shrink-0 items-center">{actions}</div> : null}
   </div>;
   return <Collapsible open={selected} className="min-w-0">
     <div className="flex min-w-0 items-center gap-1">
       <CollapsibleTrigger asChild><Button textSelectable={textSelectable} ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={detailsId} onClick={disclosure.toggle}
-        className={cn('v2-chat-disclosure v2-activity-row min-h-6 min-w-0 flex-1 rounded-md py-0.5 text-left text-muted-foreground hover:text-foreground', inline && 'v2-activity-row-flat v2-activity-inline-toggle', !textSelectable && 'select-none')}>
-        {inline ? <span className="v2-activity-leading" aria-hidden="true">
-          <span className="v2-activity-symbol">{leadingIcon}</span>
-          <span className="v2-activity-chevron">{chevron}</span>
-        </span> : <>{chevron}{leadingIcon}</>}
+        className={cn('v2-chat-disclosure v2-activity-row min-h-6 min-w-0 flex-1 rounded-md py-0.5 text-left text-muted-foreground hover:text-foreground', !textSelectable && 'select-none')}>
+        {chevron}
         {content}
       </Button></CollapsibleTrigger>
       {actions ? <div className="flex shrink-0 items-center pr-1">{actions}</div> : null}

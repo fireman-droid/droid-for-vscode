@@ -14,7 +14,7 @@ import { ProcessPresentationProvider } from './transcript/processPresentation';
 import { describeTranscript } from './transcript/transcriptGroups';
 import { resolveAssistantStatus } from './transcript/transcriptStatus';
 import { ToolActionsContext } from '../content/toolActions';
-import { AiOperationSummary, summarizeOperations } from './AiOperationSummary';
+import { summarizeOperations } from './AiOperationSummary';
 import { AssistantReply } from './AssistantReply';
 import { ReviewDockSlot } from './ReviewDock';
 import { createChatStore, type ChatStore } from './store';
@@ -103,6 +103,12 @@ function updateWorkspace(store: ChatStore, state: 'writing' | 'settled') {
   });
 }
 
+function showProcessHistory() {
+  for (const button of screen.queryAllByRole('button', { name: /^Process:/ })) {
+    if (button.getAttribute('aria-expanded') === 'false') fireEvent.click(button);
+  }
+}
+
 async function expectNoWorkspaceDiff(port: ReturnType<typeof fixture>['port']) {
   // Let the real inline-diff request queue run if an unintended preview mounted.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
@@ -127,11 +133,16 @@ it('keeps manual saves out of a pure answer during writing and after settlement'
   await expectNoWorkspaceDiff(current.port);
 });
 
-it('keeps applied rows live through stopping, then folds only AI patches into a turn card', async () => {
+it('keeps recorded file patches expanded through stopping and completion alongside turn review actions', async () => {
   const current = fixture([user, tool(confirmed), answer]);
   render(<Scene {...current} />);
   updateWorkspace(current.store, 'writing');
-  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
+  showProcessHistory();
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
+  expect(screen.queryByRole('button', { name: /^(Show|Hide) changes to/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Show all changes to/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, toolUseId: 'edit-call', path });
   expect(screen.queryByRole('region', { name: 'Changes in 1 file' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Open Review' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
@@ -144,8 +155,8 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   const card = screen.getByRole('region', { name: 'Changes in 1 file' });
   expect(within(card).getByText('1 file changed')).toBeTruthy();
   expect(screen.queryByRole('button', { name: `Hide changes to ${path}` })).toBeNull();
-  expect(screen.getByRole('button', { name: `Review changes to ${path}` })).toBeDefined();
-  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
+  expect(within(card).getByRole('button', { name: `Review changes to ${path}` })).toBeDefined();
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
   const prose = screen.getByText(answer.kind === 'assistant' ? answer.text : '');
   expect(prose.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(card.compareDocumentPosition(screen.getByRole('button', { name: 'Copy reply' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -155,6 +166,28 @@ it('keeps applied rows live through stopping, then folds only AI patches into a 
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
   fireEvent.click(within(card).getByRole('button', { name: 'Undo changes in 1 file' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, action: 'undo' });
+  await expectNoWorkspaceDiff(current.port);
+});
+
+it('expands a long recorded edit inside its card and retains the choice when its result updates', async () => {
+  const patch = (count: number) => `@@ -0,0 +1,${count} @@\n${Array.from({ length: count }, (_, index) => `+ADDED_LINE_${index}`).join('\n')}`;
+  const evidence = (count: number): OperationDiff => ({ ...confirmed, status: 'ready', source: 'tool-result', files: [
+    { path, kind: 'added', outcome: 'applied', patch: patch(count) },
+  ] });
+  const current = fixture([user, tool(evidence(20)), answer]);
+  render(<Scene {...current} />);
+  showProcessHistory();
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_8');
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).not.toContain('ADDED_LINE_9');
+  current.port.postMessage.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: `Show all changes to ${path}` }));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_19');
+  expect(current.port.postMessage).not.toHaveBeenCalled();
+  receive(current.store, snapshot([user, tool(evidence(21)), answer], 2));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('ADDED_LINE_20');
+  fireEvent.click(screen.getByRole('button', { name: `Collapse changes to ${path}` }));
+  expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).not.toContain('ADDED_LINE_9');
+  expect(screen.getByRole('button', { name: `Show all changes to ${path}` }).getAttribute('aria-expanded')).toBe('false');
   await expectNoWorkspaceDiff(current.port);
 });
 
@@ -184,13 +217,28 @@ it('reports a confirmed write without inventing text when no result patch was re
   render(<Scene {...current} />);
   expect(screen.getByRole('button', { name: 'Open Review' })).toBeTruthy();
   receive(current.store, { type: 'turn.state', sessionId, turnId, sequence: 2, status: 'completed' });
-  fireEvent.click(screen.getByRole('button', { name: `Review changes to ${path}` }));
+  const card = screen.getByRole('region', { name: 'Changes in 1 file' });
+  fireEvent.click(within(card).getByRole('button', { name: `Review changes to ${path}` }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId, path });
   expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
-  const card = screen.getByRole('region', { name: 'Changes in 1 file' });
   expect(within(card).queryByLabelText(/^Recorded operation lines:/)).toBeNull();
   fireEvent.click(within(card).getByRole('button', { name: 'Review changes in 1 file' }));
   expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'turn', turnId });
+  await expectNoWorkspaceDiff(current.port);
+});
+
+it('routes a saved large edit to its recorded Review without treating it as missing or reading workspace text', async () => {
+  const current = fixture([user, tool({ ...confirmed, status: 'ready', source: 'tool-result', files: [{
+    path, kind: 'modified', outcome: 'applied', patch: '',
+    bodyRef: { digest: 'a'.repeat(64), patchUnits: 30_000, contentUnits: 0 },
+  }] }), answer], true);
+  render(<Scene {...current} />);
+  showProcessHistory();
+  expect(screen.getByText('This edit is saved. Open Review to read its full content.')).toBeTruthy();
+  expect(screen.queryByText('No complete text Diff was recorded for this result.')).toBeNull();
+  expect(screen.queryByRole('button', { name: /^(Show|Hide) changes to/ })).toBeNull();
+  fireEvent.click(screen.getAllByRole('button', { name: `Review changes to ${path}` })[0]!);
+  expect(current.port.postMessage).toHaveBeenLastCalledWith({ type: 'review.panel.open', sessionId, scopeKind: 'operations', turnId, toolUseId: 'edit-call', path });
   await expectNoWorkspaceDiff(current.port);
 });
 
@@ -200,8 +248,8 @@ it('restores historical operation patches without restoring workspace-only reply
   const current = fixture();
   const view = render(<Scene {...current} readOnly />);
   receive(current.store, snapshot(saved, 2, true));
-  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
+  showProcessHistory();
+  expect(screen.queryByRole('button', { name: /^(Show|Hide) changes to/ })).toBeNull();
   expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
   expect(screen.getAllByRole('region', { name: 'Changes in 1 file' })).toHaveLength(1);
   expect(screen.queryByRole('button', { name: /^Undo changes/ })).toBeNull();
@@ -210,7 +258,7 @@ it('restores historical operation patches without restoring workspace-only reply
   view.unmount();
   const restored = fixture(saved, true);
   render(<Scene {...restored} readOnly />);
-  fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
+  showProcessHistory();
   expect(screen.getByRole('region', { name: `Diff for ${path}` }).textContent).toContain('AI_ONLY_CHANGE');
   expect(screen.getAllByRole('region', { name: 'Changes in 1 file' })).toHaveLength(1);
   expect(restored.port.postMessage).not.toHaveBeenCalled();
@@ -251,14 +299,14 @@ it('reveals files beyond the first three without changing the turn review or und
   expect(within(card).getAllByRole('button', { name: /^Review changes to/ })).toHaveLength(3);
 });
 
-it('opens every recorded patch in a read-only summary without offering review or write actions', () => {
+it('retains each historical edit expanded without duplicate summary details or write actions', () => {
   const second: OperationDiff = { status: 'ready', source: 'tool-result', callId: 'second-call', files: [
     { path, kind: 'modified', outcome: 'applied', patch: '@@ -1 +1 @@\n-AI_ONLY_CHANGE\n+SECOND_AI_CHANGE' },
   ] };
-  const summary = summarizeOperations([tool(confirmed), tool(second, { id: 'second-edit', toolUseId: 'second-call' })]).get(turnId)!;
-  render(<AiOperationSummary summary={summary} />);
-  expect(screen.queryByRole('region', { name: `Diff for ${path}` })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: `Show changes to ${path}` }));
+  const current = fixture([user, tool(confirmed), tool(second, { id: 'second-edit', toolUseId: 'second-call' }), answer], true);
+  render(<Scene {...current} readOnly />);
+  showProcessHistory();
+  expect(screen.queryByRole('button', { name: /^(Show|Hide) changes to/ })).toBeNull();
   const details = screen.getAllByRole('region', { name: `Diff for ${path}` });
   expect(details).toHaveLength(2);
   expect(details[0]!.textContent).toContain('AI_ONLY_CHANGE');

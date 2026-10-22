@@ -66,6 +66,7 @@ export type RuntimeAvailability =
         | 'daemon-refresh-failed'
         | 'daemon-unavailable'
         | 'sdk-protocol-incompatible'
+        | 'session-in-use'
         | 'initialization-failed';
       message: string;
     };
@@ -119,6 +120,7 @@ export type RuntimeEvent =
     }
   | {
       type: 'tool-start';
+      scriptParentId?: string;
       toolName: string;
       toolUseId: string;
       action: string;

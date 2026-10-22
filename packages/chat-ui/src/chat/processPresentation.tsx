@@ -28,17 +28,21 @@ interface ProcessPresentation {
   readonly selections: Map<string, Map<number | string, string | null>>;
   readonly pauseFollowing: () => void;
   readonly followingRef: RefObject<{ following: boolean } | null>;
+  readonly reportLayout?: (detail: string) => void;
 }
 const ProcessPresentationContext = createContext<ProcessPresentation | null>(null);
 export const ProcessGroupContext = createContext(false);
+export const ProcessLatestContext = createContext(false);
 
 export function ProcessPresentationProvider({
   messageIds,
   followingRef,
+  reportLayout,
   children,
 }: {
   readonly messageIds: readonly string[];
   readonly followingRef: RefObject<{ following: boolean } | null>;
+  readonly reportLayout?: (detail: string) => void;
   readonly children: ReactNode;
 }): React.JSX.Element {
   const choices = useRef(new Map<string, Map<number | string, boolean>>());
@@ -62,11 +66,12 @@ export function ProcessPresentationProvider({
       automaticChoices: automaticChoices.current,
       selections: selections.current,
       followingRef,
+      reportLayout,
       pauseFollowing: () => {
         if (followingRef.current !== null) followingRef.current.following = false;
       },
     }),
-    [followingRef],
+    [followingRef, reportLayout],
   );
   return (
     <ProcessPresentationContext.Provider value={value}>
@@ -80,6 +85,7 @@ export function useProcessDisclosure(
   start: number | string | undefined,
   automaticExpanded = false,
   preserveExpanded = false,
+  measurement?: { readonly records: number; readonly surface: 'history' | 'tool' | 'thinking' },
 ) {
   const presentation = useContext(ProcessPresentationContext);
   const reducedMotion = useReducedMotion();
@@ -105,6 +111,12 @@ export function useProcessDisclosure(
   const [visible, setVisible] = useState(expanded);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const measurementFrame = useRef(0);
+  const expandScrollFrame = useRef(0);
+  useEffect(() => () => {
+    cancelAnimationFrame(measurementFrame.current);
+    cancelAnimationFrame(expandScrollFrame.current);
+  }, []);
 
   useEffect(() => {
     if (!expanded) {
@@ -138,6 +150,52 @@ export function useProcessDisclosure(
       buttonRef.current?.focus({ preventScroll: true });
     }
     const next = !expanded;
+    cancelAnimationFrame(measurementFrame.current);
+    cancelAnimationFrame(expandScrollFrame.current);
+    if (next) {
+      const startedAt = performance.now();
+      const durationMs = reducedMotion ? 32 : 240;
+      const keepVisible = () => {
+        const button = buttonRef.current;
+        const content = contentRef.current;
+        const scroller = button?.closest<HTMLElement>(
+          '[data-transcript-scrollbar], [aria-label="Read-only session transcript"]',
+        );
+        if (button && content && scroller && scroller.clientHeight > 0) {
+          const scrollerRect = scroller.getBoundingClientRect();
+          const buttonRect = button.getBoundingClientRect();
+          const contentRect = content.getBoundingClientRect();
+          const pinned = scroller.parentElement?.querySelector<HTMLElement>('[data-pinned-question]');
+          const pinnedBottom =
+            pinned && pinned.parentElement?.style.visibility !== 'hidden'
+              ? pinned.getBoundingClientRect().bottom
+              : scrollerRect.top;
+          const topCeiling = Math.max(scrollerRect.top + 12, pinnedBottom + 8);
+          const bottomLimit = scrollerRect.bottom - 16;
+          const overflow = Math.max(buttonRect.bottom, contentRect.bottom) - bottomLimit;
+          const maxUpwardPush = Math.max(0, buttonRect.top - topCeiling);
+          const delta = Math.min(overflow, maxUpwardPush);
+          if (delta > 0.5) scroller.scrollTop += delta;
+        }
+        if (performance.now() - startedAt < durationMs) {
+          expandScrollFrame.current = requestAnimationFrame(keepVisible);
+        } else {
+          expandScrollFrame.current = 0;
+        }
+      };
+      expandScrollFrame.current = requestAnimationFrame(keepVisible);
+    }
+    if (next && measurement && presentation?.reportLayout) {
+      const started = performance.now();
+      const report = presentation.reportLayout;
+      // Event-to-next-paint response latency, not CPU time or animation duration.
+      measurementFrame.current = requestAnimationFrame(() => {
+        measurementFrame.current = requestAnimationFrame(() => {
+          report(JSON.stringify({ source: 'activity.expand', durationMs: Math.round(performance.now() - started), ...measurement }));
+          measurementFrame.current = 0;
+        });
+      });
+    }
     const choices = presentation?.choices;
     if (choices !== undefined && start !== undefined) {
       const selected = choices.get(messageId) ?? new Map<number | string, boolean>();

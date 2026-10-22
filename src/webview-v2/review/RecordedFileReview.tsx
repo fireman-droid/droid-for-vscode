@@ -41,12 +41,12 @@ function SavedEdit({ entry, index, path, split, fullContext, showHeader = false,
   const { t } = useI18n();
   return <section className="review-recorded-patch">
     {showHeader ? <header><span className="review-operation-number">{t("Edit")} {index + 1}</span><strong>{t(operationName(entry))}</strong><OperationStats entry={entry} /></header> : null}
-    {entry.message && !(fullContext && entry.fullPatch !== undefined) ? <p className="review-recorded-note">{entry.message}</p> : null}
+    {entry.message && !(fullContext && entry.fullPatch !== undefined) ? <p data-ui-notice="" className="review-recorded-note">{entry.message}</p> : null}
     {fullContext && entry.fullPatch !== undefined ? <DiffView patch={entry.fullPatch} path={path} split={split} source={entry.syntaxSource} questionKey={entry.toolUseId} />
       : entry.submittedContent !== undefined ? <RecordedSource content={entry.submittedContent} path={path} label={t("Submitted file version")} />
       : hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? <DiffView patch={entry.patch} path={path} split={split} source={entry.syntaxSource} questionKey={entry.toolUseId} />
-      : entry.bodyRef ? <p className="review-recorded-note" role="status">{showHeader ? t("Select this edit from History to read its saved content.") : loading ? t("Reading saved edit…") : t("Saved content is not loaded. Retry loading this edit.")}</p>
-      : <div className="review-recorded-empty"><Info aria-hidden /><div><strong>{t("No saved text for this operation")}</strong><p>{t("The operation result is retained; its code changes are unavailable.")}</p></div></div>}
+      : entry.bodyRef ? <p data-ui-notice="" className="review-recorded-note" role="status">{showHeader ? t("Select this edit from History to read its saved content.") : loading ? t("Reading saved edit…") : t("Saved content is not loaded. Retry loading this edit.")}</p>
+      : <div data-ui-notice="" className="review-recorded-empty"><Info aria-hidden /><div><strong>{t("No saved text for this operation")}</strong><p>{t("The operation result is retained; its code changes are unavailable.")}</p></div></div>}
   </section>;
 }
 
@@ -127,7 +127,7 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
     </> : null}
   </>;
   return <div className="review-recorded" ref={root}>
-    <div className="review-recorded-summary"><Info aria-hidden /><div className="review-recorded-description">
+    <div data-ui-notice="" className="review-recorded-summary"><Info aria-hidden /><div className="review-recorded-description">
       <p>{activeView === 'file' && content ? content.appliedEdits ? t('Saved file · {count} later edits included. May differ from your current workspace.', { count: content.appliedEdits }) : t('Saved file. May differ from your current workspace.')
         : allEdits ? t("Saved change excerpts in execution order.")
           : selected ? t('Edit {number} · {operation} · {outcome}. {detail}', { number: index + 1, operation: t(operationName(selected.entry)), outcome: t(outcomeLabel(selected.entry)), detail: t(fullContext && selected.entry.fullPatch !== undefined ? 'Full file comparison from saved versions.' : selected.entry.submittedContent !== undefined ? 'Submitted file version; the previous version is unavailable.' : 'Saved change excerpt.') }) : t("No saved operations.")}</p>
@@ -136,6 +136,6 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
     {activeView === 'file' && content ? <RecordedSource content={content.content} path={path} />
       : allEdits ? <div className="review-recorded-patches">{records.map(({ entry, key }, index) => <SavedEdit key={key} entry={entry} index={index} path={path} split={split} fullContext={false} showHeader />)}</div>
       : selected ? <SavedEdit entry={selected.entry} index={index} path={path} split={split} fullContext={fullContext} loading={loading} />
-      : <p className="review-empty">{selectedToolUseId ? t("The selected edit is unavailable. Choose another edit from History.") : t("No saved text is available for this file.")}</p>}
+      : <p data-ui-notice="" className="review-empty">{selectedToolUseId ? t("The selected edit is unavailable. Choose another edit from History.") : t("No saved text is available for this file.")}</p>}
   </div>;
 }

@@ -1,3 +1,4 @@
+import { scriptParentFields } from '../../../shared/transcript/scriptActivity';
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
@@ -25,7 +26,7 @@ import {
   type ToolResultPreview,
 } from '../../../shared/transcript/toolResultPreview';
 import type { RuntimeEvent } from '../../../runtime/runtimeEvents';
-import { operationDiffFields, type OperationDiff } from '../../../shared/protocol/operationDiff';
+import { enrichOperationDiff, operationDiffFields, type OperationDiff } from '../../../shared/protocol/operationDiff';
 import type { ToolExecutionPhase } from '../../../shared/protocol/operationDiff';
 import type { SubagentInvocationRecord } from '../../../runtime/subagents/subagentSummary';
 import { matchSubagentInvocations } from '../../../runtime/subagents/subagentInvocationMatching';
@@ -68,6 +69,7 @@ export interface ToolActivityProjection {
   readonly executionPhase?: ToolExecutionPhase;
   /** Sticks once seen: the CLI backgrounded this execute call. */
   readonly backgroundHint?: ToolBackgroundHint;
+  readonly scriptParentId?: string;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -79,6 +81,7 @@ interface ToolActivityEntry {
   readonly progressCount: number;
   readonly latestUpdateKind: ToolActivityUpdateKind | null;
   readonly startedAtMs?: number;
+  readonly durationMs?: number;
   readonly filePath?: string;
   /** All changed paths of a multi-file call; `filePath` is the first. */
   readonly filePaths?: readonly string[];
@@ -91,6 +94,7 @@ interface ToolActivityEntry {
   readonly operationDiff?: OperationDiff;
   readonly executionPhase?: ToolExecutionPhase;
   readonly backgroundHint?: ToolBackgroundHint;
+  readonly scriptParentId?: string;
   readonly subagent?: ToolSubagentSummary;
 }
 
@@ -256,6 +260,18 @@ export function projectToolEvent(
       };
     }
     if (existing.status !== 'running') {
+      // A Script receipt can finish before the authoritative saved Diff arrives.
+      // Enrich evidence only: never restart a completed tool or change its outcome.
+      if ((existing.status === 'completed' || existing.status === 'failed') && event.type === 'tool-result' &&
+        event.toolName === existing.toolName && event.operationDiff?.status === 'ready' && event.operationDiff.source === 'tool-result') {
+        const operationDiff = enrichOperationDiff(existing.operationDiff, event.operationDiff);
+        if (operationDiff !== existing.operationDiff) {
+          const entry = { ...existing, operationDiff };
+          const tools = new Map(state.tools);
+          tools.set(event.toolUseId, entry);
+          return { state: { ...state, tools }, projection: projectEntry(event, entry) };
+        }
+      }
       return { state, projection: null };
     }
 
@@ -313,6 +329,7 @@ export function projectToolEvent(
           !sameFilePaths(existing.filePaths, event.filePaths);
         const updatesDetail =
           event.detail !== undefined && existing.detail !== event.detail;
+        const updatesScriptParent = event.scriptParentId !== undefined && event.scriptParentId !== existing.scriptParentId;
         const updatesTarget =
           event.target !== undefined && existing.target !== event.target;
         // Monotonic: once a streamed input showed fireAndForget the
@@ -331,6 +348,7 @@ export function projectToolEvent(
           event.operationDiff !== undefined &&
           event.operationDiff !== existing.operationDiff;
         if (
+          updatesScriptParent ||
           updatesAction ||
           updatesFilePath ||
           updatesFilePaths ||
@@ -342,6 +360,7 @@ export function projectToolEvent(
         ) {
           const entry: ToolActivityEntry = {
             ...existing,
+            ...scriptParentFields(event),
             ...(updatesAction ? { action: event.action } : {}),
             ...(updatesFilePath ? { filePath: event.filePath } : {}),
             ...(updatesFilePaths ? { filePaths: event.filePaths } : {}),
@@ -366,6 +385,7 @@ export function projectToolEvent(
     const entry: ToolActivityEntry = {
       ...existing,
       status: event.isError ? 'failed' : 'completed',
+      ...(existing.startedAtMs === undefined ? {} : { durationMs: Math.max(0, Math.round(nowMs - existing.startedAtMs)) }),
       ...resultPreviewFields(event),
       ...operationDiffFields(event),
       ...(event.isError && event.errorText !== undefined
@@ -413,6 +433,7 @@ export function projectToolEvent(
     ...(event.type === 'tool-result' ? resultPreviewFields(event) : {}),
     ...(event.type === 'tool-result' ? operationDiffFields(event) : {}),
     ...(event.type === 'tool-start' ? operationDiffFields(event) : {}),
+    ...(event.type === 'tool-start' ? scriptParentFields(event) : {}),
     ...(event.type === 'tool-result' && event.isError && event.errorText !== undefined
       ? { errorMessage: event.errorText }
       : {}),
@@ -472,12 +493,12 @@ function projectEntry(
   entry: ToolActivityEntry,
   nowMs?: number,
 ): ToolActivityProjection {
-  const durationMs =
+  const durationMs = entry.durationMs ?? (
     nowMs !== undefined &&
     entry.startedAtMs !== undefined &&
     (entry.status === 'completed' || entry.status === 'failed')
       ? Math.max(0, Math.round(nowMs - entry.startedAtMs))
-      : undefined;
+      : undefined);
   return {
     toolUseId: event.toolUseId,
     toolName: event.toolName,
@@ -494,6 +515,7 @@ function projectEntry(
     ...(entry.target === undefined ? {} : { target: entry.target }),
     ...(entry.errorMessage === undefined ? {} : { errorMessage: entry.errorMessage }),
     ...resultPreviewFields(entry),
+    ...scriptParentFields(entry),
     ...operationDiffFields(entry),
     ...(entry.executionPhase === undefined ? {} : { executionPhase: entry.executionPhase }),
     ...(entry.outputTail === undefined ? {} : { outputTail: entry.outputTail }),
@@ -802,6 +824,7 @@ function projectEntryStandalone(
     ...(entry.target === undefined ? {} : { target: entry.target }),
     ...(entry.errorMessage === undefined ? {} : { errorMessage: entry.errorMessage }),
     ...resultPreviewFields(entry),
+    ...scriptParentFields(entry),
     ...operationDiffFields(entry),
     ...(entry.executionPhase === undefined ? {} : { executionPhase: entry.executionPhase }),
     ...(entry.outputTail === undefined ? {} : { outputTail: entry.outputTail }),

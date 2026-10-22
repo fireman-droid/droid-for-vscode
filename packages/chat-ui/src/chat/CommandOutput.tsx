@@ -47,11 +47,11 @@ export function CommandOutput({ command, output, running, visible = true }: {
   }, [visible, running, output]);
   return <pre ref={pre} tabIndex={0} aria-label={t("Command and output")} className="v2-command-well outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
       onScroll={(event) => { const element = event.currentTarget; following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8; }}>
-      <span className="v2-command-entry">
+      <span data-ui-copy-block="" className="v2-command-entry">
         <span aria-hidden="true" className="v2-command-prompt">$</span>
         <code className="v2-command-code">{tokens.map((token, index) => token.kind === 'text'
           ? token.text : <span key={index} className={`v2-cmd-${token.kind}`}>{token.text}</span>)}</code>
       </span>
-      {output === undefined ? null : <span className="v2-command-output">{output}</span>}
+      {output === undefined ? null : <span data-ui-copy-block="" className="v2-command-output">{output}</span>}
     </pre>;
 }

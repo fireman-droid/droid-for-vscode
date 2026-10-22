@@ -1,3 +1,4 @@
+import { scriptParentFields } from '../../shared/transcript/scriptActivity';
 import { DroidWorkingState, type DroidStreamEvent } from '@factory/droid-sdk/node';
 
 import {
@@ -15,6 +16,7 @@ import {
 } from '../../shared/transcript/toolActivity';
 import {
   isExecuteToolName,
+  isFailedExecuteResult,
   stripTerminalNoise,
   toToolOutputTail,
 } from '../../shared/transcript/toolOutput';
@@ -85,6 +87,7 @@ export function normalizeSdkEvent(
       }
       return {
         ...withToolInputContext(activity, event.input, workspaceRoot),
+        ...scriptParentFields(event),
         inputComplete: true,
         ...operationDiffFields({ operationDiff }),
       };
@@ -99,7 +102,7 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      return withToolInputContext(activity, event.toolUse.input, workspaceRoot, true);
+      return { ...withToolInputContext(activity, event.toolUse.input, workspaceRoot, true), ...scriptParentFields(event) };
     }
 
     case 'tool_progress': {
@@ -129,10 +132,11 @@ export function normalizeSdkEvent(
       if (activity === undefined) {
         return undefined;
       }
-      const errorText = event.isError ? extractToolResultText(event.content) : undefined;
+      const isError = event.isError || isFailedExecuteResult(activity.toolName, event.content);
+      const errorText = isError ? extractToolResultText(event.content) : undefined;
       return {
         ...activity,
-        isError: event.isError,
+        isError,
         ...(errorText === undefined ? {} : { errorText }),
         ...(resultPreview === undefined ? {} : { resultPreview }),
         ...operationDiffFields({ operationDiff }),

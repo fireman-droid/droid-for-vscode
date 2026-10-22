@@ -37,7 +37,7 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
     <TabsContent value={filter} className="outline-none focus-visible:ring-1 focus-visible:ring-ring">
       {navigationError ? <p role="alert" className="v2-mission-feedback mb-4 rounded-lg border border-destructive/30 p-3 text-xs text-destructive">{navigationError}</p> : null}
       {state.status === 'error' && state.retryable ? <Button variant="outline" onClick={onRefresh}>{t("Retry")}</Button> : null}
-      {!refreshing && state.status !== 'error' && rows.length === 0 ? <section className="v2-mission-empty grid justify-items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
+      {!refreshing && state.status !== 'error' && rows.length === 0 ? <section data-ui-notice="" className="v2-mission-empty grid justify-items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
         <span className="grid size-10 place-items-center rounded-full bg-muted"><FolderGit2 className="size-5 text-muted-foreground" aria-hidden="true" /></span>
         <h2 className="text-sm font-medium">{state.rows.length === 0 ? t("No Missions yet") : t("No {p0} Missions", { p0: t(formatFilter(filter)) })}</h2>
         <p className="max-w-sm text-muted-foreground">{state.rows.length === 0 ? t("Start with a concrete outcome. Your Mission plan and feature progress will appear here.") : t("Choose another filter to see the other Missions in this catalog.")}</p>

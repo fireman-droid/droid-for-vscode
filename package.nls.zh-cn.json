@@ -1,4 +1,6 @@
 {
+  "droidvisx.localAnalytics.enabled.description": "在本机独立日志中记录前端使用、响应耗时和异常分类，不上传数据，不记录聊天正文、代码、文件路径、错误原文或凭据。通过“Droid：查看本地统计”查看，也会包含在手动导出的诊断包中。",
+  "droidvisx.openLocalAnalytics.title": "Droid：查看本地统计",
   "droidvisx.autocomplete.fimEnabled.description": "独立启用 FIM 代码续写，不影响 Next Edit。",
   "droidvisx.autocomplete.nextEdit.enabled.description": "同时启用编辑预测，将编辑上下文发送到单独配置的 Next Edit 服务。",
   "droidvisx.autocomplete.nextEdit.endpoint.description": "完整的 Next Edit 接口地址，需支持编辑预测，例如 Mercury /v1/edit/completions。",

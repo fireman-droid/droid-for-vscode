@@ -17,7 +17,7 @@ export function SettingsRow({ label, detail, children, className, controlClassNa
   readonly controlClassName?: string;
 }) {
   return <div className={cn('dvx-settings-row', className)} {...props}>
-    <div className="dvx-settings-label">{label}{detail && <small className="dvx-settings-detail">{detail}</small>}</div>
+    <div className="dvx-settings-label" data-ui-notice="">{label}{detail && <small className="dvx-settings-detail">{detail}</small>}</div>
     <div className={cn('dvx-settings-control', controlClassName)}>{children}</div>
   </div>;
 }

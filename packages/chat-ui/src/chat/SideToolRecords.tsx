@@ -47,10 +47,10 @@ export function SideToolRecords({ tools, progress }: { readonly tools: readonly 
       const Icon = ICONS[tool.kind];
       const label = t(LABELS[tool.kind][tool.state === 'running' ? 0 : 1]);
       return <li key={tool.id}>
-        <div className="v2-btw-tool-row"><Icon aria-hidden="true" /><span>{tool.target ?? (tool.kind === 'other' ? tool.name : label)}</span><span aria-label={t(tool.state === 'done' ? 'Completed' : tool.state === 'error' ? 'Failed' : tool.state === 'running' ? 'Running' : 'Result unconfirmed')}><StatusIcon state={tool.state} /></span></div>
+        <div data-ui-notice="" className="v2-btw-tool-row"><Icon aria-hidden="true" /><span>{tool.target ?? (tool.kind === 'other' ? tool.name : label)}</span><span aria-label={t(tool.state === 'done' ? 'Completed' : tool.state === 'error' ? 'Failed' : tool.state === 'running' ? 'Running' : 'Result unconfirmed')}><StatusIcon state={tool.state} /></span></div>
         {tool.error ? <p className="v2-btw-error">{tool.error}</p> : null}
         {tool.output ? <pre className="v2-btw-tool-output">{tool.output}</pre> : null}
-        {tool.detailsOmitted ? <p className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
+        {tool.detailsOmitted ? <p data-ui-notice="" className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
       </li>;
     })}</ul>
   </ToolDisclosure>;
@@ -65,7 +65,7 @@ export function SideAnalysisResults({ tools }: { readonly tools: readonly SideTo
     {tool.code ? <CodeBlock text={tool.code} language={tool.language ?? 'javascript'} /> : null}
     {tool.output ? <pre className="v2-btw-tool-output">{tool.output}</pre> : null}
     {tool.error ? <p className="v2-btw-error">{tool.error}</p> : null}
-    <p className="v2-btw-tool-note">{t(tool.state === 'done' ? 'Only this isolated example ran; project tests were not run.' : 'No successful result was confirmed for this example.')}</p>
-    {tool.detailsOmitted ? <p className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
+    <p data-ui-notice="" className="v2-btw-tool-note">{t(tool.state === 'done' ? 'Only this isolated example ran; project tests were not run.' : 'No successful result was confirmed for this example.')}</p>
+    {tool.detailsOmitted ? <p data-ui-notice="" className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
   </ToolDisclosure>);
 }

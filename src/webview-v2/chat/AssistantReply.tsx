@@ -1,5 +1,5 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useMemo, type ReactNode } from 'react';
 import { ReplyView } from '@droidvisx/chat-ui/chat/ReplyView';
 import { shallow } from 'zustand/shallow';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
@@ -9,7 +9,7 @@ import type { ProcessWaiting } from './transcript/activityPresentation';
 import { ActivityGroup, clusterActivity } from './ActivityGroup';
 import { TranscriptRow } from './TranscriptRow';
 import { AiOperationSummary } from './AiOperationSummary';
-import { isFoldableFileOperation, type OperationSummary } from './operationSummary';
+import type { OperationSummary } from './operationSummary';
 
 export const AssistantReply = memo(function AssistantReply({ descriptor, status, waiting, replyText, completedAt, regenerate, fork, renderItem, readOnly = false, operationSummary, operationsLive = status.type === 'running', onInteract }: {
   readonly descriptor: AssistantGroupDescriptor;
@@ -27,12 +27,14 @@ export const AssistantReply = memo(function AssistantReply({ descriptor, status,
 }) {
   const { t } = useI18n();
   const summarized = !operationsLive && !!operationSummary?.files.size;
-  const clusters = useMemo(() => clusterActivity(summarized ? descriptor.items.filter((item) => !isFoldableFileOperation(item)) : descriptor.items).filter((cluster) => {
+  const clusters = useMemo(() => clusterActivity(descriptor.items).filter((cluster) => {
     const item = cluster.items[0]!;
     return item.kind !== 'assistant' || item.text.trim().length > 0;
-  }), [descriptor.items, summarized]);
-  const render = renderItem ?? ((item: SessionTranscriptItem, grouped: boolean) =>
-    <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} hideConfirmedOperations={summarized} onInteract={onInteract} />);
+  }), [descriptor.items]);
+  const renderDefault = useCallback((item: SessionTranscriptItem, grouped: boolean) =>
+    <TranscriptRow item={item} messageId={descriptor.id} streaming={status.type === 'running'} grouped={grouped} readOnly={readOnly} onInteract={onInteract} />,
+  [descriptor.id, status.type, readOnly, onInteract]);
+  const render = renderItem ?? renderDefault;
   const diagnosticOnly = descriptor.items.every((item) => item.kind === 'diagnostic');
   return <ReplyView label={diagnosticOnly ? t("System notice") : readOnly ? t("Subagent") : 'Droid'} diagnosticOnly={diagnosticOnly}
     readOnly={readOnly} replyText={replyText} running={status.type === 'running'} completedAt={completedAt} regenerate={regenerate} fork={fork}>

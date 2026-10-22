@@ -23,7 +23,7 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
   if (item.kind === 'diagnostic') {
     if (item.code === 'history-note') return <section role="note" className="my-2 rounded-md border border-border p-3 text-xs">
       <p className="mb-2 text-muted-foreground">{t("Saved note · Not sent to the model")}</p>
-      <p className="whitespace-pre-wrap">{item.message}</p>
+      <p data-ui-copy-content="" className="whitespace-pre-wrap">{item.message}</p>
     </section>;
     if (item.code === 'session-compacted') {
       const count = /(\d+) earlier message/.exec(item.message)?.[1];
@@ -37,7 +37,7 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
   }
   if (item.kind === 'image') return item.data.length === 0 ? <p role="note" className="text-xs text-muted-foreground">{t("Image preview unavailable")}</p> : <ImageContent src={`data:${item.mediaType};base64,${item.data}`} alt={item.generated ? t("Generated image") : t("Message attachment")} generated={item.generated} />;
   if (item.kind === 'changes') return null;
-  return item.status === 'cancelled' ? <p className="my-2 rounded-lg border border-[var(--panel-edge)] p-3 text-xs text-muted-foreground">{t("Questions cancelled")}</p> : <dl className="my-2 max-w-[560px] divide-y divide-[var(--panel-edge)] rounded-lg border border-[var(--panel-edge)] text-[13px] leading-[21px]">
+  return item.status === 'cancelled' ? <p data-ui-notice="" className="my-2 rounded-lg border border-[var(--panel-edge)] p-3 text-xs text-muted-foreground">{t("Questions cancelled")}</p> : <dl className="my-2 max-w-[560px] divide-y divide-[var(--panel-edge)] rounded-lg border border-[var(--panel-edge)] text-[13px] leading-[21px]">
     {item.answers.map((answer, index) => <div key={index} className="grid gap-3 p-3"><dt><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">Droid</span>{answer.question ?? answer.topic}</dt><dd className="whitespace-pre-wrap"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">{t("You")}</span>{answer.answer}</dd></div>)}
   </dl>;
 });

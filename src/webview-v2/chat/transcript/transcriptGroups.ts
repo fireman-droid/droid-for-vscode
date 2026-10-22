@@ -1,3 +1,4 @@
+import { presentScriptResults } from './scriptResults';
 import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 
@@ -26,10 +27,20 @@ interface TranscriptProjection extends TranscriptDescription { readonly runs: Re
 const groupText = new WeakMap<AssistantGroupDescriptor, string>();
 const sameItems = <T>(before: readonly T[], after: readonly T[]) =>
   before.length === after.length && before.every((item, index) => item === after[index]);
+function isBlankAssistant(item: SessionTranscriptItem): boolean {
+  return item.kind === 'assistant' && item.text.trim().length === 0;
+}
+function lastNonBlankItem(items: readonly SessionTranscriptItem[]): SessionTranscriptItem | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!;
+    if (!isBlankAssistant(item)) return item;
+  }
+  return undefined;
+}
 function replyText(group: AssistantGroupDescriptor): string {
   const cached = groupText.get(group);
   if (cached !== undefined) return cached;
-  const text = group.items.flatMap((item) => item.kind === 'assistant' && item.text.length > 0 ? [item.text] : []).join('\n\n');
+  const text = group.items.flatMap((item) => item.kind === 'assistant' && item.text.trim().length > 0 ? [item.text] : []).join('\n\n');
   groupText.set(group, text);
   return text;
 }
@@ -52,9 +63,20 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
     if (group === undefined) {
-      group = { kind: 'assistant', id: `assistant-turn:${key}`, turnId: key, items: [] };
-      groups.set(key, group);
-      descriptors.push(group);
+      const prior = descriptors.at(-1);
+      const priorTail = prior?.kind === 'assistant' ? lastNonBlankItem(prior.items) : undefined;
+      if (
+        prior?.kind === 'assistant' &&
+        (item.kind === 'thinking' || item.kind === 'tool' || isBlankAssistant(item)) &&
+        (priorTail?.kind === 'thinking' || priorTail?.kind === 'tool')
+      ) {
+        group = prior;
+        groups.set(key, group);
+      } else {
+        group = { kind: 'assistant', id: `assistant-turn:${key}`, turnId: key, items: [] };
+        groups.set(key, group);
+        descriptors.push(group);
+      }
     }
     group.items.push(item);
   };
@@ -68,7 +90,7 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
       images.set(owner, group);
     }
   }
-  for (const item of transcript) {
+  for (const item of presentScriptResults(transcript)) {
     // Workspace snapshots include manual edits; they belong to Review, not an AI reply.
     if (item.kind === 'changes') continue;
     if (item.kind === 'user') {

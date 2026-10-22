@@ -34,6 +34,43 @@ describe('passive parent session notifications', () => {
     expect(events.some(event => event.type === 'runtime' && event.event.type === 'user-message')).toBe(false);
   });
 
+  it('keeps Script completion context inside its foreground owner and accepts the next real follow-up', () => {
+    const events: ParentSessionEvent[] = [];
+    const parent = new ParentSessionEvents('parent', 'C:/workspace', event => events.push(event));
+    parent.observe({ type: 'create_message', message: message('foreground', 'user', [{ type: 'text', text: 'Implement the entity' }]) });
+    parent.observe({ type: 'create_message', message: { ...message('script-completion:1', 'user', [{ type: 'text', text: 'Script finished' }]), visibility: 'llm_only' } });
+    parent.observe(automatic('script-completion:1'));
+    parent.observe({ type: 'assistant_text_delta', messageId: 'answer', blockIndex: 0, textDelta: 'Entity implemented' });
+    parent.observe(complete('script-completion:1'));
+    parent.observe({ type: 'create_message', message: message('steering', 'user', [{ type: 'text', text: 'Include tests' }]) });
+    parent.observe(complete('steering'));
+    parent.observe(automatic('script-completion:2'));
+    expect(events).toEqual([{ type: 'turn-start', turnId: 'foreground', automatic: false }]);
+    parent.observe(complete('foreground'));
+    parent.observe(complete('script-completion:2'));
+    parent.observe(automatic('task-completion:next'));
+    parent.observe({ type: 'assistant_text_delta', messageId: 'follow-up', blockIndex: 0, textDelta: 'Background results arrived' });
+    parent.observe(complete('task-completion:next'));
+    expect(events.filter(event => event.type === 'turn-start')).toEqual([
+      { type: 'turn-start', turnId: 'foreground', automatic: false },
+      { type: 'turn-start', turnId: 'task-completion:next', automatic: true },
+    ]);
+    expect(events.filter(event => event.type === 'runtime' && event.event.type === 'text-delta')).toEqual([
+      { type: 'runtime', turnId: 'task-completion:next', event: { type: 'text-delta', text: 'Background results arrived' } },
+    ]);
+    expect(events.at(-1)).toMatchObject({ turnId: 'task-completion:next', event: { type: 'turn-complete', outcome: 'success' } });
+  });
+
+  it('does not treat hidden user context or ordinary system messages as a new foreground or automatic turn', () => {
+    const events: ParentSessionEvent[] = [];
+    const parent = new ParentSessionEvents('parent', 'C:/workspace', event => events.push(event));
+    parent.observe({ type: 'create_message', message: { ...message('script-context', 'user', [{ type: 'text', text: 'Script finished' }]), visibility: 'llm_only' } });
+    parent.observe({ type: 'create_message', requestId: 'settings', message: message('settings', 'system', [{ type: 'text', text: 'Settings changed' }]) });
+    expect(events).toEqual([]);
+    parent.observe(automatic('follow-up'));
+    expect(events).toEqual([{ type: 'turn-start', turnId: 'follow-up', automatic: true }]);
+  });
+
   it('keeps cancellation and transport resync scoped to the matching automatic turn', () => {
     const events: ParentSessionEvent[] = [];
     const parent = new ParentSessionEvents('parent', 'C:/workspace', event => events.push(event));
@@ -47,6 +84,16 @@ describe('passive parent session notifications', () => {
     ]);
     expect(events).toContainEqual({ type: 'resync' });
     expect(events.at(-1)).toEqual({ type: 'turn-start', turnId: 'task-completion:2', automatic: true });
+  });
+
+  it('does not let a foreground boundary lost during reconnect suppress later background turns', () => {
+    const events: ParentSessionEvent[] = [];
+    const parent = new ParentSessionEvents('parent', 'C:/workspace', event => events.push(event));
+    parent.observe({ type: 'create_message', message: message('foreground', 'user', [{ type: 'text', text: 'Delegate' }]) });
+    parent.resync();
+    parent.observe(automatic('after-reconnect'));
+    parent.observe(complete('after-reconnect'));
+    expect(events.at(-1)).toMatchObject({ turnId: 'after-reconnect', event: { type: 'turn-complete', outcome: 'success' } });
   });
 
   it('pairs child tool-result content with the earlier input and emits one named preview', () => {

@@ -75,6 +75,17 @@ export function tokenizeCommand(command: string): readonly CommandToken[] {
       continue;
     }
 
+    const hereString = char === '@' && /^@["'][ \t]*\r?\n/u.test(command.slice(index));
+    if (hereString) {
+      const quote = command[index + 1]!;
+      let end = command.indexOf('\n' + quote + '@', index + 2);
+      end = end === -1 ? command.length : end + 3;
+      push('string', command.slice(index, end));
+      index = end;
+      expectCommand = false;
+      continue;
+    }
+
     if (char === '#') {
       const lineEnd = command.indexOf('\n', index);
       const end = lineEnd === -1 ? command.length : lineEnd;

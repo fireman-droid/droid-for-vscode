@@ -1,6 +1,12 @@
 import type { MessageTranslations } from './translate';
 
 export const extraMessages: readonly MessageTranslations[] = [
+  ["Started in background · PID {pid}","已在后台启动 · PID {pid}","已在背景啟動 · PID {pid}"],
+  ["{count} result preview unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
+  ["{count} result previews unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
+  ["Word wrap","自动换行","自動換行"],
+  ["Enable word wrap","开启自动换行","開啟自動換行"],
+  ["Disable word wrap","关闭自动换行","關閉自動換行"],
   ["Copied result","已复制结果","已復制結果"],
   ["Copy result","复制结果","復制結果"],
   ["Files","文件","檔案"],
@@ -242,6 +248,7 @@ export const extraMessages: readonly MessageTranslations[] = [
   ["All edits","全部编辑","全部編輯"],
   ["Saved file","已保存文件","已保存檔案"],
   ["Saved patch","已保存补丁","已保存補丁"],
+  ["This edit is saved. Open Review to read its full content.","修改已保存，可在审阅中查看完整内容。","修改已保存，可在審閱中查看完整內容。"],
   ["Saved change excerpts in execution order.","按执行顺序保存的更改片段。","按執行順序保存的更改片段。"],
   ["No saved operations.","没有已保存的操作。","沒有已保存的操作。"],
   ["The selected edit is unavailable. Choose another edit from History.","选中的编辑不可用，请从历史中选择其他编辑。","選中的編輯不可用，請從歷史中選擇其他編輯。"],

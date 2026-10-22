@@ -1,4 +1,5 @@
 import { useSyncExternalStore, type RefObject } from 'react';
+import { UI_NOTICE_SELECTOR } from '../ui/copySelection';
 
 function subscribe(listener: () => void) {
   document.addEventListener('selectionchange', listener);
@@ -6,7 +7,7 @@ function subscribe(listener: () => void) {
 }
 
 const EDITABLE_SELECTION = '[data-composer-surface],textarea,input,select,[contenteditable]:not([contenteditable="false"])';
-const EXCLUDED_SELECTION = `${EDITABLE_SELECTION},[data-transcript-selection-exclude],[data-webview-overlay]`;
+const EXCLUDED_SELECTION = `${EDITABLE_SELECTION},[data-webview-overlay]`;
 const SELECTION_CONTROL = 'button,[data-slot="button"],label,[role="button"],[role="combobox"],[role="option"],[role="tab"],[role="menuitem"],[role="checkbox"],[role="radio"],[role="switch"]';
 
 /** One boundary for the quote toolbar, sticky ownership and scroll protection. */
@@ -17,6 +18,8 @@ export function readTranscriptSelection(root: HTMLElement | null): Selection | n
     if (!node || !root.contains(node)) return null;
     const element = node instanceof Element ? node : node.parentElement;
     if (!element || element.closest(EXCLUDED_SELECTION) || getComputedStyle(element).userSelect === 'none') return null;
+    const notice = element.closest(`${UI_NOTICE_SELECTOR},[data-ui-copy-content]`);
+    if (notice && !notice.hasAttribute('data-ui-copy-content')) return null;
     const control = element.closest(SELECTION_CONTROL);
     if (control && control.getAttribute('data-text-selectable') !== 'true') return null;
   }

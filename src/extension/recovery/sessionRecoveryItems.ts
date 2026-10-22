@@ -1,3 +1,4 @@
+import { isScriptParentId, scriptParentFields } from '../../shared/transcript/scriptActivity';
 import {
   ATTACHMENT_KINDS,
   DIAGNOSTIC_SEVERITIES,
@@ -346,6 +347,7 @@ function parseTool(
       'operationDiff',
       'executionPhase',
       'backgroundHint',
+        'scriptParentId',
       'subagent',
     ])
   ) {
@@ -411,6 +413,7 @@ function parseTool(
     isValidToolTarget(target) &&
     hasValidResultPreview(value) &&
     (value.operationDiff === undefined || isOperationDiff(value.operationDiff)) &&
+    (value.scriptParentId === undefined || isScriptParentId(value.scriptParentId) && value.scriptParentId !== toolUseId) &&
     (executionPhase === undefined || isToolExecutionPhase(executionPhase)) &&
     (errorMessage === undefined ||
       isNonEmptyBoundedString(errorMessage, MAX_TOOL_ERROR_MESSAGE_LENGTH))
@@ -439,6 +442,7 @@ function parseTool(
             }),
         ...(target === undefined ? {} : { target }),
         ...resultPreviewFields(value),
+        ...scriptParentFields(value),
         ...operationDiffFields({ operationDiff: value.operationDiff }),
         ...(executionPhase === undefined ? {} : { executionPhase }),
         ...(errorMessage === undefined ? {} : { errorMessage: errorMessage as string }),

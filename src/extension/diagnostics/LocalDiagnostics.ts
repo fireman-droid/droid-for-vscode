@@ -60,6 +60,8 @@ interface LocalDiagnosticsOptions {
   readonly now?: () => Date;
   readonly maxTotalBytes?: number;
   readonly fileSystem?: DiagnosticsFileSystem;
+  /** Optional local statistics observer; SDK log payloads are not passed here. */
+  readonly onHostRecord?: (event: RuntimeDiagnosticEvent) => void;
 }
 
 interface PersistedDiagnosticRecord {
@@ -95,6 +97,7 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
   private readonly now: () => Date;
   private readonly maxTotalBytes: number;
   private readonly fileSystem: DiagnosticsFileSystem;
+  private readonly onHostRecord: LocalDiagnosticsOptions['onHostRecord'];
   private writeQueue: Promise<void> = Promise.resolve();
   private sequence = 0;
   private disposed = false;
@@ -109,6 +112,7 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
     this.now = options.now ?? (() => new Date());
     this.maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
     this.fileSystem = options.fileSystem ?? nodeFileSystem;
+    this.onHostRecord = options.onHostRecord;
     this.act = randomBytes(3).toString('hex');
     this.observability = {
       logger: {
@@ -127,6 +131,7 @@ export class LocalDiagnostics implements RuntimeDiagnosticSink {
 
   record(event: RuntimeDiagnosticEvent): void {
     this.enqueue('host', event);
+    if (!this.disposed) this.onHostRecord?.(event);
   }
 
   beginTurnScope(turnId: string): void {

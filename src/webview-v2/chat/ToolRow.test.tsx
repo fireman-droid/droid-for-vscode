@@ -55,8 +55,8 @@ it('separates unavailable snippets from failure and opens current files without 
   const openPath = vi.fn();
   const read: ToolTranscriptItem = { kind: 'tool', id: 'read-row', turnId: 'turn-1', toolUseId: 'read-1', toolName: 'Read', action: 'Read file', status: 'completed', progressCount: 0, latestUpdateKind: null, target: 'src/app.ts' };
   const view = render(<View item={read} actions={{ openPath }} />);
-  expect(screen.queryByText('Not saved')).toBeNull();
-  expect(screen.getByRole('button', { name: /^Read/ }).getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByText('Not saved')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read-1' }, text: 'const retained = true;', truncated: true } }} actions={{ openPath }} />);
   fireEvent.click(screen.getByRole('button', { name: /^Read/ }));
   expect(screen.getByText('truncated')).toBeDefined();
@@ -71,9 +71,34 @@ it.each([false, true])('omits missing targets and unavailable preview noise with
     resultPreview: { availability: 'unavailable', reason: 'restricted' } };
   const view = render(<View item={read} grouped={grouped} />);
   expect(view.container.textContent).toContain('Read');
-  expect(view.container.textContent).not.toMatch(/Target not recorded|No preview|Not saved/);
-  expect(screen.getByRole('button', { name: /^Read/ }).getAttribute('aria-expanded')).toBe('false');
+  expect(view.container.textContent).not.toMatch(/Target not recorded|Not saved/);
+  expect(screen.getByText('No preview')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   expect(screen.getByTitle(/restricted/)).toBeTruthy();
+});
+
+it('keeps evicted results and simple read receipts compact without empty disclosures', () => {
+  const read: ToolTranscriptItem = { ...base, toolName: 'Read', action: 'Read file', status: 'completed', detailKind: undefined,
+    detail: undefined, outputTail: undefined, target: 'src/app.ts', resultPreview: { availability: 'unavailable', reason: 'evicted' } };
+  const view = render(<View item={read} grouped />);
+  expect(screen.getByText('Not retained')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
+  expect(view.container.textContent).not.toContain('conversation limit');
+  expect(screen.getByTitle(/conversation limit/)).toBeTruthy();
+  view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read' },
+    text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes', truncated: false } }} grouped />);
+  expect(screen.getByText('Read lines 1–37 (1.3 KiB)')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
+});
+
+it('presents a background launch receipt without implying that the process is still running', () => {
+  render(<View item={{ ...base, toolName: 'Script', action: 'Run script', status: 'completed', detailKind: undefined,
+    detail: undefined, outputTail: undefined, resultPreview: { availability: 'available', source: { tool: 'Script', path: 'Tool result', callId: 'script' },
+      text: 'exit null · pid 107644 · outputFile C:/temp/job.out', truncated: false } }} grouped />);
+  expect(screen.getByText('Started in background · PID 107644')).toBeTruthy();
+  expect(screen.getByTitle(/C:\/temp\/job.out/)).toBeTruthy();
+  expect(screen.queryByText(/exit null/)).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Run script/ })).toBeNull();
 });
 
 it.each([false, true])('retains the real tool error behind one detail toggle without claiming success (grouped=%s)', (grouped) => {

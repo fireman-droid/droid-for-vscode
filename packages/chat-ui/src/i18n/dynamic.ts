@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const dynamicMessages: readonly MessageTranslations[] = [
+  ["Run script", "执行脚本", "執行腳本"],
+  ["Script output", "脚本补充输出", "腳本補充輸出"],
+  ["Read lines {start}–{end} ({size})", "已读取第 {start}–{end} 行（{size}）", "已讀取第 {start}–{end} 行（{size}）"],
   ["{count} Queued Message","{count} 条排队消息","{count} 條排隊訊息"],
   ["{count} Queued Messages","{count} 条排队消息","{count} 條排隊訊息"],
   ["paused after stop","停止后已暂停","停止後已暫停"],
@@ -21,6 +24,11 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["Thinking history ({count})","思考记录（{count} 段）","思考記錄（{count} 段）"],
   ["Process: {action}","执行过程：{action}","執行過程：{action}"],
   ["Execution history","执行过程","執行過程"],
+  ["Explored","已探索","已探索"],
+  ["ran {count} command","运行了 {count} 条命令","運行了 {count} 條命令"],
+  ["ran {count} commands","运行了 {count} 条命令","運行了 {count} 條命令"],
+  ["{count} thought","思考 {count} 次","思考 {count} 次"],
+  ["{count} thoughts","思考 {count} 次","思考 {count} 次"],
   ["{count} records","{count} 条记录","{count} 條記錄"],
   ["{count} operation","{count} 次操作","{count} 次操作"],
   ["{count} operations","{count} 次操作","{count} 次操作"],
@@ -296,6 +304,7 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["Could not load this diff. Try again.","无法加载差异，请重试。","無法載入差異，請重試。"],
   ["This comparison did not finish loading. Refresh or choose the scope again.","此对比尚未加载完成，请刷新或重新选择范围。","此對比尚未載入完成，請刷新或重新選擇范圍。"],
   ["The local Droid connection is unavailable.","本地 Droid 连接不可用。","本地 Droid 連接不可用。"],
+  ["This session is open in another window. Close it there, or start a new session here.","此会话已在另一个窗口打开。请关闭另一个窗口，或在此处新建会话。","此會話已在另一個窗口打開。請關閉另一個窗口，或在此處新建會話。"],
   ["Reply failed. No error details are available.","回答失败，没有可用的错误详情。","回答失敗，沒有可用的錯誤詳情。"],
   ["Updating session settings…","正在更新会话设置…","正在更新會話設置…"],
   ["Droid is working…","Droid 正在工作…","Droid 正在工作…"],

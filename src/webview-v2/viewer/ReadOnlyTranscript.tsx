@@ -7,7 +7,7 @@ import { AssistantReply } from '../chat/AssistantReply';
 import { ReadOnlyQuestion } from './ReadOnlyQuestion';
 import { isPlanLive, selectPlanAnchors } from '../chat/transcript/planAnchor';
 import { PlanLine } from '../chat/PlanLine';
-import { createOperationSummarySelector } from '../chat/operationSummary';
+import { createOperationSummarySelector, summarizeReplyOperations } from '../chat/operationSummary';
 import { createTranscriptMessagesSelector } from '../chat/transcriptProjection';
 
 const NO_PENDING_REPLIES: ReadonlySet<string> = new Set();
@@ -18,6 +18,7 @@ export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, runn
   const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
   const plans = useMemo(() => selectPlanAnchors(items), [items]);
   const operationSummaries = useMemo(() => selectors.operations(items), [items, selectors]);
+  const replySummaries = useMemo(() => summarizeReplyOperations(operationSummaries, descriptors), [operationSummaries, descriptors]);
   const [planChoices, setPlanChoices] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const turnId = useMemo(() => {
     if (!running) return null;
@@ -39,8 +40,11 @@ export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, runn
           onToggle={(id, expanded) => { stopFollowing(); setPlanChoices((previous) => new Map(previous).set(id, expanded)); }} /> : null}</>;
     }
     const status = resolveAssistantStatus(descriptor.items, descriptor.turnId, active);
+    const operationsLive =
+      status.type === 'running' ||
+      (status.type === 'incomplete' && status.reason === 'cancelled');
     return <AssistantReply descriptor={descriptor} status={status} waiting={null} replyText={replyTails.get(descriptor.id)} readOnly
-      operationSummary={operationSummaries.get(descriptor.turnId)} operationsLive={status.type === 'running'} onInteract={stopFollowing}
+      operationSummary={replySummaries.get(descriptor.id)} operationsLive={operationsLive} onInteract={stopFollowing}
       completedAt={status.type === 'running' ? undefined : replyTimestamps.get(descriptor.id)} regenerate={undefined} fork={undefined} />;
   }} />;
 });

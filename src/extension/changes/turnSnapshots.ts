@@ -28,7 +28,7 @@ import {
   upsertTurn,
 } from './turnSnapshotRecords';
 import { snapshotWorkspaceFiles, isSnapshotWorkspacePath } from './snapshotWorkspaceFiles';
-import { captureWorkspaceTree } from './captureWorkspaceTree';
+import { captureWorkspaceTree, type WorkspaceBlobCache } from './captureWorkspaceTree';
 import { acquireWorkspaceTurnLease, readPendingWorkspaceTurn, releaseCompletedWorkspaceTurn, type WorkspaceTurnLease } from './workspaceTurnLease';
 import { pruneSnapshotObjects } from './snapshotPruning';
 import { createGitTreeReader } from '../workspace/gitTreeReader';
@@ -155,6 +155,15 @@ export function createTurnSnapshotStore(
   const retained = new Map<string, { count: number; record: TurnSnapshotRecord | undefined }>();
   const running = new Map<string, () => void>();
   const leases = new Map<string, WorkspaceTurnLease>();
+  const blobCaches = new Map<string, WorkspaceBlobCache>();
+  const blobCacheFor = (root: string): WorkspaceBlobCache => {
+    let cache = blobCaches.get(root);
+    if (cache === undefined) {
+      cache = new Map();
+      blobCaches.set(root, cache);
+    }
+    return cache;
+  };
   const shutdown = new AbortController();
   const recordFor = (scope: TurnSnapshotScope) =>
     readTurn(sessions, scope.sessionId, scope.turnId) ?? retained.get(turnKey(scope))?.record ??
@@ -387,7 +396,7 @@ export function createTurnSnapshotStore(
       if (phase === 'before' || existing?.coverage === 'workspace-files-v1') {
         const env = snapshotEnv(indexFile, resolved);
         const oid = await captureWorkspaceTree(root, (args, maxBytes, input) =>
-          git(root, args, env, deadline, maxBytes, input));
+          git(root, args, env, deadline, maxBytes, input), blobCacheFor(root));
         if (!TREE_OID.test(oid)) return failCapture(scope, phase, 'invalid-tree-oid');
         await persistPatch(scope, { [phase]: oid, coverage: 'workspace-files-v1', workspaceRoot: root });
         dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot.capture',
@@ -531,7 +540,7 @@ export function createTurnSnapshotStore(
       if (value.startsWith('160000 ') || value.startsWith('120000 ') || index === parts.length && value.length > 0) return undefined;
       if (!value.length) break;
     }
-    if (record?.coverage === 'workspace-files-v1') return isSnapshotWorkspacePath(path) ? null : undefined;
+    if (record?.coverage === 'workspace-files-v1') return isSnapshotWorkspacePath(path, root) ? null : undefined;
     if (!record?.snapshotPaths?.includes(path)) {
       // An ignored file omitted from a snapshot is not proof that it did not
       // exist. Otherwise watchers count its entire contents as a new file.
@@ -733,6 +742,13 @@ export function createTurnSnapshotStore(
         const reachable = new Set(result.stdout.toString('utf8').trim().split(/\r?\n/));
         if (roots.some(oid => !reachable.has(oid)) || [...reachable].some(oid => !TREE_OID.test(oid))) return;
         const removed = await pruneSnapshotObjects(objectsDir, reachable, dependencies);
+        if (removed > 0) {
+          for (const cache of blobCaches.values()) {
+            for (const [path, entry] of cache) {
+              if (!reachable.has(entry.hash)) cache.delete(path);
+            }
+          }
+        }
         dependencies.recordDiagnostic({ level: 'info', name: 'host.changes.snapshot-pruned',
           attributes: { removed, retainedTrees: roots.length, bytesBefore: bytes } });
       }).catch(error => {
@@ -751,6 +767,7 @@ export function createTurnSnapshotStore(
         failedTurns.clear();
         retained.clear();
         running.clear();
+        blobCaches.clear();
         for (const lease of leases.values()) await lease.detach();
         leases.clear();
         layout = undefined;

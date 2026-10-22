@@ -67,13 +67,13 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
               <h3 className="px-1 py-0.5 text-[11px] text-muted-foreground">{group.label ? t(group.label) : null}</h3>
               {group.items.map((entry) => <SessionRow key={entry.id} entry={entry} maxTitleLength={maxTitleLength} disabled={controlsDisabled} actions={actions} runOnce={runOnce} onSelect={() => select(entry.id)} />)}
             </section>)}
-            {groups.length === 0 && state.sessions.status !== 'loading' ? <p className="p-2 text-xs text-muted-foreground">{search.trim() ? t("No sessions match your search.") : state.sessions.status === 'ready' ? t("No {p0} sessions found.", { p0: assistantName }) : t("Session history has not loaded yet.")}</p> : null}
+            {groups.length === 0 && state.sessions.status !== 'loading' ? <p data-ui-notice="" className="p-2 text-xs text-muted-foreground">{search.trim() ? t("No sessions match your search.") : state.sessions.status === 'ready' ? t("No {p0} sessions found.", { p0: assistantName }) : t("Session history has not loaded yet.")}</p> : null}
           {state.sessionSearch === null ? null : <section aria-label={t("Content matches")} className="space-y-2 border-t border-[var(--panel-edge)] pt-2 text-xs">
             <h3 className="font-medium">{t("Content matches · “")}{state.sessionSearch.query}”</h3>
-            {state.sessionSearch.status === 'error' ? <p role="alert" className="text-destructive">{state.sessionSearch.message}</p> : state.sessionSearch.items.length === 0 ? <p className="text-muted-foreground">{t("No content matches.")}</p> : state.sessionSearch.items.map((hit) => {
+            {state.sessionSearch.status === 'error' ? <p role="alert" className="text-destructive">{state.sessionSearch.message}</p> : state.sessionSearch.items.length === 0 ? <p data-ui-notice="" className="text-muted-foreground">{t("No content matches.")}</p> : state.sessionSearch.items.map((hit) => {
               const body = <><span>{hit.title}</span>{hit.snippet === null ? null : <span className="line-clamp-3 text-xs text-muted-foreground">{hit.snippet}</span>}</>;
               return catalogIds.has(hit.id) ? <Button key={hit.id} variant="ghost" className="h-auto w-full flex-col items-start gap-1 whitespace-normal py-2 text-left" disabled={controlsDisabled} onClick={() => select(hit.id)}>{body}</Button>
-                : <div key={hit.id} title={t("This session belongs to another workspace")} className="space-y-1 px-2 py-2">{body}<p className="text-muted-foreground">{t("Other workspace")}</p></div>;
+                : <div key={hit.id} title={t("This session belongs to another workspace")} className="space-y-1 px-2 py-2">{body}<p data-ui-notice="" className="text-muted-foreground">{t("Other workspace")}</p></div>;
             })}
           </section>}
           {state.worktreeCreateAvailable && actions.handleCreateWorktreeSession ? <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] text-muted-foreground" disabled={controlsDisabled} onClick={() => runOnce(() => { actions.handleCreateWorktreeSession?.(); onOpenChange(false); })}>{t("New session in a worktree…")}</Button> : null}
@@ -89,7 +89,7 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
                 <span className="min-w-0 flex-1 truncate" title={entry.archivedTime}>{entry.title}</span>
                 {actions.handleUnarchiveSession ? <Button variant="ghost" size="sm" className="h-7 text-[11px]" aria-label={t("Restore {p0}", { p0: entry.title })} disabled={controlsDisabled || state.archived.status === 'loading'} onClick={() => runOnce(() => actions.handleUnarchiveSession?.(entry.id))}>{t("Restore")}</Button> : null}
               </div>)}
-              {state.archived.status === 'ready' && archivedEntries.length === 0 ? <p className="p-2 text-xs text-muted-foreground">{t("No archived sessions.")}</p> : null}
+              {state.archived.status === 'ready' && archivedEntries.length === 0 ? <p data-ui-notice="" className="p-2 text-xs text-muted-foreground">{t("No archived sessions.")}</p> : null}
             </CollapsibleContent>
           </section></Collapsible> : null}
         </div>

@@ -56,6 +56,7 @@ export function useComposerFlow(
   if (currentSession.current !== state.sessionId) {
     currentSession.current = state.sessionId;
     pendingSend.current = null;
+    setCommandNotice(null);
   }
   const writeDraft = useCallback(
     (text: string, replaceComposer = false): void => {

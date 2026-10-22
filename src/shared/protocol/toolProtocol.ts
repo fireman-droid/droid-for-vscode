@@ -12,6 +12,7 @@ import type { OperationDiff, ToolExecutionPhase } from './operationDiff';
 interface ToolDisplayFields {
   readonly turnId: string;
   readonly toolUseId: string;
+  readonly scriptParentId?: string;
   readonly toolName: string;
   readonly action: string;
   readonly progressCount: number;
