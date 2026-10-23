@@ -30,7 +30,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   );
 }
 
-export function SelectContent({ children, className, ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
+export function SelectContent({ align = 'end', children, className, ...props }: ComponentProps<typeof SelectPrimitive.Content>) {
   const container = usePortalContainer();
   return (
     <SelectPrimitive.Portal container={container}>
@@ -39,9 +39,10 @@ export function SelectContent({ children, className, ...props }: ComponentProps<
         data-slot="select-content"
         data-motion="anchored"
         position="popper"
+        align={align}
         sideOffset={4}
         collisionPadding={8}
-        className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-select-content-available-height)] w-max min-w-[var(--radix-select-trigger-width)] max-w-[min(calc(100vw-16px),var(--radix-select-content-available-width))] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)}
+        className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-select-content-available-height)] w-max min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)}
         {...props}
       >
         <SelectPrimitive.Viewport className="w-full min-w-0">{children}</SelectPrimitive.Viewport>

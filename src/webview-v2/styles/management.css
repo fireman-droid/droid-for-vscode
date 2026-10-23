@@ -59,7 +59,7 @@
   .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
   /* List reads temporarily lock scope changes without pulsing both labels. */
   .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
-  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: min(calc(100vw - 16px), var(--radix-select-content-available-width)); border-radius: 8px; }
+  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 16px); border-radius: 8px; }
   .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }
   .management-menu .dvx-menu-item > svg { width: 14px; height: 14px; flex-shrink: 0; }
   .management-menu [role='option'] { padding-right: 24px; white-space: nowrap; }

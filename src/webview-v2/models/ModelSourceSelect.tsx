@@ -17,7 +17,7 @@ interface ModelOption {
 }
 
 export function ModelSourceSelect({ label, value, models, disabled, onChange,
-  placeholder = 'Choose an available model', className = '', side = 'bottom', align = 'start' }: {
+  placeholder = 'Choose an available model', className = '', side = 'bottom', align = 'end' }: {
   readonly label: string;
   readonly value: string | undefined;
   readonly models: readonly ModelOption[];
