@@ -30,6 +30,7 @@
 | --- | --- |
 | 聊天 | 最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。队列预览最多三行；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
 | 管理页 | 常规、模型、补全、会话、任务；共享设置行、搜索筛选、分页和滚动条，Select 弹层不少于触发器宽度并随单行选项内容扩展，列表刷新保留已有内容 |
+| Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
 | Mission 创建 | 说明型开关行保持背景稳定，操作按钮随内容收紧；调度／执行／验证代理模型支持搜索，保留来源筛选与现有推理等级 |
 | 设置模型 | 搜索、来源分组、继承、模型与强度子菜单；下拉选项悬停与选中态统一使用中性灰背景与正文色勾选，菜单随单行内容扩展并受视口约束；等级来自 SDK；纯模型场景直接选择，主聊天尚未整体迁移 |
 | 多语言 | 简体中文、繁体中文、英语；默认跟随编辑器，消息与代码保持原文 |
@@ -50,7 +51,8 @@
 
 ## 最近验证
 
-- `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），并完成 100MB+ 大会话「对话转不回来」四项修复：`connectPublicDaemon.ts` 将 RPC `requestTimeout` 从 `30000ms` 提升至 `120000ms` 并注入 `loadAllMessages: false` 启用压缩锚点反向快读；`routedDaemon.ts`／`persistentIdeRelay.ts` 在同 Daemon 尚未打开 Worker 或前次 `resume` 失败时重置 Relay 根会话握手，消除 `rebindIdleAttachment` 误杀刚加载完成的 Daemon；`daemonLifecycle.ts` 在端口未监听且旧 PID 已退出时跳过 `powershell.exe` 进程查询；`runtimeLifecycle.ts` 在断线自动重连重试期间复用当前已加载的历史 transcript，避免重复读取百兆 JSONL 与重复推送快照。`lint:budgets`、全仓 `typecheck` 与生产构建通过。
+- Factory 账户与 `/limits`：本机真实凭据读取 `GET https://api.factory.ai/api/billing/limits` 返回 200，字段与 Factory 应用截图一致（`Standard`／`Droid Core` 分段切换与三窗口独立进度条 + `extraUsageBalanceCents`）；token 载荷确认含 email、first/last name 与 org；设置页 `account.read` 走独立非阻塞请求通道，不占用 `busy` 或阻塞其他设置。类型检查、文件预算通过；`factoryAccount` 9 项定向测试覆盖身份解析、窗口投影、epoch 毫秒、EU 主机与未登录路径。
+- `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），并完成 100MB+ 大会话「对话转不回来」四项修复：`connectPublicDaemon.ts` 将 RPC `requestTimeout` 从 `30000ms` 提升至 `120000ms` 并注入 `loadAllMessages: false` 启用压缩锚点反向快读；`routedDaemon.ts`／`persistentIdeRelay.ts` 在同 Daemon 尚未打开 Worker 或前次 `resume` 失败时重置 Relay 根会话握手，消除 `rebindIdleAttachment` 误杀刚加载完成的 Daemon；`daemonLifecycle.ts` 在端口未监听且旧 PID 已退出时跳过 `powershell.exe` 进程查询；`runtimeLifecycle.ts` 在断线自动重连重试期间复用当前已加载的历史 transcript，避免重复读取百兆 JSONL 与重复推送快照。主聊天顶部历史裁剪说明与展开入口已合并为渐隐细分割线与胶囊缓动触发器，前后端捆绑文件变更均支持自动热重载。`lint:budgets`、全仓 `typecheck` 与生产构建通过。
 - `codex/ui-style-refinements` 分支已完成设置页下拉框（`ModelPicker` 勾选／选中背景、`ScrollArea` 拖动滑块、模型发现列表选中行）由橙色回归中性灰、`Select` 与 `ModelPicker` 弹层按单行内容自适应扩展宽度并与未展开触发框右边缘对齐，以及 BTW 发送／停止按钮与主聊天发送按钮样式对齐；Node 24／pnpm 10.2.0 下 `typecheck`、`lint:budgets`、生产构建与 VSIX 172 项校验通过。
 - 长草稿输入修复：粘贴及继续输入后让光标在编辑区内可见，受控内容重建保留内部滚动位置；单条输入容量扩至 2,000,000 字符，发送、队列、历史恢复同步使用新预算，移除新增超限提示。
 - 消息卡片编辑期间持续暂停主聊天自动跟随，避免向下滚到底部后被流式回复再次拉走。

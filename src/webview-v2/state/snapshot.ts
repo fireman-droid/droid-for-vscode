@@ -79,6 +79,7 @@ export function reduceSnapshotMessage(
         mission: event.mission ?? null,
         missionSnapshot: sameSession ? state.missionSnapshot : null,
         missionControlResult: sameSession ? state.missionControlResult : null,
+        account: state.account,
         tokenUsage: event.tokenUsage ?? EMPTY_SESSION_TOKEN_USAGE,
         queue: event.queue ?? EMPTY_SESSION_QUEUE_STATE,
         queueEditing: reconcileQueueEditing(

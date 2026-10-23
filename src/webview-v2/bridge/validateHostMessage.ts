@@ -10,6 +10,7 @@ import {
 } from '../../shared/protocol/btwProtocol';
 import { parseCanvasFeedbackDraftMessage } from '../../shared/protocol/canvasProtocol';
 import { parseCustomModelsHostMessage } from '../../shared/protocol/customModelsProtocol';
+import { parseFactoryLimitsStateMessage } from '../../shared/protocol/factoryAccountProtocol';
 import { parseMissionHostMessage } from '../../shared/protocol/missionProtocol';
 import { THEME_PREFERENCES } from '../../shared/protocol/bounds';
 import { type ThemePreference } from '../../shared/protocol/shell';
@@ -86,6 +87,7 @@ const HOST_MESSAGE_PARSERS = {
   'session.settings': parseSessionSettingsMessage,
   'session.context': parseSessionContextMessage,
   'session.tokenUsage': parseSessionTokenUsageMessage,
+  'factory.limits': (value) => parseFactoryLimitsStateMessage(value) ?? undefined,
   'session.model-catalog': parseModelCatalogMessage,
   'session.skills': parseSessionSkillsMessage,
   'session.plugins': parseSessionPluginsMessage,

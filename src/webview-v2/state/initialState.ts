@@ -44,6 +44,7 @@ export const initialAssistantWebviewState: AssistantWebviewState = {
   mission: null,
   missionSnapshot: null,
   missionControlResult: null,
+  account: null,
   tokenUsage: EMPTY_SESSION_TOKEN_USAGE,
   queue: EMPTY_SESSION_QUEUE_STATE,
   queueEditing: null,
