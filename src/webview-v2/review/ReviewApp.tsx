@@ -48,10 +48,11 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
   const valid = target?.valid === true;
   const selectedPath = jump?.path ?? current?.path ?? target?.operationPath ?? files[0]?.path ?? null;
   const reveal = useCallback((path: string) => {
-    pendingReveal.current = path;
-    setCollapsed(previous => { const next = new Set(previous); next.delete(path); return next; });
+    const read = flow.fileReads.get(path);
+    pendingReveal.current = read.file && !read.pending ? null : path;
+    setCollapsed(previous => previous.has(path) ? new Set([...previous].filter(item => item !== path)) : previous);
     setJump({ path });
-  }, []);
+  }, [flow.fileReads]);
   useEffect(() => { setCollapsed(new Set()); setFilters({ query: '', unreviewed: false }); setReference(null); setReferenceNotice(null); }, [scopeKey]);
   const hostPath = operation ? target?.operationPath ?? files[0]?.path : current?.path;
   useEffect(() => { if (hostPath) reveal(hostPath); }, [scopeKey, hostPath, flow.context, reveal]);
@@ -79,8 +80,10 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
     };
     const file = files.find(file => normalize(file.path) === normalize(next.path) || normalize(codeReferencePath(file.path)) === normalize(next.path));
     if (!file) { setReferenceNotice(t('This file is not in the current comparison.')); return; }
-    setReferenceNotice(null); setFilters({ query: '', unreviewed: false });
-    reveal(file.path); flow.fileReads.prioritize(file.path);
+    setReferenceNotice(null); setFilters(previous => previous.query || previous.unreviewed ? { query: '', unreviewed: false } : previous);
+    const mounted = [...scroll.current?.querySelectorAll<HTMLElement>('[data-review-path]') ?? []].some(item => item.dataset.reviewPath === file.path);
+    if (!mounted || collapsed.has(file.path) || filters.query || filters.unreviewed) reveal(file.path);
+    flow.fileReads.prioritize(file.path);
     setReference({ ...next, path: file.path, request: Date.now() });
   } };
   const navigate = (path: string, direction: number) => {

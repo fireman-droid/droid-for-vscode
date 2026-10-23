@@ -15,10 +15,15 @@ export function useDiffReference(root: RefObject<HTMLDivElement | null>, path: s
       const line = Number(row.getAttribute(`data-diff-${side}`));
       return line >= reference.startLine && line <= reference.endLine;
     });
-    const first = rows[0], viewport = node.closest<HTMLElement>('.review-code-scroll');
+    const first = rows[0], last = rows.at(-1) ?? first, viewport = node.closest<HTMLElement>('.review-code-scroll');
     // File virtualization positions its section in a parent layout effect first.
     const frame = requestAnimationFrame(() => {
-      if (first?.isConnected && viewport) viewport.scrollTop += first.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 44;
+      if (!first?.isConnected || !viewport) return;
+      const area = viewport.getBoundingClientRect();
+      const firstBox = first.getBoundingClientRect();
+      const lastBox = last?.getBoundingClientRect() ?? firstBox;
+      if (area.height > 80 && firstBox.top >= area.top + 36 && lastBox.bottom <= area.bottom - 24) return;
+      viewport.scrollTop += firstBox.top - area.top - 44;
     });
     const targets = rows.map(row => row.querySelector<HTMLElement>(`[data-side="${side === 'before' ? 'left' : 'right'}"]`) ?? row);
     for (const target of targets) target.dataset.referenceHighlight = '';

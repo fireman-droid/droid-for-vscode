@@ -74,7 +74,7 @@ function VirtualReviewWindow({ files, scroll, jump, render, collapsed }: Props) 
     anchor.current = jumpIndex >= 0 ? jumpIndex : null;
     virtual.shouldAdjustScrollPositionOnItemSizeChange = jumpIndex < 0 ? undefined : item => item.index < jumpIndex;
     if (jumpIndex >= 0) virtual.scrollToIndex(jumpIndex, { align: 'start' });
-  }, [jump, jumpIndex, virtual]);
+  }, [jump, jumpIndex]);
   useEffect(() => {
     const element = scroll.current;
     const release = () => { anchor.current = null; virtual.shouldAdjustScrollPositionOnItemSizeChange = undefined; };
