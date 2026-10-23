@@ -41,7 +41,7 @@ export function SelectContent({ children, className, ...props }: ComponentProps<
         position="popper"
         sideOffset={4}
         collisionPadding={8}
-        className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-select-content-available-height)] w-[var(--radix-select-trigger-width)] min-w-0 max-w-[calc(100vw-16px)] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)}
+        className={cn('dvx-overlay-surface z-50 max-h-[var(--radix-select-content-available-height)] w-max min-w-[var(--radix-select-trigger-width)] max-w-[min(calc(100vw-16px),var(--radix-select-content-available-width))] overflow-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground outline-none', className)}
         {...props}
       >
         <SelectPrimitive.Viewport className="w-full min-w-0">{children}</SelectPrimitive.Viewport>
@@ -53,7 +53,7 @@ export function SelectContent({ children, className, ...props }: ComponentProps<
 export function SelectItem({ children, className, ...props }: ComponentProps<typeof SelectPrimitive.Item>) {
   return (
     <SelectPrimitive.Item
-      className={cn('dvx-menu-item relative flex min-w-0 select-none items-center gap-2 rounded py-1 pl-1 pr-5 text-left text-[13px] whitespace-normal [overflow-wrap:anywhere] [&>span]:min-w-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)}
+      className={cn('dvx-menu-item relative flex min-w-0 select-none items-center gap-2 rounded py-1 pl-1 pr-5 text-left text-[13px] whitespace-nowrap [&>span]:min-w-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)}
       {...props}
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
