@@ -63,7 +63,9 @@ it('registers local viewing, honors its own switch, and exports real statistics 
   const subscriptions: vscode.Disposable[] = [];
   const context = { subscriptions, globalStorageUri: { fsPath: directory }, extensionUri: { fsPath: directory },
     extension: { packageJSON: { version: '0.8.15' } } } as unknown as vscode.ExtensionContext;
-  const analytics = registerLocalFrontendAnalytics(context, directory);
+  const analytics = registerLocalFrontendAnalytics(context, directory, {
+    fetchImpl: vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch,
+  });
   host.commands.get('droidvisx.openLocalAnalytics')?.();
   expect(host.show).toHaveBeenCalledOnce();
   analytics.record({ level: 'info', name: 'webview.perf-batch', detail: JSON.stringify({

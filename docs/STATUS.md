@@ -42,7 +42,7 @@
 
 ## 最近验证
 
-- `codex/ga4-telemetry` 分支已接入 Cloudflare Worker GA4 转发上报（`Ga4RelayReporter`、`ga4Config.ts` 与可直接部署的 `scripts/ga4-relay-worker.mjs`），覆盖匿名设备哈希、`extension_activated`、`frontend_ready`、`frontend_error`、`frontend_longtask` 与 `activity_expand` 白名单事件；定向测试、`lint:budgets` 与 `typecheck` 通过，待填入用户实际 Cloudflare Worker 地址与 GA4 参数后进行线上实时报表验证。
+- `codex/ga4-telemetry` 分支已接入 Cloudflare Worker GA4 转发上报（`Ga4RelayReporter`、`ga4Config.ts` 与 `scripts/ga4-relay-worker.mjs`），默认转发地址已配置为 `https://droid-ga4.k83065556.workers.dev/collect`，覆盖匿名设备哈希、`extension_activated`、`frontend_ready`、`frontend_error`、`frontend_longtask` 与 `activity_expand` 白名单事件；定向测试、`lint:budgets`、`typecheck`、生产 VSIX 172 项校验及线上 Worker `/health`、`/collect?debug=1`（GA4 `validationMessages: []`）与 `/collect`（HTTP 204）实测通过。
 - 本轮以真实原生会话和 VS Code `globalStorage/droidvisx.droidvisx/logs` 交叉核对，展开测量实际写入 `webview.perf-batch/activity.expand`。新连接上的 13／15／20／43 条记录组可展开，收起终端正文未挂载，完成态 thinking 从顶部阅读，所见 Script 不再有外层转义包装；跨段复制实测排除执行提示。未重现用户报告的整个编辑器无响应，启动／历史定位仍观察到 205–274ms 长任务，不能将局部展开修复描述成全面性能达标。源码复制按钮通过 Host 路径处理，浏览器剪贴板未提供该路径的有效验证；对应内容／Diff 复制由针对性测试覆盖。
 - 本轮 12 个定向测试文件共 186 项通过，涵盖实时／历史失败状态、Script 解包与去重、长 Thinking 分块排版和滚动、紧凑缺失状态及既有 Edit／快照恢复。
   同一真实会话读取 2442 条消息、保留 2000 条记录后重放：原错误命令为 failed、对应重复汇总消失，剩余 14 条有内容的 Script 均无外层 part/result 传输包装直接展示。

@@ -7,7 +7,7 @@ import { projectFrontendEvent } from './projectFrontendEvent';
  * 部署好 scripts/ga4-relay-worker.mjs 后，把你的 Worker 地址（如 'https://droid-ga4.xxx.workers.dev/collect'
  * 或绑定的自定义域名 'https://stats.example.com/collect'）填到这里，或在 VS Code 设置中配置 droidvisx.telemetry.endpoint。
  */
-export const DEFAULT_GA4_RELAY_ENDPOINT = '';
+export const DEFAULT_GA4_RELAY_ENDPOINT = 'https://droid-ga4.k83065556.workers.dev/collect';
 
 export type Ga4EventName =
   | 'extension_activated'
