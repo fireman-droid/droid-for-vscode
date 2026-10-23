@@ -142,10 +142,8 @@ export function Transcript({
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
     pauseAutoFollow={editor.draft?.phase === 'editing'}
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
-    leadingContent={<>
-      {historyNotice ? <p role="note" className="mb-2 text-xs text-muted-foreground">{t(historyNotice)}</p> : null}
-      {items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
-    </>}
+    historyNotice={historyNotice ? t(historyNotice) : undefined}
+    leadingContent={items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
       {interaction}</>}
