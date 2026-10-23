@@ -77,14 +77,14 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
   }, [page, navigationId]);
   const button = (kind: Panel, label: string, children: React.ReactNode, className = '') => {
     return <Popover open={panel === kind} onOpenChange={(value) => value ? open(kind) : close()}>
-      {!editorOwner && kind !== 'model' ? <PopoverAnchor virtualRef={composer} /> : null}
+      {!editorOwner && (kind === 'settings' || kind === 'context') ? <PopoverAnchor virtualRef={composer} /> : null}
       <PopoverTrigger asChild><Button variant="ghost" size="sm"
         aria-label={label} title={label} disabled={disabled || ((kind === 'mode' || kind === 'model') && confirmed === null)}
         className={`h-6 min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
-      <PopoverContent side="top" align={kind === 'model' ? 'end' : 'start'} sideOffset={8}
-        className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-[144px]' : kind === 'model' ? 'w-[220px]' : 'w-[var(--radix-popover-trigger-width)]'}`}
+      <PopoverContent side="top" align={kind === 'model' || kind === 'mode' ? 'end' : 'start'} sideOffset={8}
+        className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-max min-w-[144px]' : kind === 'model' ? 'w-max min-w-[220px] max-w-[min(320px,calc(100vw-16px))]' : 'w-[var(--radix-popover-trigger-width)]'}`}
         data-editor-popup-owner={editorOwner}>
         {kind === 'settings' ? <SettingsPopover id={`${id}-settings`} view={view} settings={state.settings} skills={state.skills} mcp={state.mcp} plugins={state.plugins} showModeControl={false}
           disabled={settingsDisabled} attachDisabled={disabled || state.interactions.length > 0} onViewChange={setView} onUpdate={pickSetting}

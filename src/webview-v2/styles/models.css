@@ -125,7 +125,7 @@
   .models-discovery-list { max-height: min(320px, 36dvh); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border: 1px solid var(--panel-edge); border-radius: 8px; }
   .models-discovery-item { padding: 6px 8px; }
   .models-discovery-item + .models-discovery-item { border-top: 1px solid var(--panel-edge); }
-  .models-discovery-item[data-selected='true'] { background: color-mix(in srgb, var(--action) 7%, var(--surface)); }
+  .models-discovery-item[data-selected='true'] { background: var(--control-surface-hover); }
   .models-discovery-item:hover:not([data-added='true']), .models-discovery-item:focus-within { background: var(--control-surface-hover); }
   .models-discovery-row { display: flex; align-items: center; gap: 8px; min-height: 32px; }
   .models-discovery-choice { display: flex; align-items: flex-start; min-width: 0; flex: 1; gap: 10px; padding: 6px 4px; cursor: pointer; }

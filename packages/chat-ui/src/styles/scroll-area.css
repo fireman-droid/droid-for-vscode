@@ -2,7 +2,7 @@
   .dvx-scroll-area {
     --scroll-thumb: color-mix(in srgb, var(--ink) 24%, transparent);
     --scroll-thumb-hover: color-mix(in srgb, var(--ink) 42%, transparent);
-    --scroll-thumb-active: color-mix(in srgb, var(--action) 72%, var(--ink));
+    --scroll-thumb-active: color-mix(in srgb, var(--ink) 58%, transparent);
     position: relative; min-width: 0; min-height: 0; overflow: hidden;
   }
   /* Webviews can block Radix's injected style under CSP. Hide native chrome in
