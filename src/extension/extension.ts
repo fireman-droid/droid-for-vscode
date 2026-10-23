@@ -27,6 +27,7 @@ import { registerAutocomplete } from './autocomplete/registerAutocomplete';
 import { createAutocompleteEvaluation } from './dev/AutocompleteEvaluation';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
+import { watchWebviewBundle } from './webview/watchWebviewBundle';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
 import { LocalDiagnostics } from './diagnostics/LocalDiagnostics';
 import { registerLocalFrontendAnalytics } from './analytics/registerLocalFrontendAnalytics';
@@ -619,6 +620,10 @@ export function activate(context: vscode.ExtensionContext): void {
       readBrowserDevSourceRoot(context),
     ),
     diagnostics,
+    watchWebviewBundle({
+      directory: vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview').fsPath,
+      diagnostics,
+    }),
     attachmentSources,
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,

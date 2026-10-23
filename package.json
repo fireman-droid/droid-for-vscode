@@ -420,7 +420,8 @@
     "release:check": "node scripts/checkRelease.mjs",
     "release:assets": "node scripts/checkRelease.mjs --prepare-assets",
     "vscode:prepublish": "pnpm run package:prepare",
-    "build:webview": "node scripts/buildWebviewV2.mjs"
+    "build:webview": "node scripts/buildWebviewV2.mjs",
+    "sync:webview": "pnpm run build:chat-ui && pnpm run build:webview && node scripts/syncGlobalExtensions.mjs"
   },
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",
