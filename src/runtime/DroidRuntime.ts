@@ -398,6 +398,8 @@ export interface DroidRuntime {
    * daemon-side in-flight turn has finished.
    */
   readSessionWorkingState?(): Promise<RuntimeSessionWorkingState>;
+  /** Reads the backend-side working state of another session on the same daemon. */
+  readOtherSessionWorkingState?(sessionId: string): Promise<RuntimeSessionWorkingState>;
   /** Read one known backend submission's durable outcome; never submits another prompt. */
   readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
   /**

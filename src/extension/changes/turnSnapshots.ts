@@ -563,7 +563,13 @@ export function createTurnSnapshotStore(
   return {
     async readPendingCapture() {
       const root = getWorkspaceRoot();
-      return root && !closing ? readPendingWorkspaceTurn(root) : undefined;
+      if (!root || closing) return undefined;
+      const pending = await readPendingWorkspaceTurn(root);
+      if (pending && !recordFor(pending)?.before) {
+        await releaseCompletedWorkspaceTurn(root, pending);
+        return undefined;
+      }
+      return pending;
     },
     async capture(scope, phase, signal) {
       if (closing) return undefined;
@@ -579,7 +585,12 @@ export function createTurnSnapshotStore(
         }
         return existing[phase];
       }
-      if (phase === 'after' && !existing?.before) return undefined;
+      if (phase === 'after' && !existing?.before) {
+        const lease = leases.get(key);
+        if (lease) { await lease.finish(); leases.delete(key); }
+        else await releaseCompletedWorkspaceTurn(root, scope);
+        return undefined;
+      }
       const cancellation = signal ? AbortSignal.any([signal, shutdown.signal]) : shutdown.signal;
       // Wait outside the store queue: otherwise another turn's before could
       // block the active turn's after and deadlock the workspace.

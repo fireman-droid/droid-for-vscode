@@ -452,23 +452,17 @@ export class FactoryDroidRuntime implements DroidRuntime {
   }
 
   readSessionWorkingState(): Promise<RuntimeSessionWorkingState> {
-    return readSessionWorkingState({
-      session: this.requireSession(),
-      recordDiagnostic: (event) => this.recordDiagnostic(event),
-    });
+    return readSessionWorkingState({ session: this.requireSession(), recordDiagnostic: (event) => this.recordDiagnostic(event) });
   }
-
+  readOtherSessionWorkingState(sessionId: string): Promise<RuntimeSessionWorkingState> {
+    return readSessionWorkingState({ session: this.requireSession(), recordDiagnostic: (event) => this.recordDiagnostic(event) }, sessionId);
+  }
   readTurnOutcome(backendTurnId: string): Promise<RuntimeTurnOutcome | null> {
     const session = this.requireSession();
     return session.readTurnOutcome?.(backendTurnId) ?? Promise.resolve(null);
   }
-
   supportsBackgroundTurns(): boolean {
-    return (
-      !this.disposed &&
-      this.session !== null &&
-      typeof this.session.readWorkingState === 'function'
-    );
+    return !this.disposed && this.session !== null && typeof this.session.readWorkingState === 'function';
   }
 
   supportsHistoryAppend(): boolean { return !this.disposed && typeof this.session?.appendHistoryMessage === 'function'; }

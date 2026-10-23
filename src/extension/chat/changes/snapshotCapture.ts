@@ -25,21 +25,26 @@ export async function captureSnapshotBeforeSend(
   sessionId: string,
   turnId: string,
   signal?: AbortSignal,
-  runtime?: Pick<DroidRuntime, 'readSessionWorkingState'>,
+  runtime?: Pick<DroidRuntime, 'readSessionWorkingState' | 'readOtherSessionWorkingState'>,
 ): Promise<void> {
   if (!host.turnSnapshots) throw new Error('Change recording is unavailable. The request was not sent.');
   const pending = await host.turnSnapshots.readPendingCapture?.();
-  if (pending?.sessionId === sessionId && pending.turnId !== turnId) {
-    // A rejected retry may have replaced the display checkpoint. Recover the
-    // durable capture owner, never infer it from the latest displayed turn.
+  if (pending && pending.turnId !== turnId && (pending.sessionId === sessionId || runtime?.readOtherSessionWorkingState !== undefined)) {
+    // A rejected retry or an earlier session in this workspace may still hold
+    // the durable capture lease after its daemon turn finished.
     signal?.throwIfAborted();
-    // The terminal event has already released the runtime slot, but the final
-    // disk capture can still be running. Join that capture instead of asking
-    // the daemon's eventually updated registry whether the reply is done.
     const settling = pendingCaptures.get(host.turnSnapshots)?.get(`${pending.sessionId}:${pending.turnId}`);
     const recorded = host.turnSnapshots.read(pending.sessionId, pending.turnId)?.after;
-    if (!settling && !recorded && await runtime?.readSessionWorkingState?.() !== 'idle')
-      throw new Error('The previous reply is still running or its state could not be confirmed. Wait for it to finish, then retry.');
+    const state = !settling && !recorded
+      ? await (pending.sessionId === sessionId
+          ? runtime?.readSessionWorkingState?.()
+          : runtime?.readOtherSessionWorkingState?.(pending.sessionId))
+      : 'idle';
+    if (!settling && !recorded && state !== 'idle') {
+      throw new Error(pending.sessionId === sessionId
+        ? 'The previous reply is still running or its state could not be confirmed. Wait for it to finish, then retry.'
+        : `This workspace has an unfinished captured turn. Reopen session ${pending.sessionId} to finish recording it before sending another turn.`);
+    }
     signal?.throwIfAborted();
     const after = await (settling ?? finishPendingSnapshot(host.turnSnapshots, pending, signal));
     signal?.throwIfAborted();

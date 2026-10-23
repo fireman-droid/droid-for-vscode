@@ -106,12 +106,13 @@ export async function updateSessionSetting(
 
 export async function readSessionWorkingState(
   context: MetadataContext,
+  sessionId?: string,
 ): Promise<RuntimeSessionWorkingState> {
   const session = context.session;
   if (typeof session.readWorkingState !== 'function') {
     throw new Error('The Droid session does not report a working state.');
   }
-  return projectWorkingState(await session.readWorkingState());
+  return projectWorkingState(await session.readWorkingState(sessionId));
 }
 
 export async function readContextWindow(
