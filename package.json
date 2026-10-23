@@ -148,6 +148,18 @@
           "scope": "application",
           "description": "%droidvisx.localAnalytics.enabled.description%"
         },
+        "droidvisx.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%droidvisx.telemetry.enabled.description%"
+        },
+        "droidvisx.telemetry.endpoint": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%droidvisx.telemetry.endpoint.description%"
+        },
         "droidvisx.language": {
           "type": "string",
           "enum": [

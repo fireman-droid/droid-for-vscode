@@ -1,5 +1,7 @@
 {
   "droidvisx.localAnalytics.enabled.description": "在本機獨立日誌中記錄前端使用、回應耗時與異常分類，不上傳資料，不記錄聊天正文、程式碼、檔案路徑、錯誤原文或憑據。透過「Droid：檢視本機統計」查看，也會包含在手動匯出的診斷包中。",
+  "droidvisx.telemetry.enabled.description": "在設定了 GA4 轉發位址時，回報匿名的擴充功能啟用、前端耗時與異常分類統計。絕不上傳聊天正文、程式碼、檔案路徑、錯誤原文或憑據。",
+  "droidvisx.telemetry.endpoint.description": "Cloudflare Worker GA4 轉發位址（HTTPS，例如 https://your-worker.example.com/collect）。留空時使用內建轉發位址，未設定時不發起遠端回報。",
   "droidvisx.openLocalAnalytics.title": "Droid：檢視本機統計",
   "droidvisx.autocomplete.fimEnabled.description": "獨立啟用 FIM 程式碼續寫，不影響 Next Edit。",
   "droidvisx.autocomplete.nextEdit.enabled.description": "同時啟用編輯預測，將編輯上下文傳送至獨立設定的 Next Edit 服務。",
