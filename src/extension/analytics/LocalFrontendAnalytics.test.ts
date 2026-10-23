@@ -124,11 +124,35 @@ describe('local frontend statistics', () => {
           prompt: 'secret-prompt',
         }),
       });
+      analytics.record({
+        level: 'error',
+        name: 'runtime.initialize.finished',
+        attributes: {
+          durationMs: 30446,
+          outcome: 'initialization-failed',
+          reason: 'Request timeout after 30000ms: daemon.load_session (5822ceb1-db75-4d77-a12f-781f0831a27f)',
+        },
+      });
+      analytics.record({
+        level: 'info',
+        name: 'runtime.history.daemon',
+        attributes: {
+          durationMs: 8477,
+          outcome: 'ok',
+          sessionId: 'secret-session-uuid',
+          messages: 10001,
+          source: 'persisted-snapshot',
+          bytes: 111999019,
+          readMs: 2970,
+          projectMs: 4836,
+          items: 2000,
+        },
+      });
       relay.configure({ enabled: false, endpoint: 'https://droid-ga4.example.workers.dev/collect' });
       analytics.record({ level: 'error', name: 'webview.error', detail: 'should not be sent when disabled' });
 
       await analytics.flush();
-      expect(forwarded).toHaveLength(2);
+      expect(forwarded).toHaveLength(4);
       expect(forwarded[0]?.url).toBe(
         'https://www.google-analytics.com/mp/collect?measurement_id=G-TEST123456&api_secret=secret-xyz',
       );
@@ -169,7 +193,52 @@ describe('local frontend statistics', () => {
           },
         ],
       });
-      expect(JSON.stringify(forwarded)).not.toMatch(/raw-machine-id|secret-project|secret-prompt/u);
+      expect(forwarded[2]?.body).toEqual({
+        client_id: expect.stringMatching(/^[0-9a-f]{32}$/u),
+        events: [
+          {
+            name: 'runtime_init',
+            params: {
+              session_id: '1700000000',
+              editor: 'cursor',
+              platform: 'win32',
+              arch: 'x64',
+              locale: 'zh-cn',
+              ext_version: '0.8.16',
+              outcome: 'initialization-failed',
+              failure_kind: 'timeout_load_session',
+              duration_ms: 30446,
+              engagement_time_msec: 30446,
+            },
+          },
+        ],
+      });
+      expect(forwarded[3]?.body).toEqual({
+        client_id: expect.stringMatching(/^[0-9a-f]{32}$/u),
+        events: [
+          {
+            name: 'session_history',
+            params: {
+              session_id: '1700000000',
+              editor: 'cursor',
+              platform: 'win32',
+              arch: 'x64',
+              locale: 'zh-cn',
+              ext_version: '0.8.16',
+              source: 'persisted-snapshot',
+              outcome: 'ok',
+              duration_ms: 8477,
+              read_ms: 2970,
+              project_ms: 4836,
+              file_kb: 109374,
+              messages: 10001,
+              records: 2000,
+              engagement_time_msec: 8477,
+            },
+          },
+        ],
+      });
+      expect(JSON.stringify(forwarded)).not.toMatch(/raw-machine-id|secret-project|secret-prompt|secret-session-uuid|5822ceb1/u);
       analytics.dispose();
     } finally {
       globalThis.fetch = originalFetch;

@@ -495,8 +495,10 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   `droidvisx.localAnalytics.enabled` 默认开启，配置变化立即停止或恢复新事件记录。
   同时 `Ga4RelayReporter`（`extension/analytics/Ga4RelayReporter.ts` 与 `ga4Config.ts`）
   支持在配置了转发地址（`DEFAULT_GA4_RELAY_ENDPOINT` 或 `droidvisx.telemetry.endpoint`）
-  且 `droidvisx.telemetry.enabled` 开启时，将 SHA-256 哈希后的匿名 `client_id` 与白名单事件
-  （`extension_activated`、`frontend_ready`、`frontend_error`、`frontend_longtask`、`activity_expand`）
+  且 `droidvisx.telemetry.enabled` 开启时，将 SHA-256 哈希后的匿名 `client_id` 与 18 类全链路白名单事件
+  （`extension_activated`、`frontend_ready`、`frontend_render`、`frontend_error`、`frontend_longtask`、`activity_expand`、
+  `runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、
+  `turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`）
   异步 POST 至 Cloudflare Worker 转发脚本（`scripts/ga4-relay-worker.mjs`），由 Worker
   注入服务端保管的 `GA4_MEASUREMENT_ID` 与 `GA4_API_SECRET` 并转发至 GA4 Measurement Protocol。
   统计中没有聊天正文、代码、文件路径、错误原文或凭据，原完整本地诊断保持独立。命令 `droidvisx.openLocalAnalytics`

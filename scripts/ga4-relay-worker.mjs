@@ -13,9 +13,22 @@
 const ALLOWED_EVENTS = new Set([
   'extension_activated',
   'frontend_ready',
+  'frontend_render',
   'frontend_error',
   'frontend_longtask',
   'activity_expand',
+  'runtime_init',
+  'session_history',
+  'session_switch',
+  'session_recovery',
+  'daemon_health',
+  'ide_relay',
+  'turn_lifecycle',
+  'context_window',
+  'subagent_lifecycle',
+  'tool_execution',
+  'review_activity',
+  'autocomplete_activity',
 ]);
 
 const ALLOWED_PARAM_KEYS = new Set([
@@ -28,8 +41,34 @@ const ALLOWED_PARAM_KEYS = new Set([
   'ext_version',
   'surface',
   'category',
+  'sub_category',
+  'outcome',
+  'failure_kind',
+  'source',
+  'stage',
+  'target_kind',
+  'code',
+  'reason',
+  'status',
+  'phase',
+  'subagent_type',
+  'tool_name',
+  'is_error',
+  'status_code',
   'duration_ms',
+  'read_ms',
+  'project_ms',
+  'init_ms',
+  'history_ms',
+  'context_ms',
+  'network_ms',
+  'file_kb',
+  'messages',
   'records',
+  'connected_count',
+  'tool_count',
+  'used_tokens',
+  'limit_tokens',
   'task_count',
   'total_ms',
   'max_ms',
@@ -54,7 +93,7 @@ export function sanitizeGa4RelayPayload(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const clientId = typeof input.client_id === 'string' ? input.client_id.trim() : '';
   if (!SAFE_CLIENT_ID.test(clientId)) return null;
-  if (!Array.isArray(input.events) || input.events.length === 0 || input.events.length > 10) return null;
+  if (!Array.isArray(input.events) || input.events.length === 0 || input.events.length > 25) return null;
 
   const events = [];
   for (const rawEvent of input.events) {
