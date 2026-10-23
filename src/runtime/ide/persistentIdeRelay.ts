@@ -97,6 +97,14 @@ class RelayClient implements PersistentIdeRelay {
     return () => { this.listeners.delete(listener); };
   }
   resetForSessionRestart(): void {
+    this.apply({
+      ...this.snapshot,
+      requiresRestart: false,
+      state: {
+        status: 'disconnected',
+        message: 'This session is idle. IDE reconnects automatically when the conversation resumes.',
+      },
+    });
     this.pending = this.pending.then(async () => {
       this.apply(await control(this.descriptor, this.sessionId, 'reset'));
     }).catch(() => this.failed());

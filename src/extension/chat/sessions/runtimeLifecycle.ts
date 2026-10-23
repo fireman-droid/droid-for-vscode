@@ -254,12 +254,26 @@ export async function replaceRuntime(
 
   // New child IDs can precede their persisted history. Attach to the original
   // worker first; existing root history remains independent of its handshake.
+  // When auto-recovery retries a disconnected root session whose history was
+  // already loaded and displayed in the current workspace, reuse that transcript
+  // instead of re-reading and re-projecting the JSONL file on every retry.
+  const reusePreparedHistory =
+    options.preserveSessionWork === true &&
+    previousRuntime === null &&
+    target.kind === 'resume' &&
+    target.child !== true &&
+    ctl.sessionState.sessionId === target.sessionId &&
+    ctl.sessionState.historyWorkspace?.sessionId === target.sessionId &&
+    ctl.sessionState.historyWorkspace?.cwd === target.cwd &&
+    ctl.recoveryState.transcript.historyStatus !== 'unavailable';
   const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
     target.kind === 'resume' && target.child
       ? initializing.then(result => result === null ? null : result.status === 'failed'
         ? createHostTranscriptState('unavailable') : prepareHistory(ctl, target, generation, phases))
-      : prepareHistory(ctl, target, generation, phases),
+      : reusePreparedHistory
+        ? Promise.resolve(ctl.recoveryState.transcript)
+        : prepareHistory(ctl, target, generation, phases),
     initializing,
   ]);
   if (

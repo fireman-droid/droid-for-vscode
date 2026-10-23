@@ -50,7 +50,7 @@
 
 ## 最近验证
 
-- `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），可捕获 `daemon.load_session` 30s 超时、历史 `.jsonl` 体积（KB）与消息数、三段切换耗时及进程池健康度；定向测试、`lint:budgets` 与全仓 `typecheck` 通过。
+- `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），并完成 100MB+ 大会话「对话转不回来」四项修复：`connectPublicDaemon.ts` 将 RPC `requestTimeout` 从 `30000ms` 提升至 `120000ms` 并注入 `loadAllMessages: false` 启用压缩锚点反向快读；`routedDaemon.ts`／`persistentIdeRelay.ts` 在同 Daemon 尚未打开 Worker 或前次 `resume` 失败时重置 Relay 根会话握手，消除 `rebindIdleAttachment` 误杀刚加载完成的 Daemon；`daemonLifecycle.ts` 在端口未监听且旧 PID 已退出时跳过 `powershell.exe` 进程查询；`runtimeLifecycle.ts` 在断线自动重连重试期间复用当前已加载的历史 transcript，避免重复读取百兆 JSONL 与重复推送快照。`lint:budgets`、全仓 `typecheck` 与生产构建通过。
 - `codex/ui-style-refinements` 分支已完成设置页下拉框（`ModelPicker` 勾选／选中背景、`ScrollArea` 拖动滑块、模型发现列表选中行）由橙色回归中性灰、`Select` 与 `ModelPicker` 弹层按单行内容自适应扩展宽度并与未展开触发框右边缘对齐，以及 BTW 发送／停止按钮与主聊天发送按钮样式对齐；Node 24／pnpm 10.2.0 下 `typecheck`、`lint:budgets`、生产构建与 VSIX 172 项校验通过。
 - 长草稿输入修复：粘贴及继续输入后让光标在编辑区内可见，受控内容重建保留内部滚动位置；单条输入容量扩至 2,000,000 字符，发送、队列、历史恢复同步使用新预算，移除新增超限提示。
 - 消息卡片编辑期间持续暂停主聊天自动跟随，避免向下滚到底部后被流式回复再次拉走。
