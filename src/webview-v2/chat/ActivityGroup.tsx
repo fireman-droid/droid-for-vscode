@@ -2,6 +2,7 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { memo, useMemo, type ReactNode } from 'react';
 import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
+import { toolPresentation } from '../../shared/transcript/toolCatalog';
 import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
 import { type GroupCandidatePart } from './transcript/activityGrouping';
 
@@ -13,8 +14,8 @@ export function clusterActivity(items: readonly SessionTranscriptItem[]): readon
   let boundary = 'start';
   for (const item of items) {
     if (item.kind === 'assistant' && item.text.trim().length === 0) continue;
-    // Delegations outlive the parent reply and must remain visible outside folded activity.
-    const grouped = item.kind === 'thinking' || item.kind === 'tool' && item.subagent === undefined;
+    // Delegations and user-input prompts outlive or interrupt exploration and must remain visible outside folded activity.
+    const grouped = item.kind === 'thinking' || (item.kind === 'tool' && item.subagent === undefined && toolPresentation(item.toolName)?.action !== 'Ask for input');
     const prior = groups.at(-1);
     if (grouped && prior?.grouped) prior.items.push(item);
     else groups.push({ id: grouped ? `process:${boundary}` : item.id, items: [item], grouped });

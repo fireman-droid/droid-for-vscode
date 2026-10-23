@@ -31,6 +31,7 @@ import {
   handleMcpServerToggle,
 } from './capabilities/mcp';
 import { handleSettingUpdate } from './capabilities/settings';
+import { refreshFactoryLimits } from './capabilities/factoryLimits';
 import { handleModelCatalogRefresh } from './capabilities/sessionMetadata';
 import { handleReviewMessage } from './changes/reviewActions';
 import { handleFileReadDiff, handleFileOpenTurnDiff } from './changes/inlineDiffActions';
@@ -204,6 +205,9 @@ export function dispatchChatMessage(
       return;
     case 'session.context.refresh':
       handleContextRefresh(controller, message.sessionId);
+      return;
+    case 'factory.limits.refresh':
+      void refreshFactoryLimits(controller, { force: message.force === true });
       return;
     case 'session.model-catalog.refresh':
       handleModelCatalogRefresh(controller, message.sessionId);

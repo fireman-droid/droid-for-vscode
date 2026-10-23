@@ -38,9 +38,9 @@ export function getStatusMessage(
 }
 
 export function getHistoryNotice(historyStatus: AssistantWebviewState['historyStatus'], truncated: boolean): string | null {
-  if (historyStatus === 'unavailable') return 'Earlier CLI messages are unavailable here. You can continue this session.';
+  if (historyStatus === 'unavailable') return 'Earlier CLI messages are unavailable';
   if (historyStatus === 'partial') return truncated
-    ? 'Some earlier session content is unavailable, and older locally retained messages were trimmed.'
-    : 'Some earlier session content is unavailable through the public Droid history.';
-  return truncated ? 'Older messages were trimmed from the local display.' : null;
+    ? 'Earlier history partially omitted'
+    : 'Some earlier content unavailable';
+  return truncated ? 'Older messages trimmed' : null;
 }

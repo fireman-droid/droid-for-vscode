@@ -46,7 +46,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
           if (provider) page.selectProvider(provider);
         }}>
           <SelectTrigger id={providerId} className="w-full"><SelectValue placeholder={t("选择服务商")}>{page.group?.name}</SelectValue></SelectTrigger>
-          <SelectContent>{page.groups.map((provider) => <SelectItem key={provider.host} value={provider.host} textValue={`${provider.name} ${provider.host}`}>
+          <SelectContent className="w-[var(--radix-select-trigger-width)]">{page.groups.map((provider) => <SelectItem key={provider.host} value={provider.host} className="whitespace-normal" textValue={`${provider.name} ${provider.host}`}>
             <span className="block">{provider.name}</span><span className="block text-[11px] text-muted-foreground">{provider.host}</span>
           </SelectItem>)}</SelectContent>
         </Select>
@@ -57,7 +57,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
           <SelectTrigger id={sourceId} className="w-full"><SelectValue placeholder={t("选择兼容接口")}>
             {connection ? `${PROTOCOLS[connection.protocol].name} · ${connection.name}` : null}
           </SelectValue></SelectTrigger>
-          <SelectContent>{page.group?.connections.map((source) => <SelectItem key={source.id} value={source.id} textValue={`${PROTOCOLS[source.protocol].name} ${source.name} ${source.baseUrl}`}>
+          <SelectContent className="w-[var(--radix-select-trigger-width)]">{page.group?.connections.map((source) => <SelectItem key={source.id} value={source.id} className="whitespace-normal" textValue={`${PROTOCOLS[source.protocol].name} ${source.name} ${source.baseUrl}`}>
             <span className="block">{PROTOCOLS[source.protocol].name} · {source.name}</span>
             <span className="block break-all font-mono text-[11px] text-muted-foreground">{source.baseUrl}</span>
           </SelectItem>)}</SelectContent>

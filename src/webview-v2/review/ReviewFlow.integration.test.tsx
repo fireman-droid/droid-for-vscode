@@ -1,4 +1,4 @@
-import './reviewBrowserTestSetup';
+import '../../../packages/chat-ui/test/review/reviewBrowserTestSetup';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';

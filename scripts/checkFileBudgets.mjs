@@ -65,6 +65,7 @@ function walk(dir) {
 
 walk('src');
 walk('packages/chat-ui/src');
+walk('packages/chat-ui/test');
 
 for (const { rel, lines, limit, budget } of failures) {
   console.error(

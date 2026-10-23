@@ -1,5 +1,7 @@
 {
   "droidvisx.localAnalytics.enabled.description": "Record frontend usage, response timings and error categories in a separate local log. Never uploads data and excludes chat text, code, file paths, error messages and credentials. View with Droid: Open Local Analytics; included in manually exported diagnostics bundles.",
+  "droidvisx.telemetry.enabled.description": "Send anonymous activation, frontend latency and error category metrics to the configured GA4 relay endpoint when an endpoint is configured. Never sends chat text, code, file paths, raw error messages or credentials.",
+  "droidvisx.telemetry.endpoint.description": "HTTPS endpoint of the Cloudflare Worker GA4 relay (for example https://your-worker.example.com/collect). Leave empty to use the built-in relay endpoint if configured, or skip remote reporting.",
   "droidvisx.openLocalAnalytics.title": "Droid: Open Local Analytics",
   "droidvisx.autocomplete.fimEnabled.description": "Enable FIM code completion independently of Next Edit.",
   "droidvisx.autocomplete.nextEdit.enabled.description": "Enable edit predictions alongside code completion. Sends editing context to the configured Next Edit service.",

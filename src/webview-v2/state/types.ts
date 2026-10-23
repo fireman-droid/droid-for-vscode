@@ -31,6 +31,7 @@ import {
   type SessionSkillsState,
 } from '../../shared/protocol/settings';
 import { type SessionTokenUsageState } from '../../shared/protocol/tokenUsage';
+import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
 import { type SessionTranscriptItem } from '../../shared/protocol/transcript';
 import {
   type EditResendRejectReason,
@@ -170,6 +171,11 @@ export interface AssistantWebviewState {
   readonly missionSnapshot: MissionSnapshotMessage | null;
   /** Latest correlated Mission operation settlement. */
   readonly missionControlResult: MissionControlResultMessage | null;
+  /**
+   * Factory sign-in identity and credit limits. Account-scoped, so it
+   * survives session switches; null until `/limits` asks for it.
+   */
+  readonly account: FactoryAccountState | null;
   /**
    * Token-usage breakdown of the active session (cumulative totals +
    * last completed turn); empty members until the host reports data.

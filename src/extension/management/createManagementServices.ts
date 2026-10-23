@@ -11,11 +11,13 @@ import { exportActiveSessionAsMarkdown } from '../panels/sessionViewer/sessionEx
 import { ManagementSettingsService } from './managementSettings';
 import { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { ManagementServices } from './ManagementBinding';
+import type { FactoryAccountService } from '../account/FactoryAccountService';
 
 export function createManagementServices(options: {
   context: vscode.ExtensionContext; controller: ChatController; getDroid: () => Promise<DaemonApi>;
   daemon: boolean; history: SessionHistoryLoader; viewer: SessionViewerPanelController;
   mission: MissionControlPanelController; gateway: MissionGateway; diagnostics: RuntimeDiagnosticSink;
+  account: FactoryAccountService;
 }): ManagementServices {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
   const cwd = () => controller.getEditorWorkspaceContext().cwd;
@@ -24,8 +26,17 @@ export function createManagementServices(options: {
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,
       sessionManagementAvailable: options.daemon,
-    }), () => controller.metadata.modelCatalog.items.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName,
-      reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom })),
+    }), async () => {
+      const items = controller.metadata.modelCatalog.items;
+      const catalog = options.daemon
+        ? await (async () => {
+            const raw = await (await getDroid()).models.list({ includeDisabled: true });
+            return await controller.modelAvailability?.projectCatalog(raw) ?? raw;
+          })().catch(() => items)
+        : items;
+      return catalog.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName,
+        reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom }));
+    },
     () => controller.metadata.settings.value?.modelId ?? null),
     sessions: new ManagementSessionCatalog(getDroid, cwd, () => controller.sessionState.sessionId),
     sessionsAvailable: options.daemon,
@@ -56,5 +67,6 @@ export function createManagementServices(options: {
     missions: () => gateway.listCatalog(),
     openMission: id => { if (!mission.openCatalogEntry(id)) throw new Error('任务暂时不能打开。请确认任务属于当前工作区，并等待当前会话操作完成。'); },
     newMission: () => mission.openNewMission(),
+    account: options.account,
   };
 }

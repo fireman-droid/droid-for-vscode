@@ -2,7 +2,7 @@
   "name": "droidvisx",
   "displayName": "Droid - AI Coding Agent",
   "description": "Unofficial Factory Droid integration for VS Code and Cursor, with coding chat, code review, BYOK models, and independent code completion.",
-  "version": "0.8.16",
+  "version": "0.8.17",
   "publisher": "droidvisx",
   "private": true,
   "type": "module",
@@ -147,6 +147,18 @@
           "default": true,
           "scope": "application",
           "description": "%droidvisx.localAnalytics.enabled.description%"
+        },
+        "droidvisx.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%droidvisx.telemetry.enabled.description%"
+        },
+        "droidvisx.telemetry.endpoint": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%droidvisx.telemetry.endpoint.description%"
         },
         "droidvisx.language": {
           "type": "string",
@@ -394,6 +406,9 @@
     "dev:webview": "vite --config vite.webview-v2.config.ts",
     "test:extension": "vitest run src/shared src/extension",
     "test:webview": "vitest run src/webview-v2",
+    "test:chat-ui": "vitest run packages/chat-ui/test",
+    "test:runtime": "vitest run src/runtime",
+    "test:quality": "node --test src/integration/autocomplete-quality/*.test.mjs src/integration/autocomplete-quality/*.test.cjs",
     "test:integration": "pnpm run build && node src/integration/runTest.mjs",
     "smoke:runtime": "tsx src/runtime/runtimeSmoke.ts",
     "smoke:capabilities": "tsx src/runtime/capabilities/capabilitySmoke.ts",
@@ -408,7 +423,11 @@
     "release:check": "node scripts/checkRelease.mjs",
     "release:assets": "node scripts/checkRelease.mjs --prepare-assets",
     "vscode:prepublish": "pnpm run package:prepare",
-    "build:webview": "node scripts/buildWebviewV2.mjs"
+    "build:webview": "node scripts/buildWebviewV2.mjs",
+    "sync:webview": "pnpm run build:chat-ui && pnpm run build:webview && node scripts/syncGlobalExtensions.mjs",
+    "benchmark:markdown": "node scripts/benchmarkMarkdown.mjs",
+    "benchmark:review": "node scripts/benchmarkReview.mjs",
+    "dev:performance": "node scripts/servePerformance.mjs"
   },
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",

@@ -110,7 +110,22 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       },
       async resume(id, options) {
         const entry = await pool.forSession(id, true);
-        let handle = await rememberHandle(entry, await entry.connection.droid.sessions.resume(id, options), options);
+        if (entry.record.rootSessionId === id && entry.ide?.requiresSessionRestart()) {
+          const opened = await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
+          if (!opened.some((session) => session.id === id)) {
+            entry.ide.resetForSessionRestart();
+          }
+        }
+        let rawHandle: Awaited<ReturnType<DaemonApi['sessions']['resume']>>;
+        try {
+          rawHandle = await entry.connection.droid.sessions.resume(id, options);
+        } catch (error) {
+          if (entry.record.rootSessionId === id) {
+            entry.ide?.resetForSessionRestart();
+          }
+          throw error;
+        }
+        let handle = await rememberHandle(entry, rawHandle, options);
         try {
           const rebound = await pool.rebindIdleAttachment(id, entry);
           if (rebound !== entry) {

@@ -27,6 +27,7 @@ import { registerAutocomplete } from './autocomplete/registerAutocomplete';
 import { createAutocompleteEvaluation } from './dev/AutocompleteEvaluation';
 import { emitIdeState } from './chat/ideIntegration';
 import { DroidViewProvider } from './webview/DroidViewProvider';
+import { watchWebviewBundle } from './webview/watchWebviewBundle';
 import { exportDiagnosticsBundle } from './diagnostics/exportDiagnostics';
 import { LocalDiagnostics } from './diagnostics/LocalDiagnostics';
 import { registerLocalFrontendAnalytics } from './analytics/registerLocalFrontendAnalytics';
@@ -61,6 +62,7 @@ import { ModelManager } from './models/ModelManager';
 import { DroidManagement } from './management/DroidManagement';
 import { ModelsPanelController } from './models/ModelsPanelController';
 import { createManagementServices } from './management/createManagementServices';
+import { FactoryAccountService } from './account/FactoryAccountService';
 import { BrowserManagementChannel } from './dev/BrowserManagementChannel';
 import { BrowserReviewChannel } from './dev/BrowserReviewChannel';
 import { isManagementPage } from '../shared/protocol/managementPageProtocol';
@@ -341,6 +343,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const planDocuments = new PlanDocumentController((state) => {
     controller.emit(state);
   });
+  const factoryAccount = new FactoryAccountService();
   const reviewFeature = createReviewFeature({
     context,
     snapshots: turnSnapshots,
@@ -393,6 +396,7 @@ export function activate(context: vscode.ExtensionContext): void {
     modelDiscovery: createHttpCustomModelDiscovery(),
     systemPromptStore,
     providerRegistry: new ProviderRegistry(context.globalState, context.secrets),
+    factoryAccount,
     promptProviderApiKey: () => vscode.window.showInputBox({
       title: 'Save provider API key',
       prompt: 'Stored in VS Code SecretStorage and copied to Droid settings for configured models.',
@@ -538,7 +542,7 @@ export function activate(context: vscode.ExtensionContext): void {
       apply: (runtimeId, signal) => applyModelToChat(controller, runtimeId, signal),
     });
   const managementServices = createManagementServices({ context, controller, getDroid: getDaemonDroid, daemon: runtimeMode === 'daemon',
-    history: historyLoader, viewer: sessionViewer, mission: missionControl, gateway: missionGateway, diagnostics });
+    history: historyLoader, viewer: sessionViewer, mission: missionControl, gateway: missionGateway, diagnostics, account: factoryAccount });
   const modelsPanel = new ModelsPanelController(context.extensionUri, modelManager, managementServices);
   const droidManagement = new DroidManagement(controller, getDaemonDroid, runtimeMode === 'daemon', modelAvailability);
   const browserDevBridge = new BrowserDevBridge(
@@ -619,6 +623,11 @@ export function activate(context: vscode.ExtensionContext): void {
       readBrowserDevSourceRoot(context),
     ),
     diagnostics,
+    watchWebviewBundle({
+      directory: vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview').fsPath,
+      extensionDirectory: vscode.Uri.joinPath(context.extensionUri, 'dist', 'extension').fsPath,
+      diagnostics,
+    }),
     attachmentSources,
     vscode.window.registerWebviewViewProvider(
       DroidViewProvider.viewType,

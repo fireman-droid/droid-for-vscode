@@ -108,7 +108,10 @@ function validPort(value: unknown): value is number {
 }
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true; }
-  catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code !== 'ESRCH' && code !== 'EPERM';
+  }
 }
 
 let input = '';

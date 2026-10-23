@@ -492,9 +492,16 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   渲染时间；没有对所有点击、单条工具或单条思考自动埋点。
 - `LocalFrontendAnalytics` 复用本地日志写入与保留机制，在扩展 `globalStorageUri` 的
   `logs/local-analytics/droidvisx-YYYYMMDD.jsonl` 单独保存结构化统计。应用级
-  `droidvisx.localAnalytics.enabled` 默认开启，配置变化立即停止或恢复新事件记录；
-  不依赖远程遥测开关，不提供网络上传、GA4 端点或账号配置。统计中没有聊天正文、代码、
-  文件路径、错误原文或凭据，原完整本地诊断保持独立。命令 `droidvisx.openLocalAnalytics`
+  `droidvisx.localAnalytics.enabled` 默认开启，配置变化立即停止或恢复新事件记录。
+  同时 `Ga4RelayReporter`（`extension/analytics/Ga4RelayReporter.ts` 与 `ga4Config.ts`）
+  支持在配置了转发地址（`DEFAULT_GA4_RELAY_ENDPOINT` 或 `droidvisx.telemetry.endpoint`）
+  且 `droidvisx.telemetry.enabled` 开启时，将 SHA-256 哈希后的匿名 `client_id` 与 18 类全链路白名单事件
+  （`extension_activated`、`frontend_ready`、`frontend_render`、`frontend_error`、`frontend_longtask`、`activity_expand`、
+  `runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、
+  `turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`）
+  异步 POST 至 Cloudflare Worker 转发脚本（`scripts/ga4-relay-worker.mjs`），由 Worker
+  注入服务端保管的 `GA4_MEASUREMENT_ID` 与 `GA4_API_SECRET` 并转发至 GA4 Measurement Protocol。
+  统计中没有聊天正文、代码、文件路径、错误原文或凭据，原完整本地诊断保持独立。命令 `droidvisx.openLocalAnalytics`
   （“Droid：查看本地统计”）打开当前窗口的统计输出；既有 `droidvisx.exportDiagnostics`
   在写入队列完成后，将统计文件和原诊断一起打入用户手动选择的本地 ZIP。
 - `webview-v2/state/` 是根 reducer 的唯一实现；`host/` 是生产 Host 消息接线。
@@ -519,6 +526,9 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   `reviewFileReads.ts` 按文件维护独立刷新队列；读取当前定位文件和邻近视口的展开文件，
   其他离屏文件不主动刷新，回到视口按版本补读。接受新范围或会话时清空读取；生命周期变化在消息
   边界同步使在途结果失效。文件级操作显式携带该文件身份，不等待 selectFile 往返。
+  底层 `gitTreeReader` 在树列表中同时读取对象大小，校验上限后批量取正文；缺失路径由
+  `snapshotMissingPath` 批量核对原快照树和父目录，缺失的子模块对象仍单独核对条目，不能误作新文件。
+  旧部分快照继续检查忽略规则，完整工作区快照仍排除未覆盖路径；预览优化不改变撤销或已审阅动作的精确复核。
 - Review Bridge 默认 context=3，普通比较可选 20/100/all；Recorded edits 保留实际工具
   片段，按 toolUseId 选择编辑，不因新结果到达跳到末项。`reviewContent.ts` 先为选中
   操作预留正文预算，按需解析 bodyRef，其余记录只补入可容纳的内容；显式目标缺失

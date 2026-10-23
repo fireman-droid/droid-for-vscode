@@ -39,7 +39,7 @@ export function BtwModelSelect({ catalog, value, disabled, onChange, reasoning, 
       </Button>
     </PopoverTrigger>
     <PopoverContent side="top" align="end" sideOffset={8}
-      className="v2-composer-panel max-h-[min(520px,var(--radix-popover-content-available-height))] w-[220px] overflow-y-auto rounded-lg p-0">
+      className="v2-composer-panel max-h-[min(520px,var(--radix-popover-content-available-height))] w-max min-w-[220px] max-w-[min(320px,calc(100vw-16px))] overflow-y-auto rounded-lg p-0">
       {catalog !== undefined ? <ModelPopover id={`${id}-model`} modelCatalog={catalog} disabled={disabled}
         selection={{ modelId: value, reasoningEffort: effort }}
         onUpdate={(update) => {

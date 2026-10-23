@@ -16,6 +16,7 @@ export const SLASH_NAV_TARGETS = [
   'skills',
   'sessions',
   'context',
+  'limits',
 ] as const;
 export type SlashNavTarget = (typeof SLASH_NAV_TARGETS)[number];
 
@@ -29,6 +30,7 @@ export const SLASH_NAV_COMMANDS: readonly {
   { name: 'skills', description: 'Browse and toggle skills' },
   { name: 'sessions', description: 'Open session history' },
   { name: 'context', description: 'Review context usage' },
+  { name: 'limits', description: 'Show Factory usage and credit limits' },
 ];
 
 export type BuiltinSlashAction =

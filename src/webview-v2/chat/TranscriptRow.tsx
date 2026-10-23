@@ -27,9 +27,9 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
     </section>;
     if (item.code === 'session-compacted') {
       const count = /(\d+) earlier message/.exec(item.message)?.[1];
-      return <div role="status" title={item.message} className="my-4 flex items-center gap-3 text-[10.5px] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-        <span>{count ? t('Summarized {count} earlier messages', { count }) : t("Conversation summarized")}
-          {item.relatedSessionId && selectSession && !readOnly ? <> · <Button variant="plain" size="none" className="hover:text-foreground hover:underline" onClick={() => selectSession(item.relatedSessionId!)}>{t("View full history")}</Button></> : null}
+      return <div role="status" title={item.message} className="v2-history-divider my-4 select-none">
+        <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center">{count ? t('Summarized {count} earlier messages', { count }) : t("Conversation summarized")}
+          {item.relatedSessionId && selectSession && !readOnly ? <><span aria-hidden="true">·</span><Button variant="plain" size="none" className="v2-history-trigger" onClick={() => selectSession(item.relatedSessionId!)}>{t("View full history")}</Button></> : null}
         </span>
       </div>;
     }

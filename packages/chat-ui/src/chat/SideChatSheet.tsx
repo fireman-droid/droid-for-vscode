@@ -142,8 +142,8 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           <span data-ui-notice="" className="v2-btw-compose-hint">{maxLength - draft.length < 200 ? t("{p0} left", { p0: maxLength - draft.length })
             : composeHint}</span> : null}
           {showStop ? <AnswerStopButton className="v2-btw-send" stopping={state.stopping} onStop={onStop} />
-            : <Button size="none" variant="plain" className="v2-btw-send" aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
-              title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canSend} onClick={send}><ArrowUp /></Button>}
+            : <Button size="icon-sm" variant="plain" className="v2-btw-send" aria-label={t(streaming ? 'Queue follow-up' : 'Send side question')}
+              title={t(streaming ? 'Send after the current answer · Enter' : 'Send · Enter')} disabled={!canSend} onClick={send}><ArrowUp className="size-3.5" /></Button>}
         </div>
       </div>
     </footer>

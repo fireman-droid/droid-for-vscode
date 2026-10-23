@@ -1,8 +1,9 @@
+import { MAX_TURN_TEXT_LENGTH } from '../protocol/bounds';
 import { type SessionTranscriptItem } from '../protocol/transcript';
 import { enforceToolResultBudget } from './toolResultPreview';
 
 export const MAX_SESSION_TRANSCRIPT_ITEMS = 2_000;
-export const MAX_SESSION_TRANSCRIPT_TEXT_UNITS = 1_000_000;
+export const MAX_SESSION_TRANSCRIPT_TEXT_UNITS = MAX_TURN_TEXT_LENGTH + 1_000_000;
 /**
  * Thinking text counts against the text-unit budget at a fraction of
  * its length. Long sessions carry a handful of giant thinking blocks

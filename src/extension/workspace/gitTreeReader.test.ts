@@ -17,9 +17,15 @@ it('reads a batch with bounded Git processes and exact bytes for Unicode, spaces
   const run = vi.fn(reviewGit); const reader = createGitTreeReader(run);
   const results = await Promise.all([...paths, 'missing.ts'].map(path => reader.read(root, tree, path, 1024)));
   results.slice(0, -1).forEach(result => expect(result).toEqual(bytes)); expect(results.at(-1)).toBeNull();
-  expect(run).toHaveBeenCalledTimes(3); // One listing, one size probe, one blob batch.
+  expect(run).toHaveBeenCalledTimes(2); // One listing with sizes, one bounded blob batch.
   run.mockClear();
   await expect(reader.read(root, tree, paths[0]!, 2)).rejects.toThrow('preview limit');
   expect(run.mock.calls.some(([, args]) => args.includes('--batch'))).toBe(false);
   await expect(reader.read(root, 'missing-tree', paths[0]!, 1024)).rejects.toThrow();
+});
+
+it.each(['BAD', '-'])('does not treat an unreadable blob size (%s) as a missing/new file', async (size) => {
+  const run = vi.fn(async () => Buffer.from(`100644 blob ${'a'.repeat(40)} ${size}\tfile.ts\0`));
+  await expect(createGitTreeReader(run).read('/workspace', 'tree', 'file.ts', 1024)).rejects.toThrow('Invalid Git object metadata');
+  expect(run).toHaveBeenCalledOnce();
 });

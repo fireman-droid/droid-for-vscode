@@ -620,9 +620,17 @@ export async function verifyDaemonListeners(
     if (typeof pid === 'number') listeners.set(port, pid);
     else results.set(port, { status: pid === null ? 'not-listening' : 'unverified' });
   }
-  const commands = await queryProcessCommandLines([
-    ...new Set([...listeners.values(), ...targets.map(({ pid }) => pid)]),
-  ], reason => { queryFailure ??= `processes:${reason}`; }, deadline - Date.now());
+  const pids = [
+    ...new Set([
+      ...listeners.values(),
+      ...targets
+        .filter(({ port, pid }) => output === null || listeners.has(port) || isPidAlive(pid))
+        .map(({ pid }) => pid),
+    ]),
+  ];
+  const commands = pids.length === 0
+    ? new Map<number, string>()
+    : await queryProcessCommandLines(pids, reason => { queryFailure ??= `processes:${reason}`; }, deadline - Date.now());
   for (const [port, pid] of listeners) {
     const commandLine = commands?.get(pid);
     results.set(port, commandLine !== undefined && looksLikeDroidDaemon(commandLine, executable)
@@ -859,4 +867,13 @@ function defaultKillProcessTree(pid: number): Promise<void> {
   }
   process.kill(pid, 'SIGTERM');
   return Promise.resolve();
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }

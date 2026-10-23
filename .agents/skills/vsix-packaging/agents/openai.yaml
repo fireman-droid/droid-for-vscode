@@ -1,0 +1,4 @@
+interface:
+  display_name: "VSIX 打包与故障收口"
+  short_description: "对齐 CI Node/pnpm 环境，一次串行构建并校验 VSIX，按授权边界安装到本地编辑器"
+  default_prompt: "使用 $vsix-packaging 为当前提交构建并校验 VSIX 安装包。"

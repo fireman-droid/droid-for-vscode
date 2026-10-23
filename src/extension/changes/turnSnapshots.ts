@@ -32,6 +32,7 @@ import { captureWorkspaceTree, type WorkspaceBlobCache } from './captureWorkspac
 import { acquireWorkspaceTurnLease, readPendingWorkspaceTurn, releaseCompletedWorkspaceTurn, type WorkspaceTurnLease } from './workspaceTurnLease';
 import { pruneSnapshotObjects } from './snapshotPruning';
 import { createGitTreeReader } from '../workspace/gitTreeReader';
+import { snapshotMissingPath } from './snapshotMissingPath';
 export {
   MAX_SNAPSHOT_SESSIONS,
   MAX_SNAPSHOT_TURNS_PER_SESSION,
@@ -562,7 +563,13 @@ export function createTurnSnapshotStore(
   return {
     async readPendingCapture() {
       const root = getWorkspaceRoot();
-      return root && !closing ? readPendingWorkspaceTurn(root) : undefined;
+      if (!root || closing) return undefined;
+      const pending = await readPendingWorkspaceTurn(root);
+      if (pending && !recordFor(pending)?.before) {
+        await releaseCompletedWorkspaceTurn(root, pending);
+        return undefined;
+      }
+      return pending;
     },
     async capture(scope, phase, signal) {
       if (closing) return undefined;
@@ -578,7 +585,12 @@ export function createTurnSnapshotStore(
         }
         return existing[phase];
       }
-      if (phase === 'after' && !existing?.before) return undefined;
+      if (phase === 'after' && !existing?.before) {
+        const lease = leases.get(key);
+        if (lease) { await lease.finish(); leases.delete(key); }
+        else await releaseCompletedWorkspaceTurn(root, scope);
+        return undefined;
+      }
       const cancellation = signal ? AbortSignal.any([signal, shutdown.signal]) : shutdown.signal;
       // Wait outside the store queue: otherwise another turn's before could
       // block the active turn's after and deadlock the workspace.
@@ -693,9 +705,20 @@ export function createTurnSnapshotStore(
       const root = record?.workspaceRoot ?? getWorkspaceRoot();
       if (!oid || !root) return undefined;
       const bytes = await treeReader.read(root, oid, path, maxBytes);
-      // Missing ignored paths require the original evidence checks; absence from
-      // a partial tree alone never proves that a file was newly created.
-      return bytes === null ? readTreeBytes(scope, path, phase) : bytes;
+      if (bytes !== null) return bytes;
+      const deadline = dependencies.now() + SNAPSHOT_TIMEOUT_MS;
+      const resolved = await resolveLayout(root, deadline);
+      if (!resolved) return undefined;
+      const env = readEnv(resolved);
+      if (!await snapshotMissingPath(oid, path, (args, max, input) => git(root, args, env, deadline, max, input))) return undefined;
+      if (record.coverage === 'workspace-files-v1') return isSnapshotWorkspacePath(path) ? null : undefined;
+      // Legacy partial snapshots still need ignore evidence. A missing object
+      // or an omitted ignored file never becomes an empty/new-file baseline.
+      if (!record.snapshotPaths?.includes(path)) {
+        const ignored = await git(root, ['check-ignore', '--no-index', '-z', '--stdin'], env, deadline, 4096, Buffer.from(`${path}\0`));
+        if (ignored.timedOut || ignored.code !== 1) return undefined;
+      }
+      return null;
     },
     read(sessionId, turnId) {
       return cloneRecord(turnId === undefined ? readTurn(sessions, sessionId) : recordFor({ sessionId, turnId }));

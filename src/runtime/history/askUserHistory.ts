@@ -28,7 +28,10 @@ export function readAskUserQuestions(
   let questionLines: string[] | null = null;
   const finishQuestion = (): void => {
     const current = questions[questions.length - 1];
-    const question = questionLines?.join('\n').trim();
+    const question = questionLines
+      ?.join('\n')
+      .replace(/\s*\(multi\)\s*$/iu, '')
+      .trim();
     if (
       current !== undefined &&
       question !== undefined &&
@@ -40,7 +43,9 @@ export function readAskUserQuestions(
     questionLines = null;
   };
   for (const line of input.questionnaire.split(/\r?\n/)) {
-    const question = line.match(/^\s*(?:\d+\.\s*)?\[question\]\s*(.*)$/i);
+    const question =
+      line.match(/^\s*(?:\d+\.\s*)?\[question\]\s*(.*)$/i) ??
+      line.match(/^\s*\d+\.\s+(?!\[(?:topic|option|answer)\])(.*)$/i);
     if (question !== null) {
       finishQuestion();
       if (questions.length >= MAX_ASK_USER_ANSWERS) {

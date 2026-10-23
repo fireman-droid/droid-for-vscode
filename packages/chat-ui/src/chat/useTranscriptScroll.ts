@@ -17,6 +17,7 @@ export function useTranscriptScroll(
   _sendSignal: number,
   reportLayout?: (detail: string) => void,
   onReachedBottom?: () => void,
+  pauseAutoFollow = false,
 ) {
   const follow = useRef(createFollowState());
   const userScrolling = useRef(false);
@@ -119,6 +120,7 @@ export function useTranscriptScroll(
   }, [scrollToBottom]);
 
   useLayoutEffect(() => { scrollToBottom('auto'); }, [conversationId, scrollToBottom]);
+  useLayoutEffect(() => { if (pauseAutoFollow) stopFollowing(); }, [pauseAutoFollow, stopFollowing]);
   useEffect(() => {
     const element = viewport.current;
     const column = content.current;
@@ -194,7 +196,7 @@ export function useTranscriptScroll(
       if (!selecting()) {
         const wasFollowing = follow.current.following;
         applyFollowScroll(follow.current, next);
-        if (navigation.current !== null) follow.current.following = false;
+        if (pauseAutoFollow || navigation.current !== null) follow.current.following = false;
         // Finishing replies and virtual-row adjustments are not reading intent.
         // Rejoin only during a user gesture at the current, measured bottom.
         else if (layoutChanged || !userScrolling.current ||
@@ -219,6 +221,9 @@ export function useTranscriptScroll(
       const wasFollowing = follow.current.following;
       cancelAnimation();
       applyFollowWheelIntent(follow.current, event.deltaY, sample());
+      // Editing a question is a sustained pause, not a single wheel gesture.
+      // Reaching today's bottom must not let the next streamed token take over.
+      if (pauseAutoFollow) follow.current.following = false;
       setFollowingBottom(follow.current.following);
       userScrolling.current = event.deltaY > 0;
       if (wasFollowing && !follow.current.following) {
@@ -301,6 +306,6 @@ export function useTranscriptScroll(
       reducedMotion.removeEventListener('change', schedule);
       cancelAnimation();
     };
-  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom]);
+  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow]);
   return { follow, followingBottom, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }

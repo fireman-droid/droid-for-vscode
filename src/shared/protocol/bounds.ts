@@ -1,6 +1,6 @@
 import { MAX_PERMISSION_TOOL_NAME_LENGTH } from './interactionProtocol';
 
-export const MAX_TURN_TEXT_LENGTH = 200_000;
+export const MAX_TURN_TEXT_LENGTH = 2_000_000;
 
 export const MAX_ASSISTANT_TEXT_LENGTH = 200_000;
 

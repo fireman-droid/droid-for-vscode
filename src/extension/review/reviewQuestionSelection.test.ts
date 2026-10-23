@@ -20,7 +20,7 @@ const main: ConfirmedSessionSettings = { modelId: 'alpha', reasoningEffort: 'hig
 const models = [alpha, beta];
 function service() {
   return new ManagementSettingsService({} as vscode.SecretStorage, 'test', () => ({ cwd: null, connection: 'connected', ide: 'connected', sessionManagementAvailable: true }),
-    () => models.map(model => ({ id: model.id, label: model.displayName, reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort })), () => main.modelId);
+    async () => models.map(model => ({ id: model.id, label: model.displayName, reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom })), () => main.modelId);
 }
 beforeEach(() => {
   mock.values.clear(); mock.ask.mockReset(); mock.dispose.mockReset().mockResolvedValue(undefined);

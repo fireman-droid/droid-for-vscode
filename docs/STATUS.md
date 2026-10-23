@@ -1,47 +1,51 @@
 # 当前状态
 
-核对日期：2026-10-22。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-10-23。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
-- `0.8.16` 包含「已探索」活动折叠与底部 Composer 输入框内运行状态提示、多步历史回合合并与尾部预算保留、工作区基线哈希缓存、当前目录启动隔离与租约冲突处理、Script 结果解包与关联去重、长 Thinking 分块与收起终端卸载、代码块自动换行、界面提示复制过滤，以及纯本地前端统计。
+- 当前发布版本为 `0.8.17`，合并了 Factory 账户与 `/limits` 额度面板、2,000,000 字符大草稿输入与编辑防跳动、Review 批量 Git 元数据读取优化（PR #15）、100MB+ 大会话快速恢复與断线重连优化、18 类诊断事件 GA4 遥测转发、设置页侧栏与下拉菜单交互整改、工作区跨会话与孤儿快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 自愈（#16）、以及 `AskUser` 题干多选兜底识别与无 `[question]` 前缀历史解析（#9）。
+- `0.8.16` 已通过 [PR #14](https://github.com/fireman-droid/droid-for-vscode/pull/14) 合入 `main`（提交 `c6e8c8fa`），[GitHub v0.8.16](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.16) 与 [Open VSX 0.8.16](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.16) 均已正式公开（同一产物 `droid-0.8.16.vsix`，14,313,474 字节，SHA256 `8fa29f8a97a5014e945919d28309ad6a921f01fc6f7a40b2186c258249b99814`，172 项内容与入口校验通过）。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」等运行状态移入底部 Composer 输入框的「继续提问」占位位置，发送后旋转显示、输入时隐藏、停止后恢复占位文字。
-- `0.8.15` 已通过 [PR #12](https://github.com/fireman-droid/droid-for-vscode/pull/12) 合入 `main`，
-  提交 `30268883`；版本、CHANGELOG 与 `v0.8.15` 标签一致。包含最新操作原位更新、移除中间思考分组、
-  保留单条独立折叠，以及正文／符号左边缘对齐；不包含目录整理、超长输入或暂停中的 BYOK 草稿。
-- [GitHub v0.8.15](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.15) 已正式公开。
-  正式包来自标签的干净源码，下载后再次核对版本、源码提交、172 项包内容与扩展入口加载。
-  SHA256：`34245c268c8b2759364c2361dc96a18b94f0ed97ca19d0871369aecdebca6659`。
-- [Open VSX 0.8.15](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.15) 已公开可下载，
-  [发布流程](https://github.com/fireman-droid/droid-for-vscode/actions/runs/39094529442) 成功；下载包的 SHA256 与上述 GitHub 正式包一致。
-  Cursor 客户端更新仍取决于其市场同步。
-- Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，本次未提交。
-  此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
-  未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，尚未正式发布。
-  包 SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
-  Cursor 已于 2026-10-19 按用户要求安装同一个 `9b50956d`／`0.8.15` 本地试用包，替换旧 `0.8.13`。已核对 Cursor 产品身份及当前用户扩展登记，扩展入口、聊天 JS 与 CSS 的 SHA256 均与 VSIX 一致；需在 Cursor 执行 Reload Window，未追加安装后页面验收。
-  官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
-- 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
+- Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
+- 官方 Droid CLI 当前为 `0.242.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 
 ## 当前源码
 
 | 范围 | 当前实现与边界 |
 | --- | --- |
 | 聊天 | 最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。队列预览最多三行；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
-| 管理页 | 常规、模型、补全、会话、任务；共享设置行、搜索筛选、分页和滚动条，列表刷新保留已有内容 |
+| 管理页 | 常规、模型、补全、会话、任务；共享设置行、搜索筛选、分页和滚动条，Select 弹层不少于触发器宽度并随单行选项内容扩展，列表刷新保留已有内容 |
+| Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
 | Mission 创建 | 说明型开关行保持背景稳定，操作按钮随内容收紧；调度／执行／验证代理模型支持搜索，保留来源筛选与现有推理等级 |
-| 设置模型 | 搜索、来源分组、继承、模型与强度子菜单；等级来自 SDK；纯模型场景直接选择，主聊天尚未整体迁移 |
+| 设置模型 | 搜索、来源分组、继承、模型与强度子菜单；下拉选项悬停与选中态统一使用中性灰背景与正文色勾选，菜单随单行内容扩展并受视口约束；等级来自 SDK；纯模型场景直接选择，主聊天尚未整体迁移 |
 | 多语言 | 简体中文、繁体中文、英语；默认跟随编辑器，消息与代码保持原文 |
 | 主题 | Light／Dark／Auto；真实浏览器刷新先恢复最近主题，深色导航使用可辨识的共享选中背景；正文、BTW、Diff 和输入框共用用户选定的半透明石墨灰文字选区，保留原有字色 |
 | Review | 操作与整轮改动、Git 比较、全文／片段、行内问答、受限的操作 Undo 和 SDK Restore；真实浏览器复用同一 Host 控制器，工具栏、滚动和问答沿用共享 UI |
 | 恢复 | 打开的会话在 SDK 快速重连结束后每 30 秒继续恢复原连接；Host 自动恢复已知会话及空闲 IDE，回到窗口／侧栏时检查；不重发消息，不中断运行中的后台。失联后台仅在确认旧进程退出后允许替代，身份无法核实不另起任务 |
 | 补全 | 独立 FIM 与 Next Edit；自动续写允许较长词尾、条件右括号和语言候选扩展，共享防抖／上下文／请求，短负缓存及可关联诊断；多行建议的嵌套闭合括号不再因相邻同形括号被整段拒绝；默认关闭，模型费用独立于聊天 |
 
+## 开发与测试结构
+
+- 旧 Figma 原型工程与过期设计截图已移出当前源码；生产页面、文档截图和第三方许可保留。
+- 22 个公共 UI 测试及两份 DOM/输入辅助文件归入 `packages/chat-ui/test/`；应用业务测试仍就近存放。
+  默认 Vitest 收集范围包含公共包，文件预算覆盖测试目录；两份无消费者的旧组件转导出已移除。
+- 根命令统一提供 `test:extension`、`test:runtime`、`test:webview`、`test:chat-ui`、`test:quality` 与性能入口，详见 DEVELOPMENT。
+  5 个补全评估器 Node 测试文件通过 `test:quality` 接入必需 PR 检查；Node 26 / Python / Go 与 Node 24 构建阶段分开。
+  常规测试不调用模型，真实模型评估与 smoke 保持显式运行。
+- 编辑器集成测试按必需激活事件逐项断言，允许增加其他合法入口，不再固定旧的三项完整清单。
+
 ## 最近验证
 
+- `codex/ui-style-fixes` 与 `codex/runtime-fixes`：完成设置侧栏宽度补全、Review 代码问答引用芯片防跳动、Quote 芯片图标实心旋转、`Ask for input` 移出「已探索」分组，以及跨会话／孤儿工作区快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 处理（#16）和 `AskUser` 多选兜底识别／无前缀编号历史解析（#9）。`lint:budgets`、类型检查与受影响单元测试（63 项）全部通过。
+- Factory 账户与 `/limits`：本机真实凭据读取 `GET https://api.factory.ai/api/billing/limits` 返回 200，字段与 Factory 应用截图一致（`Standard`／`Droid Core` 分段切换与三窗口独立进度条 + `extraUsageBalanceCents`）；token 载荷确认含 email、first/last name 与 org；设置页 `account.read` 走独立非阻塞请求通道，不占用 `busy` 或阻塞其他设置。类型检查、文件预算通过；`factoryAccount` 9 项定向测试覆盖身份解析、窗口投影、epoch 毫秒、EU 主机与未登录路径。
+- `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），并完成 100MB+ 大会话「对话转不回来」四项修复：`connectPublicDaemon.ts` 将 RPC `requestTimeout` 从 `30000ms` 提升至 `120000ms` 并注入 `loadAllMessages: false` 启用压缩锚点反向快读；`routedDaemon.ts`／`persistentIdeRelay.ts` 在同 Daemon 尚未打开 Worker 或前次 `resume` 失败时重置 Relay 根会话握手，消除 `rebindIdleAttachment` 误杀刚加载完成的 Daemon；`daemonLifecycle.ts` 在端口未监听且旧 PID 已退出时跳过 `powershell.exe` 进程查询；`runtimeLifecycle.ts` 在断线自动重连重试期间复用当前已加载的历史 transcript，避免重复读取百兆 JSONL 与重复推送快照。主聊天顶部历史裁剪说明与展开入口已合并为渐隐细分割线与胶囊缓动触发器，前后端捆绑文件变更均支持自动热重载。`lint:budgets`、全仓 `typecheck` 与生产构建通过。
+- `codex/ui-style-refinements` 分支已完成设置页下拉框（`ModelPicker` 勾选／选中背景、`ScrollArea` 拖动滑块、模型发现列表选中行）由橙色回归中性灰、`Select` 与 `ModelPicker` 弹层按单行内容自适应扩展宽度并与未展开触发框右边缘对齐，以及 BTW 发送／停止按钮与主聊天发送按钮样式对齐；Node 24／pnpm 10.2.0 下 `typecheck`、`lint:budgets`、生产构建与 VSIX 172 项校验通过。
+- 长草稿输入修复：粘贴及继续输入后让光标在编辑区内可见，受控内容重建保留内部滚动位置；单条输入容量扩至 2,000,000 字符，发送、队列、历史恢复同步使用新预算，移除新增超限提示。
+- 消息卡片编辑期间持续暂停主聊天自动跟随，避免向下滚到底部后被流式回复再次拉走。
+- 目录与测试整理：迁移相关的 26 个 Vitest 文件 / 150 项测试、5 个评估器文件 / 20 项 Node 测试通过，默认 Vitest 覆盖公共包测试目录，文件预算与类型检查通过。
 - 本轮以真实原生会话和 VS Code `globalStorage/droidvisx.droidvisx/logs` 交叉核对，展开测量实际写入 `webview.perf-batch/activity.expand`。新连接上的 13／15／20／43 条记录组可展开，收起终端正文未挂载，完成态 thinking 从顶部阅读，所见 Script 不再有外层转义包装；跨段复制实测排除执行提示。未重现用户报告的整个编辑器无响应，启动／历史定位仍观察到 205–274ms 长任务，不能将局部展开修复描述成全面性能达标。源码复制按钮通过 Host 路径处理，浏览器剪贴板未提供该路径的有效验证；对应内容／Diff 复制由针对性测试覆盖。
 - 本轮 12 个定向测试文件共 186 项通过，涵盖实时／历史失败状态、Script 解包与去重、长 Thinking 分块排版和滚动、紧凑缺失状态及既有 Edit／快照恢复。
   同一真实会话读取 2442 条消息、保留 2000 条记录后重放：原错误命令为 failed、对应重复汇总消失，剩余 14 条有内容的 Script 均无外层 part/result 传输包装直接展示。
@@ -76,7 +80,7 @@
 ## 文档与规则
 
 - 用户／项目规则已去除逐次测试审批与无效 skill 依赖；保留范围、用户改动和安装发布边界。
-- 设置页认可的共用样式写入 DESIGN，项目仅将 `practical-ui-refinement` 作为当前界面整改 skill。
+- 设置页认可的共用样式写入 DESIGN；项目级 skill 由统一入口 `droid-dev-pipeline` 串联 `practical-ui-refinement`（界面整改）、`vsix-packaging`（构建打包与安装校验）与 `git-branch-release`（分支提交、PR 合并与单产物发版）。
 - STATUS 保留当前快照，PLAN 保留待办，DESIGN 保留稳定约定；历史材料由 Git 保存。
 - 文档站构建及仓库内文档文件链接检查通过；构建仍提示已有的大体积前端 chunk，未影响产出。
 - 宣传首页按 Factory 首页结构重做：首屏、三列支柱、模型展示、八项功能、Mission、

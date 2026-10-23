@@ -48,7 +48,7 @@ export async function connectPublicDaemon(
       getAccessToken: options.getAccessToken ?? (async () => options.auth.apiKey),
       onAuthenticationError: options.onAuthenticationError,
       connectionTimeoutMs: 5000,
-      requestTimeout: 30000,
+      requestTimeout: 120000,
       maxPollAttempts: 15,
       maxReconnectAttempts: 3,
       reconnectInterval: 1000,
@@ -57,6 +57,17 @@ export async function connectPublicDaemon(
       supportsTerminalRestoreOnLoad: false,
     },
   });
+  // The extension reads full UI history directly from disk via persistedHistory.ts.
+  // DaemonSessionController hardcodes loadAllMessages=true when clientType==='sdk',
+  // forcing droid exec to forward-stream 100MB+ JSONLs instead of using its
+  // reverse compaction-anchor reader. Override loadAllMessages=false at the RPC boundary.
+  const daemonClient = (controller as unknown as {
+    daemonClient?: { loadSession?: (params: Record<string, unknown>) => Promise<unknown> };
+  }).daemonClient;
+  const rawLoadSession = daemonClient?.loadSession?.bind(daemonClient);
+  if (daemonClient && rawLoadSession) {
+    daemonClient.loadSession = (params) => rawLoadSession({ ...params, loadAllMessages: false });
+  }
   try {
     await controller.attemptInitialConnection();
     return retainDaemonController(controller, options, missions);

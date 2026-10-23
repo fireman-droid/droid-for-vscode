@@ -70,6 +70,10 @@ function reduceHostMessage(
           }
         : advance(state, event.sequence);
 
+    case 'factory.limits':
+      // Account-scoped: the projection outlives the session that asked.
+      return { ...state, sequence: event.sequence, account: event.account };
+
     case 'customModels.state':
     case 'systemPrompt.state':
 
