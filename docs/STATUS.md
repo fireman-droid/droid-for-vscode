@@ -20,9 +20,8 @@
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，本次未提交。
   此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题。
   未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- Microsoft VS Code 当前安装 `codex/script-activity-results` 的 `0.8.15` 本地试用包，源码提交 `9b50956d`，尚未正式发布。
-  包 SHA256 为 `afef506d83b860934e0aa844714cd7d1c497f0d4a280846b5a7ad6bce54fe12a`；已核对 Microsoft VS Code 产品身份，CLI 安装成功，需 Reload Window。
-  Cursor 已于 2026-10-19 按用户要求安装同一个 `9b50956d`／`0.8.15` 本地试用包，替换旧 `0.8.13`。已核对 Cursor 产品身份及当前用户扩展登记，扩展入口、聊天 JS 与 CSS 的 SHA256 均与 VSIX 一致；需在 Cursor 执行 Reload Window，未追加安装后页面验收。
+- Microsoft VS Code 与 Cursor 当前均已安装 `codex/ga4-telemetry` 的 `0.8.16` 本地试用包，源码提交 `54c74e06`（同时包含下拉框右对齐／中性灰／BTW 发送按钮修复与 Cloudflare Worker GA4 性能统计转发），尚未正式发布。
+  包 SHA256 为 `b60361fe541301b8ab5f6eb3a8feaa7ab93593a32717468ef9b8a05d6f023fbb`；已核对 Microsoft VS Code 与 Cursor CLI 产品身份并安装成功，需在各自编辑器执行 Reload Window。
   官方 Droid CLI 当前为 `0.241.1`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 - 主工作区未提交 BYOK 改动与其他任务分支保留原样，未顺带合并或清理。
 
