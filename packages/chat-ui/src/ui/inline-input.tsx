@@ -1,7 +1,7 @@
 import { useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type HTMLAttributes, type ReactNode, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from './cn';
-import { inlineSelection, inlineText, setInlineSelection } from './inlineInputDom';
+import { inlineSelection, inlineText, revealInlineCaret, setInlineSelection } from './inlineInputDom';
 import { limitInlineEdit } from './inlineInputEdit';
 
 export interface InlineInputHandle {
@@ -33,6 +33,7 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
   placeholder, disabled, maxLength = Infinity, measureText, onContentLayout, className, ...props }: InlineInputProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
+  const revealAfterEdit = useRef(false);
   const rendered = useRef<string | null>(null);
   const [slots, setSlots] = useState<Array<{ token: string; element: HTMLElement }>>([]);
   const [revision, setRevision] = useState(0);
@@ -43,7 +44,9 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     get selectionEnd() { return inlineSelection(root.current!).end; },
     get selectionDirection() { return inlineSelection(root.current!).direction; },
     focus(options) { root.current?.focus(options); },
-    setSelectionRange(start, end, direction) { if (root.current) setInlineSelection(root.current, start, end, direction); },
+    setSelectionRange(start, end, direction) {
+      if (root.current) { setInlineSelection(root.current, start, end, direction); revealInlineCaret(root.current); }
+    },
   };
   useImperativeHandle(ref, () => handle.current!, []);
   const tokenKey = tokens.join('');
@@ -52,6 +55,7 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     if (composing.current || (rendered.current === value + tokenKey && inlineText(node) === value)) return;
     const selected = inlineSelection(node);
     const focused = node.ownerDocument.activeElement === node;
+    const scrollTop = node.scrollTop;
     const fragment = node.ownerDocument.createDocumentFragment();
     const next: typeof slots = [];
     let text = '';
@@ -78,6 +82,7 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     node.replaceChildren(fragment);
     rendered.current = value + tokenKey; setSlots(next);
     if (focused) setInlineSelection(node, selected.start, selected.end, selected.direction);
+    node.scrollTop = scrollTop;
   }, [value, tokenKey, revision]);
   useLayoutEffect(() => {
     const node = root.current!;
@@ -86,6 +91,7 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     if (slots.some(slot => slot.element.parentNode !== node) ||
       node.querySelectorAll(':scope > [data-inline-token]').length !== slots.length) return;
     onContentLayout?.(node);
+    if (revealAfterEdit.current) { revealInlineCaret(node); revealAfterEdit.current = false; }
   }, [value, tokenKey, slots, revision, onContentLayout]);
   const restoreCaret = (next: string, cursor: number) => {
     const input = handle.current!, element = input.element;
@@ -99,6 +105,7 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     const next = inlineText(root.current!);
     const caret = handle.current!.selectionStart;
     const limited = limitInlineEdit(value, next, caret, maxLength, measureText);
+    revealAfterEdit.current = true;
     onChange(limited.value, limited.cursor);
     if (limited.value !== next) {
       // A rejected insertion may leave the controlled value unchanged. Still
@@ -109,7 +116,8 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
   };
   const replace = (text: string) => {
     const input = handle.current!, start = input.selectionStart, end = input.selectionEnd;
-    const limited = limitInlineEdit(input.value, input.value.slice(0, start) + text + input.value.slice(end), start + text.length, maxLength, measureText);
+    const next = input.value.slice(0, start) + text + input.value.slice(end);
+    const limited = limitInlineEdit(input.value, next, start + text.length, maxLength, measureText);
     onChange(limited.value, limited.cursor);
     restoreCaret(limited.value, limited.cursor);
   };

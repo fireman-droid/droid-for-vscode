@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_ASSISTANT_TEXT_LENGTH,
+  MAX_TURN_TEXT_LENGTH,
   MAX_CHANGED_FILES_PER_TURN,
   MAX_IMAGES_PER_TURN,
 } from '../../shared/protocol/bounds';
@@ -23,6 +24,17 @@ import {
 } from './hostTranscriptState';
 
 describe('hostTranscriptState', () => {
+  it('retains a full expanded-capacity prompt when a reply arrives and history is restored', () => {
+    const text = '码'.repeat(MAX_TURN_TEXT_LENGTH);
+    const accepted = appendAcceptedUserPrompt(createHostTranscriptState('complete'), 'turn-large', text);
+    const replied = project(accepted, {
+      type: 'assistant.delta', sessionId: 'session-1', turnId: 'turn-large', delta: 'Received',
+    });
+    const restored = hydrateHostTranscriptState(replied);
+    expect(restored.transcript.find(item => item.kind === 'user')).toMatchObject({ text });
+    expect(restored.transcript.find(item => item.kind === 'assistant')).toMatchObject({ text: 'Received' });
+  });
+
   it('projects accepted prompts and semantic events with stable IDs', () => {
     let state = appendAcceptedUserPrompt(
       createHostTranscriptState('complete'),

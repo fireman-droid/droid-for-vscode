@@ -56,3 +56,23 @@ export function setInlineSelection(root: HTMLElement, start: number, end = start
   if (direction === 'backward') selection?.setBaseAndExtent(endNode, endOffset, startNode, startOffset);
   else selection?.setBaseAndExtent(startNode, startOffset, endNode, endOffset);
 }
+
+/** Reveal only the editor's caret; scrollIntoView would also move the chat. */
+export function revealInlineCaret(root: HTMLElement) {
+  const selection = root.ownerDocument.getSelection();
+  if (root.ownerDocument.activeElement !== root || root.clientHeight === 0 ||
+    !selection?.focusNode || !root.contains(selection.focusNode)) return;
+  const range = root.ownerDocument.createRange();
+  range.setStart(selection.focusNode, selection.focusOffset); range.collapse(true);
+  let caret = Array.from(range.getClientRects()).find(rect => rect.height > 0);
+  // Some engines omit a collapsed rect at the end of a text node.
+  if (!caret && selection.focusNode.nodeType === Node.TEXT_NODE && selection.focusOffset > 0) {
+    range.setStart(selection.focusNode, selection.focusOffset - 1);
+    caret = Array.from(range.getClientRects()).at(-1);
+  }
+  if (!caret) return;
+  const top = root.getBoundingClientRect().top + root.clientTop;
+  const bottom = top + root.clientHeight;
+  if (caret.bottom > bottom) root.scrollTop += caret.bottom - bottom;
+  else if (caret.top < top) root.scrollTop -= top - caret.top;
+}
