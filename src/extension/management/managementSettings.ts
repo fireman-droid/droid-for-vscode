@@ -12,7 +12,7 @@ import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 export class ManagementSettingsService {
   constructor(private readonly secrets: vscode.SecretStorage, private readonly version: string,
     private readonly status: () => Pick<ManagementSettings, 'cwd' | 'connection' | 'ide' | 'sessionManagementAvailable'>,
-    private readonly questionModels: () => ManagementSettings['reviewQuestion']['models'],
+    private readonly questionModels: () => ManagementSettings['reviewQuestion']['models'] | Promise<ManagementSettings['reviewQuestion']['models']>,
     private readonly mainModel: () => string | null = () => null) {}
 
   async read(): Promise<ManagementSettings> {
@@ -29,7 +29,7 @@ export class ManagementSettingsService {
       busyMessageMode: readBusyMessageMode(),
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey, nextEditHasKey,
-      reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: this.questionModels() },
+      reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: await this.questionModels() },
       completion: {
         enabled: settings.enabled, autoTrigger: settings.autoTrigger !== false, relatedFiles: settings.relatedFiles,
         adaptiveDebounce: settings.adaptiveDebounce !== false, debounceMs: settings.debounceMs,
@@ -40,9 +40,10 @@ export class ManagementSettingsService {
   }
 
   async saveQuestionModel(modelId: string | null, reasoningEffort: SessionReasoningEffort | null = null): Promise<void> {
-    if (modelId !== null && !this.questionModels().some(model => model.id === modelId))
+    const models = await this.questionModels();
+    if (modelId !== null && !models.some(model => model.id === modelId))
       throw new Error('此模型已不可用，请刷新设置后重新选择。');
-    const model = this.questionModels().find(item => item.id === (modelId ?? this.mainModel()));
+    const model = models.find(item => item.id === (modelId ?? this.mainModel()));
     if (reasoningEffort !== null && !model?.reasoning?.includes(reasoningEffort))
       throw new Error('此模型不支持所选推理强度，请重新选择。');
     // Clear the previous model's effort before changing models, then apply the validated selection.

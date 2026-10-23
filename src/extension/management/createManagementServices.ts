@@ -24,8 +24,17 @@ export function createManagementServices(options: {
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,
       sessionManagementAvailable: options.daemon,
-    }), () => controller.metadata.modelCatalog.items.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName,
-      reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom })),
+    }), async () => {
+      const items = controller.metadata.modelCatalog.items;
+      const catalog = options.daemon
+        ? await (async () => {
+            const raw = await (await getDroid()).models.list({ includeDisabled: true });
+            return await controller.modelAvailability?.projectCatalog(raw) ?? raw;
+          })().catch(() => items)
+        : items;
+      return catalog.filter(model => !model.disabled).map(model => ({ id: model.id, label: model.displayName,
+        reasoning: model.supportedReasoningEfforts, defaultReasoning: model.defaultReasoningEffort, isCustom: model.isCustom }));
+    },
     () => controller.metadata.settings.value?.modelId ?? null),
     sessions: new ManagementSessionCatalog(getDroid, cwd, () => controller.sessionState.sessionId),
     sessionsAvailable: options.daemon,
