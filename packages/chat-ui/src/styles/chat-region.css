@@ -345,9 +345,47 @@
   .dvx-change-action:focus-visible, .dvx-change-row:focus-visible, .dvx-change-more:focus-visible {
     outline: 1px solid var(--focus); outline-offset: -2px;
   }
+  .v2-history-divider {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    color: color-mix(in srgb, var(--muted-ink) 88%, transparent); font-size: 11px; line-height: 16px;
+  }
+  .v2-history-divider::before, .v2-history-divider::after {
+    content: ''; height: 1px; flex: 1 1 24px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 10%, transparent));
+  }
+  .v2-history-divider::after {
+    background: linear-gradient(270deg, transparent, color-mix(in srgb, var(--ink) 10%, transparent));
+  }
+  .v2-history-trigger {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; margin-block: -2px; border-radius: 999px;
+    background: transparent; color: var(--muted-ink);
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .v2-history-trigger > svg {
+    width: 12px; height: 12px; flex-shrink: 0; opacity: 0.72;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .v2-history-trigger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
+  .v2-history-trigger:hover:not(:disabled) > svg {
+    opacity: 1; transform: translateY(-1.5px);
+  }
+  .v2-history-trigger:active:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    transform: scale(0.98);
+  }
   @media (prefers-reduced-motion: reduce) {
     .dvx-change-action, .dvx-change-row, .dvx-change-more,
-    .dvx-change-file-header > .dvx-change-row { transition: none; }
+    .dvx-change-file-header > .dvx-change-row,
+    .v2-history-trigger, .v2-history-trigger > svg { transition: none; }
   }
   @media (hover: none) {
     .v2-chat-surface .v2-code-toolbar { opacity: 1; }

@@ -259,11 +259,11 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         <div ref={content} className={`v2-chat-rail min-h-full pt-5 ${statusContent ? 'pb-0' : 'pb-3'}`}>
           <div ref={leading} className="flow-root">
             {leadingContent}
-            {(historyNotice || hiddenMessageCount > 0) ? <div role="note" data-ui-notice="" className="mb-4 flex select-none items-center gap-3 text-[11px] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+            {(historyNotice || hiddenMessageCount > 0) ? <div role="note" data-ui-notice="" className="v2-history-divider select-none">
               <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center">
                 {historyNotice ? <span>{historyNotice}</span> : null}
                 {historyNotice && hiddenMessageCount > 0 ? <span aria-hidden="true">·</span> : null}
-                {hiddenMessageCount > 0 ? <Button variant="plain" size="none" className="group inline-flex items-center gap-1 text-[11px] text-secondary-foreground hover:text-foreground" onClick={revealEarlier}><ChevronUp className="size-3 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-px group-hover:text-foreground motion-reduce:transition-none" aria-hidden="true" /><span className="underline-offset-4 group-hover:underline">{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</span></Button> : null}
+                {hiddenMessageCount > 0 ? <Button variant="plain" size="none" className="v2-history-trigger" onClick={revealEarlier}><ChevronUp aria-hidden="true" /><span>{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</span></Button> : null}
               </span>
             </div> : null}
           </div>
