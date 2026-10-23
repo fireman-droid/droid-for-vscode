@@ -17,11 +17,9 @@ async function run() {
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
   assert.ok(extension, `Expected ${EXTENSION_ID} to be installed`);
   assert.equal(extension.packageJSON.main, './dist/extension/extension.cjs');
-  assert.deepEqual(extension.packageJSON.activationEvents, [
-    `onView:${VIEW_ID}`,
-    `onCommand:${FOCUS_COMMAND}`,
-    `onCommand:${OPEN_LOGS_COMMAND}`,
-  ]);
+  for (const event of [`onView:${VIEW_ID}`, `onCommand:${FOCUS_COMMAND}`, `onCommand:${OPEN_LOGS_COMMAND}`]) {
+    assert.ok(extension.packageJSON.activationEvents.includes(event), `Missing activation event: ${event}`);
+  }
   assert.ok(
     extension.packageJSON.contributes.commands.some(
       (entry) => entry.command === FOCUS_COMMAND,
@@ -80,4 +78,14 @@ function withTimeout(promise, timeoutMs, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-module.exports = { run };
+module.exports = {
+  async run() {
+    try {
+      await run();
+      console.log('Extension activation, commands, view focus and deactivation passed.');
+    } catch (error) {
+      console.error('Extension integration assertion failed:', error);
+      throw error;
+    }
+  },
+};

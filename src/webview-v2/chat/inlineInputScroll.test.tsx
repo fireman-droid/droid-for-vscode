@@ -9,7 +9,7 @@ import { EDITOR_COPY_MIME } from '../../../packages/chat-ui/src/chat/codeReferen
 import { useCodeReferenceDraft } from '../../../packages/chat-ui/src/chat/useCodeReferenceDraft';
 import { inlineText, setInlineSelection } from '../../../packages/chat-ui/src/ui/inlineInputDom';
 import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
-import { pasteText } from './inlineInput.testHelpers';
+import { pasteText } from '../../../packages/chat-ui/test/chat/inlineInput.testHelpers';
 
 const originalRects = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
 afterEach(() => {

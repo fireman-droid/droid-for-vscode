@@ -38,12 +38,23 @@
 | 恢复 | 打开的会话在 SDK 快速重连结束后每 30 秒继续恢复原连接；Host 自动恢复已知会话及空闲 IDE，回到窗口／侧栏时检查；不重发消息，不中断运行中的后台。失联后台仅在确认旧进程退出后允许替代，身份无法核实不另起任务 |
 | 补全 | 独立 FIM 与 Next Edit；自动续写允许较长词尾、条件右括号和语言候选扩展，共享防抖／上下文／请求，短负缓存及可关联诊断；多行建议的嵌套闭合括号不再因相邻同形括号被整段拒绝；默认关闭，模型费用独立于聊天 |
 
+## 开发与测试结构
+
+- 旧 Figma 原型工程与过期设计截图已移出当前源码；生产页面、文档截图和第三方许可保留。
+- 22 个公共 UI 测试及两份 DOM/输入辅助文件归入 `packages/chat-ui/test/`；应用业务测试仍就近存放。
+  默认 Vitest 收集范围包含公共包，文件预算覆盖测试目录；两份无消费者的旧组件转导出已移除。
+- 根命令统一提供 `test:extension`、`test:runtime`、`test:webview`、`test:chat-ui`、`test:quality` 与性能入口，详见 DEVELOPMENT。
+  5 个补全评估器 Node 测试文件通过 `test:quality` 接入必需 PR 检查；Node 26 / Python / Go 与 Node 24 构建阶段分开。
+  常规测试不调用模型，真实模型评估与 smoke 保持显式运行。
+- 编辑器集成测试按必需激活事件逐项断言，允许增加其他合法入口，不再固定旧的三项完整清单。
+
 ## 最近验证
 
 - `codex/ga4-telemetry` 分支已接入 Cloudflare Worker GA4 转发上报（`Ga4RelayReporter`、`ga4Config.ts` 与 `scripts/ga4-relay-worker.mjs`），默认转发地址已配置为 `https://droid-ga4.k83065556.workers.dev/collect`，覆盖匿名设备哈希、`extension_activated`、`frontend_ready`、`frontend_error`、`frontend_longtask` 与 `activity_expand` 白名单事件；定向测试、`lint:budgets`、`typecheck`、生产 VSIX 172 项校验及线上 Worker `/health`、`/collect?debug=1`（GA4 `validationMessages: []`）与 `/collect`（HTTP 204）实测通过。
 - `codex/ui-style-refinements` 分支已完成设置页下拉框（`ModelPicker` 勾选／选中背景、`ScrollArea` 拖动滑块、模型发现列表选中行）由橙色回归中性灰、`Select` 与 `ModelPicker` 弹层按单行内容自适应扩展宽度并与未展开触发框右边缘对齐，以及 BTW 发送／停止按钮与主聊天发送按钮样式对齐；Node 24／pnpm 10.2.0 下 `typecheck`、`lint:budgets`、生产构建与 VSIX 172 项校验通过。
 - 长草稿输入修复：粘贴及继续输入后让光标在编辑区内可见，受控内容重建保留内部滚动位置；单条输入容量扩至 2,000,000 字符，发送、队列、历史恢复同步使用新预算，移除新增超限提示。
 - 消息卡片编辑期间持续暂停主聊天自动跟随，避免向下滚到底部后被流式回复再次拉走。
+- 目录与测试整理：迁移相关的 26 个 Vitest 文件 / 150 项测试、5 个评估器文件 / 20 项 Node 测试通过，默认 Vitest 覆盖公共包测试目录，文件预算与类型检查通过。
 - 本轮以真实原生会话和 VS Code `globalStorage/droidvisx.droidvisx/logs` 交叉核对，展开测量实际写入 `webview.perf-batch/activity.expand`。新连接上的 13／15／20／43 条记录组可展开，收起终端正文未挂载，完成态 thinking 从顶部阅读，所见 Script 不再有外层转义包装；跨段复制实测排除执行提示。未重现用户报告的整个编辑器无响应，启动／历史定位仍观察到 205–274ms 长任务，不能将局部展开修复描述成全面性能达标。源码复制按钮通过 Host 路径处理，浏览器剪贴板未提供该路径的有效验证；对应内容／Diff 复制由针对性测试覆盖。
 - 本轮 12 个定向测试文件共 186 项通过，涵盖实时／历史失败状态、Script 解包与去重、长 Thinking 分块排版和滚动、紧凑缺失状态及既有 Edit／快照恢复。
   同一真实会话读取 2442 条消息、保留 2000 条记录后重放：原错误命令为 failed、对应重复汇总消失，剩余 14 条有内容的 Script 均无外层 part/result 传输包装直接展示。

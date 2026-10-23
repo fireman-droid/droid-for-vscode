@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import './reviewBrowserTestSetup';
+import '../../../packages/chat-ui/test/review/reviewBrowserTestSetup';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';

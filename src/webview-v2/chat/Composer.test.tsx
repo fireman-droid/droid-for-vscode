@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { inlineText, setInlineSelection, inputText } from './inlineInput.testHelpers';
+import { inlineText, setInlineSelection, inputText } from '../../../packages/chat-ui/test/chat/inlineInput.testHelpers';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
