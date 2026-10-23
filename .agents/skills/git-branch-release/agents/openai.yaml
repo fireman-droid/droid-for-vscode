@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git 分支、提交与正式发版"
+  short_description: "管理任务分支与无用分支清理、精准原子提交、PR 检查合并及单产物正式发版"
+  default_prompt: "使用 $git-branch-release 处理当前仓库的分支管理、原子提交、PR 合并或正式发版流程。"
