@@ -109,7 +109,7 @@ describe('long conversation stream backlog', () => {
         ...Array.from({ length: 8 }, (_, index) => ({
           id: `history-${index}`,
           kind: 'user' as const,
-          text: 'h'.repeat(120000),
+          text: 'h'.repeat(400000),
         })),
         ...seed.transcript,
       ],

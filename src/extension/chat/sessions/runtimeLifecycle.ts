@@ -265,7 +265,8 @@ export async function replaceRuntime(
     ctl.sessionState.sessionId === target.sessionId &&
     ctl.sessionState.historyWorkspace?.sessionId === target.sessionId &&
     ctl.sessionState.historyWorkspace?.cwd === target.cwd &&
-    ctl.recoveryState.transcript.historyStatus !== 'unavailable';
+    ctl.recoveryState.transcript.historyStatus !== 'unavailable' &&
+    ctl.recoveryState.transcript.transcript.some((item) => item.kind !== 'diagnostic');
   const initializing = createInitializedRuntime(ctl, target, generation, phases);
   const [transcript, activation] = await Promise.all([
     target.kind === 'resume' && target.child
