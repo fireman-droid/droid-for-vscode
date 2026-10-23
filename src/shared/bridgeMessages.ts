@@ -1,6 +1,10 @@
 import type { ModelsOpenMessage } from './protocol/modelManagerProtocol';
 import type { AttachmentPreviewRequest, AttachmentPreviewResponse } from './protocol/attachmentPreviewProtocol';
 import type { ManagementPageOpenMessage } from './protocol/managementPageProtocol';
+import type {
+  FactoryLimitsRefreshMessage,
+  FactoryLimitsStateMessage,
+} from './protocol/factoryAccountProtocol';
 import type { RewindResultMessage } from './protocol/rewindResult';
 import type { SystemPromptRequest, SystemPromptResponse } from './protocol/systemPromptProtocol';
 import type { IdeState, HostIdeMessage, IdeReconnectMessage, IdeRefreshMessage } from './protocol/ideProtocol';
@@ -215,7 +219,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v50 adds a session-scoped retry for the runtime model catalog.
 // v53 retains read-only result previews from ordinary external files.
 // v54 reports card-scoped child-chat opening feedback.
-export const BRIDGE_PROTOCOL_VERSION = 54 as const;
+// v55 adds the Factory account projection behind `/limits`.
+export const BRIDGE_PROTOCOL_VERSION = 55 as const;
 
 export type WebviewToHostMessage =
   | SystemPromptRequest
@@ -225,6 +230,7 @@ export type WebviewToHostMessage =
   | ModelsOpenMessage
   | ManagementPageOpenMessage
   | ManagementOpenMessage
+  | FactoryLimitsRefreshMessage
   | WebviewReadyMessage
   | WebviewStateAppliedMessage
   | WebviewDiagnosticMessage
@@ -383,6 +389,7 @@ export type HostToWebviewMessage =
   | SessionSettingsStateMessage
   | SessionContextStateMessage
   | SessionTokenUsageStateMessage
+  | FactoryLimitsStateMessage
   | ModelCatalogStateMessage
   | SessionSkillsStateMessage
   | SessionPluginsStateMessage

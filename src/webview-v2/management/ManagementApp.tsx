@@ -42,7 +42,7 @@ function ManagementContent({ transport }: { transport: ManagementTransport }) {
   useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(timer); }, [copied]);
   const s = state.settings;
   return <div className="management-page" data-sidebar-collapsed={sidebarCollapsed}>
-    <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} version={s?.version}
+    <ManagementSidebar page={state.page} collapsed={sidebarCollapsed} version={s?.version} account={state.account}
       onToggle={() => setSidebarCollapsed(value => !value)}
       onNavigate={page => { state.setPage(page); state.setNotice(null); }} />
     <ScrollArea className="management-scroll" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}><main className="management-main">

@@ -7,6 +7,7 @@ import { useCapabilityActions } from './composer/useCapabilityActions';
 import { useAttachmentActions } from './attachments/useAttachmentActions';
 import { useOptimisticSettingPick } from './composer/useOptimisticSetting';
 import { ContextPopover } from './composer/ContextPopover';
+import { LimitsPopover } from './composer/LimitsPopover';
 import { ModePopover } from './composer/ModePopover';
 import { ModelPopover, getModelName } from './composer/ModelPopover';
 import { SettingsPopover } from './composer/SettingsPopover';
@@ -16,7 +17,7 @@ import { ThemeContext, type ThemeContextValue } from '../shell/themeController';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Button } from '../ui/button';
 
-type Panel = 'settings' | 'context' | 'mode' | 'model';
+type Panel = 'settings' | 'context' | 'mode' | 'model' | 'limits';
 
 export function ComposerControls({ state, port, blocked, page, navigationId, onPageChange, onCompact, compactPending, theme, onNewSession, onMissionOpen, missionActive, editorOwner, input, action }: {
   readonly state: AssistantWebviewState;
@@ -60,13 +61,17 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
     setView('root'); setPanel(next);
     if (next === 'context' && panel !== 'context' && !disabled && state.context.status !== 'loading')
       actions.handleContextRefresh();
+    if (next === 'limits' && panel !== 'limits') actions.handleLimitsRefresh();
     if (next === 'model' && panel !== 'model' && !disabled &&
       (state.modelCatalog.status === 'error' || state.modelCatalog.status === 'unsupported'))
       actions.handleModelCatalogRefresh();
   };
   const close = () => { setPanel(null); onPageChange?.(null); };
   useEffect(() => {
-    if (disabled || !page) return;
+    if (!page) return;
+    // Usage is account-scoped, so `/limits` opens without a live session.
+    if (page === 'limits') { open('limits'); return; }
+    if (disabled) return;
     if (page === 'model' || page === 'context' || page === 'mode' || page === 'settings') open(page);
     else if (page === 'skills' || page === 'mcp' || page === 'plugins') {
       open('settings'); setView(page);
@@ -105,6 +110,16 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
     </Popover>;
   };
   return <ThemeContext.Provider value={theme}><div ref={frame} className={editorOwner ? 'flex min-w-0 flex-1 items-center gap-1' : 'v2-composer-input-row'}>
+    {/* `/limits` shares the Context Usage panel form and anchor: it reads as
+        the same surface above the Composer, not a separate dialog. */}
+    {editorOwner ? null : <Popover open={panel === 'limits'} onOpenChange={(value) => value ? open('limits') : close()}>
+      <PopoverAnchor virtualRef={composer} />
+      <PopoverContent side="top" align="start" sideOffset={8}
+        className="v2-composer-panel w-[var(--radix-popover-trigger-width)] overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))]">
+        <LimitsPopover id={`${id}-limits`} account={state.account}
+          disabled={state.account?.status === 'loading'} onRefresh={actions.handleLimitsRefresh} onClose={close} />
+      </PopoverContent>
+    </Popover>}
     {!editorOwner ? button('settings', t('Session controls'), <Plus />, 'v2-composer-add w-6 shrink-0 p-0') : null}
     {input}
     {button('mode', t('Mode: {mode}', { mode: modeLabel }), <><span>{modeLabel}</span><ChevronDown className="dvx-select-icon size-3" aria-hidden="true" /></>, editorOwner ? 'ml-auto shrink-0' : 'v2-composer-mode shrink-0')}

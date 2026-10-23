@@ -25,11 +25,17 @@ describe('resolveBuiltinSlash', () => {
     ['/skills', 'skills'],
     ['/sessions', 'sessions'],
     ['/context', 'context'],
+    ['/limits', 'limits'],
+    [' /LIMITS ', 'limits'],
   ])('maps %s onto navigation', (text, target) => {
     expect(resolveBuiltinSlash(text, btwOff)).toEqual({
       kind: 'navigate',
       target,
     });
+  });
+
+  it('keeps /limits with arguments as normal prompt text', () => {
+    expect(resolveBuiltinSlash('/limits extra', btwOff)).toBeNull();
   });
 
   it('keeps commands with arguments as normal prompt text', () => {

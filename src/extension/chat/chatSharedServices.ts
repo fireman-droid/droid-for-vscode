@@ -1,5 +1,6 @@
 import type { DisabledModelsStore } from '../models/DisabledModelsStore';
 import { bindModelAvailability } from '../models/bindModelAvailability';
+import type { FactoryAccountService } from '../account/FactoryAccountService';
 import type { ChatController } from './ChatController';
 import type { SystemPromptStore } from './capabilities/systemPrompt';
 import type { DisposableSubscription } from './internals';
@@ -15,6 +16,8 @@ export interface ChatSharedServices {
   readonly systemPromptStore?: SystemPromptStore;
   readonly providerRegistry?: ProviderRegistry;
   readonly promptProviderApiKey?: () => Thenable<string | undefined>;
+  /** Factory sign-in identity and credit limits; one read per window. */
+  readonly factoryAccount?: FactoryAccountService;
 }
 
 /** Each controller owns its subscription, never the shared service itself. */
@@ -27,6 +30,7 @@ export function bindChatSharedServices(
   controller.systemPromptStore = services.systemPromptStore;
   controller.providerRegistry = services.providerRegistry;
   controller.promptProviderApiKey = services.promptProviderApiKey;
+  controller.accountService = services.factoryAccount;
   return services.modelAvailability === undefined
     ? undefined
     : bindModelAvailability(controller, services.modelAvailability);

@@ -161,6 +161,7 @@ export class ChatController {
   readIdeState() { return readControllerIde(this); }
   daemonCustomModels?: () => Promise<CustomModelsGateway>;
   modelDiscovery?: CustomModelDiscoveryGateway;
+  accountService?: import('../account/FactoryAccountService').FactoryAccountService;
   systemPromptStore?: import('./capabilities/systemPrompt').SystemPromptStore;
   providerRegistry?: ProviderRegistry;
   promptProviderApiKey?: () => Thenable<string | undefined>;

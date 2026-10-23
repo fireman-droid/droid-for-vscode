@@ -4,6 +4,7 @@ import { parseSystemPromptRequest } from './protocol/systemPromptProtocol';
 import { parseIdeRequest } from './protocol/ideProtocol';
 import { parseManagementOpen } from './protocol/managementProtocol';
 import { parseManagementPageOpen } from './protocol/managementPageProtocol';
+import { parseFactoryLimitsRefresh } from './protocol/factoryAccountProtocol';
 import { parseFileReadDiffMessage, parseFileOpenTurnDiffMessage } from './protocol/inlineDiffProtocol';
 import {
   parseBtwAskMessage,
@@ -123,6 +124,7 @@ const parseSubagentMessage: WebviewMessageParser = (value) =>
 
 const WEBVIEW_MESSAGE_PARSERS = {
   'management.open': parseManagementPageOpen,
+  'factory.limits.refresh': parseFactoryLimitsRefresh,
   'systemPrompt.read': parseSystemPromptRequest,
   'systemPrompt.save': parseSystemPromptRequest,
   'ide.reconnect': parseIdeRequest,

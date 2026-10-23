@@ -11,11 +11,13 @@ import { exportActiveSessionAsMarkdown } from '../panels/sessionViewer/sessionEx
 import { ManagementSettingsService } from './managementSettings';
 import { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { ManagementServices } from './ManagementBinding';
+import type { FactoryAccountService } from '../account/FactoryAccountService';
 
 export function createManagementServices(options: {
   context: vscode.ExtensionContext; controller: ChatController; getDroid: () => Promise<DaemonApi>;
   daemon: boolean; history: SessionHistoryLoader; viewer: SessionViewerPanelController;
   mission: MissionControlPanelController; gateway: MissionGateway; diagnostics: RuntimeDiagnosticSink;
+  account: FactoryAccountService;
 }): ManagementServices {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
   const cwd = () => controller.getEditorWorkspaceContext().cwd;
@@ -56,5 +58,6 @@ export function createManagementServices(options: {
     missions: () => gateway.listCatalog(),
     openMission: id => { if (!mission.openCatalogEntry(id)) throw new Error('任务暂时不能打开。请确认任务属于当前工作区，并等待当前会话操作完成。'); },
     newMission: () => mission.openNewMission(),
+    account: options.account,
   };
 }

@@ -27,6 +27,10 @@ export function useCapabilityActions({
       sessionId,
     });
   }, [sessionId, vscode]);
+  /** Factory usage is account-scoped, so it needs no session or connection. */
+  const handleLimitsRefresh = useCallback((): void => {
+    post(vscode, { type: 'factory.limits.refresh' });
+  }, [vscode]);
   const handleSkillsRefresh = useCallback((): void => {
     if (sessionId === null) {
       return;
@@ -134,6 +138,7 @@ export function useCapabilityActions({
   return {
     handleModelCatalogRefresh,
     handleContextRefresh,
+    handleLimitsRefresh,
     handleSkillsRefresh,
     handleCommandsRefresh,
     handleSkillToggle,

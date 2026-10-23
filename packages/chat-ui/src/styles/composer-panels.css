@@ -146,6 +146,8 @@
   .v2-composer-panel .dvx-context-legend-value { @apply shrink-0 text-xs tabular-nums text-muted-foreground; }
   .v2-composer-panel .dvx-context-compact { @apply border-t border-[var(--panel-edge)] p-1; }
   .v2-composer-panel .dvx-context-compact-button { @apply flex min-h-7 w-full items-center justify-center gap-1.5 rounded px-2 py-1 text-xs disabled:opacity-50; }
+  .v2-composer-panel .dvx-limits-popover { @apply pb-1; }
+  .v2-composer-panel .dvx-limits-popover .dvx-context-legend + .dvx-context-legend { @apply mt-2; }
   .v2-composer-panel .dvx-panel-head { @apply flex min-h-10 items-center justify-between gap-2 border-b border-[var(--panel-edge)] px-3 py-2; }
   .v2-composer-panel .dvx-panel-title { @apply min-w-0 truncate text-[13px] font-semibold; }
   .v2-composer-panel .dvx-panel-back { @apply -ml-1.5 inline-flex min-w-0 items-center gap-[5px] rounded-md py-[3px] pl-1 pr-2; }

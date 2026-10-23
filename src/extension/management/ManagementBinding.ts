@@ -7,8 +7,12 @@ import {
 import type { ManagementSessionCatalog } from '../../runtime/catalog/ManagementSessionCatalog';
 import type { ManagedSession } from '../../shared/protocol/managementPageProtocol';
 import type { MissionCatalogResult } from '../chat/mission/MissionGateway';
+import { projectFactoryLimits } from '../chat/capabilities/factoryLimits';
 import type { ManagementSettingsService } from './managementSettings';
 import type { ManagementDefaultsService } from './ManagementDefaultsService';
+import type { FactoryAccountService } from '../account/FactoryAccountService';
+import { LIMITS_REQUEST_FAILED_MESSAGE } from '../../runtime/account/factoryAccount';
+import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
 
 export interface ManagementServices {
   readonly settings: ManagementSettingsService;
@@ -22,6 +26,8 @@ export interface ManagementServices {
   readonly missions: () => Promise<MissionCatalogResult>;
   readonly openMission: (id: string) => void;
   readonly newMission: () => void;
+  /** Factory sign-in identity and limits for the sidebar footer. */
+  readonly account: FactoryAccountService;
 }
 
 /** Management owns no chat runtime: opening this panel never replaces the chat. */
@@ -68,6 +74,7 @@ export class ManagementBinding implements vscode.Disposable {
     const s = this.services;
     switch (action.kind) {
       case 'ready': case 'settings.read': return { settings: await s.settings.read() };
+      case 'account.read': return { account: await this.readAccount(action.force) };
       case 'defaults.read': return { defaults: await s.defaults.read() };
       case 'defaults.save': return { defaults: await s.defaults.save(action.patch), message: '默认设置已保存，当前聊天保持不变。' };
       case 'theme.set':
@@ -110,6 +117,36 @@ export class ManagementBinding implements vscode.Disposable {
         return {};
       }
     }
+  }
+  /**
+   * Account identity is the sidebar's footer; the same read also
+   * supplies the limits `/limits` shows, so both surfaces stay in
+   * step without a second billing request.
+   */
+  private async readAccount(force: boolean): Promise<FactoryAccountState> {
+    let result;
+    try {
+      result = await this.services.account.read({ force });
+    } catch {
+      return { status: 'unavailable', message: LIMITS_REQUEST_FAILED_MESSAGE };
+    }
+    if (result.status === 'unavailable') return result;
+    if (result.status === 'identity-only') {
+      return {
+        status: 'ready',
+        identity: result.identity,
+        limits: null,
+        limitsError: result.limitsError,
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+    return {
+      status: 'ready',
+      identity: result.identity,
+      limits: projectFactoryLimits(result),
+      limitsError: null,
+      fetchedAt: new Date().toISOString(),
+    };
   }
   private post(message: ManagementHostMessage): void {
     if (!this.disposed) void this.webview.postMessage(message);

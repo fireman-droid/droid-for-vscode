@@ -1,25 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MANAGEMENT_VERSION, parseManagementHostMessage, type ManagementAction, type ManagementPage,
   type ManagementRequest, type ManagementResult, type ManagementSettings } from '../../shared/protocol/managementPageProtocol';
+import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
 import type { ModelsTransport } from '../models/useModels';
 
 export interface ManagementTransport extends ModelsTransport { postManagement(message: ManagementRequest): void }
 export function useManagement(transport: ManagementTransport) {
   const [page, setPage] = useState<ManagementPage>('general');
   const [settings, setSettings] = useState<ManagementSettings | null>(null);
+  const [account, setAccount] = useState<FactoryAccountState | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null);
-  const pending = useRef<{ id: string; resolve: (result: ManagementResult) => void } | null>(null);
+  const pending = useRef<{ id: string; action: ManagementAction['kind']; resolve: (result: ManagementResult) => void } | null>(null);
   const next = useRef(0);
-  const run = useCallback((action: ManagementAction): Promise<ManagementResult> => {
+  const send = useCallback((action: ManagementAction): Promise<ManagementResult> => {
     const requestId = `management-${Date.now()}-${++next.current}`;
     if (pending.current) return Promise.resolve({ type: 'management.result', version: MANAGEMENT_VERSION, requestId, ok: false, message: '请等待当前操作完成。' });
-    setBusy(true); setNotice(null);
     return new Promise(resolve => {
-      pending.current = { id: requestId, resolve };
+      pending.current = { id: requestId, action: action.kind, resolve };
       transport.postManagement({ type: 'management.request', version: MANAGEMENT_VERSION, requestId, action });
     });
   }, [transport]);
+  const run = useCallback((action: ManagementAction): Promise<ManagementResult> => {
+    setBusy(true); setNotice(null);
+    return send(action);
+  }, [send]);
   useEffect(() => {
     const off = transport.subscribe(value => {
       const message = parseManagementHostMessage(value);
@@ -29,17 +34,22 @@ export function useManagement(transport: ManagementTransport) {
       if (pending.current?.id !== message.requestId) return;
       const operation = pending.current; pending.current = null;
       if (message.settings) setSettings(message.settings);
-      setBusy(false);
-      setNotice(message.message ? { ok: message.ok, message: message.message } : null);
+      if (message.account) setAccount(message.account);
+      if (operation.action !== 'account.read') {
+        setBusy(false);
+        setNotice(message.message ? { ok: message.ok, message: message.message } : null);
+      }
       operation.resolve(message);
     });
-    void run({ kind: 'ready' });
+    // The account read is quiet: it feeds the sidebar footer and must not
+    // lock the page's controls while the network request is in flight.
+    void send({ kind: 'ready' }).then(() => send({ kind: 'account.read', force: false }));
     return () => {
       off(); pending.current?.resolve({ type: 'management.result', version: MANAGEMENT_VERSION,
         requestId: pending.current.id, ok: false, message: '管理页已关闭。' });
       pending.current = null;
     };
-  }, [transport, run]);
-  return { page, setPage, settings, busy, notice, setNotice, run };
+  }, [transport, send]);
+  return { page, setPage, settings, account, busy, notice, setNotice, run };
 }
 export type ManagementState = ReturnType<typeof useManagement>;

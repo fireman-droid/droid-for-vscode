@@ -4,16 +4,19 @@ import { PinwheelIcon } from '@droidvisx/chat-ui/ui/pinwheel-icon';
 import { SelectionIndicator } from '@droidvisx/chat-ui/ui/selection-indicator';
 import { Boxes, MessageSquare, PanelLeft, Settings2, TextCursorInput, Workflow } from 'lucide-react';
 import { MANAGEMENT_PAGES, type ManagementPage } from '../../shared/protocol/managementPageProtocol';
+import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
 import { Button } from '../ui/button';
 import { Tooltip } from '../ui/overlays';
+import { AccountFooter } from './AccountFooter';
 
 const names = { general: '常规', models: '模型', completion: '智能补全', sessions: '会话', missions: 'Missions' };
 const icons = { general: Settings2, models: Boxes, completion: TextCursorInput, sessions: MessageSquare, missions: Workflow };
 
-export function ManagementSidebar({ page, collapsed, version, onToggle, onNavigate }: {
+export function ManagementSidebar({ page, collapsed, version, account, onToggle, onNavigate }: {
   readonly page: ManagementPage;
   readonly collapsed: boolean;
   readonly version: string | undefined;
+  readonly account: FactoryAccountState | null;
   readonly onToggle: () => void;
   readonly onNavigate: (page: ManagementPage) => void;
 }) {
@@ -41,6 +44,7 @@ export function ManagementSidebar({ page, collapsed, version, onToggle, onNaviga
       <SelectionIndicator activeSelector='[aria-current="page"]' variant="surface" />
     </nav>
     <div className="management-sidebar-footer">
+      <AccountFooter account={account} collapsed={collapsed} />
       <small className="management-version"><PinwheelIcon className="size-3.5 shrink-0" /><span>Droid {version ?? ''}</span></small>
     </div>
   </aside>;

@@ -6,6 +6,7 @@ import type { SessionReasoningEffort } from './settings';
 import { isBusyMessageMode, type BusyMessageMode } from './queueProtocol';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
+import { isFactoryAccountState, type FactoryAccountState } from './factoryAccountProtocol';
 
 export const MANAGEMENT_VERSION = 1 as const;
 export const MANAGEMENT_PAGES = ['general', 'models', 'completion', 'sessions', 'missions'] as const;
@@ -65,6 +66,7 @@ export interface ManagedSession {
 }
 export type ManagementAction =
   | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
+  | { readonly kind: 'account.read'; readonly force: boolean }
   | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
   | { readonly kind: 'theme.set'; readonly theme: ManagementSettings['theme'] }
   | { readonly kind: 'chat.busyMessageMode.set'; readonly mode: BusyMessageMode }
@@ -94,6 +96,7 @@ export interface ManagementResult {
   readonly sessions?: readonly ManagedSession[];
   readonly nextCursor?: number | null;
   readonly missions?: readonly MissionControlCatalogRow[];
+  readonly account?: FactoryAccountState;
 }
 export type ManagementHostMessage = ManagementResult
   | { readonly type: 'management.navigate'; readonly version: typeof MANAGEMENT_VERSION; readonly page: ManagementPage }
@@ -118,6 +121,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   let valid = false;
   if (['ready', 'settings.read', 'defaults.read', 'missions.list', 'missions.new', 'chat.focus'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind']);
   else if (a.kind === 'defaults.save') valid = hasExactKeys(a, ['kind', 'scope', 'patch']) && isDefaultsPatch(a.patch, a.scope);
+  else if (a.kind === 'account.read') valid = hasExactKeys(a, ['kind', 'force']) && typeof a.force === 'boolean';
   else if (a.kind === 'theme.set') valid = hasExactKeys(a, ['kind', 'theme']) && ['auto', 'light', 'dark'].includes(String(a.theme));
   else if (a.kind === 'chat.busyMessageMode.set') valid = hasExactKeys(a, ['kind', 'mode']) && isBusyMessageMode(a.mode);
   else if (a.kind === 'language.set') valid = hasExactKeys(a, ['kind', 'language']) && isLanguagePreference(a.language);
@@ -153,6 +157,7 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   if (value.defaults !== undefined && !isManagementDefaults(value.defaults)) return undefined;
   if (value.message !== undefined && typeof value.message !== 'string') return undefined;
   if (value.nextCursor !== undefined && value.nextCursor !== null && (typeof value.nextCursor !== 'number' || !Number.isFinite(value.nextCursor))) return undefined;
+  if (value.account !== undefined && !isFactoryAccountState(value.account)) return undefined;
   if (value.sessions !== undefined && (!Array.isArray(value.sessions) || !value.sessions.every(s => isStrictRecord(s)
     && text(s.id) && typeof s.title === 'string' && typeof s.cwd === 'string' && ['chat', 'exec'].includes(String(s.kind))
     && typeof s.modifiedTime === 'string' && typeof s.messageCount === 'number'
