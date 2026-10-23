@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 
-const WATCHED_ASSETS = [
+const WATCHED_WEBVIEW_ASSETS = [
   'webview.js',
   'webview.css',
   'management.js',
@@ -14,17 +14,30 @@ const WATCHED_ASSETS = [
   'session-viewer.js',
 ] as const;
 
+const WATCHED_EXTENSION_ASSETS = [
+  'extension.cjs',
+  'sessionCatalogWorker.cjs',
+  'sessionHistoryWorker.cjs',
+  'persistentIdeRelayWorker.cjs',
+  'btwAnalysisWorker.cjs',
+] as const;
+
 export interface WatchWebviewBundleOptions {
   readonly directory: string;
+  readonly extensionDirectory?: string;
   readonly debounceMs?: number;
   readonly reloadWebviews?: () => Thenable<unknown>;
+  readonly restartExtensionHost?: () => Thenable<unknown>;
   readonly diagnostics?: RuntimeDiagnosticSink;
 }
 
-async function computeBundleSignature(directory: string): Promise<string | null> {
+async function computeAssetSignature(
+  directory: string,
+  assets: readonly string[],
+): Promise<string | null> {
   const hash = createHash('sha256');
   try {
-    for (const file of WATCHED_ASSETS) {
+    for (const file of assets) {
       const content = await readFile(join(directory, file));
       if (content.byteLength === 0) return null;
       hash.update(file);
@@ -37,36 +50,72 @@ async function computeBundleSignature(directory: string): Promise<string | null>
 }
 
 /**
- * Watches the installed extension's global `dist/webview` directory so any open
- * VS Code or Cursor window across any workspace folder automatically refreshes
- * its Droid webviews as soon as updated webview assets are synced to disk.
+ * Watches the installed extension's global `dist/webview` and `dist/extension`
+ * directories so any open VS Code or Cursor window across any workspace folder
+ * automatically refreshes its Droid webviews (or restarts the Extension Host
+ * when backend `.cjs` bundles change) as soon as updated assets are synced to disk.
  */
 export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.Disposable {
   const debounceMs = options.debounceMs ?? 350;
   const reload =
     options.reloadWebviews ??
     (() => vscode.commands.executeCommand('workbench.action.webview.reloadWebviews'));
+  const restartHost =
+    options.restartExtensionHost ??
+    (() => vscode.commands.executeCommand('workbench.action.restartExtensionHost'));
 
   let disposed = false;
-  let baseline: string | null = null;
+  let webviewBaseline: string | null = null;
+  let extensionBaseline: string | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let watcher: vscode.FileSystemWatcher | undefined;
+  const watchers: vscode.FileSystemWatcher[] = [];
   const listeners: vscode.Disposable[] = [];
 
-  void computeBundleSignature(options.directory).then(sig => {
-    if (!disposed) baseline = sig;
+  void computeAssetSignature(options.directory, WATCHED_WEBVIEW_ASSETS).then(sig => {
+    if (!disposed) webviewBaseline = sig;
   });
+  if (options.extensionDirectory) {
+    void computeAssetSignature(options.extensionDirectory, WATCHED_EXTENSION_ASSETS).then(sig => {
+      if (!disposed) extensionBaseline = sig;
+    });
+  }
 
   const checkAndReload = async (): Promise<void> => {
     if (disposed) return;
-    const next = await computeBundleSignature(options.directory);
+    if (options.extensionDirectory) {
+      const nextExt = await computeAssetSignature(options.extensionDirectory, WATCHED_EXTENSION_ASSETS);
+      if (disposed) return;
+      if (nextExt) {
+        if (extensionBaseline === null) {
+          extensionBaseline = nextExt;
+        } else if (nextExt !== extensionBaseline) {
+          extensionBaseline = nextExt;
+          const nextWeb = await computeAssetSignature(options.directory, WATCHED_WEBVIEW_ASSETS);
+          if (disposed) return;
+          if (nextWeb) webviewBaseline = nextWeb;
+          options.diagnostics?.record({
+            level: 'info',
+            name: 'host.extension.hot-reload',
+            attributes: { signature: nextExt.slice(0, 12) },
+          });
+          try {
+            await restartHost();
+            return;
+          } catch {
+            // Fall through to webview reload if restartExtensionHost is unavailable.
+          }
+        }
+      }
+    }
+
+    const next = await computeAssetSignature(options.directory, WATCHED_WEBVIEW_ASSETS);
     if (disposed || !next) return;
-    if (baseline === null) {
-      baseline = next;
+    if (webviewBaseline === null) {
+      webviewBaseline = next;
       return;
     }
-    if (next === baseline) return;
-    baseline = next;
+    if (next === webviewBaseline) return;
+    webviewBaseline = next;
     options.diagnostics?.record({
       level: 'info',
       name: 'host.webview.hot-reload',
@@ -89,13 +138,24 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
   };
 
   try {
-    watcher = vscode.workspace.createFileSystemWatcher(
+    const webviewWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(options.directory), '*.{js,css}'),
     );
+    watchers.push(webviewWatcher);
     listeners.push(
-      watcher.onDidChange(schedule),
-      watcher.onDidCreate(schedule),
+      webviewWatcher.onDidChange(schedule),
+      webviewWatcher.onDidCreate(schedule),
     );
+    if (options.extensionDirectory) {
+      const extWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(options.extensionDirectory), '*.cjs'),
+      );
+      watchers.push(extWatcher);
+      listeners.push(
+        extWatcher.onDidChange(schedule),
+        extWatcher.onDidCreate(schedule),
+      );
+    }
   } catch {
     // Watcher API may be absent in minimal unit-test mocks.
   }
@@ -109,6 +169,8 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
     for (const listener of listeners.splice(0)) {
       listener.dispose();
     }
-    watcher?.dispose();
+    for (const watcher of watchers.splice(0)) {
+      watcher.dispose();
+    }
   });
 }

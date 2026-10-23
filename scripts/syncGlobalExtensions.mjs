@@ -2,7 +2,7 @@ import { cpSync, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-const includeExtension = process.argv.includes('--all') || process.argv.includes('--extension');
+const includeExtension = !process.argv.includes('--webview-only');
 const repoRoot = process.cwd();
 const webviewSrc = path.join(repoRoot, 'dist', 'webview');
 const extensionSrc = path.join(repoRoot, 'dist', 'extension');

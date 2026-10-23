@@ -622,6 +622,7 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
     watchWebviewBundle({
       directory: vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview').fsPath,
+      extensionDirectory: vscode.Uri.joinPath(context.extensionUri, 'dist', 'extension').fsPath,
       diagnostics,
     }),
     attachmentSources,
