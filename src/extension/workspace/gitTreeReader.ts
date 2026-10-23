@@ -10,34 +10,25 @@ export class GitObjectTooLargeError extends Error {
 export function createGitTreeReader(run: Run, allowSymlinks = false) {
   const queues = new Map<string, Read[]>();
   const batch = async (root: string, tree: string, reads: Read[]) => {
-    const listing = await run(root, ['--literal-pathspecs', 'ls-tree', '-z', tree, '--', ...reads.map(read => read.path)], 1024 * 1024);
-    const entries = new Map<string, { mode: string; type: string; oid: string }>();
+    const listing = await run(root, ['--literal-pathspecs', 'ls-tree', '-l', '-z', tree, '--', ...reads.map(read => read.path)], 1024 * 1024);
+    const entries = new Map<string, { mode: string; type: string; oid: string; size: number }>();
     for (const entry of listing.toString('utf8').split('\0')) {
-      const match = /^(\d+) (\w+) ([0-9a-f]+)\t([\s\S]+)$/.exec(entry);
-      if (match) entries.set(match[4]!, { mode: match[1]!, type: match[2]!, oid: match[3]! });
+      if (!entry) continue;
+      const match = /^(\d+) (\w+) ([0-9a-f]+) +([0-9]+|-)\t([\s\S]+)$/.exec(entry);
+      if (!match) throw new Error('Invalid Git object metadata.');
+      entries.set(match[5]!, { mode: match[1]!, type: match[2]!, oid: match[3]!, size: Number(match[4]) });
     }
-    const present: Array<Read & { oid: string }> = [];
+    const bounded: Array<Read & { oid: string; size: number }> = [];
     for (const read of reads) {
       const entry = entries.get(read.path);
       if (!entry) { read.resolve(null); continue; }
       if (entry.type !== 'blob' || !entry.mode.startsWith('100') && !(allowSymlinks && entry.mode === '120000')) {
         read.reject(new Error('This file type cannot be compared as text.')); continue;
       }
-      present.push({ ...read, oid: entry.oid });
-    }
-    if (!present.length) return;
-    const input = Buffer.from(present.map(read => `${read.oid}\n`).join(''));
-    const headers = (await run(root, ['cat-file', '--batch-check'], 64 * 1024, input)).toString().trimEnd().split('\n');
-    if (headers.length !== present.length) throw new Error('Incomplete Git object metadata.');
-    const bounded: Array<Read & { oid: string; size: number }> = [];
-    for (let index = 0; index < present.length; index++) {
-      const read = present[index]!;
-      const [oid, type, sizeText] = headers[index]!.split(' ');
-      const size = Number(sizeText);
-      if (oid !== read.oid || type !== 'blob' || !Number.isSafeInteger(size) || size < 0)
+      if (!Number.isSafeInteger(entry.size) || entry.size < 0)
         throw new Error('Invalid Git object metadata.');
-      if (size > read.limit) read.reject(new GitObjectTooLargeError());
-      else bounded.push({ ...read, size });
+      if (entry.size > read.limit) read.reject(new GitObjectTooLargeError());
+      else bounded.push({ ...read, oid: entry.oid, size: entry.size });
     }
     for (let index = 0; index < bounded.length;) {
       const chunk: typeof bounded = [];
