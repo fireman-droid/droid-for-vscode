@@ -20,7 +20,7 @@ export async function settleRecoveredSnapshot(
     if (!current()) return false;
     // A failed retry can replace the display checkpoint while the original
     // turn still owns the workspace capture. Settle that durable identity.
-    if (pending?.sessionId === sessionId && pending.turnId !== turn?.turnId) {
+    if (pending?.sessionId === sessionId && (pending.turnId !== turn?.turnId || !store.read(pending.sessionId, pending.turnId)?.after)) {
       const after = await finishPendingSnapshot(store, pending);
       if (!current()) return false;
       if (!after) throw new Error('Missing final workspace snapshot');

@@ -51,7 +51,7 @@ export interface FactoryDroidSession {
    * it from the daemon's opened-session registry; process sessions
    * omit it (their turns cannot outlive the window).
    */
-  readWorkingState?(): Promise<string | null>;
+  readWorkingState?(sessionId?: string): Promise<string | null>;
   readTurnOutcome?(backendTurnId: string): Promise<RuntimeTurnOutcome | null>;
   readMissionSnapshot?(): unknown;
   refreshMissionSnapshot?(): Promise<unknown>;

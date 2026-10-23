@@ -147,7 +147,10 @@ class RelayClient implements PersistentIdeRelay {
     catch (error) {
       // The helper also exits when its daemon exits; cleanup may race that exit.
       try { process.kill(this.descriptor.pid, 0); }
-      catch (probe) { if ((probe as NodeJS.ErrnoException).code === 'ESRCH') return; }
+      catch (probe) {
+        const code = (probe as NodeJS.ErrnoException).code;
+        if (code === 'ESRCH' || code === 'EPERM') return;
+      }
       throw error;
     }
     finally { await this.dispose(); }
