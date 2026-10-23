@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { Button } from '../../ui/button';
 import type {
@@ -7,20 +8,13 @@ import type {
   FactoryLimitWindow,
 } from '../../../shared/protocol/factoryAccountProtocol';
 
-/**
- * `/limits` in the Context Usage panel's own form (same header row,
- * summary line, meter and legend rows) so both usage panels read as
- * one surface above the Composer instead of a separate dialog.
- *
- * The summary follows the CLI: the busiest active Standard window
- * leads, and every window still appears in its legend with its reset.
- */
-
 const WINDOW_LABELS: readonly { readonly key: keyof FactoryLimitPool; readonly label: string }[] = [
-  { key: 'fiveHour', label: '5-Hour' },
-  { key: 'weekly', label: 'Weekly' },
-  { key: 'monthly', label: 'Monthly' },
+  { key: 'fiveHour', label: '5-hour usage' },
+  { key: 'weekly', label: 'Weekly usage' },
+  { key: 'monthly', label: 'Monthly usage' },
 ];
+
+type PoolKind = 'standard' | 'core';
 
 export function LimitsPopover({
   id,
@@ -36,13 +30,29 @@ export function LimitsPopover({
   readonly onClose?: () => void;
 }): React.JSX.Element {
   const { t } = useI18n();
+  const [pool, setPool] = useState<PoolKind>('standard');
   const loading = account === null || account.status === 'loading';
+  const readyLimits = account !== null && account.status === 'ready' ? account.limits : null;
   return (
     <div id={id} className="dvx-composer-popover dvx-limits-popover" role="dialog"
-      aria-label={t('Credit limits')} aria-busy={loading}>
-      <div className="dvx-context-head">
-        <span className="dvx-context-head-title">{t('Credit limits')}</span>
+      aria-label={t('Usage Limits')} aria-busy={loading}>
+      <div className="dvx-context-head dvx-limits-head">
+        <span className="dvx-context-head-title">{t('Usage Limits')}</span>
         <div className="dvx-context-head-actions">
+          {readyLimits !== null ? (
+            <div className="dvx-limits-tabs" role="tablist" aria-label={t('Usage Limits')}>
+              <Button variant="plain" size="none" type="button" role="tab"
+                aria-selected={pool === 'standard'} data-active={pool === 'standard'}
+                className="dvx-limits-tab" onClick={() => setPool('standard')}>
+                {t('Standard')}
+              </Button>
+              <Button variant="plain" size="none" type="button" role="tab"
+                aria-selected={pool === 'core'} data-active={pool === 'core'}
+                className="dvx-limits-tab" onClick={() => setPool('core')}>
+                {t('Droid Core')}
+              </Button>
+            </div>
+          ) : null}
           <Button variant="plain" size="none" type="button" className="dvx-context-icon-button"
             aria-label={t('Refresh')} title={loading ? t('Refreshing…') : t('Refresh')}
             disabled={disabled || loading} onClick={onRefresh}>
@@ -54,8 +64,8 @@ export function LimitsPopover({
           </Button>}
         </div>
       </div>
-      {account !== null && account.status === 'ready' && account.limits !== null
-        ? <LimitsUsage limits={account.limits} />
+      {readyLimits !== null
+        ? <LimitsUsage limits={readyLimits} pool={pool} />
         : <p className={account !== null && account.status === 'ready' ? 'dvx-popover-message dvx-error-text' : 'dvx-popover-message'}
           role={account !== null && account.status === 'ready' ? 'alert' : 'status'}>
           {account === null || account.status === 'loading' ? t('Loading usage…')
@@ -66,81 +76,86 @@ export function LimitsPopover({
   );
 }
 
-function LimitsUsage({ limits }: { readonly limits: FactoryLimits }): React.JSX.Element {
+function LimitsUsage({
+  limits,
+  pool,
+}: {
+  readonly limits: FactoryLimits;
+  readonly pool: PoolKind;
+}): React.JSX.Element {
   const { t } = useI18n();
-  // The CLI reports the busiest active Standard window; unstarted
-  // windows carry no percentage and must not win the summary.
-  const lead = WINDOW_LABELS
-    .filter(({ key }) => limits.standard[key].windowEnd !== null)
-    .map((entry) => ({ label: entry.label, window: limits.standard[entry.key] }))
-    .reduce<{ label: string; window: FactoryLimitWindow } | null>(
-      (best, entry) => best === null || entry.window.usedPercent > best.window.usedPercent ? entry : best,
-      null,
-    );
-  const percentLabel = lead === null ? t('Not started')
-    : lead.window.usedPercent > 0 && Math.round(lead.window.usedPercent) === 0 ? '<1%'
-    : `${Math.round(lead.window.usedPercent)}%`;
-  const extra = limits.extraUsageBalanceCents === null
-    ? null
-    : `$${(limits.extraUsageBalanceCents / 100).toFixed(2)}`;
+  const activePool = pool === 'standard' ? limits.standard : limits.core;
+  const extra =
+    limits.extraUsageBalanceCents !== null && limits.extraUsageBalanceCents > 0
+      ? `$${(limits.extraUsageBalanceCents / 100).toFixed(2)}`
+      : null;
   return (
-    <div className="dvx-context-usage">
-      <div className="dvx-context-usage-summary">
-        <strong>{lead === null ? percentLabel : `${percentLabel} ${t('used')}`}</strong>
-        <span>{lead === null ? t('No window started')
-          : `${t(lead.label)} · ${formatReset(lead.window.secondsRemaining, t)}`}</span>
-      </div>
-      <div className="dvx-context-bar" role="progressbar" aria-label={t('Standard Pool usage')}
-        aria-valuemin={0} aria-valuemax={100}
-        aria-valuenow={lead === null ? 0 : Math.round(lead.window.usedPercent)}
-        aria-valuetext={lead === null ? t('Not started')
-          : `${Math.round(lead.window.usedPercent)}% of ${t(lead.label)}`}>
-        <span className="dvx-context-bar-segment" style={{
-          width: `${lead === null ? 0 : lead.window.usedPercent}%`,
-          background: 'var(--dvx-accent)',
-        }} />
-      </div>
-      <p className="dvx-context-usage-note" title={t('Included allowance, resetting on rolling windows.')}>
-        {t('Standard Pool · Auto-resets on rolling windows')}</p>
-      <ul className="dvx-context-legend" aria-label={t('Standard Pool windows')}>
-        {WINDOW_LABELS.map(({ key, label }, index) => <LimitLegendRow key={key}
-          label={t(label)} window={limits.standard[key]} colorVar={`--dvx-ctx-${index + 1}`} />)}
+    <div className="dvx-limits-body">
+      <ul className="dvx-limits-list" aria-label={t(pool === 'standard' ? 'Standard Pool windows' : 'Droid Core windows')}>
+        {WINDOW_LABELS.map(({ key, label }) => (
+          <LimitWindowRow key={key} label={t(label)} window={activePool[key]} />
+        ))}
       </ul>
-      <ul className="dvx-context-legend" aria-label={t('Droid Core windows')}>
-        {WINDOW_LABELS.map(({ key, label }, index) => <LimitLegendRow key={key}
-          label={`${t('Droid Core')} · ${t(label)}`} window={limits.core[key]} colorVar={`--dvx-ctx-${index + 1}`} />)}
-      </ul>
-      <p className="dvx-context-usage-note">{t('Droid Core is the free allowance used after the Standard Pool runs out.')}</p>
-      {extra === null ? null : <ul className="dvx-context-legend" aria-label={t('Extra usage')}>
-        <li className="dvx-context-legend-row dvx-context-legend-credits">
-          <span className="dvx-context-legend-swatch" aria-hidden="true" />
-          <span className="dvx-context-legend-label">{t('Extra usage')}</span>
-          <span className="dvx-context-legend-value">{extra}</span>
-        </li>
-      </ul>}
-      {extra === null ? null : <p className="dvx-context-usage-note">
-        {t('Prepaid credits, billed after the included allowance.')}</p>}
+      {extra === null ? null : (
+        <div className="dvx-limits-extra">
+          <span>{t('Extra usage')}</span>
+          <span className="tabular-nums">{extra}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-/** One legend row in the Context Usage form: swatch, label, value. */
-function LimitLegendRow({ label, window, colorVar }: {
+function LimitWindowRow({
+  label,
+  window,
+}: {
   readonly label: string;
   readonly window: FactoryLimitWindow;
-  readonly colorVar: string;
 }): React.JSX.Element {
   const { t } = useI18n();
   const started = window.windowEnd !== null;
+  const rounded = started ? Math.round(window.usedPercent) : 0;
+  const percentLabel = !started
+    ? '0%'
+    : window.usedPercent > 0 && rounded === 0
+      ? '<1%'
+      : `${rounded}%`;
   const reset = started ? formatReset(window.secondsRemaining, t) : '';
-  return <li className="dvx-context-legend-row" title={started ? reset : t('Not started')}>
-    <span className="dvx-context-legend-swatch" style={{ background: `var(${colorVar})` }} aria-hidden="true" />
-    <span className="dvx-context-legend-label">{label}</span>
-    <span className="dvx-context-legend-value">
-      {started ? `${Math.round(window.usedPercent)}%` : t('Not started')}
-      {reset === '' ? '' : ` · ${reset}`}
-    </span>
-  </li>;
+  return (
+    <li className="dvx-limits-item">
+      <div className="dvx-limits-row">
+        <span className="dvx-limits-label">
+          <span>{label}</span>
+          <span className="dvx-limits-percent">{percentLabel}</span>
+        </span>
+        <span className="dvx-limits-meta">
+          {!started ? (
+            t('Use Droid to start')
+          ) : reset === '' ? null : (
+            <>
+              <ResetIcon />
+              <span>{reset}</span>
+            </>
+          )}
+        </span>
+      </div>
+      <div
+        className="dvx-limits-track"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={rounded}
+        aria-valuetext={started ? `${percentLabel}${reset ? ` · ${reset}` : ''}` : t('Use Droid to start')}
+      >
+        <span
+          className="dvx-limits-fill"
+          style={{ width: `${started ? Math.min(100, Math.max(0, window.usedPercent)) : 0}%` }}
+        />
+      </div>
+    </li>
+  );
 }
 
 /** Coarse reset countdown: days, then hours, then minutes. */
@@ -157,6 +172,15 @@ function formatReset(
     return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
   }
   return `${Math.max(1, Math.floor(seconds / 60))}m`;
+}
+
+function ResetIcon(): React.JSX.Element {
+  return (
+    <svg className="dvx-limits-reset-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M13 8a5 5 0 1 1-1.47-3.53M13 2.75V5.5h-2.75" stroke="currentColor" strokeWidth="1.35"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function RefreshIcon({ spinning }: { readonly spinning: boolean }): React.JSX.Element {

@@ -146,8 +146,23 @@
   .v2-composer-panel .dvx-context-legend-value { @apply shrink-0 text-xs tabular-nums text-muted-foreground; }
   .v2-composer-panel .dvx-context-compact { @apply border-t border-[var(--panel-edge)] p-1; }
   .v2-composer-panel .dvx-context-compact-button { @apply flex min-h-7 w-full items-center justify-center gap-1.5 rounded px-2 py-1 text-xs disabled:opacity-50; }
-  .v2-composer-panel .dvx-limits-popover { @apply pb-1; }
-  .v2-composer-panel .dvx-limits-popover .dvx-context-legend + .dvx-context-legend { @apply mt-2; }
+  .v2-composer-panel .dvx-limits-popover { @apply pb-3; }
+  .v2-composer-panel .dvx-limits-head { @apply pt-2 pb-1; }
+  .v2-composer-panel .dvx-limits-tabs { @apply mr-1 inline-flex items-center overflow-hidden rounded-[5px] border border-[var(--panel-edge)] p-0.5; background: color-mix(in srgb, var(--ink) 3%, transparent); }
+  .v2-composer-panel .dvx-limits-tab { @apply rounded-[3.5px] px-2 py-[3px] text-[11px] font-medium leading-4 text-muted-foreground transition-colors; }
+  .v2-composer-panel .dvx-limits-tab[data-active='true'],
+  .v2-composer-panel .dvx-limits-tab[data-active='true']:hover:not(:disabled) { background: var(--ink); color: var(--surface); }
+  .v2-composer-panel .dvx-limits-body { @apply px-3 pt-1.5; }
+  .v2-composer-panel .dvx-limits-list { @apply m-0 grid list-none gap-3.5 p-0; }
+  .v2-composer-panel .dvx-limits-item { @apply grid gap-1.5; }
+  .v2-composer-panel .dvx-limits-row { @apply flex items-baseline justify-between gap-2; }
+  .v2-composer-panel .dvx-limits-label { @apply inline-flex min-w-0 items-baseline gap-1.5 text-[12.5px] font-medium text-foreground; }
+  .v2-composer-panel .dvx-limits-percent { @apply text-[11.5px] font-normal tabular-nums text-muted-foreground; }
+  .v2-composer-panel .dvx-limits-meta { @apply inline-flex shrink-0 items-center gap-1 text-[11.5px] tabular-nums text-muted-foreground; }
+  .v2-composer-panel .dvx-limits-reset-icon { @apply size-3 shrink-0; }
+  .v2-composer-panel .dvx-limits-track { @apply h-[5px] w-full overflow-hidden rounded-full; background: color-mix(in srgb, var(--ink) 11%, transparent); }
+  .v2-composer-panel .dvx-limits-fill { @apply block h-full rounded-full; background: #ff5719; transition: width 240ms var(--motion-ease); }
+  .v2-composer-panel .dvx-limits-extra { @apply mt-3 flex items-center justify-between border-t border-[var(--panel-edge)] pt-2 text-xs text-muted-foreground; }
   .v2-composer-panel .dvx-panel-head { @apply flex min-h-10 items-center justify-between gap-2 border-b border-[var(--panel-edge)] px-3 py-2; }
   .v2-composer-panel .dvx-panel-title { @apply min-w-0 truncate text-[13px] font-semibold; }
   .v2-composer-panel .dvx-panel-back { @apply -ml-1.5 inline-flex min-w-0 items-center gap-[5px] rounded-md py-[3px] pl-1 pr-2; }

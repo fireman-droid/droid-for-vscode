@@ -2,6 +2,12 @@ import type { MessageTranslations } from './translate';
 
 export const managementMessages: readonly MessageTranslations[] = [
   ["Credit limits", "额度上限", "額度上限"],
+  ["Usage Limits", "用量上限", "用量上限"],
+  ["Standard", "标准池", "標準池"],
+  ["5-hour usage", "5 小时用量", "5 小時用量"],
+  ["Weekly usage", "周度用量", "週度用量"],
+  ["Monthly usage", "月度用量", "月度用量"],
+  ["Use Droid to start", "使用 Droid 后开始", "使用 Droid 後開始"],
   ["Loading usage…", "正在读取额度…", "正在讀取額度…"],
   ["Standard Pool", "标准额度池", "標準額度池"],
   ["Standard Pool usage", "标准额度池用量", "標準額度池用量"],

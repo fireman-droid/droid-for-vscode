@@ -60,6 +60,11 @@ export class ManagementBinding implements vscode.Disposable {
   }
   private async run(request: ManagementRequest): Promise<void> {
     const base = { type: 'management.result', version: MANAGEMENT_VERSION, requestId: request.requestId } as const;
+    if (request.action.kind === 'account.read') {
+      const account = await this.readAccount(request.action.force);
+      this.post({ ...base, ok: true, account });
+      return;
+    }
     if (this.busy) { this.post({ ...base, ok: false, message: '请等待当前操作完成。' }); return; }
     this.busy = true;
     try {
