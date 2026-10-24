@@ -6,7 +6,8 @@
 
 ## 版本与交付
 
-- 当前发布版本为 `0.8.17`，合并了 Factory 账户与 `/limits` 额度面板、2,000,000 字符大草稿输入与编辑防跳动、Review 批量 Git 元数据读取优化（PR #15）、100MB+ 大会话快速恢复與断线重连优化、18 类诊断事件 GA4 遥测转发、设置页侧栏与下拉菜单交互整改、工作区跨会话与孤儿快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 自愈（#16）、以及 `AskUser` 题干多选兜底识别与无 `[question]` 前缀历史解析（#9）。
+- 当前发布版本为 `0.8.18`，在 `0.8.17` 基础上合并了多窗口 Daemon 并发进程验真批次合并、Windows `Win32_Process` 最小属性查询、旧窗口退出后无会话孤儿 `window-daemon` 自动回收、隐藏侧栏 `host.view.state-delivery` 警告静默、Mermaid 内联 `<style>` 资源错误误报过滤，以及 GA4 遥测初始化／历史／前端资源异常细分维度。
+- `0.8.17` 已通过 [PR #17](https://github.com/fireman-droid/droid-for-vscode/pull/17) 合入 `main`（提交 `1639c2f2`），并同步发布至 GitHub Release 与 Open VSX。
 - `0.8.16` 已通过 [PR #14](https://github.com/fireman-droid/droid-for-vscode/pull/14) 合入 `main`（提交 `c6e8c8fa`），[GitHub v0.8.16](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.16) 与 [Open VSX 0.8.16](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.16) 均已正式公开（同一产物 `droid-0.8.16.vsix`，14,313,474 字节，SHA256 `8fa29f8a97a5014e945919d28309ad6a921f01fc6f7a40b2186c258249b99814`，172 项内容与入口校验通过）。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」等运行状态移入底部 Composer 输入框的「继续提问」占位位置，发送后旋转显示、输入时隐藏、停止后恢复占位文字。
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
