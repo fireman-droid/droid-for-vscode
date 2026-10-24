@@ -58,9 +58,11 @@ export function createWebviewStateDelivery(options: {
     dirtySequence = Math.max(dirtySequence ?? -1, sequence);
     scheduleRetry();
   };
-  const failed = (message: ControllerHostMessage, outcome: 'not-delivered' | 'rejected') => {
+  const failed = (message: ControllerHostMessage, outcome: 'not-delivered' | 'rejected', visible = true) => {
     if (!current() || !REPLAYABLE_CHAT_STATE.has(message.type)) return;
-    record('host.view.state-delivery', { type: message.type, sequence: message.sequence, outcome }, true);
+    if (visible && options.isVisible()) {
+      record('host.view.state-delivery', { type: message.type, sequence: message.sequence, outcome }, true);
+    }
     if (message.type === 'plan.document.state') scheduleRetry();
     else markDirty(message.sequence);
   };
@@ -103,7 +105,7 @@ export function createWebviewStateDelivery(options: {
     try {
       void Promise.resolve(options.postMessage(message)).then((delivered) => {
         if (!current()) return;
-        if (!delivered) { failed(message, 'not-delivered'); return; }
+        if (!delivered) { failed(message, 'not-delivered', visibleWhenPosted); return; }
         if (!options.isVisible() && message.type !== 'plan.document.state' && REPLAYABLE_CHAT_STATE.has(message.type)) markDirty(message.sequence);
         if (message.type === 'plan.document.state' && pageId === undefined && visibleWhenPosted && options.isVisible()) {
           acknowledgePlan(message.sequence);
@@ -120,8 +122,8 @@ export function createWebviewStateDelivery(options: {
           retries = 0;
           clearRetry();
         }
-      }, () => failed(message, 'rejected'));
-    } catch { failed(message, 'rejected'); }
+      }, () => failed(message, 'rejected', visibleWhenPosted));
+    } catch { failed(message, 'rejected', visibleWhenPosted); }
   };
   const requestReplay = (reason: 'ready' | 'delivery-retry') => {
     if (!current() || !ready) return;

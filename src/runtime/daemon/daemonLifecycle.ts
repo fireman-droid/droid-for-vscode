@@ -661,7 +661,7 @@ async function queryProcessCommandLines(
   const [command, args] = process.platform === 'win32'
     ? (['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
       '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +
-      'ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -ErrorAction Stop -Filter "' +
+      'ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -Property ProcessId,CommandLine -ErrorAction Stop -Filter "' +
       pids.map(pid => `ProcessId=${String(pid)}`).join(' OR ') +
       '" | Select-Object ProcessId,CommandLine)']] as const)
     : (['ps', ['-p', pids.join(','), '-o', 'pid=,args=']] as const);
@@ -785,7 +785,7 @@ function defaultQueryProcessCommandLine(pid: number, timeoutMs = IDENTITY_QUERY_
             '-NoProfile',
             '-NonInteractive',
             '-Command',
-            `(Get-CimInstance Win32_Process -Filter "ProcessId=${String(pid)}").CommandLine`,
+            `(Get-CimInstance Win32_Process -Property CommandLine -Filter "ProcessId=${String(pid)}").CommandLine`,
           ],
         ] as const)
       : (['ps', ['-p', String(pid), '-o', 'args=']] as const);

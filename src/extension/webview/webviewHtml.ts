@@ -122,6 +122,9 @@ const BOOT_BEACON_SCRIPT = /* js */ `
   window.addEventListener('error', function (event) {
     var target = event.target;
     if (target && target !== window && target.tagName) {
+      if (target.tagName === 'STYLE' && !target.src && !target.href) {
+        return;
+      }
       post('error', 'resource failed: ' + target.tagName + ' ' +
         (target.src || target.href || ''));
       return;

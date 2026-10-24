@@ -2,6 +2,19 @@
 
 按版本记录功能、体验改进与修复。安装方式与使用范围见 [README](README.md)。
 
+## 0.8.18
+
+### Highlights
+
+- 多窗口 Daemon 探活提速与孤儿后台自动回收：Windows 进程身份校验精简 WMI 查询字段并合并复用在途 `verifyRecords` 批次，避免并发激活时重复拉起 `powershell.exe`；发现阶段自动回收宿主窗口已退出的无会话孤儿 `window-daemon`，稳态探活耗时降至毫秒级。
+- 全链路诊断与 GA4 遥测细分：补齐运行时初始化失败原因（`timeout_init_session`、`daemon_identity_mismatch`、`duplicate_daemon_owner`、`child_owner_unavailable`、`auth_unavailable`）、前端异常子分类、会话历史加载失败分类以及 `daemon_health` 身份重试与孤儿回收事件。
+
+### Fixed
+
+- 修复多窗口并发激活或旧 `window-daemon` 记录堆积时，WMI 进程查询超时（`processes:timeout`）导致会话初始化报错 `An existing session daemon is unavailable` 的问题。
+- 修复 Mermaid 图表离屏测量创建的临时内联 `<style>` 节点触发 Webview `resource failed: STYLE` 错误误报的问题。
+- 修复聊天侧栏隐藏期间每 30 秒重复刷写 `host.view.state-delivery` 警告日志的问题，保留面板恢复可见时的快照补同步。
+
 ## 0.8.17
 
 ### Highlights

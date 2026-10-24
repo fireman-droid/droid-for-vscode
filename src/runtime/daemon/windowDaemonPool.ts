@@ -52,6 +52,10 @@ export class WindowDaemonPool {
   private readonly allocations = new Map<string, Promise<WindowDaemonEntry>>();
   private readonly ideAttachments = new Map<string, Promise<WindowDaemonEntry>>();
   private discovery: Promise<WindowDaemonEntry[]> | undefined;
+  private activeVerification: {
+    readonly ports: ReadonlySet<number>;
+    readonly promise: Promise<ReadonlyMap<number, DaemonListenerVerification>>;
+  } | undefined;
   private openedDiscovery: Promise<{
     entry: WindowDaemonEntry;
     opened: Awaited<ReturnType<DaemonApi['sessions']['listOpened']>>;
@@ -348,6 +352,20 @@ export class WindowDaemonPool {
   }
 
   private async verifyRecords(records: readonly WindowDaemonRecord[]): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
+    if (records.length === 0) return new Map();
+    const active = this.activeVerification;
+    if (active && records.every((record) => active.ports.has(record.port))) {
+      return active.promise;
+    }
+    const promise = this.runVerifyRecords(records);
+    const current = { ports: new Set(records.map((record) => record.port)), promise };
+    this.activeVerification = current;
+    const clear = () => { if (this.activeVerification === current) this.activeVerification = undefined; };
+    void promise.then(clear, clear);
+    return promise;
+  }
+
+  private async runVerifyRecords(records: readonly WindowDaemonRecord[]): Promise<ReadonlyMap<number, DaemonListenerVerification>> {
     const deadline = Date.now() + 10_000;
     const verify = (targets: readonly WindowDaemonRecord[]) =>
       verifyDaemonListeners(targets, '127.0.0.1', 'droid', Math.max(0, deadline - Date.now()));
@@ -379,13 +397,43 @@ export class WindowDaemonPool {
 
   private discoverOpened(): NonNullable<WindowDaemonPool['openedDiscovery']> {
     if (this.openedDiscovery) return this.openedDiscovery;
-    const pending = this.discoverEntries().then((entries) => mapConcurrent(entries, async (entry) => ({
-      entry, opened: await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } }),
-    })));
+    const pending = this.discoverEntries().then(async (entries) => {
+      const probed = await mapConcurrent(entries, async (entry) => ({
+        entry, opened: await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } }),
+      }));
+      const active: typeof probed = [];
+      for (const item of probed) {
+        if (item.opened.length === 0 && await this.shouldRetireOrphan(item.entry)) {
+          try {
+            await this.retireEmpty(item.entry);
+            if (!this.connections.has(item.entry.record.id)) {
+              this.options.record({ level: 'info', name: 'daemon.discovery.orphan-retired', attributes: {
+                instanceId: item.entry.record.id, pid: item.entry.record.pid, port: item.entry.record.port,
+              } });
+              continue;
+            }
+          } catch {
+            this.options.record({ level: 'warn', name: 'daemon.window.cleanup-deferred' });
+          }
+        }
+        active.push(item);
+      }
+      return active;
+    });
     this.openedDiscovery = pending;
     const clear = () => { if (this.openedDiscovery === pending) this.openedDiscovery = undefined; };
     void pending.then(clear, clear);
     return pending;
+  }
+
+  private async shouldRetireOrphan(entry: WindowDaemonEntry): Promise<boolean> {
+    const { record } = entry;
+    if (record.id === 'legacy' || this.owned.has(record.id) || this.used.has(record.id)) return false;
+    if (record.ownerPid === process.pid || isProcessAlive(record.ownerPid)) return false;
+    for (const owner of this.owners.values()) if (owner.record.id === record.id) return false;
+    if (!record.rootSessionId) return true;
+    const currentOwnerId = await readSessionDaemon(record.rootSessionId);
+    return currentOwnerId !== null && currentOwnerId !== record.id;
   }
 
   async remember(sessionId: string, entry: WindowDaemonEntry, handle?: DaemonSessionHandle): Promise<void> {
@@ -627,7 +675,8 @@ export class WindowDaemonPool {
   }
 
   private async retireEmpty(entry: WindowDaemonEntry): Promise<void> {
-    if (!this.owned.has(entry.record.id)) return;
+    if (!this.owned.has(entry.record.id) &&
+        (entry.record.id === 'legacy' || isProcessAlive(entry.record.ownerPid))) return;
     const opened = await entry.connection.droid.sessions.listOpened({ filter: { includeBtwForks: true } });
     if (opened.length > 0) return;
     const pid = await resolveDaemonListenerPid(entry.record.port, '127.0.0.1');
