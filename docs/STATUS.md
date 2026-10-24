@@ -1,6 +1,6 @@
 # 当前状态
 
-核对日期：2026-10-23。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-10-24。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
@@ -39,6 +39,7 @@
 
 ## 最近验证
 
+- `codex/telemetry-and-daemon-fixes`：GA4 媒体资源 `properties/560369275` 已注册全部 21 个 EVENT 级自定义维度与 17 个自定义指标；`daemonLifecycle.ts` 的 Windows `Win32_Process` 查询限定 `-Property ProcessId,CommandLine`；`windowDaemonPool.ts` 复用在途 `verifyRecords` 批次避免并发重复拉起 `powershell.exe`，并在发现阶段与 `retireEmpty` 中自动回收旧窗口退出后遗留的无会话孤儿 `window-daemon`；`webviewStateDelivery.ts` 在侧栏隐藏期间仅标记待重放快照，不再每 30 秒刷写 `host.view.state-delivery` 警告；`webviewHtml.ts` 忽略内联无 `src`/`href` 的 `<style>` 捕获期错误事件，消除 Mermaid 离屏测量触发的 `resource failed: STYLE` 误报；`ga4Config.ts` 补齐初始化失败、历史读取失败、前端资源错误与 `daemon_health` 细分维度。
 - `codex/ui-style-fixes` 与 `codex/runtime-fixes`：完成设置侧栏宽度补全、Review 代码问答引用芯片防跳动、Quote 芯片图标实心旋转、`Ask for input` 移出「已探索」分组，以及跨会话／孤儿工作区快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 处理（#16）和 `AskUser` 多选兜底识别／无前缀编号历史解析（#9）。`lint:budgets`、类型检查与受影响单元测试（63 项）全部通过。
 - Factory 账户与 `/limits`：本机真实凭据读取 `GET https://api.factory.ai/api/billing/limits` 返回 200，字段与 Factory 应用截图一致（`Standard`／`Droid Core` 分段切换与三窗口独立进度条 + `extraUsageBalanceCents`）；token 载荷确认含 email、first/last name 与 org；设置页 `account.read` 走独立非阻塞请求通道，不占用 `busy` 或阻塞其他设置。类型检查、文件预算通过；`factoryAccount` 9 项定向测试覆盖身份解析、窗口投影、epoch 毫秒、EU 主机与未登录路径。
 - `codex/ga4-diagnostics` 分支已将 Cloudflare Worker GA4 遥测从 5 类前端事件扩充至 18 类全链路白名单事件（新增 `frontend_render`、`runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、`turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`），并完成 100MB+ 大会话「对话转不回来」四项修复：`connectPublicDaemon.ts` 将 RPC `requestTimeout` 从 `30000ms` 提升至 `120000ms` 并注入 `loadAllMessages: false` 启用压缩锚点反向快读；`routedDaemon.ts`／`persistentIdeRelay.ts` 在同 Daemon 尚未打开 Worker 或前次 `resume` 失败时重置 Relay 根会话握手，消除 `rebindIdleAttachment` 误杀刚加载完成的 Daemon；`daemonLifecycle.ts` 在端口未监听且旧 PID 已退出时跳过 `powershell.exe` 进程查询；`runtimeLifecycle.ts` 在断线自动重连重试期间复用当前已加载的历史 transcript，避免重复读取百兆 JSONL 与重复推送快照。主聊天顶部历史裁剪说明与展开入口已合并为渐隐细分割线与胶囊缓动触发器，前后端捆绑文件变更均支持自动热重载。`lint:budgets`、全仓 `typecheck` 与生产构建通过。

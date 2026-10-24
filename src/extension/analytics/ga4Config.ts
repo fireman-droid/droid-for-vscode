@@ -111,10 +111,15 @@ export function classifyInitFailureReason(outcome: unknown, reason: unknown): st
   const text = typeof reason === 'string' ? reason : '';
   if (/Request timeout.*daemon\.load_session/iu.test(text)) return 'timeout_load_session';
   if (/Request timeout.*daemon\.create_session/iu.test(text)) return 'timeout_create_session';
+  if (/Request timeout.*daemon\.initialize_session/iu.test(text)) return 'timeout_init_session';
   if (/timeout/iu.test(text)) return 'timeout_other';
   if (/existing session daemon is unavailable/iu.test(text)) return 'existing_daemon_unavailable';
+  if (/listener process|identity could not be verified/iu.test(text)) return 'daemon_identity_mismatch';
+  if (/multiple daemons/iu.test(text)) return 'duplicate_daemon_owner';
+  if (/child session has not become available/iu.test(text)) return 'child_owner_unavailable';
   if (/open in another window/iu.test(text)) return 'session_in_use';
-  if (/connection closed|socket|ECONNREFUSED|EPIPE|ECONNRESET/iu.test(text)) return 'connection_closed';
+  if (/sign-in is unavailable|authentication|unauthorized/iu.test(text)) return 'auth_unavailable';
+  if (/connection closed|socket|ECONNREFUSED|EPIPE|ECONNRESET|disconnected/iu.test(text)) return 'connection_closed';
   if (/validation/iu.test(text)) return 'validation_failed';
   if (typeof outcome === 'string' && outcome !== 'initialization-failed') return safeToken(outcome, 'other');
   return 'other';
@@ -123,8 +128,12 @@ export function classifyInitFailureReason(outcome: unknown, reason: unknown): st
 function classifyFrontendErrorSubCategory(detail: string | undefined): string {
   if (!detail) return 'unspecified';
   if (/resource failed:\s*STYLE/iu.test(detail)) return 'resource_style';
+  if (/resource failed:\s*LINK/iu.test(detail)) return 'resource_stylesheet';
   if (/resource failed:\s*SCRIPT/iu.test(detail)) return 'resource_script';
+  if (/resource failed:\s*IMG/iu.test(detail)) return 'resource_image';
   if (/resource failed/iu.test(detail)) return 'resource_other';
+  if (/no host message within .* of webview\.ready/iu.test(detail)) return 'ready_handshake_timeout';
+  if (/bundle did not mount/iu.test(detail)) return 'bundle_mount_timeout';
   if (/ResizeObserver/iu.test(detail)) return 'resize_observer';
   return 'runtime_error';
 }
@@ -280,6 +289,9 @@ export function projectGa4Event(
           ? safeToken(attrs.historyStatus, 'finished')
           : safeToken(attrs.source, 'daemon'),
       outcome: safeToken(attrs.outcome),
+      ...(attrs.outcome === 'failed'
+        ? { failure_kind: classifyInitFailureReason(attrs.outcome, attrs.reason ?? event.detail) }
+        : {}),
       engagement_time_msec: engagementMs(durationMs),
     };
     addOptionalMetric(params, 'duration_ms', durationMs);
@@ -347,8 +359,10 @@ export function projectGa4Event(
   // 6. Daemon pool & discovery health
   if (
     event.name === 'daemon.discovery.finished' ||
+    event.name === 'daemon.discovery.identity-retry' ||
     event.name === 'daemon.discovery.identity-unavailable' ||
     event.name === 'daemon.discovery.stale-record' ||
+    event.name === 'daemon.discovery.orphan-retired' ||
     event.name === 'daemon.sidecar.warmed' ||
     event.name === 'daemon.sidecar.warm-failed' ||
     event.name === 'daemon.sidecar.start-failed' ||
