@@ -1,5 +1,5 @@
 import { CollapsibleTrigger } from '../ui/collapsible';
-import { useContext, useId, type ReactNode } from 'react';
+import { useContext, useId, type ReactNode, type Ref } from 'react';
 import { Tool } from '../ai-elements/tool';
 import { Button } from '../ui/button';
 import { CommandActions, CommandOutput } from './CommandOutput';
@@ -9,8 +9,9 @@ export interface CommandCardProps {
   readonly running: boolean; readonly failed?: boolean; readonly statusLabel?: string;
   readonly command: string; readonly output?: string; readonly open: boolean;
   readonly onOpenChange: () => void; readonly fileActions?: ReactNode;
+  readonly buttonRef?: Ref<HTMLButtonElement>; readonly contentRef?: Ref<HTMLDivElement>;
 }
-export function CommandCard({ title, target, chips, running, failed, statusLabel, command, output, open, onOpenChange, fileActions }: CommandCardProps) {
+export function CommandCard({ title, target, chips, running, failed, statusLabel, command, output, open, onOpenChange, fileActions, buttonRef, contentRef }: CommandCardProps) {
   const bodyId = useId();
   const inline = useContext(ProcessGroupContext);
   const heading = <>
@@ -28,11 +29,11 @@ export function CommandCard({ title, target, chips, running, failed, statusLabel
   </>;
   return <Tool className="v2-command-card" data-activity-inline={inline || undefined} open={open} onOpenChange={onOpenChange}>
     <header data-ui-notice="" className="v2-command-head select-none">
-      <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-command-toggle select-none" aria-controls={bodyId}>{heading}</Button></CollapsibleTrigger>
+      <CollapsibleTrigger asChild><Button ref={buttonRef} variant="plain" size="none" className="v2-command-toggle select-none" aria-controls={bodyId}>{heading}</Button></CollapsibleTrigger>
       {fileActions}
       <CommandActions command={command} running={running} />
     </header>
-    <div id={bodyId} className="v2-command-body" data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open || undefined}>
+    <div ref={contentRef} id={bodyId} className="v2-command-body" data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open || undefined}>
       <div className="v2-command-body-inner">
         {open ? <CommandOutput command={command} output={output} running={running} /> : null}
       </div>

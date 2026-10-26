@@ -237,7 +237,7 @@
   .v2-chat-surface :is(.v2-command-title, .v2-command-chips, .v2-command-target) { font-size: 13px; line-height: 18px; }
   .v2-chat-surface .v2-command-body { border-radius: 0 0 11px 11px; background: var(--chat-code-surface); }
   .v2-chat-surface .v2-command-well {
-    max-height: 300px;
+    max-height: 228px;
     padding: 12px;
     border-radius: 0 0 11px 11px;
     background: var(--chat-code-surface);
