@@ -17,7 +17,7 @@
 
 | 范围 | 当前实现与边界 |
 | --- | --- |
-| 聊天 | 最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。队列预览最多三行；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
+| 聊天 | 新提问直接切换置顶，底部动态留白跑道承载首屏静止生长的回复，超出一屏后自动向下跟随，短回复结束时保持留白不回弹；最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。队列预览最多三行；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
 | 管理页 | 常规、模型、补全、会话、任务；共享设置行、搜索筛选、分页和滚动条，Select 弹层不少于触发器宽度并随单行选项内容扩展，列表刷新保留已有内容 |
 | Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
 | Mission 创建 | 说明型开关行保持背景稳定，操作按钮随内容收紧；调度／执行／验证代理模型支持搜索，保留来源筛选与现有推理等级 |
@@ -40,6 +40,7 @@
 
 ## 最近验证
 
+- `codex/ui-style-fixes`（新提问直接置顶与动态留白跑道）：`TranscriptView.tsx` 与 `useTranscriptScroll.ts` 在新用户提问进入消息列表时直接将其切换置顶（`PINNED_QUESTION_GAP = 12`），底部同步维护动态留白跑道 `data-pin-runway` 使首屏回复静止向下生长、超出一屏后自动向下跟随、短回复结束保持留白不回弹；`AGENTS.md` 补充文档与代码冲突处理规则。`typecheck`、`lint:budgets` 与 5 个转录滚动／锚定／导航测试文件（12 项）全部通过。
 - `codex/telemetry-and-daemon-fixes`：GA4 媒体资源 `properties/560369275` 已注册全部 21 个 EVENT 级自定义维度与 17 个自定义指标；`daemonLifecycle.ts` 的 Windows `Win32_Process` 查询限定 `-Property ProcessId,CommandLine`；`windowDaemonPool.ts` 复用在途 `verifyRecords` 批次避免并发重复拉起 `powershell.exe`，并在发现阶段与 `retireEmpty` 中自动回收旧窗口退出后遗留的无会话孤儿 `window-daemon`；`webviewStateDelivery.ts` 在侧栏隐藏期间仅标记待重放快照，不再每 30 秒刷写 `host.view.state-delivery` 警告；`webviewHtml.ts` 忽略内联无 `src`/`href` 的 `<style>` 捕获期错误事件，消除 Mermaid 离屏测量触发的 `resource failed: STYLE` 误报；`ga4Config.ts` 补齐初始化失败、历史读取失败、前端资源错误与 `daemon_health` 细分维度。
 - `codex/ui-style-fixes` 与 `codex/runtime-fixes`：完成设置侧栏宽度补全、Review 代码问答引用芯片防跳动、Quote 芯片图标实心旋转、`Ask for input` 移出「已探索」分组，以及跨会话／孤儿工作区快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 处理（#16）和 `AskUser` 多选兜底识别／无前缀编号历史解析（#9）。`lint:budgets`、类型检查与受影响单元测试（63 项）全部通过。
 - Factory 账户与 `/limits`：本机真实凭据读取 `GET https://api.factory.ai/api/billing/limits` 返回 200，字段与 Factory 应用截图一致（`Standard`／`Droid Core` 分段切换与三窗口独立进度条 + `extraUsageBalanceCents`）；token 载荷确认含 email、first/last name 与 org；设置页 `account.read` 走独立非阻塞请求通道，不占用 `busy` 或阻塞其他设置。类型检查、文件预算通过；`factoryAccount` 9 项定向测试覆盖身份解析、窗口投影、epoch 毫秒、EU 主机与未登录路径。

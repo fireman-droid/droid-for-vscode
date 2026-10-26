@@ -8,8 +8,6 @@ import {
 import { hasTranscriptSelection, readTranscriptSelection } from './transcriptSelection';
 import { isNestedScrollTarget } from '../navigation/nestedScroll';
 
-const SEND_NEAR_BOTTOM_PX = 80;
-
 export function useTranscriptScroll(
   viewport: RefObject<HTMLDivElement | null>,
   content: RefObject<HTMLDivElement | null>,
@@ -18,6 +16,7 @@ export function useTranscriptScroll(
   reportLayout?: (detail: string) => void,
   onReachedBottom?: () => void,
   pauseAutoFollow = false,
+  syncRunway?: () => void,
 ) {
   const follow = useRef(createFollowState());
   const userScrolling = useRef(false);
@@ -95,6 +94,7 @@ export function useTranscriptScroll(
   useLayoutEffect(() => { compensateNavigation(); });
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     cancelAnimation();
+    syncRunway?.();
     const element = viewport.current;
     readTranscriptSelection(element?.parentElement ?? null)?.removeAllRanges();
     follow.current.following = true;
@@ -106,17 +106,14 @@ export function useTranscriptScroll(
     setFollowingBottom(element !== null && !bottomNavigation.current);
     setAway(false);
     scheduleUpdate.current();
-  }, [viewport, writeTop, cancelAnimation]);
+  }, [viewport, writeTop, cancelAnimation, syncRunway]);
   const prepareForSend = useCallback(() => {
-    const element = viewport.current;
-    // Capture before the draft clears and the new question changes either height.
-    sendBehavior.current = element !== null &&
-      element.scrollHeight - element.clientHeight - element.scrollTop <= SEND_NEAR_BOTTOM_PX ? 'auto' : 'smooth';
-  }, [viewport]);
+    sendBehavior.current = 'auto';
+  }, []);
   const followNewQuestion = useCallback(() => {
-    const behavior = sendBehavior.current ?? 'smooth';
-    scrollToBottom(behavior);
-    settlingSend.current = behavior !== 'smooth';
+    sendBehavior.current = null;
+    scrollToBottom('auto');
+    settlingSend.current = true;
   }, [scrollToBottom]);
 
   useLayoutEffect(() => { scrollToBottom('auto'); }, [conversationId, scrollToBottom]);
@@ -137,6 +134,7 @@ export function useTranscriptScroll(
     const update = (time: number) => {
       frame.current = null;
       if (element.clientHeight === 0) { lastFrame.current = 0; return; }
+      syncRunway?.();
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
@@ -189,6 +187,7 @@ export function useTranscriptScroll(
     scheduleUpdate.current = schedule;
     let lastScrollClientHeight = element.clientHeight;
     const onScroll = () => {
+      syncRunway?.();
       const next = sample();
       const layoutChanged = next.clientHeight !== lastScrollClientHeight ||
         next.scrollHeight !== follow.current.lastScrollHeight;
@@ -250,6 +249,7 @@ export function useTranscriptScroll(
     let maxHeight = previousHeight;
     let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
+      syncRunway?.();
       const height = element.clientHeight;
       // New virtual rows and the cleared composer settle together. Correct their
       // geometry before paint, then return to the usual smooth streaming follow.
@@ -306,6 +306,6 @@ export function useTranscriptScroll(
       reducedMotion.removeEventListener('change', schedule);
       cancelAnimation();
     };
-  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow]);
+  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow, syncRunway]);
   return { follow, followingBottom, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }

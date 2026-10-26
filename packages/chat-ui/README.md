@@ -128,11 +128,10 @@ const createSyntaxWorker = async () => new Worker('/assets/syntaxWorker.js');
 | 基础组件 | `ui/*`、`ai-elements/*` 子路径，沿用共享 Radix 焦点／键盘／Portal 行为 |
 
 - 同一个稳定消息使用相同 id，token 到达时只更新内容，不重建会话身份。
-- `TranscriptView` 在新用户消息进入 `messages` 时恢复到底部跟随；
+- `TranscriptView` 在新用户消息进入 `messages` 时直接将该提问切换置顶，并通过底部动态留白跑道承载首屏静止生长的回复，超出一屏后自动向下跟随，短回复结束时保持留白不回弹；
   `sendSignal` 用于输入／导航身份，不会因消息仍在队列中而滚动旧内容。
-  普通发送在清空输入和追加消息前调用 `TranscriptHandle.prepareForSend()`，
-  按发送前距底部 80px 的容差选择即时保持底部或平滑回底；排队时不调用。
-  运行提示通过 `statusContent` 传入，实际回到底部后才固定位置，避免提示先出现在历史视口再随页面跳转；
+  普通发送在清空输入和追加消息前调用 `TranscriptHandle.prepareForSend()`；排队时不调用。
+  状态提示通过 `statusContent` 传入，实际回到底部后才固定位置，避免提示先出现在历史视口再随页面跳转；
   稳定跟随后不受正文增长影响，短对话仍紧接正文。查看历史、选择文字或导航时随列表滚走。
   交互卡片等继续使用 `trailingContent`。
   需要暂停跟随时调用其 `TranscriptHandle.stopFollowing()`。

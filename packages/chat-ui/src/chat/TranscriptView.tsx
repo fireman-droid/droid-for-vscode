@@ -75,20 +75,17 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow);
+  const runway = useRef<HTMLDivElement>(null);
+  const runwayHeight = useRef(0);
+  const syncRunwayRef = useRef<() => void>(() => {});
+  const syncRunway = useCallback(() => syncRunwayRef.current(), []);
+  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow, syncRunway);
   const lastQuestionId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index].role === 'user') return messages[index].id;
     }
     return undefined;
   }, [messages]);
-  const previousQuestion = useRef(lastQuestionId);
-  useLayoutEffect(() => {
-    // Queueing/editing also changes sendSignal. Follow only when a new
-    // question actually enters the transcript, not while the old turn stops.
-    if (lastQuestionId !== undefined && previousQuestion.current !== lastQuestionId) scrolling.followNewQuestion();
-    previousQuestion.current = lastQuestionId;
-  }, [lastQuestionId, scrolling.followNewQuestion]);
   const allDescriptors = messages;
   const [windowState, setWindowState] = useState({ sessionId: sessionKey, count: DEFAULT_MESSAGE_WINDOW });
   const messageWindow = windowState.sessionId === sessionKey ? windowState.count : DEFAULT_MESSAGE_WINDOW;
@@ -111,6 +108,40 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const descriptor = byId.get(turn.id)!;
     return descriptor.role === 'user' ? [{ key: turn.id, text: descriptor.text ?? '', turnIndex }] : [];
   }).map((item, index) => ({ ...item, preview: questionPreview(item.text, index) })), [turns, byId]);
+  const questionState = useRef<{
+    conversationId: string | null;
+    questionId: string | undefined;
+    sendSignal: number;
+    pinnedId: string | null;
+  }>({
+    conversationId,
+    questionId: lastQuestionId,
+    sendSignal,
+    pinnedId: null,
+  });
+  if (questionState.current.conversationId !== conversationId) {
+    questionState.current = {
+      conversationId,
+      questionId: lastQuestionId,
+      sendSignal,
+      pinnedId: null,
+    };
+  } else if (lastQuestionId !== questionState.current.questionId) {
+    const hadQuestion = questionState.current.questionId !== undefined;
+    const sentFromEmpty =
+      sendSignal !== questionState.current.sendSignal ||
+      (questions.length === 1 && !messages.at(-1)?.replyEnd);
+    if (lastQuestionId !== undefined && (hadQuestion || sentFromEmpty)) {
+      questionState.current.pinnedId = lastQuestionId;
+    } else if (lastQuestionId === undefined) {
+      questionState.current.pinnedId = null;
+    }
+    questionState.current.questionId = lastQuestionId;
+    questionState.current.sendSignal = sendSignal;
+  }
+  const pinnedTurnIndex = questionState.current.pinnedId === null
+    ? -1
+    : turns.findIndex((turn) => turn.id === questionState.current.pinnedId);
   const getScrollElement = useCallback(() => viewport.current, []);
   const subscribe = useCallback((notify: () => void) => {
     const element = viewport.current;
@@ -135,13 +166,53 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
     !scrolling.follow.current.following && scrolling.navigation.current === null &&
     (instance.itemSizeCache.has(item.key) ? item.end <= (instance.scrollOffset ?? 0) : item.start < (instance.scrollOffset ?? 0));
+  syncRunwayRef.current = () => {
+    const element = viewport.current, column = content.current, spacer = runway.current;
+    const cachedTurn = pinnedTurnIndex >= 0 ? virtualizer.measurementsCache[pinnedTurnIndex] : undefined;
+    if (!element || !column || !spacer || pinnedTurnIndex < 0 || element.clientHeight <= 0 || cachedTurn === undefined) {
+      runwayHeight.current = 0;
+      if (spacer) spacer.style.height = '0px';
+      return;
+    }
+    const columnRect = column.getBoundingClientRect();
+    const rowEl = column.querySelector<HTMLElement>(`[data-index="${pinnedTurnIndex}"]`);
+    const rowRect = rowEl?.getBoundingClientRect();
+    const turnStart = columnRect.height > 0 && rowRect && rowRect.height > 0
+      ? rowRect.top - columnRect.top
+      : cachedTurn.start;
+    const pinTop = Math.max(0, turnStart - PINNED_QUESTION_GAP);
+    const paddingBottom = parseFloat(getComputedStyle(column).paddingBottom) || (statusContent ? 0 : 12);
+    const naturalHeight = columnRect.height > 0
+      ? spacer.getBoundingClientRect().top - columnRect.top + paddingBottom
+      : scrollMargin + virtualizer.getTotalSize() + paddingBottom;
+    const nextHeight = Math.max(0, pinTop + element.clientHeight - naturalHeight);
+    runwayHeight.current = nextHeight;
+    spacer.style.height = `${nextHeight}px`;
+  };
+  useLayoutEffect(syncRunway);
+  const previousPinned = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    // Queueing/editing also changes sendSignal. Follow only when a new
+    // question actually enters the transcript, not while the old turn stops.
+    const currentPinned = questionState.current.pinnedId;
+    if (currentPinned !== null && previousPinned.current !== currentPinned) {
+      syncRunway();
+      scrolling.followNewQuestion();
+    }
+    previousPinned.current = currentPinned;
+  }, [lastQuestionId, sendSignal, conversationId, syncRunway, scrolling.followNewQuestion]);
+  const effectiveScrollHeight = useCallback(
+    (element: HTMLDivElement | null) =>
+      (element?.scrollHeight ?? 0) - (questions.length <= 1 ? runwayHeight.current : 0),
+    [questions.length],
+  );
   const readBoundary = useCallback(() => {
     const element = viewport.current;
     const offset = (element?.scrollTop ?? 0) + PINNED_QUESTION_GAP;
     const row = virtualizer.getVirtualItemForOffset(questionEntryOffset(offset));
     return `${row?.index ?? -1}:${row !== undefined && hasQuestionEntered(row.start, offset)}:${
-      isScrollableTranscript(element?.scrollHeight ?? 0, element?.clientHeight ?? 0)}`;
-  }, [virtualizer]);
+      isScrollableTranscript(effectiveScrollHeight(element), element?.clientHeight ?? 0)}`;
+  }, [virtualizer, effectiveScrollHeight]);
   // Pixel movement only moves the pinned overlay; render the transcript when
   // the question boundary or virtual range changes, not on every scroll event.
   useSyncExternalStore(subscribe, readBoundary, readBoundary);
@@ -155,7 +226,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   }, [hiddenMessageCount, scrolling.writeTop]);
   const questionTops = questions.map((question) => virtualizer.measurementsCache[question.turnIndex]?.start ?? Number.POSITIVE_INFINITY);
   const activeQuestion = findActiveQuestionIndex(questionTops, top + PINNED_QUESTION_GAP);
-  const showNavigator = isScrollableTranscript(viewport.current?.scrollHeight ?? 0, viewport.current?.clientHeight ?? 0);
+  const showNavigator = isScrollableTranscript(effectiveScrollHeight(viewport.current), viewport.current?.clientHeight ?? 0);
   const jumpTarget = jump?.conversationId === conversationId && jump.sendSignal === sendSignal
     ? questions.find((question) => question.key === jump.id) : undefined;
   const navigateQuestion = (id: string) => {
@@ -286,6 +357,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           {statusContent ? <div className={`bg-background pb-1 pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
             {statusContent}
           </div> : null}
+          <div ref={runway} data-pin-runway="" aria-hidden="true" style={{ height: `${runwayHeight.current}px` }} />
         </div>
       </div>
       {pinned === null ? null : <>
