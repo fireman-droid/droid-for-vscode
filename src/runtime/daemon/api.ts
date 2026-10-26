@@ -61,6 +61,11 @@ export interface DaemonApi {
     | 'killWorker'
   > & {
     rename?: ConnectedDroid['sessions']['rename'];
+    /** Read opened sessions on a known session's owning daemon without scanning the pool. */
+    listOpenedForSession?(
+      sessionId: string,
+      options?: Parameters<ConnectedDroid['sessions']['listOpened']>[0],
+    ): ReturnType<ConnectedDroid['sessions']['listOpened']>;
     listPage(
       options?: Parameters<ConnectedDroid['sessions']['list']>[0],
     ): ReturnType<DaemonSessionController['listAvailableSessions']>;

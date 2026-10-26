@@ -282,7 +282,10 @@ export function activate(context: vscode.ExtensionContext): void {
         if (target.mode === 'subagent-readonly') {
           return subagentTranscripts?.readViewer(target.sessionId, target.subagent)?.running ?? null;
         }
-        const rows = await (await daemonSidecar.droid()).sessions.listOpened();
+        const sessions = (await daemonSidecar.droid()).sessions;
+        const rows = await (sessions.listOpenedForSession
+          ? sessions.listOpenedForSession(target.sessionId)
+          : sessions.listOpened());
         const row = rows.find(({ id }) => id === target.sessionId);
         return row === undefined ? false : String(row.workingState) !== 'idle';
       },

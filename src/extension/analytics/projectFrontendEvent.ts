@@ -8,6 +8,7 @@ export type FrontendEvent =
   | { name: 'activity.expand'; attributes: { surface: 'history' | 'tool' | 'thinking'; durationMs: number; records: number } };
 
 const errorKinds = ['error', 'unhandledrejection', 'boot-timeout', 'handshake-timeout'] as const;
+const BENIGN_RESIZE_OBSERVER_ERROR = /^ResizeObserver loop (completed with undelivered notifications\.|limit exceeded)/iu;
 function metric(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 86_400_000;
 }
@@ -19,6 +20,9 @@ export function projectFrontendEvent(event: RuntimeDiagnosticEvent): FrontendEve
   const surface = match[1] === 'sessionViewer' ? 'viewer' : match[1] === 'missionControl' ? 'mission' : 'chat';
   const kind = match[2];
   if ((errorKinds as readonly string[]).includes(kind)) {
+    if (kind === 'error' && BENIGN_RESIZE_OBSERVER_ERROR.test(event.detail ?? '')) {
+      return undefined;
+    }
     return { name: 'frontend.error', attributes: { surface, category: kind as typeof errorKinds[number] } };
   }
   if (kind === 'boot-ok') {

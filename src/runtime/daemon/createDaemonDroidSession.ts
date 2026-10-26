@@ -499,7 +499,9 @@ function adaptDaemonSession(
       // of a session that kept running while no window was attached
       // (probe: artifacts/probe-get-messages.mjs phase 2). A missing
       // row means the daemon no longer tracks the session as open.
-      const opened = await droid.sessions.listOpened();
+      const opened = await (droid.sessions.listOpenedForSession
+        ? droid.sessions.listOpenedForSession(targetSessionId)
+        : droid.sessions.listOpened());
       const row = opened.find((entry) => entry.id === targetSessionId);
       return row === undefined ? null : String(row.workingState);
     },

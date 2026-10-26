@@ -130,7 +130,11 @@ const BOOT_BEACON_SCRIPT = /* js */ `
         (target.src || target.href || ''));
       return;
     }
-    post('error', (event.message || 'unknown error') + ' @' +
+    var message = event.message || 'unknown error';
+    if (/^ResizeObserver loop (completed with undelivered notifications\.|limit exceeded)$/i.test(message)) {
+      return;
+    }
+    post('error', message + ' @' +
       (event.filename || '?') + ':' + (event.lineno || 0));
   }, true);
   window.addEventListener('unhandledrejection', function (event) {

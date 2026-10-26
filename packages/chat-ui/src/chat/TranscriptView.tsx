@@ -176,8 +176,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       runwayHeight.current = 0;
       pinnedAtTop.current = false;
       lastPinTop.current = 0;
-      if (column) column.style.minHeight = '';
-      if (spacer) spacer.style.height = '0px';
+      if (column && column.style.minHeight !== '') column.style.minHeight = '';
+      if (spacer && spacer.style.height !== '0px') spacer.style.height = '0px';
       return 0;
     }
     const previousRunway = runwayHeight.current;
@@ -199,8 +199,9 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const layoutShifted = nextHeight !== previousRunway || pinTop !== previousPinTop;
     runwayHeight.current = nextHeight;
     lastPinTop.current = pinTop;
-    column.style.minHeight = `${minColumnHeight}px`;
-    spacer.style.height = '0px';
+    const nextMinHeight = `${minColumnHeight}px`;
+    if (column.style.minHeight !== nextMinHeight) column.style.minHeight = nextMinHeight;
+    if (spacer.style.height !== '0px') spacer.style.height = '0px';
     if (pinnedAtTop.current) {
       if (!layoutShifted && !scrolling.follow.current.following && element.scrollTop < pinTop - 2) {
         pinnedAtTop.current = false;
