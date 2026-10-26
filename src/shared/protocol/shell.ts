@@ -46,6 +46,7 @@ export interface UiThemeMessage {
   readonly type: 'ui.theme';
   readonly preference: ThemePreference;
   readonly resolved: 'light' | 'dark';
+  readonly starfield?: boolean;
 }
 
 export interface ConnectionState {

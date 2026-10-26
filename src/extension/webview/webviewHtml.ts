@@ -44,6 +44,7 @@ export type WebviewInitialTheme = keyof typeof INITIAL_BACKGROUNDS;
 export interface WebviewBootTheme {
   readonly preference: ThemePreference;
   readonly resolved: WebviewInitialTheme;
+  readonly starfield?: boolean;
 }
 
 const DEFAULT_BOOT_THEME: WebviewBootTheme = {
@@ -75,7 +76,7 @@ export function getWebviewHtml(
   // takes over the attribute); the inline style covers the window
   // between HTML parse and stylesheet load.
   return /* html */ `<!doctype html>
-<html lang="${locale.resolved}" data-dvx-language="${locale.preference}" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
+<html lang="${locale.resolved}" data-dvx-language="${locale.preference}" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${theme.starfield === false ? ' data-dvx-starfield="false"' : ''}${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
 <head>
   <meta charset="UTF-8">
   <meta

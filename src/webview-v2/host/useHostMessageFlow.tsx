@@ -35,6 +35,7 @@ export function useHostMessageFlow(
     readonly applyHostTheme: (
       preference: ThemePreference,
       resolved: 'light' | 'dark',
+      starfield?: boolean,
     ) => void;
     readonly appendCanvasDraft: (text: string) => void;
     readonly settleSend: () => void;
@@ -94,7 +95,7 @@ export function useHostMessageFlow(
         case 'missionControl.navigationRejected':
           return;
         case 'ui.theme':
-          latest.current.applyHostTheme(message.preference, message.resolved);
+          latest.current.applyHostTheme(message.preference, message.resolved, message.starfield);
           return;
         case 'canvas.feedbackDraft':
           if (message.sequence > canvasSequence.current) {

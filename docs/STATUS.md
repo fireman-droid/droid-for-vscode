@@ -23,7 +23,7 @@
 | Mission 创建 | 说明型开关行保持背景稳定，操作按钮随内容收紧；调度／执行／验证代理模型支持搜索，保留来源筛选与现有推理等级 |
 | 设置模型 | 搜索、来源分组、继承、模型与强度子菜单；下拉选项悬停与选中态统一使用中性灰背景与正文色勾选，菜单随单行内容扩展并受视口约束；等级来自 SDK；纯模型场景直接选择，主聊天尚未整体迁移 |
 | 多语言 | 简体中文、繁体中文、英语；默认跟随编辑器，消息与代码保持原文 |
-| 主题 | Light／Dark／Auto；真实浏览器刷新先恢复最近主题，深色导航使用可辨识的共享选中背景；正文、BTW、Diff 和输入框共用用户选定的半透明石墨灰文字选区，保留原有字色 |
+| 主题 | Light／Dark／Auto；真实浏览器刷新先恢复最近主题，深色导航使用可辨识的共享选中背景；深色模式下主聊天提供可开关的透明层夜空呼吸繁星背景（`droidvisx.chat.starfield`，不改变原有背景色，浅色模式与隐藏态自动停用）；正文、BTW、Diff 和输入框共用用户选定的半透明石墨灰文字选区，保留原有字色 |
 | Review | 操作与整轮改动、Git 比较、全文／片段、行内问答、受限的操作 Undo 和 SDK Restore；真实浏览器复用同一 Host 控制器，工具栏、滚动和问答沿用共享 UI |
 | 恢复 | 打开的会话在 SDK 快速重连结束后每 30 秒继续恢复原连接；Host 自动恢复已知会话及空闲 IDE，回到窗口／侧栏时检查；不重发消息，不中断运行中的后台。失联后台仅在确认旧进程退出后允许替代，身份无法核实不另起任务 |
 | 补全 | 独立 FIM 与 Next Edit；自动续写允许较长词尾、条件右括号和语言候选扩展，共享防抖／上下文／请求，短负缓存及可关联诊断；多行建议的嵌套闭合括号不再因相邻同形括号被整段拒绝；默认关闭，模型费用独立于聊天 |
@@ -40,7 +40,7 @@
 
 ## 最近验证
 
-- `codex/ui-style-fixes`（新提问直接置顶、动态留白跑道防抖与 BTW 工具折叠重构）：`TranscriptView.tsx` 与 `useTranscriptScroll.ts` 在新用户提问进入消息列表时直接将其切换置顶（`PINNED_QUESTION_GAP = 12`），通过列表容器 `min-height` 与动态留白跑道 `data-pin-runway` 使首屏回复静止向下生长、过程卡片展开／收起零抖动、短回复结束保持留白不回弹；`statusMessage.ts` 消除中断轮次重复 `Stopped` 提示；`SideToolRecords.tsx`、`SideReply.tsx` 与 `btw.css` 将 BTW 工具折叠标题固定为「已探索」分类统计摘要并与思考折叠左箭头对齐，展开列表改为单行省略且移除已完成勾选列，运行与等待状态独立成行展示在折叠组下方。`typecheck` 与 `lint:budgets` 全部通过。
+- `codex/ui-style-fixes`（新提问直接置顶、动态留白跑道防抖、BTW 工具折叠重构与深色模式星空背景）：`TranscriptView.tsx` 与 `useTranscriptScroll.ts` 在新用户提问进入消息列表时直接将其切换置顶（`PINNED_QUESTION_GAP = 12`），通过列表容器 `min-height` 与动态留白跑道 `data-pin-runway` 使首屏回复静止向下生长、过程卡片展开／收起零抖动、短回复结束保持留白不回弹；`statusMessage.ts` 消除中断轮次重复 `Stopped` 提示；`SideToolRecords.tsx`、`SideReply.tsx` 与 `btw.css` 将 BTW 工具折叠标题固定为「已探索」分类统计摘要并与思考折叠左箭头对齐，展开列表改为单行省略且移除已完成勾选列，运行与等待状态独立成行展示在折叠组下方；`StarfieldBackdrop.tsx`、`ChatLayout.tsx` 与管理页常规设置新增深色模式专属透明层呼吸繁星背景（`droidvisx.chat.starfield` 开关控制，离屏精灵缓存 + 空闲帧率节流 + 隐藏自动休眠，不改变原有 `--surface` 底色）。`typecheck` 与 `lint:budgets` 全部通过。
 - `codex/telemetry-and-daemon-fixes`：GA4 媒体资源 `properties/560369275` 已注册全部 21 个 EVENT 级自定义维度与 17 个自定义指标；`daemonLifecycle.ts` 的 Windows `Win32_Process` 查询限定 `-Property ProcessId,CommandLine`；`windowDaemonPool.ts` 复用在途 `verifyRecords` 批次避免并发重复拉起 `powershell.exe`，并在发现阶段与 `retireEmpty` 中自动回收旧窗口退出后遗留的无会话孤儿 `window-daemon`；`webviewStateDelivery.ts` 在侧栏隐藏期间仅标记待重放快照，不再每 30 秒刷写 `host.view.state-delivery` 警告；`webviewHtml.ts` 忽略内联无 `src`/`href` 的 `<style>` 捕获期错误事件，消除 Mermaid 离屏测量触发的 `resource failed: STYLE` 误报；`ga4Config.ts` 补齐初始化失败、历史读取失败、前端资源错误与 `daemon_health` 细分维度。
 - `codex/ui-style-fixes` 与 `codex/runtime-fixes`：完成设置侧栏宽度补全、Review 代码问答引用芯片防跳动、Quote 芯片图标实心旋转、`Ask for input` 移出「已探索」分组，以及跨会话／孤儿工作区快照租约自动结清、`window-daemon` 受保护复用 PID `kill EPERM` 处理（#16）和 `AskUser` 多选兜底识别／无前缀编号历史解析（#9）。`lint:budgets`、类型检查与受影响单元测试（63 项）全部通过。
 - Factory 账户与 `/limits`：本机真实凭据读取 `GET https://api.factory.ai/api/billing/limits` 返回 200，字段与 Factory 应用截图一致（`Standard`／`Droid Core` 分段切换与三窗口独立进度条 + `extraUsageBalanceCents`）；token 载荷确认含 email、first/last name 与 org；设置页 `account.read` 走独立非阻塞请求通道，不占用 `busy` 或阻塞其他设置。类型检查、文件预算通过；`factoryAccount` 9 项定向测试覆盖身份解析、窗口投影、epoch 毫秒、EU 主机与未登录路径。

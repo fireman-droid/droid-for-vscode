@@ -5,7 +5,7 @@ import {
   COMPLETION_SECTION, DEFAULT_ENDPOINT, completionNeedsKey, completionSecretKey, mercuryAlternateEndpoint,
   readCompletionKey, readCompletionSettings, validateCompletionEndpoint,
 } from '../autocomplete/settings';
-import { readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
+import { readChatStarfieldEnabled, readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
 import { readReviewQuestionModel, readReviewQuestionEffort, REVIEW_QUESTION_MODEL_SETTING, REVIEW_QUESTION_EFFORT_SETTING } from '../review/reviewQuestionSettings';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 
@@ -27,6 +27,7 @@ export class ManagementSettingsService {
     const nextEditHasKey = !validateCompletionEndpoint(nextEdit.endpoint, 'mercury-edit') && Boolean(await readCompletionKey(this.secrets, nextEdit.endpoint));
     return {
       busyMessageMode: readBusyMessageMode(),
+      starfield: readChatStarfieldEnabled(),
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey, nextEditHasKey,
       reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: await this.questionModels() },

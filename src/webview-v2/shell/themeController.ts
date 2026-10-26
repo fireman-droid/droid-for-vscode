@@ -50,6 +50,10 @@ export function readBootResolvedTheme(): ResolvedTheme {
   return document.documentElement.dataset.dvxTheme === 'dark' ? 'dark' : 'light';
 }
 
+export function readBootStarfield(): boolean {
+  return document.documentElement.dataset.dvxStarfield !== 'false';
+}
+
 /**
  * Whether the editor currently runs a dark theme, read from the
  * classes VS Code maintains on the webview body (vscode-dark /
@@ -102,10 +106,16 @@ export function useThemeController(
 ): {
   readonly context: ThemeContextValue;
   readonly resolved: ResolvedTheme;
-  readonly applyHostTheme: (preference: ThemePreference, resolved: ResolvedTheme) => void;
+  readonly starfield: boolean;
+  readonly applyHostTheme: (
+    preference: ThemePreference,
+    resolved: ResolvedTheme,
+    starfield?: boolean,
+  ) => void;
 } {
   const [preference, setPreference] = useState<ThemePreference>(readBootThemePreference);
   const [resolved, setResolved] = useState<ResolvedTheme>(readBootResolvedTheme);
+  const [starfield, setStarfield] = useState<boolean>(readBootStarfield);
   useEffect(() => {
     applyDocumentTheme(resolved, preference);
   }, [preference, resolved]);
@@ -119,9 +129,16 @@ export function useThemeController(
     [persistPreference],
   );
   const applyHostTheme = useCallback(
-    (nextPreference: ThemePreference, nextResolved: ResolvedTheme): void => {
+    (
+      nextPreference: ThemePreference,
+      nextResolved: ResolvedTheme,
+      nextStarfield?: boolean,
+    ): void => {
       setPreference(nextPreference);
       setResolved(nextResolved);
+      const enabled = nextStarfield !== false;
+      setStarfield(enabled);
+      document.documentElement.dataset.dvxStarfield = enabled ? 'true' : 'false';
     },
     [],
   );
@@ -129,5 +146,5 @@ export function useThemeController(
     () => ({ preference, resolved, onPreferenceChange }),
     [onPreferenceChange, preference, resolved],
   );
-  return { context, resolved, applyHostTheme };
+  return { context, resolved, starfield, applyHostTheme };
 }

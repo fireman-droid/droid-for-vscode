@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BUSY_MESSAGE_MODE_SETTING } from '../chat/queue/busyMessageSettings';
+import { CHAT_STARFIELD_SETTING } from '../webview/webviewTheme';
 import {
   MANAGEMENT_VERSION, parseManagementRequest, type ManagementAction, type ManagementHostMessage,
   type ManagementPage, type ManagementRequest, type ManagementResult,
@@ -84,6 +85,9 @@ export class ManagementBinding implements vscode.Disposable {
       case 'defaults.save': return { defaults: await s.defaults.save(action.patch), message: '默认设置已保存，当前聊天保持不变。' };
       case 'theme.set':
         await vscode.workspace.getConfiguration('droidvisx').update('theme', action.theme, vscode.ConfigurationTarget.Global);
+        return { settings: await s.settings.read() };
+      case 'chat.starfield.set':
+        await vscode.workspace.getConfiguration('droidvisx').update(CHAT_STARFIELD_SETTING, action.enabled, vscode.ConfigurationTarget.Global);
         return { settings: await s.settings.read() };
       case 'chat.busyMessageMode.set':
         await vscode.workspace.getConfiguration('droidvisx').update(BUSY_MESSAGE_MODE_SETTING, action.mode, vscode.ConfigurationTarget.Global);

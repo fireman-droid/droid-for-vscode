@@ -205,6 +205,12 @@
           "scope": "application",
           "description": "How messages sent while Droid is working are delivered."
         },
+        "droidvisx.chat.starfield": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Show a subtle breathing starfield background in the main chat when using a dark theme."
+        },
         "droidvisx.theme": {
           "type": "string",
           "enum": [

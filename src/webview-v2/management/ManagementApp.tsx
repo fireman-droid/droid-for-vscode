@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import type { ManagementPage } from '../../shared/protocol/managementPageProtocol';
 import { Button } from '../ui/button';
+import { Switch } from '../ui/controls';
 import { SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { SettingsModelPicker } from '../models/SettingsModelPicker';
@@ -55,7 +56,11 @@ function ManagementContent({ transport }: { transport: ManagementTransport }) {
             onChange={value => { if (isLanguagePreference(value)) void state.run({ kind: 'language.set', language: value }); }}
             options={[['auto', t('Follow editor')], ['en', 'English'], ['zh-CN', '简体中文'], ['zh-TW', '繁體中文']]} />
         </ManagementRow>
-        <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow></SettingsSection>
+        <ManagementRow label={t("主题")}><ManagementChoice label={t("主题")} value={s.theme} disabled={state.busy} onChange={theme => void state.run({ kind: 'theme.set', theme: theme as typeof s.theme })} options={[[ 'auto', t('跟随编辑器') ], ['light', t('浅色')], ['dark', t('深色')]]} /></ManagementRow>
+        <ManagementRow label={t('Starfield background')} detail={t('Subtle breathing starfield in dark mode.')}>
+          <Switch aria-label={t('Starfield background')} checked={s.starfield !== false} disabled={state.busy}
+            onCheckedChange={enabled => void state.run({ kind: 'chat.starfield.set', enabled })} />
+        </ManagementRow></SettingsSection>
         <SettingsSection title={t('Chat')}><ManagementRow label={t('Messages while working')}
           detail={t((s.busyMessageMode ?? 'wait') === 'wait' ? 'Wait until the current task finishes.' : 'Guide the current task at the next model step.')}>
           <ManagementChoice label={t('Messages while working')} value={s.busyMessageMode ?? 'wait'} disabled={state.busy}

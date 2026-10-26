@@ -196,6 +196,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <ContentProvider value={content}>
     <div className="v2-chat-layout flex h-full min-w-0" data-mission-open={capabilities.openMission && host.missionWorkspaceRoute !== null || undefined} data-mission-chat={childChat || host.missionChat || undefined}>
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
+      starfield={theme.resolved === 'dark' && theme.starfield}
       header={<>
         <div className="flex min-w-0 items-center">{!childChat ? <AppInfo /> : null}</div>
         <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
