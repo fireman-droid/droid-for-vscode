@@ -16,7 +16,7 @@ export function useTranscriptScroll(
   reportLayout?: (detail: string) => void,
   onReachedBottom?: () => void,
   pauseAutoFollow = false,
-  syncRunway?: () => void,
+  syncRunway?: () => number,
 ) {
   const follow = useRef(createFollowState());
   const userScrolling = useRef(false);
@@ -134,8 +134,9 @@ export function useTranscriptScroll(
     const update = (time: number) => {
       frame.current = null;
       if (element.clientHeight === 0) { lastFrame.current = 0; return; }
-      syncRunway?.();
+      const runway = syncRunway?.() ?? 0;
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
+      const contentBottom = Math.max(0, element.scrollHeight - runway - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
       const waitingForMarkdown = () => (readTarget !== null || settlingSend.current) && column.querySelector('[data-markdown-pending]') !== null;
@@ -179,7 +180,7 @@ export function useTranscriptScroll(
       }
       lastFrame.current = frame.current === null ? 0 : time;
       setFollowingBottom(follow.current.following && navigation.current === null && !bottomNavigation.current);
-      setAway(bottom - element.scrollTop > 48);
+      setAway(contentBottom - element.scrollTop > 48);
       if (navigation.current === null && bottom - element.scrollTop <= FOLLOW_REJOIN_PX)
         onReachedBottom?.();
     };

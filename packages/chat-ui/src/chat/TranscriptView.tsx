@@ -77,7 +77,9 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   }, []);
   const runway = useRef<HTMLDivElement>(null);
   const runwayHeight = useRef(0);
-  const syncRunwayRef = useRef<() => void>(() => {});
+  const pinnedAtTop = useRef(false);
+  const lastPinTop = useRef(0);
+  const syncRunwayRef = useRef<() => number>(() => 0);
   const syncRunway = useCallback(() => syncRunwayRef.current(), []);
   const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow, syncRunway);
   const lastQuestionId = useMemo(() => {
@@ -95,6 +97,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   const historyAnchor = useRef<{ height: number; top: number } | null>(null);
   const revealEarlier = () => {
     const element = viewport.current;
+    pinnedAtTop.current = false;
     scrolling.stopFollowing();
     historyAnchor.current = element ? { height: element.scrollHeight, top: element.scrollTop } : null;
     setWindowState((current) => ({ ...current, count: current.count + MESSAGE_WINDOW_STEP }));
@@ -171,31 +174,50 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const cachedTurn = pinnedTurnIndex >= 0 ? virtualizer.measurementsCache[pinnedTurnIndex] : undefined;
     if (!element || !column || !spacer || pinnedTurnIndex < 0 || element.clientHeight <= 0 || cachedTurn === undefined) {
       runwayHeight.current = 0;
+      pinnedAtTop.current = false;
+      lastPinTop.current = 0;
       if (spacer) spacer.style.height = '0px';
-      return;
+      return 0;
     }
+    const previousRunway = runwayHeight.current;
+    const previousPinTop = lastPinTop.current;
     const columnRect = column.getBoundingClientRect();
     const rowEl = column.querySelector<HTMLElement>(`[data-index="${pinnedTurnIndex}"]`);
     const rowRect = rowEl?.getBoundingClientRect();
-    const turnStart = columnRect.height > 0 && rowRect && rowRect.height > 0
+    const domTurnStart = columnRect.height > 0 && rowRect && rowRect.height > 0
       ? rowRect.top - columnRect.top
       : cachedTurn.start;
+    const turnStart = Math.ceil(Math.max(cachedTurn.start, domTurnStart));
     const pinTop = Math.max(0, turnStart - PINNED_QUESTION_GAP);
     const paddingBottom = parseFloat(getComputedStyle(column).paddingBottom) || (statusContent ? 0 : 12);
     const naturalHeight = columnRect.height > 0
       ? spacer.getBoundingClientRect().top - columnRect.top + paddingBottom
       : scrollMargin + virtualizer.getTotalSize() + paddingBottom;
-    const nextHeight = Math.max(0, pinTop + element.clientHeight - naturalHeight);
+    const nextHeight = Math.ceil(Math.max(0, pinTop + element.clientHeight - naturalHeight));
+    const layoutShifted = nextHeight !== previousRunway || pinTop !== previousPinTop;
     runwayHeight.current = nextHeight;
+    lastPinTop.current = pinTop;
     spacer.style.height = `${nextHeight}px`;
+    if (pinnedAtTop.current) {
+      if (!layoutShifted && !scrolling.follow.current.following && element.scrollTop < pinTop - 2) {
+        pinnedAtTop.current = false;
+      } else if ((layoutShifted || scrolling.follow.current.following) && nextHeight > 0 && (element.scrollTop < pinTop || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
+        element.scrollTop = pinTop;
+        scrolling.follow.current.pendingProgrammaticTop = element.scrollTop;
+      }
+    } else if (element.scrollTop >= pinTop - 2) {
+      pinnedAtTop.current = true;
+    }
+    return nextHeight;
   };
-  useLayoutEffect(syncRunway);
+  useLayoutEffect(() => { syncRunway(); });
   const previousPinned = useRef<string | null>(null);
   useLayoutEffect(() => {
     // Queueing/editing also changes sendSignal. Follow only when a new
     // question actually enters the transcript, not while the old turn stops.
     const currentPinned = questionState.current.pinnedId;
     if (currentPinned !== null && previousPinned.current !== currentPinned) {
+      pinnedAtTop.current = true;
       syncRunway();
       scrolling.followNewQuestion();
     }
@@ -232,6 +254,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   const navigateQuestion = (id: string) => {
     const question = questions.find((item) => item.key === id);
     if (!question) return;
+    pinnedAtTop.current = false;
     scrolling.stopFollowing();
     pendingJump.current = true;
     setJump({ id, conversationId: conversationId, sendSignal });
