@@ -283,6 +283,7 @@ export function useTranscriptScroll(
     });
     observer.observe(element);
     observer.observe(column);
+    for (const child of column.children) observer.observe(child);
     const pendingMarkdown = new MutationObserver(() => { if (navigation.current !== null || settlingSend.current) schedule(); });
     pendingMarkdown.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-markdown-pending'] });
     element.addEventListener('scroll', onScroll, { passive: true });

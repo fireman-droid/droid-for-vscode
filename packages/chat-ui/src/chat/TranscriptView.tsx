@@ -176,6 +176,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       runwayHeight.current = 0;
       pinnedAtTop.current = false;
       lastPinTop.current = 0;
+      if (column) column.style.minHeight = '';
       if (spacer) spacer.style.height = '0px';
       return 0;
     }
@@ -193,11 +194,13 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const naturalHeight = columnRect.height > 0
       ? spacer.getBoundingClientRect().top - columnRect.top + paddingBottom
       : scrollMargin + virtualizer.getTotalSize() + paddingBottom;
-    const nextHeight = Math.ceil(Math.max(0, pinTop + element.clientHeight - naturalHeight));
+    const minColumnHeight = Math.ceil(pinTop + element.clientHeight);
+    const nextHeight = Math.ceil(Math.max(0, minColumnHeight - naturalHeight));
     const layoutShifted = nextHeight !== previousRunway || pinTop !== previousPinTop;
     runwayHeight.current = nextHeight;
     lastPinTop.current = pinTop;
-    spacer.style.height = `${nextHeight}px`;
+    column.style.minHeight = `${minColumnHeight}px`;
+    spacer.style.height = '0px';
     if (pinnedAtTop.current) {
       if (!layoutShifted && !scrolling.follow.current.following && element.scrollTop < pinTop - 2) {
         pinnedAtTop.current = false;
@@ -380,7 +383,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           {statusContent ? <div className={`bg-background pb-1 pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
             {statusContent}
           </div> : null}
-          <div ref={runway} data-pin-runway="" aria-hidden="true" style={{ height: `${runwayHeight.current}px` }} />
+          <div ref={runway} data-pin-runway="" aria-hidden="true" />
         </div>
       </div>
       {pinned === null ? null : <>

@@ -71,7 +71,7 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
         {presentation.detailFacts?.length ? <p data-ui-notice="" className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
       </div> : null}
     </AnimatedCollapsibleContent>
-    {presentation.running && !disclosure.expanded ? <Button variant="plain" size="none" aria-controls={id} aria-expanded={disclosure.expanded} onClick={disclosure.toggle}
+    {presentation.running && !(disclosure.expanded && disclosure.visible) ? <Button variant="plain" size="none" aria-controls={id} aria-expanded={disclosure.expanded} onClick={disclosure.toggle}
       style={{ '--shimmer-delay': liveStep.current.shimmerDelay } as CSSProperties} className="v2-running-latest select-none">
       <span key={`action:${liveStep.current.actionVersion}`} className="v2-running-slot v2-running-slot-action">
         <span className="v2-shimmer-text">{t(activeAction)}</span>
