@@ -168,9 +168,10 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     settleSend: composer.settleSend,
   });
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
-  const notice = selectVisibleNotice(host.transientDiagnostic, state.sessionId, state.turn?.turnId ?? null, running || state.turn?.status === 'stopping');
+  const turnBusy = running || state.turn?.status === 'stopping';
+  const notice = selectVisibleNotice(host.transientDiagnostic, state.sessionId, state.turn?.turnId ?? null, turnBusy);
   const statusMessage = getStatusMessage(state, composer.draft);
-  const idleStatus = statusMessage && !running && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
+  const idleStatus = statusMessage && !turnBusy && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
     ? statusMessage : null;
   const statusNotice = notice || idleStatus || composerNoticeText ? <>
     {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} embedded /> : null}
