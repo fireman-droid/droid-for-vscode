@@ -203,7 +203,12 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     if (column.style.minHeight !== nextMinHeight) column.style.minHeight = nextMinHeight;
     if (spacer.style.height !== '0px') spacer.style.height = '0px';
     if (pinnedAtTop.current) {
-      if (!layoutShifted && !scrolling.follow.current.following && element.scrollTop < pinTop - 2) {
+      // Runway height changes with every streamed line, so layout stability can
+      // never decide whether the reader left the pin. Compare against the pin
+      // the reader was attached to instead; releasing only stops future snaps
+      // and never writes scrollTop, so it cannot pull the viewport back down.
+      const pinReference = previousPinTop > 0 ? Math.min(previousPinTop, pinTop) : pinTop;
+      if (!scrolling.follow.current.following && element.scrollTop < pinReference - 2) {
         pinnedAtTop.current = false;
       } else if ((layoutShifted || scrolling.follow.current.following) && nextHeight > 0 && (element.scrollTop < pinTop || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
         element.scrollTop = pinTop;
