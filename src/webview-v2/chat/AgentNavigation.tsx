@@ -93,10 +93,10 @@ export function AgentNavigation({ navigation, port }: {
           onClick={row.onOpen}>
           {row.selected ? <Check aria-hidden="true" /> : <Users aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{row.title}</span>
-          <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{t(row.statusLabel)}</span>
+          {!row.onStop ? <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{t(row.statusLabel)}</span> : null}
         </Button>
         {row.onStop ? <Button variant="plain" size="none"
-          className="v2-composer-changes-stop min-h-6 w-[68px] shrink-0 whitespace-nowrap"
+          className="v2-composer-changes-stop min-h-6 shrink-0 whitespace-nowrap"
           disabled={row.stopPending} aria-busy={row.stopPending || undefined}
           aria-label={t("{p0} agent task: {p1}", { p0: row.stopPending ? t("Stopping") : t("Stop"), p1: row.title })}
           title={`${row.stopPending ? t("Stopping") : t("Stop")} ${row.title}`}
