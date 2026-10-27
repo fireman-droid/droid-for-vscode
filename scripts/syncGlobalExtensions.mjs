@@ -6,6 +6,7 @@ const includeExtension = !process.argv.includes('--webview-only');
 const repoRoot = process.cwd();
 const webviewSrc = path.join(repoRoot, 'dist', 'webview');
 const extensionSrc = path.join(repoRoot, 'dist', 'extension');
+const manifestSrc = path.join(repoRoot, 'package.json');
 
 if (!existsSync(webviewSrc)) {
   throw new Error(`Missing dist/webview directory at ${webviewSrc}. Run build:webview first.`);
@@ -27,6 +28,9 @@ for (const root of roots) {
     cpSync(webviewSrc, path.join(targetDir, 'dist', 'webview'), { recursive: true, force: true });
     if (includeExtension && existsSync(extensionSrc)) {
       cpSync(extensionSrc, path.join(targetDir, 'dist', 'extension'), { recursive: true, force: true });
+      if (existsSync(manifestSrc)) {
+        cpSync(manifestSrc, path.join(targetDir, 'package.json'), { force: true });
+      }
     }
     syncedCount += 1;
     console.log(`Synced webview bundle -> ${targetDir}`);
