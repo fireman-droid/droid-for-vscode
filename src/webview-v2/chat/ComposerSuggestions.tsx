@@ -14,7 +14,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
   readonly state: Pick<AssistantWebviewState, 'fileSearch' | 'commands' | 'skills' | 'btwAvailable'>;
   readonly draft: string;
   readonly disabled: boolean;
-  readonly onChange: (text: string) => void;
+  readonly onChange: (text: string, cursor?: number) => void;
   readonly onFileSearch: (id: string, query: string) => void;
   readonly onAttachPath: (path: string) => void;
   readonly onCommandsRefresh: () => void;
@@ -71,15 +71,16 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     const navigate = entry.kind === 'nav';
     const btw = entry.kind === 'builtin' && entry.name === 'btw';
     const prefix = navigate || btw ? '' : entry.kind === 'skill' ? `Use the "${entry.name}" skill: ` : `/${name} `;
-    onChange(prefix + draft.slice(slash.end));
+    onChange(prefix + draft.slice(slash.end), prefix.length);
     dismiss();
     if (navigate) onNavigate(entry.name);
     if (btw) onBtwOpen();
   };
   const selectMention = (path: string) => {
     if (mention === null) return;
+    const before = draft.slice(0, mention.start);
     onAttachPath(path);
-    onChange(draft.slice(0, mention.start) + draft.slice(mention.end));
+    onChange(before + draft.slice(mention.end), before.length);
     dismiss();
   };
   const open = !disabled && (slash !== null || mention !== null);

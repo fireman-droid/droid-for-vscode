@@ -9,7 +9,7 @@ import type { ChatPort } from '../host/chatIntent';
 import type { AssistantWebviewState } from '../state/types';
 import { QuestionCard } from './QuestionCard';
 import { createTranscriptSelector } from './transcript/transcriptGroups';
-import { resolveAssistantStatus } from './transcript/transcriptStatus';
+import { matchesAssistantTurn, resolveAssistantStatus } from './transcript/transcriptStatus';
 import { currentProcessWaiting } from './transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
@@ -133,7 +133,7 @@ export function Transcript({
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
-      return descriptor.kind === 'assistant' && descriptor.turnId === state.turn?.turnId;
+      return descriptor.kind === 'assistant' && matchesAssistantTurn(descriptor.items, descriptor.turnId, state.turn?.turnId);
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);

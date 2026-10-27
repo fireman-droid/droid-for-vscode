@@ -6,12 +6,24 @@ export type TranscriptStatus =
   | { readonly type: 'complete'; readonly reason: 'stop' }
   | { readonly type: 'incomplete'; readonly reason: 'cancelled' | 'error' };
 
+export function matchesAssistantTurn(
+  items: readonly SessionTranscriptItem[],
+  descriptorTurnId: string,
+  activeTurnId: string | null | undefined,
+): boolean {
+  if (!activeTurnId) return false;
+  return descriptorTurnId === activeTurnId ||
+    items.some((item) => item.kind !== 'user' && item.turnId === activeTurnId);
+}
+
 export function resolveAssistantStatus(
   items: readonly SessionTranscriptItem[],
   turnId: string,
   turn: { readonly turnId: string; readonly status: TurnStatus } | null,
 ): TranscriptStatus {
-  if (turn?.turnId === turnId) return mapTurnStatus(turn.status);
+  if (turn !== null && matchesAssistantTurn(items, turnId, turn.turnId)) {
+    return mapTurnStatus(turn.status);
+  }
   if (items.some((item) => (item.kind === 'thinking' && item.status === 'active') || (item.kind === 'tool' && item.status === 'running'))) {
     return { type: 'running' };
   }

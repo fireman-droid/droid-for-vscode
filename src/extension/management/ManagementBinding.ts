@@ -100,7 +100,7 @@ export class ManagementBinding implements vscode.Disposable {
         return { settings: await s.settings.read() };
       case 'completion.save':
         await s.settings.save(action.preferences, action.setApiKey, action.setNextEditApiKey);
-        return { settings: await s.settings.read(), message: '已保存' };
+        return { settings: await s.settings.read() };
       case 'chat.focus': await vscode.commands.executeCommand('droidvisx.focusView'); return {};
       case 'missions.new': s.newMission(); return {};
       case 'missions.list': {

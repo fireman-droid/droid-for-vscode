@@ -119,9 +119,11 @@
   .management-mission-table time { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .management-mission-unknown { color: var(--muted-ink); }
   .management-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+  .management-collapsible-rows .dvx-settings-row:first-child { border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-advanced { margin-top: 16px; }
   .management-advanced > svg { transition: transform var(--motion-normal) var(--motion-ease); }
   .management-advanced[data-state='open'] > svg { transform: rotate(180deg); }
+  .management-advanced-content .dvx-settings-section { margin-top: 8px; }
   .management-empty { margin: 24px 0; color: var(--muted-ink); font-size: 12px; }
   .management-caption { margin-top: 12px; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted-ink); }
   .management-caption.text-destructive { color: var(--error-ink); }

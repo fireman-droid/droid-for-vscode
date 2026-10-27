@@ -87,8 +87,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
     </header>
     <div ref={follow.viewportRef} aria-label={t("Side conversation")} className="v2-btw-viewport">
       <div ref={follow.contentRef} className="v2-btw-transcript">
-        {preparing && !state.entries.length ? <p role="status" className="v2-btw-progress"><DroidActivity phase="loading" />{t('Preparing')}</p> : null}
-        {state.entries.length === 0 && !unavailable && !preparing ? <div data-ui-notice="" className="v2-btw-empty">
+        {state.entries.length === 0 && !unavailable ? <div data-ui-notice="" className="v2-btw-empty">
           <MessageSquare className="v2-btw-empty-mark" aria-hidden="true" />
           <p>{t("A question on the side.")}</p>
           <span>{t("Explore a detail without interrupting your main conversation.")}</span>
@@ -129,10 +128,13 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
         <div className="v2-btw-compose-content">
         {attachments}
         <QuoteChips quotes={quotedContext} previewAnchor={composer} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
-        <CodeReferenceInput ref={input} draft={references} className="dvx-btw-input v2-btw-input" disabled={unavailable}
-          aria-label={t("By the Way question")} placeholder={state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")}
-          onPaste={onPaste}
-          onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
+        <div className="v2-btw-editor">
+          <CodeReferenceInput ref={input} draft={references} className="dvx-btw-input v2-btw-input" disabled={unavailable}
+            aria-label={t("By the Way question")} placeholder={preparing && !state.entries.length ? undefined : state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")}
+            onPaste={onPaste}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
+          {preparing && !state.entries.length ? <p role="status" data-ui-notice="" className="v2-btw-input-placeholder"><DroidActivity phase="loading" /><span className="truncate">{t('Preparing')}</span></p> : null}
+        </div>
         </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}
         {composerActions && composeHint ? <div data-ui-notice="" className="v2-btw-compose-hint">{composeHint}</div> : null}
