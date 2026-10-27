@@ -186,7 +186,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const rowEl = column.querySelector<HTMLElement>(`[data-index="${pinnedTurnIndex}"]`);
     const rowRect = rowEl?.getBoundingClientRect();
     const domTurnStart = columnRect.height > 0 && rowRect && rowRect.height > 0
-      ? rowRect.top - columnRect.top
+      ? Math.round(rowRect.top - columnRect.top)
       : cachedTurn.start;
     const turnStart = Math.ceil(Math.max(cachedTurn.start, domTurnStart));
     const pinTop = Math.max(0, turnStart - PINNED_QUESTION_GAP);
@@ -210,7 +210,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       const pinReference = previousPinTop > 0 ? Math.min(previousPinTop, pinTop) : pinTop;
       if (!scrolling.follow.current.following && element.scrollTop < pinReference - 2) {
         pinnedAtTop.current = false;
-      } else if ((layoutShifted || scrolling.follow.current.following) && nextHeight > 0 && (element.scrollTop < pinTop || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
+      } else if ((layoutShifted || scrolling.follow.current.following) && nextHeight > 0 && (element.scrollTop < pinTop - 1 || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
         element.scrollTop = pinTop;
         scrolling.follow.current.pendingProgrammaticTop = element.scrollTop;
       }
@@ -370,7 +370,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
               </span>
             </div> : null}
           </div>
-          <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow} reportLayout={reportLayout}>
+          <ProcessPresentationProvider key={conversationId} messageIds={ids} followingRef={scrolling.follow} onPauseFollowing={scrolling.stopFollowing} reportLayout={reportLayout}>
           <div style={{ paddingTop: Math.max(0, (virtualItems[0]?.start ?? scrollMargin) - scrollMargin), paddingBottom: Math.max(0, virtualizer.getTotalSize() - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)) }}>
             {virtualItems.map((row, index) => (
               <div key={row.key} ref={virtualizer.measureElement} data-index={row.index} data-markdown-row="" className="flow-root"

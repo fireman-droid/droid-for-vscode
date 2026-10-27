@@ -37,11 +37,13 @@ export const ProcessLatestContext = createContext(false);
 export function ProcessPresentationProvider({
   messageIds,
   followingRef,
+  onPauseFollowing,
   reportLayout,
   children,
 }: {
   readonly messageIds: readonly string[];
   readonly followingRef: RefObject<{ following: boolean } | null>;
+  readonly onPauseFollowing?: () => void;
   readonly reportLayout?: (detail: string) => void;
   readonly children: ReactNode;
 }): React.JSX.Element {
@@ -69,9 +71,10 @@ export function ProcessPresentationProvider({
       reportLayout,
       pauseFollowing: () => {
         if (followingRef.current !== null) followingRef.current.following = false;
+        onPauseFollowing?.();
       },
     }),
-    [followingRef, reportLayout],
+    [followingRef, onPauseFollowing, reportLayout],
   );
   return (
     <ProcessPresentationContext.Provider value={value}>

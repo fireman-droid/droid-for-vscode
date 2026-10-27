@@ -64,22 +64,23 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
       {presentation.facts.length ? <span className={`v2-explored-facts ${presentation.failed ? 'failed' : ''}`}>{presentation.facts.join(' · ')}</span> : null}
       <ChevronRight className="v2-explored-chev" />
     </Button></CollapsibleTrigger>
-    <AnimatedCollapsibleContent id={id} ref={disclosure.contentRef} open={disclosure.expanded} visible={disclosure.visible}
-      className={`transition-[grid-template-rows,opacity] motion-reduce:transition-none ${disclosure.visible ? 'opacity-100' : 'opacity-0'}`}>
+    <AnimatedCollapsibleContent id={id} ref={disclosure.contentRef} open={disclosure.expanded} visible={disclosure.visible}>
       {disclosure.mounted ? <div className="v2-activity-items min-w-0">
         <ProcessGroupContext.Provider value={true}>{children}</ProcessGroupContext.Provider>
         {presentation.detailFacts?.length ? <p data-ui-notice="" className="py-1 text-[11px] text-muted-foreground">{presentation.detailFacts.join(' · ')}</p> : null}
       </div> : null}
     </AnimatedCollapsibleContent>
-    {presentation.running && !(disclosure.expanded && disclosure.visible) ? <Button variant="plain" size="none" aria-controls={id} aria-expanded={disclosure.expanded} onClick={disclosure.toggle}
-      style={{ '--shimmer-delay': liveStep.current.shimmerDelay } as CSSProperties} className="v2-running-latest select-none">
-      <span key={`action:${liveStep.current.actionVersion}`} className="v2-running-slot v2-running-slot-action">
-        <span className="v2-shimmer-text">{t(activeAction)}</span>
-      </span>
-      {activeTarget ? <span key={`target:${liveStep.current.targetVersion}`} className="v2-running-slot v2-running-slot-target">
-        <span className="v2-shimmer-sub" title={activeTarget}>{activeTarget}</span>
-      </span> : null}
-    </Button> : null}
+    {presentation.running ? <AnimatedCollapsibleContent open={!disclosure.expanded} visible={!disclosure.visible}>
+      <Button variant="plain" size="none" aria-controls={id} aria-expanded={disclosure.expanded} onClick={disclosure.toggle}
+        style={{ '--shimmer-delay': liveStep.current.shimmerDelay } as CSSProperties} className="v2-running-latest select-none">
+        <span key={`action:${liveStep.current.actionVersion}`} className="v2-running-slot v2-running-slot-action">
+          <span className="v2-shimmer-text">{t(activeAction)}</span>
+        </span>
+        {activeTarget ? <span key={`target:${liveStep.current.targetVersion}`} className="v2-running-slot v2-running-slot-target">
+          <span className="v2-shimmer-sub" title={activeTarget}>{activeTarget}</span>
+        </span> : null}
+      </Button>
+    </AnimatedCollapsibleContent> : null}
     </Collapsible> : null}
     {presentation.waiting ? <p role="status" className="py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
     {presentation.notice ? <p role="status" className={`py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
