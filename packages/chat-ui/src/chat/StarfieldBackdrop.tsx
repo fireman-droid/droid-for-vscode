@@ -1,8 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-const SIZE_SCALE = 1.22;
+const SIZE_SCALE = 1.42;
 const BRIGHTNESS = 1.0;
-const IDLE_FRAME_INTERVAL_MS = 40;
+const IDLE_FRAME_INTERVAL_MS = 33;
+/** One full celestial revolution in 5 minutes (clockwise around bottom-right pole). */
+const ORBIT_PERIOD_MS = 300_000;
+const ORBIT_OMEGA_PER_MS = (Math.PI * 2) / ORBIT_PERIOD_MS;
+const EDGE_PAD = 12;
 
 interface StarTint {
   readonly name: string;
@@ -61,8 +65,11 @@ function getPinpointSprite(tint: StarTint): HTMLCanvasElement {
 }
 
 interface StarParticle {
-  x: number;
-  y: number;
+  readonly orbitR: number;
+  readonly theta0: number;
+  readonly thetaMin: number;
+  readonly thetaSpan: number;
+  readonly orbitOmega: number;
   readonly kind: 'dot' | 'sprite' | 'beacon';
   readonly r: number;
   readonly size: number;
@@ -70,7 +77,6 @@ interface StarParticle {
   readonly maxAlpha: number;
   readonly omega: number;
   readonly phase: number;
-  readonly driftY: number;
   readonly tint: StarTint;
   readonly sprite: HTMLCanvasElement;
 }
@@ -86,78 +92,126 @@ interface MeteorParticle {
   readonly headSprite: HTMLCanvasElement;
 }
 
-function sampleSkyPos(width: number, height: number): { x: number; y: number } {
-  if (Math.random() < 0.42) {
-    const t = Math.random();
-    const u1 = Math.max(1e-6, Math.random());
-    const u2 = Math.random();
-    const gauss = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    const spread = Math.min(width, height) * 0.23;
-    const x = t * width;
-    const y = (0.74 - t * 0.54) * height + gauss * spread;
-    return { x: (x + width) % width, y: (y + height) % height };
+function computeArcBounds(r: number, width: number, height: number): { thetaMin: number; thetaSpan: number } {
+  const safeR = Math.max(6, r);
+  const padAngle = Math.asin(Math.min(0.95, EDGE_PAD / safeR));
+  const thetaMin =
+    safeR > width + EDGE_PAD ? Math.acos(Math.min(1, (width + EDGE_PAD) / safeR)) : -padAngle;
+  const thetaMax =
+    safeR > height + EDGE_PAD
+      ? Math.asin(Math.min(1, (height + EDGE_PAD) / safeR))
+      : Math.PI * 0.5 + padAngle;
+  return {
+    thetaMin,
+    thetaSpan: Math.max(0.08, thetaMax - thetaMin),
+  };
+}
+
+/**
+ * Samples a star inside the top-left quadrant of a circle whose center is at the
+ * bottom-right corner `(width, height)` and whose radius equals `max(width, height)`.
+ */
+function sampleQuadrantStar(
+  width: number,
+  height: number,
+  circleRadius: number,
+): { orbitR: number; theta0: number; thetaMin: number; thetaSpan: number } {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    let x: number;
+    let y: number;
+    if (Math.random() < 0.38) {
+      const t = Math.random();
+      const u1 = Math.max(1e-6, Math.random());
+      const u2 = Math.random();
+      const gauss = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      const spread = Math.min(width, height) * 0.24;
+      x = ((t * width) % width + width) % width;
+      y = (((0.76 - t * 0.56) * height + gauss * spread) % height + height) % height;
+    } else {
+      x = Math.random() * width;
+      y = Math.random() * height;
+    }
+    const dx = width - x;
+    const dy = height - y;
+    const orbitR = Math.hypot(dx, dy);
+    if (orbitR >= 8 && orbitR <= circleRadius) {
+      const { thetaMin, thetaSpan } = computeArcBounds(orbitR, width, height);
+      const theta0 = thetaMin + Math.random() * thetaSpan;
+      return { orbitR, theta0, thetaMin, thetaSpan };
+    }
   }
-  return { x: Math.random() * width, y: Math.random() * height };
+  const orbitR = Math.max(12, Math.sqrt(Math.random()) * circleRadius);
+  const { thetaMin, thetaSpan } = computeArcBounds(orbitR, width, height);
+  return {
+    orbitR,
+    theta0: thetaMin + Math.random() * thetaSpan,
+    thetaMin,
+    thetaSpan,
+  };
 }
 
 function buildStars(width: number, height: number): StarParticle[] {
   const area = width * height;
+  const circleRadius = Math.max(width, height);
   const specs = [
     {
       count: Math.round(Math.max(110, Math.min(220, area / 4200))),
       kind: 'dot' as const,
-      minR: 0.4,
-      maxR: 0.65,
+      minR: 0.42,
+      maxR: 0.68,
       minAlpha: 0.14,
-      maxAlpha: 0.38,
+      maxAlpha: 0.4,
       minPeriod: 4500,
       maxPeriod: 9000,
-      driftY: -0.009,
+      orbitScale: 0.95,
     },
     {
       count: Math.round(Math.max(48, Math.min(100, area / 9500))),
       kind: 'sprite' as const,
-      minSize: 3.4,
-      maxSize: 4.8,
+      minSize: 3.5,
+      maxSize: 5.0,
       minAlpha: 0.18,
-      maxAlpha: 0.66,
+      maxAlpha: 0.68,
       minPeriod: 3200,
       maxPeriod: 6400,
-      driftY: -0.016,
+      orbitScale: 0.99,
     },
     {
       count: Math.round(Math.max(24, Math.min(48, area / 19000))),
       kind: 'sprite' as const,
-      minSize: 5.0,
-      maxSize: 6.8,
-      minAlpha: 0.15,
-      maxAlpha: 0.85,
+      minSize: 5.2,
+      maxSize: 7.0,
+      minAlpha: 0.16,
+      maxAlpha: 0.86,
       minPeriod: 2400,
       maxPeriod: 5000,
-      driftY: -0.025,
+      orbitScale: 1.02,
     },
     {
       count: Math.round(Math.max(8, Math.min(16, area / 56000))),
       kind: 'beacon' as const,
-      minSize: 7.0,
-      maxSize: 9.2,
-      minAlpha: 0.2,
-      maxAlpha: 0.9,
+      minSize: 7.2,
+      maxSize: 9.5,
+      minAlpha: 0.22,
+      maxAlpha: 0.92,
       minPeriod: 2600,
       maxPeriod: 4800,
-      driftY: -0.034,
+      orbitScale: 1.05,
     },
   ];
 
   const stars: StarParticle[] = [];
   for (const spec of specs) {
     for (let i = 0; i < spec.count; i += 1) {
-      const pos = sampleSkyPos(width, height);
+      const orbit = sampleQuadrantStar(width, height, circleRadius);
       const tint = pickTint();
       const period = spec.minPeriod + Math.random() * (spec.maxPeriod - spec.minPeriod);
       stars.push({
-        x: pos.x,
-        y: pos.y,
+        orbitR: orbit.orbitR,
+        theta0: orbit.theta0,
+        thetaMin: orbit.thetaMin,
+        thetaSpan: orbit.thetaSpan,
+        orbitOmega: ORBIT_OMEGA_PER_MS * spec.orbitScale * (0.96 + Math.random() * 0.08),
         kind: spec.kind,
         r: spec.minR !== undefined ? spec.minR + Math.random() * (spec.maxR - spec.minR) : 0,
         size: spec.minSize !== undefined ? spec.minSize + Math.random() * (spec.maxSize - spec.minSize) : 0,
@@ -165,7 +219,6 @@ function buildStars(width: number, height: number): StarParticle[] {
         maxAlpha: spec.maxAlpha * (0.85 + Math.random() * 0.15),
         omega: (Math.PI * 2) / period,
         phase: Math.random() * Math.PI * 2,
-        driftY: spec.driftY * (0.75 + Math.random() * 0.5),
         tint,
         sprite: getPinpointSprite(tint),
       });
@@ -213,31 +266,33 @@ export function StarfieldBackdrop() {
       const invW = 2.2 / Math.max(1, width);
       const invH = 1.4 / Math.max(1, height);
       const waveT = now * 0.0004;
+      const orbitTime = dtScale > 0 ? now : 0;
 
       for (let i = 0; i < stars.length; i += 1) {
         const s = stars[i];
-        if (dtScale > 0) {
-          s.y += s.driftY * dtScale;
-          if (s.y < -12) {
-            s.y = height + 12;
-            s.x = Math.random() * width;
-          }
-        }
-        const spatialWave = s.x * invW + s.y * invH;
+        const wrapped = ((s.theta0 - s.thetaMin + orbitTime * s.orbitOmega) % s.thetaSpan + s.thetaSpan) % s.thetaSpan;
+        const theta = s.thetaMin + wrapped;
+        const x = width - s.orbitR * Math.cos(theta);
+        const y = height - s.orbitR * Math.sin(theta);
+        const arcProgress = wrapped / s.thetaSpan;
+        const edgeFade =
+          arcProgress < 0.04 ? arcProgress / 0.04 : arcProgress > 0.96 ? (1 - arcProgress) / 0.04 : 1;
+
+        const spatialWave = x * invW + y * invH;
         const rawSin = 0.5 + 0.5 * Math.sin(now * s.omega + s.phase + Math.sin(waveT + spatialWave) * 0.6);
         const breath = rawSin * Math.sqrt(rawSin);
-        const alpha = Math.min(0.95, (s.minAlpha + (s.maxAlpha - s.minAlpha) * breath) * BRIGHTNESS);
+        const alpha = Math.min(0.95, (s.minAlpha + (s.maxAlpha - s.minAlpha) * breath) * BRIGHTNESS * edgeFade);
 
         if (s.kind === 'dot') {
           const [hr, hg, hb] = s.tint.halo;
           ctx.fillStyle = `rgba(${hr}, ${hg}, ${hb}, ${alpha.toFixed(3)})`;
           const r = s.r * SIZE_SCALE;
-          ctx.fillRect(s.x - r, s.y - r, r * 2, r * 2);
+          ctx.fillRect(x - r, y - r, r * 2, r * 2);
         } else {
           const scale = (0.85 + 0.27 * breath) * SIZE_SCALE;
           const sz = s.size * scale;
           ctx.globalAlpha = alpha;
-          ctx.drawImage(s.sprite, s.x - sz * 0.5, s.y - sz * 0.5, sz, sz);
+          ctx.drawImage(s.sprite, x - sz * 0.5, y - sz * 0.5, sz, sz);
         }
       }
       ctx.globalAlpha = 1;
