@@ -171,6 +171,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     (instance.itemSizeCache.has(item.key) ? item.end <= (instance.scrollOffset ?? 0) : item.start < (instance.scrollOffset ?? 0));
   syncRunwayRef.current = () => {
     const element = viewport.current, column = content.current, spacer = runway.current;
+    virtualizer.getTotalSize();
     const cachedTurn = pinnedTurnIndex >= 0 ? virtualizer.measurementsCache[pinnedTurnIndex] : undefined;
     if (!element || !column || !spacer || pinnedTurnIndex < 0 || element.clientHeight <= 0 || cachedTurn === undefined) {
       runwayHeight.current = 0;
@@ -216,6 +217,10 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       }
     } else if (element.scrollTop >= pinTop - 2) {
       pinnedAtTop.current = true;
+      if (scrolling.follow.current.following && nextHeight > 0 && element.scrollTop < pinTop - 1) {
+        element.scrollTop = pinTop;
+        scrolling.follow.current.pendingProgrammaticTop = element.scrollTop;
+      }
     }
     return nextHeight;
   };
@@ -237,17 +242,33 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       (element?.scrollHeight ?? 0) - (questions.length <= 1 ? runwayHeight.current : 0),
     [questions.length],
   );
+  const resolvePinOffset = useCallback((scrollTop: number) => {
+    const baseOffset = scrollTop + PINNED_QUESTION_GAP;
+    if (pinnedTurnIndex >= 0) {
+      const pinnedStart = virtualizer.measurementsCache[pinnedTurnIndex]?.start;
+      if (pinnedStart !== undefined && baseOffset < pinnedStart) {
+        if (runwayHeight.current > 0 && scrollTop >= lastPinTop.current - 2) return pinnedStart;
+        const element = viewport.current;
+        const rowEl = element?.querySelector<HTMLElement>(`[data-index="${pinnedTurnIndex}"]`);
+        if (element && rowEl && rowEl.getBoundingClientRect().top - element.getBoundingClientRect().top <= PINNED_QUESTION_GAP + 2) {
+          return pinnedStart;
+        }
+      }
+    }
+    return baseOffset;
+  }, [pinnedTurnIndex, virtualizer]);
   const readBoundary = useCallback(() => {
     const element = viewport.current;
-    const offset = (element?.scrollTop ?? 0) + PINNED_QUESTION_GAP;
+    const offset = resolvePinOffset(element?.scrollTop ?? 0);
     const row = virtualizer.getVirtualItemForOffset(questionEntryOffset(offset));
     return `${row?.index ?? -1}:${row !== undefined && hasQuestionEntered(row.start, offset)}:${
       isScrollableTranscript(effectiveScrollHeight(element), element?.clientHeight ?? 0)}`;
-  }, [virtualizer, effectiveScrollHeight]);
+  }, [virtualizer, effectiveScrollHeight, resolvePinOffset]);
   // Pixel movement only moves the pinned overlay; render the transcript when
   // the question boundary or virtual range changes, not on every scroll event.
   useSyncExternalStore(subscribe, readBoundary, readBoundary);
   const top = viewport.current?.scrollTop ?? 0;
+  const pinOffset = resolvePinOffset(top);
   const virtualItems = virtualizer.getVirtualItems();
   useLayoutEffect(() => {
     const anchor = historyAnchor.current, element = viewport.current;
@@ -256,7 +277,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     scrolling.writeTop(anchor.top + element.scrollHeight - anchor.height);
   }, [hiddenMessageCount, scrolling.writeTop]);
   const questionTops = questions.map((question) => virtualizer.measurementsCache[question.turnIndex]?.start ?? Number.POSITIVE_INFINITY);
-  const activeQuestion = findActiveQuestionIndex(questionTops, top + PINNED_QUESTION_GAP);
+  const activeQuestion = findActiveQuestionIndex(questionTops, pinOffset);
   const showNavigator = isScrollableTranscript(effectiveScrollHeight(viewport.current), viewport.current?.clientHeight ?? 0);
   const jumpTarget = jump?.conversationId === conversationId && jump.sendSignal === sendSignal
     ? questions.find((question) => question.key === jump.id) : undefined;
@@ -291,21 +312,22 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     scrollToBottom: returnToBottom,
     prepareForSend: scrolling.prepareForSend,
   }), [scrolling.stopFollowing, scrolling.prepareForSend, returnToBottom]);
-  const liveCandidate = virtualizer.getVirtualItemForOffset(questionEntryOffset(top + PINNED_QUESTION_GAP));
+  const pin = useRef<HTMLDivElement>(null);
+  const liveCandidate = virtualizer.getVirtualItemForOffset(questionEntryOffset(pinOffset));
+  const liveEntered = liveCandidate !== undefined && hasQuestionEntered(liveCandidate.start, pinOffset);
   const heldCandidate = useRef<{ conversationId: string | null; candidate: typeof liveCandidate; entered: boolean }>({
     conversationId: conversationId, candidate: liveCandidate, entered: false,
   });
-  if (!hasTranscriptSelection(selectionRoot.current) || heldCandidate.current.conversationId !== conversationId)
-    heldCandidate.current = { conversationId: conversationId, candidate: liveCandidate, entered: liveCandidate !== undefined && hasQuestionEntered(liveCandidate.start, top + PINNED_QUESTION_GAP) };
+  if (heldCandidate.current.conversationId !== conversationId || liveEntered || !hasTranscriptSelection(pin.current))
+    heldCandidate.current = { conversationId: conversationId, candidate: liveCandidate, entered: liveEntered };
   const candidate = heldCandidate.current.candidate;
   const lead = candidate === undefined || !heldCandidate.current.entered ? undefined : byId.get(turns[candidate.index]?.id);
   const pinned = lead?.role === 'user' ? lead : null;
   // Selection can retain a pinned owner after its original row re-enters view.
   // Retain the overlay node, but only hide the original while it is above the edge.
   const pinEntered = candidate !== undefined && hasQuestionEntered(
-    virtualizer.measurementsCache[candidate.index]?.start ?? candidate.start, top + PINNED_QUESTION_GAP,
+    virtualizer.measurementsCache[candidate.index]?.start ?? candidate.start, pinOffset,
   );
-  const pin = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ id: '', height: 0 });
   const measurePinned = useCallback(() => {
     const element = pin.current;
@@ -338,7 +360,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     let frame: number | null = null;
     const update = () => {
       frame = null;
-      if (hasTranscriptSelection(selectionRoot.current)) return;
+      if (hasTranscriptSelection(pin.current)) return;
       // Editing grows the pinned card and its placeholder in one commit. The
       // virtualizer can still hold the previous row height until ResizeObserver
       // runs, so read the rendered boundary from the same layout as the card.

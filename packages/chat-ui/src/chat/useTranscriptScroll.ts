@@ -192,25 +192,27 @@ export function useTranscriptScroll(
     const onScroll = () => {
       syncRunway?.();
       const next = sample();
+      const previousScrollHeight = follow.current.lastScrollHeight;
       const layoutChanged = next.clientHeight !== lastScrollClientHeight ||
-        next.scrollHeight !== follow.current.lastScrollHeight;
+        next.scrollHeight !== previousScrollHeight;
+      const shrank = next.scrollHeight < previousScrollHeight;
       lastScrollClientHeight = next.clientHeight;
       const releasedByGesture = wheelReleased.current;
       wheelReleased.current = false;
+      const atBottom = next.scrollHeight - next.scrollTop - next.clientHeight <= FOLLOW_REJOIN_PX;
       if (!selecting()) {
         const wasFollowing = follow.current.following;
         applyFollowScroll(follow.current, next);
         if (pauseAutoFollow || navigation.current !== null) follow.current.following = false;
-        else if (releasedByGesture &&
-          next.scrollHeight - next.scrollTop - next.clientHeight > FOLLOW_REJOIN_PX)
+        else if (releasedByGesture && !atBottom)
           follow.current.following = false;
         // Finishing replies and virtual-row adjustments are not reading intent.
         // Rejoin only during a user gesture at the current, measured bottom.
-        else if (layoutChanged || !userScrolling.current ||
-          (!wasFollowing && next.scrollHeight - next.scrollTop - next.clientHeight > FOLLOW_REJOIN_PX))
+        else if ((layoutChanged && (!userScrolling.current || shrank || !atBottom)) || !userScrolling.current ||
+          (!wasFollowing && !atBottom))
           follow.current.following = wasFollowing;
       }
-      if (layoutChanged) userScrolling.current = false;
+      if (shrank) userScrolling.current = false;
       schedule();
     };
     const onPointerDown = (event: PointerEvent) => {
