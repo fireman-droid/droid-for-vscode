@@ -71,7 +71,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   };
   return <aside ref={panel} aria-label={t("By the Way side chat")} data-webview-overlay=""
     className="v2-btw-panel v2-chat-surface"
-    style={{ width: `min(${width}px,calc(100vw - 160px))` }}>
+    style={{ width: `min(${width}px,calc(100% - 160px))` }}>
     <div role="separator" aria-label={t("Resize By the Way panel")} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={520} aria-valuenow={width} tabIndex={0}
       className="v2-btw-resizer"
       onPointerDown={(event) => { resize.current = { id: event.pointerId, x: event.clientX, width: panel.current!.getBoundingClientRect().width }; event.currentTarget.setPointerCapture(event.pointerId); }}

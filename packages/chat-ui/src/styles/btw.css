@@ -5,6 +5,7 @@
     height: 100%;
     min-width: 0;
     min-height: 0;
+    max-width: 100%;
     flex-shrink: 0;
     grid-template-rows: 36px minmax(0, 1fr) auto;
     border-left: 1px solid var(--panel-edge);
@@ -50,7 +51,8 @@
   }
   .v2-btw-viewport {
     min-height: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
     overflow-anchor: none;
     scrollbar-gutter: stable;
@@ -82,18 +84,20 @@
   }
   .v2-btw-question-content {
     max-height: min(160px, 30vh);
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior-x: contain;
     border-radius: 2px;
     outline: none;
     font-size: 13px;
     line-height: 21px;
+    overflow-wrap: anywhere;
   }
   .v2-btw-question-content:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-btw-answer { min-width: 0; padding: 4px 2px 0; }
   .v2-btw-speaker { margin-right: 8px; color: var(--muted-ink); font-size: 12px; }
   .v2-btw-author { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; color: var(--muted-ink); font-size: 12px; }
-  .v2-btw-author > svg { width: 16px; height: 16px; }
+  .v2-btw-author > svg { width: 16px; height: 16px; flex: none; }
   .v2-btw-tool-record { min-width: 0; }
   .v2-btw-tool-toggle {
     display: flex; width: 100%; min-width: 0; align-items: center; gap: 6px;
@@ -117,7 +121,8 @@
     min-width: 0;
     max-height: 65vh;
     padding: 0 12px 12px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
   }
   .v2-btw-queued {
