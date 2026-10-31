@@ -17,7 +17,28 @@ const sample: SessionBtwState = {
     {
       id: 'preview-follow-up', state: 'done', message: null,
       question: '那 BTW 会影响主对话吗？',
-      answer: 'BTW 使用独立的侧问答会话，不会把这段追问写进主对话。\n\n- 可以继续阅读主对话，同时在这里追问。\n- 回答过程中可以先写下一条问题。\n- 关闭 BTW 仅隐藏面板，重新打开可继续草稿和侧问答。',
+      answer: '先看一下 BTW 的会话来源。\n\nBTW 使用独立的侧问答会话，不会把这段追问写进主对话。\n\n- 可以继续阅读主对话，同时在这里追问。\n- 回答过程中可以先写下一条问题。\n- 关闭 BTW 仅隐藏面板，重新打开可继续草稿和侧问答。',
+      tools: [
+        { id: 'preview-read', name: 'Read', kind: 'read', state: 'done', target: 'src/extension/btw/btwSideChat.ts' },
+        { id: 'preview-search', name: 'Grep', kind: 'search', state: 'done', target: 'forkSession' },
+      ],
+      parts: [
+        { kind: 'thinking', id: 'thinking-0', text: '用户想确认侧问答是否写回主会话，先找 fork 的创建位置。', active: false, truncated: false, durationMs: 1_800 },
+        { kind: 'tool', id: 'preview-read' },
+        { kind: 'tool', id: 'preview-search' },
+        { kind: 'text', start: 0 },
+        { kind: 'thinking', id: 'thinking-1', text: 'fork 独立保存，主会话不会收到这些消息。', active: false, truncated: false, durationMs: 900 },
+        { kind: 'text', start: 17 },
+      ],
+    },
+    {
+      id: 'preview-streaming', state: 'streaming', message: null, progress: 'tool',
+      question: '停止回答时会保留哪些内容？', answer: '',
+      tools: [{ id: 'preview-running', name: 'Read', kind: 'read', state: 'running', target: 'src/extension/btw/btwStopState.ts' }],
+      parts: [
+        { kind: 'thinking', id: 'thinking-0', text: '先看停止状态如何结算。', active: false, truncated: false, durationMs: 600 },
+        { kind: 'tool', id: 'preview-running' },
+      ],
     },
   ],
 };

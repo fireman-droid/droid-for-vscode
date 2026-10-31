@@ -1,14 +1,21 @@
-import { MAX_BTW_THINKING_LENGTH } from '../../shared/protocol/btwProtocol';
+import { MAX_BTW_THINKING_BLOCKS, MAX_BTW_THINKING_LENGTH } from '../../shared/protocol/btwProtocol';
 
-export interface BtwThinkingEvent {
-  readonly kind: 'thinking';
+export interface BtwThinkingBlock {
+  readonly id: string;
   readonly text: string;
   readonly active: boolean;
   readonly truncated: boolean;
   readonly durationMs?: number;
 }
 
+/** Every retained block in first-seen order, so consumers can place each one where it began. */
+export interface BtwThinkingEvent {
+  readonly kind: 'thinking';
+  readonly blocks: readonly BtwThinkingBlock[];
+}
+
 interface ThinkingBlock {
+  readonly id: string;
   text: string;
   complete: boolean;
   truncated: boolean;
@@ -18,6 +25,7 @@ interface ThinkingBlock {
 /** One question's SDK thinking blocks, shared by process notifications and daemon streams. */
 export class BtwThinkingProjection {
   private readonly messages = new Map<string, Map<number, ThinkingBlock>>();
+  private readonly order: ThinkingBlock[] = [];
   private retainedLength = 0;
 
   project(event: {
@@ -62,7 +70,12 @@ export class BtwThinkingProjection {
     let message = this.messages.get(messageId);
     if (!message) { message = new Map(); this.messages.set(messageId, message); }
     let block = message.get(index);
-    if (!block) { block = { text: '', complete: false, truncated: false }; message.set(index, block); }
+    if (!block) {
+      if (this.order.length >= MAX_BTW_THINKING_BLOCKS) return null;
+      block = { id: `thinking-${this.order.length}`, text: '', complete: false, truncated: false };
+      message.set(index, block);
+      this.order.push(block);
+    }
     return block;
   }
 
@@ -79,15 +92,10 @@ export class BtwThinkingProjection {
   }
 
   private snapshot(): BtwThinkingEvent {
-    const blocks = [...this.messages.values()].flatMap((message) => [...message.entries()].sort(([a], [b]) => a - b).map(([, block]) => block));
-    const text = blocks.map((block) => block.text).filter(Boolean).join('\n\n');
-    const durations = blocks.flatMap((block) => block.durationMs === undefined ? [] : [block.durationMs]);
-    return {
-      kind: 'thinking', text: text.slice(0, MAX_BTW_THINKING_LENGTH),
-      active: blocks.some((block) => !block.complete),
-      truncated: text.length > MAX_BTW_THINKING_LENGTH || blocks.some((block) => block.truncated),
-      ...(durations.length ? { durationMs: Math.min(Number.MAX_SAFE_INTEGER, durations.reduce((total, duration) => total + duration, 0)) } : {}),
-    };
+    return { kind: 'thinking', blocks: this.order.map((block) => ({
+      id: block.id, text: block.text, active: !block.complete, truncated: block.truncated,
+      ...(block.durationMs === undefined ? {} : { durationMs: block.durationMs }),
+    })) };
   }
 }
 

@@ -15,6 +15,12 @@ export interface SideToolActivity {
   readonly detailsOmitted?: boolean;
 }
 
+/** Arrival order of one answer; text spans `answer` from `start` to the next text part. */
+export type SideReplyPart =
+  | { readonly kind: 'thinking'; readonly id: string; readonly text: string; readonly active: boolean; readonly truncated: boolean; readonly durationMs?: number }
+  | { readonly kind: 'tool'; readonly id: string }
+  | { readonly kind: 'text'; readonly start: number };
+
 export interface SideConversation {
   readonly status: 'idle' | 'preparing' | 'ready' | 'error' | 'unsupported';
   readonly stopping?: boolean;
@@ -23,9 +29,7 @@ export interface SideConversation {
     readonly question: string;
     readonly images?: readonly SideChatImage[];
     readonly answer: string;
-    readonly thinking?: string;
-    readonly thinkingTruncated?: boolean;
-    readonly thinkingDurationMs?: number;
+    readonly parts?: readonly SideReplyPart[];
     readonly state: 'streaming' | 'done' | 'error';
     readonly stopped?: boolean;
     readonly progress?: 'waiting' | 'thinking' | 'tool' | 'answering';

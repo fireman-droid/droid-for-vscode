@@ -1,10 +1,11 @@
-import { Check, ChevronRight, CircleAlert, CircleCheck, CircleDashed, FileCode2, Globe, Search, GitBranch, Wrench } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, CircleCheck, CircleDashed } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { DroidActivity } from '../ui/droid-motion';
 import { CodeBlock } from '../content/CodeBlock';
+import { ActivityItem } from './ActivityItem';
 import type { SideToolActivity } from './sideChat';
 
 export const SIDE_TOOL_LABELS = {
@@ -12,7 +13,6 @@ export const SIDE_TOOL_LABELS = {
   web: ['Looking up documentation…', 'Look up documentation'], git: ['Querying Git…', 'Git query'],
   analysis: ['Running example…', 'Run example'], other: ['Using tools…', 'Tool'],
 } as const;
-const ICONS = { read: FileCode2, search: Search, web: Globe, git: GitBranch, analysis: Wrench, other: Wrench };
 
 function StatusIcon({ state }: { readonly state: SideToolActivity['state'] }) {
   if (state === 'running') return <DroidActivity phase="working" />;
@@ -20,7 +20,7 @@ function StatusIcon({ state }: { readonly state: SideToolActivity['state'] }) {
   return <Icon aria-hidden="true" />;
 }
 
-function summarizeSideTools(tools: readonly SideToolActivity[], t: ReturnType<typeof useI18n>['t']): string {
+export function summarizeSideTools(tools: readonly SideToolActivity[], t: ReturnType<typeof useI18n>['t']): string {
   let reads = 0, searches = 0, fetches = 0, git = 0, others = 0;
   for (const tool of tools) {
     if (tool.kind === 'read') reads += 1;
@@ -38,9 +38,22 @@ function summarizeSideTools(tools: readonly SideToolActivity[], t: ReturnType<ty
   return parts.join(', ');
 }
 
-function ToolDisclosure({ label, status, icon, children, failed = false }: {
-  readonly label: ReactNode;
-  readonly status?: string | null;
+/** One tool row inside the shared process group; details open only when a result exists. */
+export function SideToolItem({ messageId, tool }: { readonly messageId: string; readonly tool: SideToolActivity }) {
+  const { t } = useI18n();
+  const target = tool.target ?? (tool.kind === 'other' ? tool.name : undefined);
+  const status = tool.state === 'error' ? t('Failed') : tool.state === 'incomplete' ? t('Result unconfirmed') : undefined;
+  const details = tool.error || tool.output || tool.detailsOmitted ? <>
+    {tool.error ? <p className="v2-btw-error">{tool.error}</p> : null}
+    {tool.output ? <pre className="v2-btw-tool-output">{tool.output}</pre> : null}
+    {tool.detailsOmitted ? <p data-ui-notice="" className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
+  </> : undefined;
+  return <ActivityItem id={tool.id} messageId={messageId} title={t(SIDE_TOOL_LABELS[tool.kind][tool.state === 'running' ? 0 : 1])}
+    target={target} status={status} failed={tool.state === 'error'}>{details}</ActivityItem>;
+}
+
+function ToolDisclosure({ label, icon, children, failed = false }: {
+  readonly label: string;
   readonly icon?: ReactNode;
   readonly children: ReactNode;
   readonly failed?: boolean;
@@ -49,47 +62,16 @@ function ToolDisclosure({ label, status, icon, children, failed = false }: {
     <CollapsibleTrigger asChild><Button variant="plain" size="none" className="v2-btw-tool-toggle" data-failed={failed || undefined}>
       <ChevronRight className="v2-btw-tool-chevron" aria-hidden="true" />
       {icon}
-      {typeof label === 'string' ? <span className="v2-btw-tool-counts" title={label}>{label}</span> : label}
-      {status ? <span className="v2-btw-tool-status" data-failed={failed || undefined}>{status}</span> : null}
+      <span className="v2-btw-tool-counts" title={label}>{label}</span>
     </Button></CollapsibleTrigger>
     <CollapsibleContent className="v2-btw-tool-detail">{children}</CollapsibleContent>
   </Collapsible>;
 }
 
-/** One compact activity line. The retained list is expanded only on request. */
-export function SideToolRecords({ tools }: { readonly tools: readonly SideToolActivity[] }) {
-  const { t } = useI18n();
-  if (!tools.length) return null;
-  const active = [...tools].reverse().find(tool => tool.state === 'running');
-  const failedCount = tools.filter(tool => tool.state === 'error').length;
-  const completed = tools.filter(tool => tool.state === 'done');
-  const summary = summarizeSideTools(tools, t);
-  const status = failedCount > 0 ? t('{count} failed', { count: failedCount })
-    : !active && completed.length < tools.length ? t('Result unconfirmed') : null;
-  return <ToolDisclosure failed={failedCount > 0} status={status}
-    label={<><span className="v2-btw-tool-verb">{t('Explored')}</span><span className="v2-btw-tool-counts" title={summary}>{summary}</span></>}>
-    <ul className="v2-btw-tool-list">{tools.map(tool => {
-      const Icon = ICONS[tool.kind];
-      const fallback = t(SIDE_TOOL_LABELS[tool.kind][tool.state === 'running' ? 0 : 1]);
-      const text = tool.target ?? (tool.kind === 'other' ? tool.name : fallback);
-      return <li key={tool.id}>
-        <div data-ui-notice="" className="v2-btw-tool-row">
-          <Icon aria-hidden="true" />
-          <span title={text}>{text}</span>
-          {tool.state !== 'done' ? <span aria-label={t(tool.state === 'error' ? 'Failed' : tool.state === 'running' ? 'Running' : 'Result unconfirmed')} data-failed={tool.state === 'error' || undefined}><StatusIcon state={tool.state} /></span> : null}
-        </div>
-        {tool.error ? <p className="v2-btw-error">{tool.error}</p> : null}
-        {tool.output ? <pre className="v2-btw-tool-output">{tool.output}</pre> : null}
-        {tool.detailsOmitted ? <p data-ui-notice="" className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
-      </li>;
-    })}</ul>
-  </ToolDisclosure>;
-}
-
 /** Success is a structured tool result, never a claim inferred from answer text. */
-export function SideAnalysisResults({ tools }: { readonly tools: readonly SideToolActivity[] }) {
+export function SideAnalysisResult({ tool }: { readonly tool: SideToolActivity }) {
   const { t } = useI18n();
-  return tools.map(tool => <ToolDisclosure key={tool.id} failed={tool.state === 'error'}
+  return <ToolDisclosure failed={tool.state === 'error'}
     label={t(tool.state === 'done' ? 'Example run completed' : tool.state === 'error' ? 'Example execution failed' : 'Example result unconfirmed')}
     icon={tool.state === 'done' ? <CircleCheck aria-hidden="true" /> : <StatusIcon state={tool.state} />}>
     {tool.code ? <CodeBlock text={tool.code} language={tool.language ?? 'javascript'} /> : null}
@@ -97,5 +79,5 @@ export function SideAnalysisResults({ tools }: { readonly tools: readonly SideTo
     {tool.error ? <p className="v2-btw-error">{tool.error}</p> : null}
     <p data-ui-notice="" className="v2-btw-tool-note">{t(tool.state === 'done' ? 'Only this isolated example ran; project tests were not run.' : 'No successful result was confirmed for this example.')}</p>
     {tool.detailsOmitted ? <p data-ui-notice="" className="v2-btw-tool-note">{t('Some earlier or lengthy details were omitted.')}</p> : null}
-  </ToolDisclosure>);
+  </ToolDisclosure>;
 }

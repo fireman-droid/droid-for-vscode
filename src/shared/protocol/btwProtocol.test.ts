@@ -176,6 +176,23 @@ describe('parseSessionBtwMessage', () => {
     expect(parseSessionBtwMessage(validMessage())?.btw.entries[0]?.message).toBeNull();
   });
 
+  it('accepts ordered parts and rejects a tool part without its tool', () => {
+    const message = validMessage();
+    const entry = {
+      id: 'e', question: 'q', answer: 'ab', state: 'done',
+      tools: [{ id: 'read-1', name: 'Read', kind: 'read', state: 'done' }],
+      parts: [
+        { kind: 'thinking', id: 'thinking-0', text: 'plan', active: false, truncated: false, durationMs: 10 },
+        { kind: 'tool', id: 'read-1' },
+        { kind: 'text', start: 0 },
+      ],
+    };
+    (message.btw as Record<string, unknown>).entries = [entry];
+    expect(parseSessionBtwMessage(message)?.btw.entries[0]?.parts).toHaveLength(3);
+    (message.btw as Record<string, unknown>).entries = [{ ...entry, tools: [] }];
+    expect(parseSessionBtwMessage(message)).toBeNull();
+  });
+
   it('rejects duplicate entry ids', () => {
     const message = validMessage();
     const entry = {

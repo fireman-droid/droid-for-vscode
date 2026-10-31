@@ -102,21 +102,12 @@
     transition: color var(--motion-fast) var(--motion-ease);
   }
   .v2-btw-tool-toggle:hover:not(:disabled) { color: var(--ink); }
-  .v2-btw-tool-verb { flex: none; color: var(--secondary-ink); font-weight: 500; transition: color var(--motion-fast) var(--motion-ease); }
-  .v2-btw-tool-toggle:hover:not(:disabled) .v2-btw-tool-verb { color: var(--ink); }
   .v2-btw-tool-counts { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .v2-btw-tool-status { flex: none; color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
-  .v2-btw-tool-status[data-failed] { color: var(--error-ink); }
   .v2-btw-tool-toggle > svg { width: 12px; height: 12px; flex: none; }
   .v2-btw-tool-toggle .v2-btw-tool-chevron { width: 12px; height: 12px; transition: transform var(--motion-fast) var(--motion-ease); }
   .v2-btw-tool-toggle[data-state='open'] .v2-btw-tool-chevron { transform: rotate(90deg); }
   .v2-btw-tool-toggle[data-failed] { color: var(--error-ink); }
   .v2-btw-tool-detail { min-width: 0; padding: 2px 0 6px 16px; }
-  .v2-btw-tool-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-  .v2-btw-tool-row { display: flex; min-width: 0; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 12px; line-height: 18px; user-select: none; }
-  .v2-btw-tool-row > span:first-of-type { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .v2-btw-tool-row svg { width: 12px; height: 12px; flex: none; color: var(--muted-ink); }
-  .v2-btw-tool-row [data-failed] svg { color: var(--error-ink); }
   .v2-btw-tool-output { max-height: 180px; padding: 8px; margin-top: 6px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft-surface); border-radius: var(--control-radius); font: 12px/1.6 var(--vscode-editor-font-family, monospace); }
   .v2-btw-tool-note { margin-top: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .v2-btw-progress { display: flex; min-width: 0; align-items: center; gap: 6px; margin-top: 4px; color: var(--muted-ink); font-size: 12px; line-height: 18px; user-select: none; }
@@ -211,6 +202,6 @@
   .v2-btw-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   .v2-btw-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-btw-composer, .v2-btw-send, .v2-btw-resizer::after, .v2-btw-tool-toggle, .v2-btw-tool-verb, .v2-btw-tool-chevron { transition: none; }
+    .v2-btw-composer, .v2-btw-send, .v2-btw-resizer::after, .v2-btw-tool-toggle, .v2-btw-tool-chevron { transition: none; }
   }
 }

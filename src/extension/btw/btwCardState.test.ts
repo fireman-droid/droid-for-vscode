@@ -8,6 +8,8 @@ import {
 import {
   appendBtwAnswerDelta,
   appendBtwQuestion,
+  applyBtwThinking,
+  applyBtwTool,
   completeBtwEntry,
   failBtwEntry,
   setBtwPendingQuestion,
@@ -35,6 +37,24 @@ describe('btwCardState', () => {
       answer: 'ZEBRA-42',
       state: 'done',
     });
+  });
+
+  it('keeps thinking, tools and prose in arrival order and updates blocks in place', () => {
+    const block = (id: string, text: string, active: boolean) => ({ id, text, active, truncated: false });
+    let state = appendBtwQuestion(EMPTY_SESSION_BTW_STATE, 'e1', 'q');
+    state = applyBtwThinking(state, 'e1', { kind: 'thinking', blocks: [block('thinking-0', 'Plan', true)] });
+    state = applyBtwTool(state, 'e1', { id: 'read-1', name: 'Read', kind: 'read', state: 'running' });
+    state = appendBtwAnswerDelta(state, 'e1', 'First. ');
+    state = applyBtwThinking(state, 'e1', { kind: 'thinking', blocks: [block('thinking-0', 'Plan done', false), block('thinking-1', 'Next', true)] });
+    state = applyBtwTool(state, 'e1', { id: 'read-1', name: 'Read', kind: 'read', state: 'done' });
+    state = appendBtwAnswerDelta(state, 'e1', 'Second.');
+    expect(state.entries[0]?.parts).toEqual([
+      { kind: 'thinking', id: 'thinking-0', text: 'Plan done', active: false, truncated: false },
+      { kind: 'tool', id: 'read-1' },
+      { kind: 'text', start: 0 },
+      { kind: 'thinking', id: 'thinking-1', text: 'Next', active: true, truncated: false },
+      { kind: 'text', start: 7 },
+    ]);
   });
 
   it('marks failed entries with their quiet error copy', () => {

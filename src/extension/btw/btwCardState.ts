@@ -2,6 +2,7 @@ import {
   MAX_BTW_ANSWER_LENGTH,
   MAX_BTW_THINKING_LENGTH,
   MAX_BTW_ENTRIES,
+  type BtwEntryPart,
   type BtwEntryProgress,
   type BtwStatus,
   type SessionBtwState,
@@ -17,9 +18,23 @@ export function applyBtwTool(state: SessionBtwState, id: string, tool: BtwToolAc
     const tools = [...entry.tools ?? []];
     const index = tools.findIndex(item => item.id === tool.id);
     if (index < 0) tools.push(tool); else tools[index] = tool;
-    return { ...entry, tools: retainBtwTools(tools), progress: tool.state === 'running' ? 'tool' as const
+    const retained = retainBtwTools(tools);
+    const parts = index < 0 ? [...entry.parts ?? [], { kind: 'tool' as const, id: tool.id }] : entry.parts ?? [];
+    return { ...entry, tools: retained, parts: retainParts(parts, retained), progress: tool.state === 'running' ? 'tool' as const
       : entry.progress === 'tool' ? 'waiting' as const : entry.progress };
   }) };
+}
+
+/** Drops parts of evicted tools; text parts left adjacent merge into the earlier one. */
+function retainParts(parts: readonly BtwEntryPart[], tools: readonly BtwToolActivity[]): readonly BtwEntryPart[] {
+  const ids = new Set(tools.map(tool => tool.id));
+  const kept: BtwEntryPart[] = [];
+  for (const part of parts) {
+    if (part.kind === 'tool' && !ids.has(part.id)) continue;
+    if (part.kind === 'text' && kept.at(-1)?.kind === 'text') continue;
+    kept.push(part);
+  }
+  return kept;
 }
 
 function settleTools(tools: readonly BtwToolActivity[] | undefined): readonly BtwToolActivity[] | undefined {
@@ -112,23 +127,35 @@ export function appendBtwAnswerDelta(
       return entry;
     }
     changed = true;
+    const parts = entry.parts ?? [];
     return {
       ...entry,
       answer: (entry.answer + text).slice(0, MAX_BTW_ANSWER_LENGTH),
+      parts: text.length === 0 || parts.at(-1)?.kind === 'text' ? parts : [...parts, { kind: 'text' as const, start: entry.answer.length }],
       progress: 'answering' as const,
     };
   });
   return changed ? { ...state, entries } : state;
 }
 
-/** Retains the SDK's reconciled text and duration, including textless thinking events. */
+/** Updates known thinking blocks in place and appends new ones where they began, including textless blocks. */
 export function applyBtwThinking(state: SessionBtwState, id: string, event: BtwThinkingEvent): SessionBtwState {
-  return { ...state, entries: state.entries.map((entry) => entry.id !== id || entry.state !== 'streaming' ? entry : {
-    ...entry,
-    thinking: event.text.slice(0, MAX_BTW_THINKING_LENGTH),
-    thinkingTruncated: event.truncated,
-    ...(event.durationMs === undefined ? {} : { thinkingDurationMs: event.durationMs }),
-    progress: event.active ? 'thinking' : entry.progress === 'thinking' ? 'waiting' : entry.progress,
+  return { ...state, entries: state.entries.map((entry) => {
+    if (entry.id !== id || entry.state !== 'streaming') return entry;
+    const parts = [...entry.parts ?? []];
+    let budget = MAX_BTW_THINKING_LENGTH;
+    for (const block of event.blocks) {
+      const text = block.text.slice(0, budget);
+      budget -= text.length;
+      const part: BtwEntryPart = { kind: 'thinking', id: block.id, text, active: block.active,
+        truncated: block.truncated || text.length < block.text.length,
+        ...(block.durationMs === undefined ? {} : { durationMs: block.durationMs }) };
+      const index = parts.findIndex(item => item.kind === 'thinking' && item.id === block.id);
+      if (index < 0) parts.push(part); else parts[index] = part;
+    }
+    const active = event.blocks.some(block => block.active);
+    return { ...entry, parts,
+      progress: active ? 'thinking' as const : entry.progress === 'thinking' ? 'waiting' as const : entry.progress };
   }) };
 }
 
