@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n';
 import { useEffect, useRef, type PointerEvent } from 'react';
-import { Aperture, ArrowUp, Clock3, MessageSquare, Quote, X } from 'lucide-react';
+import { ArrowUp, Clock3, MessageSquare, Quote, X } from 'lucide-react';
 import { AnswerStopButton } from './AnswerStopButton';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
@@ -9,6 +9,7 @@ import { useSmoothFollowScroll } from '../navigation/useSmoothFollowScroll';
 import { Button } from '../ui/button';
 import { DroidActivity } from '../ui/droid-motion';
 import type { InlineInputHandle } from '../ui/inline-input';
+import { PinwheelIcon } from '../ui/pinwheel-icon';
 import { QuoteChips } from './QuoteChips';
 import { SideReply } from './SideReply';
 import { ReferencedText } from './CodeReferenceChips';
@@ -106,7 +107,7 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
                 </div>
             </div>
             <div aria-label={t("{p0} answer", { p0: assistantName })} className="v2-btw-answer">
-              <div data-ui-notice="" className="v2-btw-author"><Aperture aria-hidden="true" />{assistantName}</div>
+              <div data-ui-notice="" className="v2-btw-author"><PinwheelIcon aria-hidden="true" />{assistantName}</div>
               <SideReply entry={entry} preparing={preparing} />
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
