@@ -9,7 +9,7 @@ import type { ChatPort } from '../host/chatIntent';
 import type { AssistantWebviewState } from '../state/types';
 import { QuestionCard } from './QuestionCard';
 import { createTranscriptSelector } from './transcript/transcriptGroups';
-import { matchesAssistantTurn, resolveAssistantStatus } from './transcript/transcriptStatus';
+import { matchesAssistantTurn, replyOperationsLive, resolveAssistantStatus } from './transcript/transcriptStatus';
 import { currentProcessWaiting } from './transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
@@ -173,10 +173,8 @@ export function Transcript({
           : waiting;
       const status = resolveAssistantStatus(message.items, message.turnId, activeTurn);
       const summary = replySummaries.get(message.id);
-      const operationsLive =
-        replyPending ||
-        status.type === 'running' ||
-        (status.type === 'incomplete' && status.reason === 'cancelled');
+      const operationsLive = replyOperationsLive(status, replyPending,
+        state.turn?.turnId === message.turnId && state.turn.status === 'stopping');
       return <AssistantReply descriptor={message} status={status} waiting={activeWaiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}

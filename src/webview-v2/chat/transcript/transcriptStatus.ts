@@ -45,3 +45,18 @@ function mapTurnStatus(status: TurnStatus): TranscriptStatus {
     case 'completed': return { type: 'complete', reason: 'stop' };
   }
 }
+
+/**
+ * Whether this reply's recorded change summary must stay hidden behind the
+ * live ledger. Only a stop still in flight holds the ledger open; an
+ * interrupted reply has already settled, so its summary must show like a
+ * completed one instead of disappearing with the paused reply.
+ */
+export function replyOperationsLive(
+  status: TranscriptStatus,
+  replyPending: boolean,
+  stopping: boolean,
+): boolean {
+  if (replyPending || status.type === 'running') return true;
+  return status.type === 'incomplete' && status.reason === 'cancelled' && stopping;
+}

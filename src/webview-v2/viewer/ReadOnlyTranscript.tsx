@@ -2,7 +2,7 @@ import { ReadOnlyTranscriptView } from '@droidvisx/chat-ui/chat/ReadOnlyTranscri
 import { memo, useMemo, useState } from 'react';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { createTranscriptSelector } from '../chat/transcript/transcriptGroups';
-import { matchesAssistantTurn, resolveAssistantStatus } from '../chat/transcript/transcriptStatus';
+import { matchesAssistantTurn, replyOperationsLive, resolveAssistantStatus } from '../chat/transcript/transcriptStatus';
 import { AssistantReply } from '../chat/AssistantReply';
 import { ReadOnlyQuestion } from './ReadOnlyQuestion';
 import { isPlanLive, selectPlanAnchors } from '../chat/transcript/planAnchor';
@@ -49,10 +49,7 @@ export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, runn
     const isPendingTail = replyPending && descriptor.id === lastReplyId;
     const activeTurn = isPendingTail ? { turnId: descriptor.turnId, status: 'streaming' as const } : active;
     const status = resolveAssistantStatus(descriptor.items, descriptor.turnId, activeTurn);
-    const operationsLive =
-      replyPending ||
-      status.type === 'running' ||
-      (status.type === 'incomplete' && status.reason === 'cancelled');
+    const operationsLive = replyOperationsLive(status, replyPending, running && turnId === descriptor.turnId);
     return <AssistantReply descriptor={descriptor} status={status} waiting={null}
       replyText={replyPending ? undefined : replyTails.get(descriptor.id)} readOnly
       operationSummary={replySummaries.get(descriptor.id)} operationsLive={operationsLive} onInteract={stopFollowing}

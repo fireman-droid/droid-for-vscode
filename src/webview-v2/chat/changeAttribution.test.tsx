@@ -12,7 +12,7 @@ import { initialAssistantWebviewState } from '../state/initialState';
 import type { StoreHostMessage } from '../state/types';
 import { ProcessPresentationProvider } from './transcript/processPresentation';
 import { describeTranscript } from './transcript/transcriptGroups';
-import { resolveAssistantStatus } from './transcript/transcriptStatus';
+import { replyOperationsLive, resolveAssistantStatus } from './transcript/transcriptStatus';
 import { ToolActionsContext } from '../content/toolActions';
 import { summarizeOperations } from './AiOperationSummary';
 import { AssistantReply } from './AssistantReply';
@@ -81,8 +81,8 @@ function Scene({ store, port, readOnly = false }: ReturnType<typeof fixture> & {
         if (descriptor.kind === 'user') return <p key={descriptor.item.id}>{descriptor.item.text}</p>;
         const summary = summaries.get(descriptor.turnId);
         const status = resolveAssistantStatus(descriptor.items, descriptor.turnId, state.turn);
-        const operationsLive = state.turn?.turnId === descriptor.turnId
-          ? ['submitting', 'streaming', 'stopping'].includes(state.turn.status) : status.type === 'running';
+        const operationsLive = replyOperationsLive(status, false,
+          state.turn?.turnId === descriptor.turnId && state.turn.status === 'stopping');
         return <AssistantReply key={descriptor.id} descriptor={descriptor} status={status}
           waiting={null} replyText={replyTails.get(descriptor.id)} completedAt={undefined} regenerate={undefined} fork={undefined}
           operationSummary={summary} operationsLive={operationsLive} readOnly={readOnly} />;
