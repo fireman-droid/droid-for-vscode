@@ -87,14 +87,21 @@ export class WindowDaemonPool {
 
   private observeIde(ide: NativeIdeRelay): () => void {
     const relay = ++this.nextIdeRelay;
-    const startedAt = Date.now();
+    let stateStartedAt = Date.now();
+    let lastStatus: string | undefined;
     const recordState = () => {
       const state = ide.read();
       const status = state.status === 'disconnected' && !ide.requiresSessionRestart() ? 'idle' : state.status;
+      const now = Date.now();
+      const durationMs = now - stateStartedAt;
+      if (status !== lastStatus) {
+        stateStartedAt = now;
+        lastStatus = status;
+      }
       this.options.record({
         level: status === 'error' || status === 'disconnected' ? 'warn' : 'info',
         name: 'ide.native.relay-state',
-        attributes: { relay, status, durationMs: Date.now() - startedAt },
+        attributes: { relay, status, durationMs },
         // Relay messages are fixed lifecycle explanations, never request payloads.
         detail: state.message,
       });

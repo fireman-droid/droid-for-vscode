@@ -120,7 +120,10 @@ class RelayClient implements PersistentIdeRelay {
     if (this.read().status === 'connected') return;
     if (this.read().status !== 'connecting') throw new Error(this.read().message);
     await new Promise<void>((resolve, reject) => {
+      const fastPoll = setInterval(() => { void this.poll(); }, 50);
+      fastPoll.unref();
       const finish = (error?: unknown) => {
+        clearInterval(fastPoll);
         unsubscribe(); signal?.removeEventListener('abort', abort); clearTimeout(timeout);
         if (error) reject(error); else resolve();
       };
@@ -133,7 +136,10 @@ class RelayClient implements PersistentIdeRelay {
       const timeout = setTimeout(() => finish(new Error('Timed out waiting for the native IDE handshake.')), 60_000);
       signal?.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) abort();
-      else check();
+      else {
+        check();
+        void this.poll();
+      }
     });
   }
   async dispose(): Promise<void> {

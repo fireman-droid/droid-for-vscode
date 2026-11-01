@@ -14,7 +14,7 @@ import { currentProcessWaiting } from './transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../shell/statusMessage';
-import { isPlanLive, selectPlanAnchors } from './transcript/planAnchor';
+import { createPlanAnchorSelector, isPlanLive } from './transcript/planAnchor';
 import { createOperationSummarySelector, summarizeReplyOperations } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
@@ -114,9 +114,9 @@ export function Transcript({
     ...ingress,
   };
   const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
-    structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
+    plans: createPlanAnchorSelector(), structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
   const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
-  const plans = useMemo(() => selectPlanAnchors(items), [items]);
+  const plans = useMemo(() => selectors.plans(items), [items, selectors]);
   const [planChoices, setPlanChoices] = useState<{ conversationId: string | null; values: ReadonlyMap<string, boolean> } | null>(null);
   const currentPlanChoices = planChoices?.conversationId === state.conversationId ? planChoices.values : null;
   const togglePlan = useCallback((id: string, expanded: boolean) => {

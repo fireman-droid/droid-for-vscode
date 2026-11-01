@@ -20,6 +20,7 @@ import {
 import { parseSessionViewerWebviewMessage } from './validateSessionViewerMessage';
 
 export const SESSION_VIEWER_REFRESH_MS = 2_500;
+export const LIVE_VIEWER_REFRESH_MS = 80;
 const VIEW_TYPE = 'droidvisx.sessionViewer';
 
 export interface SessionViewerPanelTarget {
@@ -53,6 +54,7 @@ interface ViewerEntry {
   readonly panel: vscode.WebviewPanel;
   readonly disposables: vscode.Disposable[];
   timer: ReturnType<typeof setInterval> | null;
+  scheduleTimer: ReturnType<typeof setTimeout> | null;
   refreshBusy: boolean;
   refreshTrailing: boolean;
   running: boolean;
@@ -136,6 +138,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       panel,
       disposables: [bindWebviewLocale(panel.webview)],
       timer: null,
+      scheduleTimer: null,
       refreshBusy: false,
       refreshTrailing: false,
       running: true,
@@ -217,7 +220,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
     const source = this.resolveSource(entry.target.kind);
     if (entry.sourceSubscription === null && source?.subscribe !== undefined) {
       entry.sourceSubscription = source.subscribe(entry.target, () => {
-        void this.refresh(entry);
+        this.scheduleLiveRefresh(entry);
       });
     }
     if (entry.timer === null) {
@@ -228,16 +231,34 @@ export class SessionViewerPanelController implements vscode.Disposable {
     void this.refresh(entry);
   }
 
+  private scheduleLiveRefresh(entry: ViewerEntry): void {
+    if (!this.isCurrent(entry) || entry.scheduleTimer !== null) {
+      return;
+    }
+    entry.scheduleTimer = setTimeout(() => {
+      entry.scheduleTimer = null;
+      void this.refresh(entry);
+    }, LIVE_VIEWER_REFRESH_MS);
+  }
+
   private stopRefresh(entry: ViewerEntry): void {
     if (entry.timer !== null) {
       clearInterval(entry.timer);
       entry.timer = null;
+    }
+    if (entry.scheduleTimer !== null) {
+      clearTimeout(entry.scheduleTimer);
+      entry.scheduleTimer = null;
     }
   }
 
   private async refresh(entry: ViewerEntry): Promise<void> {
     if (!this.isCurrent(entry)) {
       return;
+    }
+    if (entry.scheduleTimer !== null) {
+      clearTimeout(entry.scheduleTimer);
+      entry.scheduleTimer = null;
     }
     if (entry.refreshBusy) {
       entry.refreshTrailing = true;
@@ -324,8 +345,11 @@ export class SessionViewerPanelController implements vscode.Disposable {
                 stopping: false,
                 stopError: entry.stopError,
               };
+      const changed = entry.lastSnapshot === null || !sameSnapshot(entry.lastSnapshot, snapshot);
       entry.lastSnapshot = snapshot;
-      this.post(entry, snapshot);
+      if (changed) {
+        this.post(entry, snapshot);
+      }
       if (wasRunning && !entry.running) {
         this.diagnostics?.record({
           level: 'info',
@@ -454,6 +478,32 @@ export class SessionViewerPanelController implements vscode.Disposable {
 function targetKey(target: SessionViewerPanelTarget): string {
   return JSON.stringify([target.kind, target.mode, target.sessionId,
     target.subagent?.parentSessionId, target.subagent?.toolUseId]);
+}
+
+function sameSnapshot(left: SessionViewerSnapshotMessage, right: SessionViewerSnapshotMessage): boolean {
+  if (
+    left.status !== right.status ||
+    left.running !== right.running ||
+    left.lifecycle !== right.lifecycle ||
+    left.stopping !== right.stopping ||
+    left.stopError !== right.stopError ||
+    left.target.kind !== right.target.kind ||
+    left.target.mode !== right.target.mode ||
+    left.target.title !== right.target.title ||
+    ('sessionId' in left.target ? left.target.sessionId : undefined) !==
+      ('sessionId' in right.target ? right.target.sessionId : undefined)
+  ) {
+    return false;
+  }
+  if (left.status === 'unavailable' || right.status === 'unavailable') {
+    return left.status === 'unavailable' && right.status === 'unavailable' && left.reason === right.reason;
+  }
+  return (
+    left.truncated === right.truncated &&
+    left.refreshError === right.refreshError &&
+    left.items.length === right.items.length &&
+    left.items.every((item, index) => item === right.items[index])
+  );
 }
 
 function publicTarget(target: SessionViewerPanelTarget): SessionViewerTarget {

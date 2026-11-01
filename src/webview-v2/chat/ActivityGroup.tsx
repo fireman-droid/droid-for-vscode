@@ -1,10 +1,12 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
+import { ChevronUp } from 'lucide-react';
 import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { toolPresentation } from '../../shared/transcript/toolCatalog';
 import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
 import { type GroupCandidatePart } from './transcript/activityGrouping';
+import { Button } from '../ui/button';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;
 export interface ActivityCluster { readonly id: string; readonly items: readonly SessionTranscriptItem[]; readonly grouped: boolean }
@@ -34,11 +36,25 @@ function candidate(item: SessionTranscriptItem): GroupCandidatePart {
   return item.kind === 'tool' ? { type: 'tool-call', toolName: item.toolName, providerMetadata: { droidvisx: item } } : { type: item.kind };
 }
 
+const DEFAULT_HISTORY_ITEMS_WINDOW = 60;
+const HISTORY_ITEMS_STEP = 120;
+
 const HistoryItems = memo(function HistoryItems({ items, renderItem }: {
   readonly items: readonly SessionTranscriptItem[];
   readonly renderItem: (item: SessionTranscriptItem, grouped: boolean) => ReactNode;
 }) {
-  return <>{items.map((item) => <div key={item.id}>{renderItem(item, true)}</div>)}</>;
+  const { t } = useI18n();
+  const [windowCount, setWindowCount] = useState(DEFAULT_HISTORY_ITEMS_WINDOW);
+  const hiddenCount = Math.max(0, items.length - windowCount);
+  const visibleItems = hiddenCount > 0 ? items.slice(hiddenCount) : items;
+  return <>
+    {hiddenCount > 0 ? <div role="note" data-ui-notice="" className="py-1 select-none">
+      <Button variant="plain" size="none" className="v2-history-trigger" onClick={() => setWindowCount((current) => current + HISTORY_ITEMS_STEP)}>
+        <ChevronUp aria-hidden="true" /><span>{t("Show earlier messages (")}{hiddenCount} {t("hidden)")}</span>
+      </Button>
+    </div> : null}
+    {visibleItems.map((item) => <div key={item.id}>{renderItem(item, true)}</div>)}
+  </>;
 }, (before, after) => before.renderItem === after.renderItem && before.items.length === after.items.length &&
   before.items.every((item, index) => item === after.items[index]));
 

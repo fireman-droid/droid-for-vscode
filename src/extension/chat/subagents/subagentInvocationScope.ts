@@ -50,7 +50,8 @@ export function invocationTranscripts(
     return new Map(rows.map(([key]) => [key, null]));
   boundaries.sort((left, right) => left.start! - right.start!);
   return new Map(boundaries.flatMap((boundary, index) => {
-    const transcript = items.slice(boundary.start!, boundaries[index + 1]?.start);
+    const end = boundaries[index + 1]?.start;
+    const transcript = boundary.start === 0 && end === undefined ? items : items.slice(boundary.start!, end);
     return boundary.keys.map(key => [key, transcript] as const);
   }));
 }

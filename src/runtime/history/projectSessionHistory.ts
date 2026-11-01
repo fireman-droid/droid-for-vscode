@@ -166,11 +166,13 @@ export function* projectSessionHistorySteps(
     // Image byte eviction keeps placeholder rows in place, so it does
     // not flip the history to partial by itself.
     const imageBudget = enforceTranscriptImageBudget(
-      appendHistoryTurnChanges(
-        readTranscript(projection),
-        projection.transcriptTextUnits,
-        projection.multiFileTools,
-      ),
+      enforceToolResultBudget(
+        appendHistoryTurnChanges(
+          readTranscript(projection),
+          projection.transcriptTextUnits,
+          projection.multiFileTools,
+        ),
+      ).items,
     );
     const state = withSubagentInvocationSummaries({
       transcript: [...imageBudget.transcript],
@@ -757,12 +759,6 @@ function completeTool(projection: Projection, block: Record<string, unknown>): v
     ) ?? tool.operationDiff,
   );
   projection.transcript[index] = updated;
-  const budget = enforceToolResultBudget(readTranscript(projection));
-  if (budget.evicted)
-    for (const item of budget.items) {
-      const position = projection.positions.get(item.id);
-      if (position !== undefined) projection.transcript[position] = item;
-    }
   projection.transcriptTextUnits +=
     transcriptItemTextUnits(updated) - transcriptItemTextUnits(existing);
   const askUserResult = projectAskUserHistoryItem(

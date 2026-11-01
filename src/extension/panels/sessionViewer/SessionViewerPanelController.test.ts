@@ -93,6 +93,7 @@ vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
 
 import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../../shared/protocol/sessionViewerProtocol';
 import {
+  LIVE_VIEWER_REFRESH_MS,
   SESSION_VIEWER_REFRESH_MS,
   SessionViewerPanelController,
 } from './SessionViewerPanelController';
@@ -259,6 +260,38 @@ describe('SessionViewerPanelController', () => {
     expect(JSON.stringify(vscodeMock.__panels[0]!.webview.posted)).not.toContain(
       'exec-1',
     );
+    controller.dispose();
+  });
+
+  it('coalesces rapid live subagent updates and skips unchanged snapshots', async () => {
+    let notify: (() => void) | null = null;
+    let items = [{ id: 'u1', kind: 'user' as const, text: 'Task' }];
+    const controller = new SessionViewerPanelController(
+      new vscodeMock.Uri('/extension') as never,
+      { loadHistory: vi.fn() },
+      () => ({
+        isRunning: async () => true,
+        stop: async () => 'failed',
+        readTranscript: () => ({ items, truncated: false, running: true, lifecycle: 'working' }),
+        subscribe: (_target, listener) => { notify = listener; return () => { notify = null; }; },
+      }),
+    );
+    controller.open({ ...target, mode: 'subagent-readonly', subagent: { parentSessionId: 'p1', toolUseId: 't1' } });
+    await settle();
+    const posted = vscodeMock.__panels[0]!.webview.posted;
+    expect(posted).toHaveLength(1);
+    items = [...items, { id: 'u2', kind: 'user', text: 'Step 1' }];
+    notify!();
+    items = [...items, { id: 'u3', kind: 'user', text: 'Step 2' }];
+    notify!();
+    await settle();
+    expect(posted).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(LIVE_VIEWER_REFRESH_MS);
+    await settle();
+    expect(posted).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(SESSION_VIEWER_REFRESH_MS);
+    await settle();
+    expect(posted).toHaveLength(2);
     controller.dispose();
   });
 });
