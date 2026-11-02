@@ -38,6 +38,15 @@ function createQueue(factory: SyntaxWorkerFactory) {
     })().catch(error => { if (active === job) fail(error instanceof Error ? error.message : 'Syntax worker could not start.'); });
   }
   return (request: Omit<SyntaxRequest, 'id'>, receive: Job['receive']) => {
+    const streamKey = request.documents.length === 1 ? request.documents[0]?.streamKey : undefined;
+    if (streamKey) {
+      for (let i = queued.length - 1; i >= 0; i--) {
+        if (queued[i]!.request.documents.length === 1 && queued[i]!.request.documents[0]?.streamKey === streamKey) {
+          queued[i]!.cancelled = true;
+          queued.splice(i, 1);
+        }
+      }
+    }
     const job: Job = { request: { ...request, id: ++sequence }, receive, cancelled: false };
     queued.push(job);
     pump();

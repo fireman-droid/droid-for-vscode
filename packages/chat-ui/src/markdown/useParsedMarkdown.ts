@@ -28,8 +28,8 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
     const cached = recallMarkdown(text, thinking);
     // Prefixes are useful while a worker parses a stream, but a synchronous
     // render must use the entire current document, including closing fences.
-    if (cached?.text === text) return cached.nodes;
-    const nodes = parseMarkdown(text, thinking);
+    if (cached?.text === text && !streaming) return cached.nodes;
+    const nodes = parseMarkdown(text, thinking, streaming);
     if (!streaming) retainMarkdown({ text, thinking, nodes });
     return nodes;
   }, [offload, text, thinking, streaming]);
@@ -63,7 +63,9 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
         });
       }
       worker.retain(value.streaming);
-      active = { id: ++id, text: value.text, thinking: value.thinking };
+      active = value.streaming
+        ? { id: ++id, text: value.text, thinking: value.thinking, streaming: true }
+        : { id: ++id, text: value.text, thinking: value.thinking };
       worker.postMessage(active);
     };
     const receive = (data: MarkdownParseResponse) => {
