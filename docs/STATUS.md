@@ -1,12 +1,13 @@
 # 当前状态
 
-核对日期：2026-10-24。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-11-02。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
-- 当前发布版本为 `0.8.18`，在 `0.8.17` 基础上合并了多窗口 Daemon 并发进程验真批次合并、Windows `Win32_Process` 最小属性查询、旧窗口退出后无会话孤儿 `window-daemon` 自动回收、隐藏侧栏 `host.view.state-delivery` 警告静默、Mermaid 内联 `<style>` 资源错误误报过滤，以及 GA4 遥测初始化／历史／前端资源异常细分维度。
+- 当前发布版本为 `0.8.19`，在 `0.8.18` 基础上合并了混合增量流式 Markdown 渲染与 Shiki `GrammarState` 按行增量高亮、Kilo 风格 AI 回复排版与流式渐显防跳闪、新提问置顶与动态留白跑道（含流式上滑「回到底部」按钮恢复）、BTW 按序过程穿插与气泡重构、会话恢复与子代理详情页提速、子任务三档模型／推理强度独立直选、补全设置即时保存、深色模式呼吸星空背景及引用胶囊精简。
+- `0.8.18` 已通过 [PR #18](https://github.com/fireman-droid/droid-for-vscode/pull/18) 合入 `main`（提交 `e9dfb6f0`），并同步发布至 GitHub Release 与 Open VSX。
 - `0.8.17` 已通过 [PR #17](https://github.com/fireman-droid/droid-for-vscode/pull/17) 合入 `main`（提交 `1639c2f2`），并同步发布至 GitHub Release 与 Open VSX。
 - `0.8.16` 已通过 [PR #14](https://github.com/fireman-droid/droid-for-vscode/pull/14) 合入 `main`（提交 `c6e8c8fa`），[GitHub v0.8.16](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.16) 与 [Open VSX 0.8.16](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.16) 均已正式公开（同一产物 `droid-0.8.16.vsix`，14,313,474 字节，SHA256 `8fa29f8a97a5014e945919d28309ad6a921f01fc6f7a40b2186c258249b99814`，172 项内容与入口校验通过）。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
