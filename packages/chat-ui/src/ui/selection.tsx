@@ -16,7 +16,10 @@ export function Checkbox({ className, ...props }: ComponentProps<typeof Checkbox
   );
 }
 
-export const Select = SelectPrimitive.Root;
+export function Select({ onValueChange, value, ...props }: ComponentProps<typeof SelectPrimitive.Root>) {
+  // Radix SelectBubbleInput dispatches a synthetic change on controlled updates before new <option>s mount, producing "".
+  return <SelectPrimitive.Root value={value} onValueChange={next => { if (next && next !== value) onValueChange?.(next); }} {...props} />;
+}
 export const SelectValue = SelectPrimitive.Value;
 
 export function SelectTrigger({ className, children, ...props }: ComponentProps<typeof SelectPrimitive.Trigger>) {

@@ -20,7 +20,7 @@ export function DefaultsSelect({ label, value, options, disabled, onChange, plac
 }) {
   const { t } = useI18n();
   const items = value && !options.some(o => o.value === value) ? [{ value, label: value, disabled: true }, ...options] : options;
-  return <Select value={value ?? ''} disabled={disabled} onValueChange={onChange}>
+  return <Select value={value ?? ''} disabled={disabled} onValueChange={next => { if (next && next !== value && options.some(o => o.value === next)) onChange(next); }}>
     <SelectTrigger aria-label={t(label)} className={`management-default-choice${wide ? ' management-default-choice-wide' : ''}`}><SelectValue placeholder={t(placeholder)} /></SelectTrigger>
     <SelectContent className="management-menu" align="end">{items.map(o => <SelectItem key={o.value} value={o.value} disabled={o.disabled}>{o.label}</SelectItem>)}</SelectContent>
   </Select>;
@@ -83,7 +83,7 @@ export function useDefaultsFields(props: DefaultsFieldsProps) {
         }} />, model?.disabledReason || snapshot.locked[modelKey])}
       {row(effortKey, '推理强度', <DefaultsSelect label="推理强度" value={modelId ? (text(effortKey) ?? model?.defaultReasoning ?? efforts[0]) : DEFAULT}
         disabled={!modelId || disabled(effortKey) || Boolean(model?.disabledReason)} options={effortOptions}
-        onChange={value => update({ [effortKey]: value })} />, snapshot.locked[effortKey])}
+        onChange={value => update({ [effortKey]: value === DEFAULT ? null : value })} />, snapshot.locked[effortKey])}
     </>;
   };
   return { text, disabled, row, choice, toggle, number, modelPair, subagentTier, modelOptions, pickerModels };

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { MissionControlCatalogRow } from '../../shared/protocol/missionControlPanelProtocol';
 import type { ManagementState } from './useManagement';
+import { DefaultsSettings } from './DefaultsSettings';
 import { MissionManagement } from './MissionManagement';
 
 afterEach(cleanup);
@@ -28,3 +29,32 @@ it('searches the whole mission list and returns to page one when the query chang
   expect(screen.getByRole('button', { name: /第 1 页|Page 1/ }).getAttribute('aria-current')).toBe('page');
   expect(run).toHaveBeenCalledTimes(1);
 });
+
+it('keeps subtask model defaults valid when switching a configured tier back to Follow main chat', async () => {
+  Element.prototype.scrollIntoView = () => {};
+  const user = userEvent.setup();
+  const defaults = {
+    values: {
+      modelId: 'auto', reasoningEffort: 'none', interactionMode: 'auto', autonomyLevel: 'high',
+      compactionTokenLimit: 300000, compactionTokenLimitPerModel: {}, compactionModel: 'current-model',
+      compactionThresholdCheckEnabled: true, subagentAutonomyLevel: 'high',
+      'subagentModelSettings.lightModel': 'auto', 'subagentModelSettings.lightReasoningEffort': 'none',
+    },
+    locked: {}, autonomyLevels: ['off', 'low', 'medium', 'high'], specDirectories: [],
+    models: [{ id: 'auto', label: 'Auto Model', reasoning: ['none'], defaultReasoning: 'none', isCustom: false }],
+  };
+  const run = vi.fn().mockResolvedValue({ ok: true, defaults });
+  render(<DefaultsSettings active scope="sessions" state={{ settings: {}, busy: false, run, setNotice: vi.fn() } as unknown as ManagementState} />);
+  const trigger = await screen.findByRole('button', { name: 'Model', exact: true });
+  await user.click(trigger);
+  await user.click(await screen.findByRole('menuitemradio', { name: /跟随主聊天|Follow main chat/ }));
+  expect(screen.queryByRole('alert')).toBeNull();
+  const save = screen.getByRole('button', { name: /保存|Save/ });
+  expect((save as HTMLButtonElement).disabled).toBe(false);
+  await user.click(save);
+  expect(run).toHaveBeenLastCalledWith({
+    kind: 'defaults.save', scope: 'sessions',
+    patch: { 'subagentModelSettings.lightModel': null, 'subagentModelSettings.lightReasoningEffort': null },
+  });
+});
+
