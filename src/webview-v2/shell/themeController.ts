@@ -7,7 +7,12 @@ import {
   useState,
 } from 'react';
 
-import { type ThemePreference } from '../../shared/protocol/shell';
+import {
+  normalizeChatBackdrop,
+  type ChatBackdropMode,
+  type ChatBackdropSetting,
+  type ThemePreference,
+} from '../../shared/protocol/shell';
 
 /** The editor color-scheme kind ('auto' resolved against the editor). */
 export type ResolvedTheme = 'light' | 'dark';
@@ -50,8 +55,11 @@ export function readBootResolvedTheme(): ResolvedTheme {
   return document.documentElement.dataset.dvxTheme === 'dark' ? 'dark' : 'light';
 }
 
-export function readBootStarfield(): boolean {
-  return document.documentElement.dataset.dvxStarfield !== 'false';
+export function readBootStarfield(): ChatBackdropMode {
+  const raw = document.documentElement.dataset.dvxStarfield;
+  if (raw === 'false' || raw === 'off') return 'off';
+  if (raw === 'three-body') return 'three-body';
+  return 'starfield';
 }
 
 /**
@@ -106,16 +114,16 @@ export function useThemeController(
 ): {
   readonly context: ThemeContextValue;
   readonly resolved: ResolvedTheme;
-  readonly starfield: boolean;
+  readonly starfield: ChatBackdropMode;
   readonly applyHostTheme: (
     preference: ThemePreference,
     resolved: ResolvedTheme,
-    starfield?: boolean,
+    starfield?: ChatBackdropSetting,
   ) => void;
 } {
   const [preference, setPreference] = useState<ThemePreference>(readBootThemePreference);
   const [resolved, setResolved] = useState<ResolvedTheme>(readBootResolvedTheme);
-  const [starfield, setStarfield] = useState<boolean>(readBootStarfield);
+  const [starfield, setStarfield] = useState<ChatBackdropMode>(readBootStarfield);
   useEffect(() => {
     applyDocumentTheme(resolved, preference);
   }, [preference, resolved]);
@@ -132,13 +140,13 @@ export function useThemeController(
     (
       nextPreference: ThemePreference,
       nextResolved: ResolvedTheme,
-      nextStarfield?: boolean,
+      nextStarfield?: ChatBackdropSetting,
     ): void => {
       setPreference(nextPreference);
       setResolved(nextResolved);
-      const enabled = nextStarfield !== false;
-      setStarfield(enabled);
-      document.documentElement.dataset.dvxStarfield = enabled ? 'true' : 'false';
+      const mode = normalizeChatBackdrop(nextStarfield);
+      setStarfield(mode);
+      document.documentElement.dataset.dvxStarfield = mode === 'off' ? 'false' : mode;
     },
     [],
   );

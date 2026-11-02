@@ -25,6 +25,23 @@ export interface RuntimeRetryMessage {
 
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 
+export const CHAT_BACKDROP_MODES = ['starfield', 'three-body', 'off'] as const;
+export type ChatBackdropMode = (typeof CHAT_BACKDROP_MODES)[number];
+export type ChatBackdropSetting = boolean | ChatBackdropMode;
+
+export function isChatBackdropSetting(value: unknown): value is ChatBackdropSetting {
+  return (
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && (CHAT_BACKDROP_MODES as readonly string[]).includes(value))
+  );
+}
+
+export function normalizeChatBackdrop(value?: ChatBackdropSetting): ChatBackdropMode {
+  if (value === false || value === 'off') return 'off';
+  if (value === 'three-body') return 'three-body';
+  return 'starfield';
+}
+
 /**
  * Webview → Host: persist a new theme preference. Handled by the
  * view provider (writes user settings); never reaches the session
@@ -46,7 +63,7 @@ export interface UiThemeMessage {
   readonly type: 'ui.theme';
   readonly preference: ThemePreference;
   readonly resolved: 'light' | 'dark';
-  readonly starfield?: boolean;
+  readonly starfield?: ChatBackdropSetting;
 }
 
 export interface ConnectionState {

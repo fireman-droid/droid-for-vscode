@@ -206,10 +206,18 @@
           "description": "How messages sent while Droid is working are delivered."
         },
         "droidvisx.chat.starfield": {
-          "type": "boolean",
-          "default": true,
+          "type": ["string", "boolean"],
+          "enum": ["starfield", "three-body", "off", true, false],
+          "enumDescriptions": [
+            "Subtle breathing starfield in dark mode.",
+            "Three-body stellar orbits in dark mode.",
+            "Disable dark-mode chat backdrop.",
+            "Subtle breathing starfield in dark mode (legacy boolean).",
+            "Disable dark-mode chat backdrop (legacy boolean)."
+          ],
+          "default": "starfield",
           "scope": "application",
-          "description": "Show a subtle breathing starfield background in the main chat when using a dark theme."
+          "description": "Ambient cosmic backdrop in the main chat when using a dark theme."
         },
         "droidvisx.theme": {
           "type": "string",
