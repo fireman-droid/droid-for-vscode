@@ -1,5 +1,5 @@
 import { useI18n } from '../i18n';
-import { Quote, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useContext, type RefObject } from 'react';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -26,8 +26,8 @@ export function QuoteChips({ quotes, onRemove, className, previewAnchor }: Quote
         {anchor ? <PopoverAnchor virtualRef={anchor} /> : null}
         <div className="inline-flex h-6 min-w-0 max-w-full items-center rounded-md border border-[var(--panel-edge)] text-muted-foreground">
           <PopoverTrigger asChild><Button variant="plain" size="none" aria-label={t("View {p0}: {p1}", { p0: label.toLowerCase(), p1: preview })}
-            className="flex h-full min-w-0 max-w-[200px] items-center gap-1.5 rounded-md px-2 text-left text-[11px] hover:bg-[var(--control-surface-hover)] hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
-            <Quote aria-hidden="true" className="size-2.5 shrink-0 rotate-180 fill-current stroke-none opacity-75" /><span className="truncate">{preview}</span>
+            className="flex h-full min-w-0 max-w-[200px] items-center rounded-md px-2 text-left text-[11px] hover:bg-[var(--control-surface-hover)] hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring">
+            <span className="truncate">{preview}</span>
           </Button></PopoverTrigger>
           {onRemove ? <Button variant="plain" size="none" aria-label={t("Remove {p0}", { p0: label.toLowerCase() })}
             className="grid size-[22px] shrink-0 place-items-center rounded-md hover:bg-[var(--control-surface-hover)] hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
