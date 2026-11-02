@@ -1,6 +1,5 @@
 import { useI18n } from '../i18n';
 import type { SideConversation, SideReplyPart, SideToolActivity } from './sideChat';
-import { DroidActivity } from '../ui/droid-motion';
 import { ActivityGroupView } from './ActivityGroupView';
 import { AssistantMessage } from './AssistantMessage';
 import { ReplyView } from './ReplyView';
@@ -16,7 +15,7 @@ type Segment =
   | { readonly kind: 'text'; readonly id: string; readonly text: string }
   | { readonly kind: 'analysis'; readonly tool: SideToolActivity };
 
-const PROGRESS_LABELS = {
+export const PROGRESS_LABELS = {
   waiting: 'Waiting for reply…', thinking: 'Thinking…', tool: 'Using tools…', answering: 'Receiving reply…',
 } as const;
 
@@ -78,16 +77,13 @@ function ProcessSegment({ entry, items, groupId, live, progress }: {
   </ActivityGroupView>;
 }
 
-export function SideReply({ entry, preparing }: { readonly entry: Entry; readonly preparing: boolean }) {
+export function SideReply({ entry }: { readonly entry: Entry }) {
   const { t } = useI18n();
   const running = entry.state === 'streaming';
   const progress = entry.progress ?? (entry.answer ? 'answering' : 'waiting');
   const segments = segmentsOf(entry);
   const tail = segments.at(-1);
   const liveProcess = running && tail?.kind === 'process' && progress !== 'answering';
-  const waiting = running && !liveProcess && (preparing || progress !== 'answering' || !entry.answer)
-    ? { label: t(preparing ? 'Preparing' : PROGRESS_LABELS[progress]), loading: preparing || progress === 'waiting' }
-    : undefined;
   return <ReplyView replyText={entry.answer || undefined} running={running} readOnly showTimestamp={false}>
     {segments.map((segment, index) => segment.kind === 'process'
       ? <ProcessSegment key={segment.id} entry={entry} items={segment.items} groupId={segment.id}
@@ -95,10 +91,6 @@ export function SideReply({ entry, preparing }: { readonly entry: Entry; readonl
       : segment.kind === 'analysis' ? <SideAnalysisResult key={segment.tool.id} tool={segment.tool} />
       : segment.text.trim() ? <AssistantMessage key={segment.id} text={segment.text} streaming={running && index === segments.length - 1} />
       : null)}
-    {waiting ? <p role="status" aria-live="polite" data-ui-notice="" className="v2-btw-progress">
-      <DroidActivity phase={waiting.loading ? 'loading' : 'working'} />
-      <span title={waiting.label}>{waiting.label}</span>
-    </p> : null}
     {entry.stopped ? <p role="status" data-ui-notice="" className="text-[11px] text-muted-foreground">{t('Stopped')}</p> : null}
   </ReplyView>;
 }

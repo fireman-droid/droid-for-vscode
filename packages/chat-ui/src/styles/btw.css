@@ -78,24 +78,31 @@
     position: sticky;
     top: 0;
     z-index: 2;
+    display: flex;
+    justify-content: flex-end;
     min-width: 0;
-    padding-block: 8px;
+    padding-block: 6px 8px;
     background: var(--surface);
   }
   .v2-btw-question-content {
+    width: fit-content;
+    max-width: 88%;
     max-height: min(160px, 30vh);
+    padding: 7px 12px;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-x: contain;
-    border-radius: 2px;
+    border: 1px solid var(--chat-edge, var(--panel-edge));
+    border-radius: 14px 14px 3px 14px;
+    background: var(--soft-surface);
+    color: var(--ink);
     outline: none;
     font-size: 13px;
-    line-height: 21px;
+    line-height: 20px;
     overflow-wrap: anywhere;
   }
   .v2-btw-question-content:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-btw-answer { min-width: 0; padding: 4px 2px 0; }
-  .v2-btw-speaker { margin-right: 8px; color: var(--muted-ink); font-size: 12px; }
   .v2-btw-author { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; color: var(--muted-ink); font-size: 12px; }
   .v2-btw-author > svg { width: 16px; height: 16px; flex: none; }
   .v2-btw-tool-record { min-width: 0; }
@@ -114,8 +121,6 @@
   .v2-btw-tool-detail { min-width: 0; padding: 2px 0 6px 16px; }
   .v2-btw-tool-output { max-height: 180px; padding: 8px; margin-top: 6px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft-surface); border-radius: var(--control-radius); font: 12px/1.6 var(--vscode-editor-font-family, monospace); }
   .v2-btw-tool-note { margin-top: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
-  .v2-btw-progress { display: flex; min-width: 0; align-items: center; gap: 6px; margin-top: 4px; color: var(--muted-ink); font-size: 12px; line-height: 18px; user-select: none; }
-  .v2-btw-progress > span:not(.droid-activity) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .v2-btw-error { margin-top: 6px; color: var(--error-ink); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
   .v2-btw-footer {
     min-width: 0;

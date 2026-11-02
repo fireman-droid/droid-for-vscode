@@ -11,7 +11,7 @@ import { DroidActivity } from '../ui/droid-motion';
 import type { InlineInputHandle } from '../ui/inline-input';
 import { PinwheelIcon } from '../ui/pinwheel-icon';
 import { QuoteChips } from './QuoteChips';
-import { SideReply } from './SideReply';
+import { PROGRESS_LABELS, SideReply } from './SideReply';
 import { ReferencedText } from './CodeReferenceChips';
 import { CodeReferenceInput } from './CodeReferenceInput';
 import { useCodeReferenceDraft } from './useCodeReferenceDraft';
@@ -30,6 +30,17 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
   const unavailable = state.status === 'unsupported' || state.status === 'error';
   const canAsk = !unavailable && state.pendingQuestion === null;
   const preparing = state.status === 'preparing';
+  const activeProgress = activeEntry ? (activeEntry.progress ?? (activeEntry.answer ? 'answering' : 'waiting')) : undefined;
+  const runningStatus = state.stopping && streaming
+    ? { label: t('Stopping…'), phase: 'loading' as const }
+    : preparing
+      ? { label: t('Preparing'), phase: 'loading' as const }
+      : activeProgress
+        ? {
+            label: t(PROGRESS_LABELS[activeProgress]),
+            phase: activeProgress === 'waiting' ? ('loading' as const) : activeProgress === 'thinking' ? ('thinking' as const) : ('working' as const),
+          }
+        : undefined;
   const composeHint = state.pendingQuestion !== null ? t('Continue drafting') : null;
   const quotedContext = quotes ?? (quote ? [quote] : []);
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
@@ -103,12 +114,12 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
                 <div role="region" aria-label={t("Your question")} tabIndex={0} className="v2-btw-question-content">
                   {parsed ? <QuoteChips quotes={parsed.quotes} className="mb-2" /> : null}
                   {entry.images?.length ? renderImages?.(entry.images) : null}
-                  <div className="select-text"><span data-ui-notice="" className="v2-btw-speaker">{t('You')}</span><ReferencedText text={parsed?.body ?? entry.question} /></div>
+                  <div className="select-text"><ReferencedText text={parsed?.body ?? entry.question} /></div>
                 </div>
             </div>
             <div aria-label={t("{p0} answer", { p0: assistantName })} className="v2-btw-answer">
               <div data-ui-notice="" className="v2-btw-author"><PinwheelIcon aria-hidden="true" />{assistantName}</div>
-              <SideReply entry={entry} preparing={preparing} />
+              <SideReply entry={entry} />
             </div>
             {entry.message ? <p role="alert" className="v2-btw-error">{entry.message}</p> : null}
           </article>;
@@ -131,10 +142,10 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
         <QuoteChips quotes={quotedContext} previewAnchor={composer} onRemove={removeQuote ? (index) => { removeQuote(index); input.current?.focus({ preventScroll: true }); } : undefined} className="mb-2" />
         <div className="v2-btw-editor">
           <CodeReferenceInput ref={input} draft={references} className="dvx-btw-input v2-btw-input" disabled={unavailable}
-            aria-label={t("By the Way question")} placeholder={preparing && !state.entries.length ? undefined : state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")}
+            aria-label={t("By the Way question")} placeholder={runningStatus ? undefined : state.entries.length ? t("Ask a follow-up…") : t("Ask a side question…")}
             onPaste={onPaste}
             onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} />
-          {preparing && !state.entries.length ? <p role="status" data-ui-notice="" className="v2-btw-input-placeholder"><DroidActivity phase="loading" /><span className="truncate">{t('Preparing')}</span></p> : null}
+          {runningStatus ? <p role="status" aria-live="polite" data-ui-notice="" className="v2-btw-input-placeholder"><DroidActivity phase={runningStatus.phase} /><span className="truncate" title={runningStatus.label}>{runningStatus.label}</span></p> : null}
         </div>
         </div>
         {notice ? <p role="status" className="mt-1 text-[11px] leading-4 text-muted-foreground">{notice}</p> : null}

@@ -47,6 +47,7 @@ it('keeps drafting available while a follow-up is queued and preserves stop and 
   }
   const view = render(<Harness state={state} />);
   expect(screen.getByText('Queued follow-up')).toBeDefined();
+  expect(screen.getByText('Waiting for reply…')).toBeDefined();
   const input = screen.getByRole('textbox') as HTMLTextAreaElement;
   expect(input.getAttribute('contenteditable')).toBe('true');
   await user.type(input, 'Keep this next question{Enter}');
