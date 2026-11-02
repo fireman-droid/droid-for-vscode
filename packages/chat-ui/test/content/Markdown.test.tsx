@@ -132,6 +132,14 @@ describe('V2 Markdown actions', () => {
 
     rerender(<Markdown text="Math $x^2 + y^2" streaming />);
     expect(container.querySelector('.katex')).not.toBeNull();
+
+    rerender(<Markdown text="Price is $100 and **bold text" streaming={false} />);
+    expect(container.querySelector('strong')).toBeNull();
+    expect(container.textContent).toContain('**bold text');
+
+    rerender(<Markdown text={'> ```ts\n> const raw = "**unclosed'} streaming />);
+    expect(container.querySelector('strong')).toBeNull();
+    expect(container.textContent).toContain('const raw = "**unclosed');
   });
 
   it('preserves earlier highlighted code line DOM nodes and selection while streaming new lines', async () => {

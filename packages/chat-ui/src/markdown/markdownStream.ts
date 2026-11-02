@@ -1,6 +1,6 @@
 import type { Element, RootContent } from 'hast';
 
-export interface OpenFenceState {
+interface OpenFenceState {
   readonly marker: '`' | '~';
   readonly length: number;
   readonly language: string | null;
@@ -8,7 +8,7 @@ export interface OpenFenceState {
   readonly contentOffset: number;
 }
 
-export interface MarkdownBlock {
+interface MarkdownBlock {
   readonly raw: string;
   readonly offset: number;
   readonly mode: 'full' | 'live';
@@ -25,7 +25,7 @@ export interface StreamParseState {
 
 const REFERENCE_DEFINITION = /^ {0,3}\[[^\r\n\]]+\]:[ \t\r\n]*\S/mu;
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/u;
-const ANY_FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/mu;
+const ANY_FENCE_LINE = /^(?: {0,3}>[ \t]?)* {0,3}(`{3,}|~{3,})/mu;
 const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]/u;
 const INDENTED_CONTINUATION = /^(?: {2,}|\t)/u;
 const INDENTED_CODE = /^(?: {4,}|\t)/u;
@@ -74,8 +74,9 @@ function countDoubleDollars(line: string): number {
 export function splitMarkdownBlocks(text: string): {
   readonly blocks: readonly MarkdownBlock[];
   readonly openFence: OpenFenceState | null;
+  readonly hasOpenFence: boolean;
 } {
-  if (!text) return { blocks: [], openFence: null };
+  if (!text) return { blocks: [], openFence: null, hasOpenFence: false };
   const blocks: MarkdownBlock[] = [];
   let blockStart = 0;
   let sawBlankLine = false;
@@ -135,7 +136,7 @@ export function splitMarkdownBlocks(text: string): {
           ...fence,
           blockOffset: blockStart,
           contentOffset: lineEnd,
-          standalone: isFirstLineOfBlock,
+          standalone: isFirstLineOfBlock && !rawLine.startsWith(' ') && !rawLine.startsWith('\t'),
         };
         cursor = lineEnd;
         continue;
@@ -165,6 +166,7 @@ export function splitMarkdownBlocks(text: string): {
       blockOffset: openFence.blockOffset,
       contentOffset: openFence.contentOffset,
     } : null,
+    hasOpenFence: openFence !== null,
   };
 }
 
@@ -398,4 +400,11 @@ export function completeStreamingInlineMarkdown(blockText: string): string {
     }
   }
   return suffix ? `${blockText}${suffix}` : blockText;
+}
+
+export function hasUnclosedInlineMarkdown(text: string): boolean {
+  if (!text) return false;
+  const lastBlank = text.lastIndexOf('\n\n');
+  const tail = lastBlank === -1 ? text : text.slice(lastBlank + 2);
+  return completeStreamingInlineMarkdown(tail) !== tail;
 }

@@ -38,21 +38,30 @@ export const CodeSyntax = memo(function CodeSyntax({ text, language, path }: Cod
     if (!createSyntaxWorker) return;
     let cancelActive: (() => void) | null = null;
     let inFlight = false;
+    let activeSource: Source | null = null;
     let completed: Source | null = null;
 
     const send = () => {
-      if (inFlight) return;
       const next = latest.current;
+      if (inFlight && activeSource && (!next.text.startsWith(activeSource.text) || next.language !== activeSource.language || next.path !== activeSource.path)) {
+        cancelActive?.();
+        cancelActive = null;
+        inFlight = false;
+        activeSource = null;
+      }
+      if (inFlight) return;
       if (!next.text.trim()) return;
       if (completed && completed.text === next.text && completed.language === next.language && completed.path === next.path) {
         return;
       }
       inFlight = true;
+      activeSource = next;
       cancelActive = requestSyntax(
         createSyntaxWorker,
         { documents: [{ text: next.text, streamKey }], language: next.language, path: next.path },
         (result) => {
           inFlight = false;
+          activeSource = null;
           cancelActive = null;
           completed = next;
           if (result.error) console.warn('Source highlighting:', result.error);

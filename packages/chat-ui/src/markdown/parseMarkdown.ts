@@ -138,13 +138,13 @@ export function parseMarkdown(text: string, thinking: boolean, streaming = false
     const nodes = parseSingleBlock(source, thinking, 0);
     return saveStreamState({ text, thinking, streaming, hasRefs: true, openFence: null, nodes });
   }
-  const { blocks, openFence } = splitMarkdownBlocks(text);
+  const { blocks, openFence, hasOpenFence } = splitMarkdownBlocks(text);
   const nodes: RootContent[] = [];
   for (const block of blocks) {
     if (block.mode === 'full') {
       nodes.push(...getCachedBlock(block.raw, thinking, block.offset));
     } else {
-      const source = streaming && openFence === null ? completeStreamingInlineMarkdown(block.raw) : block.raw;
+      const source = streaming && !hasOpenFence ? completeStreamingInlineMarkdown(block.raw) : block.raw;
       nodes.push(...parseSingleBlock(source, thinking, block.offset));
     }
   }
