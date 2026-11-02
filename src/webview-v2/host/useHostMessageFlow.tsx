@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
-import { type ThemePreference } from '../../shared/protocol/shell';
+import { type ChatBackdropSetting, type ThemePreference } from '../../shared/protocol/shell';
 import type { MissionControlSetupSnapshotMessage } from '../../shared/protocol/missionControlSetupProtocol';
 import {
   announceBooted,
@@ -35,7 +35,7 @@ export function useHostMessageFlow(
     readonly applyHostTheme: (
       preference: ThemePreference,
       resolved: 'light' | 'dark',
-      starfield?: boolean,
+      starfield?: ChatBackdropSetting,
     ) => void;
     readonly appendCanvasDraft: (text: string) => void;
     readonly settleSend: () => void;

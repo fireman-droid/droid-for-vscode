@@ -13,7 +13,7 @@ import { parseCustomModelsHostMessage } from '../../shared/protocol/customModels
 import { parseFactoryLimitsStateMessage } from '../../shared/protocol/factoryAccountProtocol';
 import { parseMissionHostMessage } from '../../shared/protocol/missionProtocol';
 import { THEME_PREFERENCES } from '../../shared/protocol/bounds';
-import { type ThemePreference } from '../../shared/protocol/shell';
+import { isChatBackdropSetting, type ThemePreference } from '../../shared/protocol/shell';
 import {
   parseQueueStateMessage,
   type QueueStateMessage,
@@ -216,7 +216,7 @@ function parseUiTheme(
     typeof value.preference !== 'string' ||
     !(THEME_PREFERENCES as readonly string[]).includes(value.preference) ||
     (value.resolved !== 'light' && value.resolved !== 'dark') ||
-    (value.starfield !== undefined && typeof value.starfield !== 'boolean')
+    (value.starfield !== undefined && !isChatBackdropSetting(value.starfield))
   ) {
     return undefined;
   }

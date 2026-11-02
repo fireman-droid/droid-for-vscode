@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { type ThemePreference } from '../../shared/protocol/shell';
+import { type ChatBackdropSetting, type ThemePreference } from '../../shared/protocol/shell';
 import type { ChatSurfaceRole } from '../../shared/chatSurfacePolicy';
 import type { UiLocaleMessage } from '../../shared/protocol/localeProtocol';
 
@@ -44,7 +44,7 @@ export type WebviewInitialTheme = keyof typeof INITIAL_BACKGROUNDS;
 export interface WebviewBootTheme {
   readonly preference: ThemePreference;
   readonly resolved: WebviewInitialTheme;
-  readonly starfield?: boolean;
+  readonly starfield?: ChatBackdropSetting;
 }
 
 const DEFAULT_BOOT_THEME: WebviewBootTheme = {
@@ -76,7 +76,7 @@ export function getWebviewHtml(
   // takes over the attribute); the inline style covers the window
   // between HTML parse and stylesheet load.
   return /* html */ `<!doctype html>
-<html lang="${locale.resolved}" data-dvx-language="${locale.preference}" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${theme.starfield === false ? ' data-dvx-starfield="false"' : ''}${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
+<html lang="${locale.resolved}" data-dvx-language="${locale.preference}" data-dvx-theme="${theme.resolved}" data-dvx-theme-preference="${theme.preference}" data-theme="${theme.resolved}" data-theme-preference="${theme.preference}"${theme.starfield === false || theme.starfield === 'off' ? ' data-dvx-starfield="false"' : theme.starfield === 'three-body' ? ' data-dvx-starfield="three-body"' : ''}${chatRole ? ` data-chat-role="${chatRole}"` : ''}>
 <head>
   <meta charset="UTF-8">
   <meta
