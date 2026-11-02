@@ -39,7 +39,7 @@
   .management-page .management-default-choice-wide[role='combobox'] { width: auto; min-width: 220px; }
   .management-default-toggle { display: flex; align-items: center; gap: 8px; }
   .management-default-toggle small { margin: 0; }
-  .management-default-tier { padding-top: 14px; }
+  .management-default-tier { padding-top: 14px; border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-default-directory { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
   .management-default-directory input { width: 220px; max-width: 100%; }
   .management-default-override { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }

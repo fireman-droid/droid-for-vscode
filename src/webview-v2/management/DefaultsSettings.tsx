@@ -37,7 +37,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
   const f = useDefaultsFields(props);
   const [tier, setTier] = useState('light');
   const levels = props.snapshot.autonomyLevels ?? [];
-  const levelNames: Record<string, string> = { off: '关闭', low: '低', medium: '中', high: '高', inherit: '跟随主会话' };
+  const levelNames: Record<string, string> = { off: '关闭', low: '低', medium: '中', high: '高', inherit: '跟随主聊天' };
   return <>
     <SettingsSection>
       {f.modelPair('modelId', 'reasoningEffort', '默认模型', '默认推理强度')}
@@ -51,11 +51,11 @@ function SessionDefaults(props: DefaultsFieldsProps) {
     </SettingsSection>
     <CompactionDefaults {...props} />
     <SettingsSection title={t("子任务模型")}>
-      {f.choice('subagentAutonomyLevel', '子任务自主等级', [...levels, 'inherit'].map(value => ({ value, label: levelNames[value] ?? value })), true)}
+      {f.choice('subagentAutonomyLevel', '子任务自主等级', ['inherit', ...levels].map(value => ({ value, label: levelNames[value] ?? value })), false, 'inherit')}
       <Tabs value={tier} onValueChange={setTier} className="management-default-tier">
         <TabsList animatedIndicator aria-label={t("子任务复杂度")}><TabsTrigger value="light">{t("轻量")}</TabsTrigger><TabsTrigger value="medium">{t("中等")}</TabsTrigger><TabsTrigger value="heavy">{t("复杂")}</TabsTrigger></TabsList>
         {(['light', 'medium', 'heavy'] as const).map(t => <TabsContent key={t} value={t}>
-          {f.modelPair(`subagentModelSettings.${t}Model`, `subagentModelSettings.${t}ReasoningEffort`, 'Model', '推理强度', true, '跟随主聊天')}
+          {f.subagentTier(t)}
         </TabsContent>)}
       </Tabs>
     </SettingsSection>

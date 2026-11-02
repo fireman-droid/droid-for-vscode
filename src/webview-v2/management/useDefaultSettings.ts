@@ -24,7 +24,9 @@ export function useDefaultSettings(state: ManagementState, scope: DefaultsScope,
     const next = { ...previous, ...changes };
     for (const key of Object.keys(changes) as (keyof DefaultValues)[]) {
       const current = snapshot?.values[key];
-      if (JSON.stringify(changes[key]) === JSON.stringify(current) || (changes[key] === null && current === undefined)) delete next[key];
+      if (JSON.stringify(changes[key]) === JSON.stringify(current)
+        || (changes[key] === null && current === undefined)
+        || (key === 'subagentAutonomyLevel' && changes[key] === 'inherit' && current === undefined)) delete next[key];
     }
     return next;
   });
