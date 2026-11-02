@@ -57,4 +57,3 @@ it('keeps subtask model defaults valid when switching a configured tier back to 
     patch: { 'subagentModelSettings.lightModel': null, 'subagentModelSettings.lightReasoningEffort': null },
   });
 });
-
