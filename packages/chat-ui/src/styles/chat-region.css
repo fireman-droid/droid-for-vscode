@@ -140,30 +140,40 @@
   .v2-chat-surface .markdown-prose {
     color: var(--ink);
     font-size: 13px;
-    line-height: 19.5px;
+    line-height: 21px;
     overflow-wrap: anywhere;
   }
   .v2-chat-surface .markdown-prose :is(h1, h2) {
-    margin: 16px 0 8px;
-    font-size: 16px;
+    margin: 18px 0 8px;
+    color: var(--strong-ink);
+    font-size: 15px;
     font-weight: 600;
-    line-height: 24px;
+    line-height: 22px;
   }
   .v2-chat-surface .markdown-prose :is(h3, h4, h5, h6) {
-    margin: 16px 0 8px;
-    font-size: 13px;
+    margin: 14px 0 6px;
+    color: var(--strong-ink);
+    font-size: 13.5px;
     font-weight: 600;
-    line-height: 18px;
+    line-height: 20px;
   }
-  .v2-chat-surface .markdown-prose p { margin: 0 0 8px; }
-  .v2-chat-surface .markdown-prose :is(ul, ol) { margin: 4px 0; padding-left: 26px; }
-  .v2-chat-surface .markdown-prose li { padding-block: 4px; }
+  .v2-chat-surface .markdown-prose p { margin: 0 0 10px; }
+  .v2-chat-surface .markdown-prose :is(ul, ol) { margin: 6px 0 10px; padding-left: 24px; }
+  .v2-chat-surface .markdown-prose li { margin-bottom: 6px; padding-block: 0; }
+  .v2-chat-surface .markdown-prose li:last-child { margin-bottom: 0; }
   .v2-chat-surface .markdown-prose li + li { margin-top: 0; }
+  .v2-chat-surface .markdown-prose li::marker { color: var(--muted-ink); }
   .v2-chat-surface .markdown-prose li > p { margin: 0; }
-  .v2-chat-surface .markdown-prose li > p + p { margin-top: 8px; }
-  .v2-chat-surface .markdown-prose li > :is(ul, ol) { margin: 0; }
+  .v2-chat-surface .markdown-prose li > p + p { margin-top: 6px; }
+  .v2-chat-surface .markdown-prose li > :is(ul, ol) { margin: 4px 0; padding-left: 18px; }
   .v2-chat-surface .markdown-prose ul ul { list-style-type: circle; }
-  .v2-chat-surface .markdown-prose strong { font-weight: 600; }
+  .v2-chat-surface .markdown-prose strong { color: var(--strong-ink); font-weight: 600; }
+  .v2-chat-surface .markdown-prose blockquote {
+    margin: 12px 0;
+    padding: 0 0 0 10px;
+    border-left: 2px solid var(--chat-edge);
+    color: var(--muted-ink);
+  }
   .v2-chat-surface .markdown-prose blockquote > :first-child { margin-top: 0; }
   .v2-chat-surface .markdown-prose blockquote > :last-child { margin-bottom: 0; }
   .v2-chat-surface .markdown-prose hr { margin: 16px 0; border-color: var(--chat-edge); }
@@ -176,15 +186,32 @@
     vertical-align: middle;
   }
   .v2-chat-surface .markdown-prose .v2-inline-code {
-    padding: 2px 4px;
+    padding: 1px 5px;
+    border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
     border-radius: 4px;
-    background: var(--chat-code-surface);
-    font-size: 13px;
-    font-weight: 500;
+    background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+    color: var(--strong-ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 400;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .v2-chat-surface .v2-inline-code a { display: inline; font: inherit; text-align: left; white-space: inherit; overflow-wrap: inherit; }
+  .v2-chat-surface .v2-inline-code a {
+    display: inline;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: underline dotted color-mix(in srgb, currentColor 50%, transparent);
+    text-underline-offset: 2px;
+    white-space: inherit;
+    overflow-wrap: inherit;
+  }
+  .v2-chat-surface .v2-inline-code a:hover {
+    color: var(--link-ink);
+    text-decoration-color: currentColor;
+    text-decoration-style: solid;
+  }
   .v2-chat-surface .v2-code-block {
     margin-block: 12px;
     border-color: var(--chat-edge);

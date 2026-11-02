@@ -5,7 +5,7 @@ import { useTranscriptScroll } from '../../src/chat/useTranscriptScroll';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
 
-function transcript(reducedMotion = false) {
+function transcript(reducedMotion = false, runway = 0) {
   const frames = new Map<number, FrameRequestCallback>();
   const resizeCallbacks = new Set<() => void>();
   let id = 0, time = 0, height = 400, scrollHeight = 2000;
@@ -22,9 +22,9 @@ function transcript(reducedMotion = false) {
     clientHeight: { get: () => height }, scrollHeight: { get: () => scrollHeight },
   });
   viewport.scrollTo = ({ top }: ScrollToOptions) => { viewport.scrollTop = Number(top); };
-  const viewportRef = { current: viewport }, columnRef = { current: column };
+  const viewportRef = { current: viewport }, columnRef = { current: column }, syncRunway = () => runway;
   const { result, rerender } = renderHook(({ editing }) =>
-    useTranscriptScroll(viewportRef, columnRef, 'history', 0, undefined, undefined, editing),
+    useTranscriptScroll(viewportRef, columnRef, 'history', 0, undefined, undefined, editing, syncRunway),
   { initialProps: { editing: false } });
   act(() => { result.current.stopFollowing(); viewport.scrollTop = 100; fireEvent.scroll(viewport); });
   return {
@@ -78,6 +78,22 @@ it('honors reduced motion when returning to the latest reply', () => {
   act(() => chat.result.current.scrollToBottom());
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(1600);
+});
+
+it('marks the transcript as scrolled away when wheeling up during an active pin runway', () => {
+  const chat = transcript(true, 360);
+  act(() => chat.result.current.scrollToBottom('auto'));
+  chat.frame();
+  expect(chat.result.current.away).toBe(false);
+
+  fireEvent.wheel(chat.viewport, { deltaY: -80 });
+  act(() => { chat.viewport.scrollTop = 1520; fireEvent.scroll(chat.viewport); });
+  chat.frame();
+  expect(chat.result.current.away).toBe(true);
+
+  act(() => chat.result.current.scrollToBottom('auto'));
+  chat.frame();
+  expect(chat.result.current.away).toBe(false);
 });
 
 it.each(['wheel', 'keyboard', 'touch'] as const)('keeps the chat under user control during message editing after a %s reaches bottom', (gesture) => {

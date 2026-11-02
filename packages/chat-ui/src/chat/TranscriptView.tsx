@@ -181,7 +181,6 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       if (spacer && spacer.style.height !== '0px') spacer.style.height = '0px';
       return 0;
     }
-    const previousRunway = runwayHeight.current;
     const previousPinTop = lastPinTop.current;
     const columnRect = column.getBoundingClientRect();
     const rowEl = column.querySelector<HTMLElement>(`[data-index="${pinnedTurnIndex}"]`);
@@ -197,7 +196,6 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       : scrollMargin + virtualizer.getTotalSize() + paddingBottom;
     const minColumnHeight = Math.ceil(pinTop + element.clientHeight);
     const nextHeight = Math.ceil(Math.max(0, minColumnHeight - naturalHeight));
-    const layoutShifted = nextHeight !== previousRunway || pinTop !== previousPinTop;
     runwayHeight.current = nextHeight;
     lastPinTop.current = pinTop;
     const nextMinHeight = `${minColumnHeight}px`;
@@ -211,7 +209,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       const pinReference = previousPinTop > 0 ? Math.min(previousPinTop, pinTop) : pinTop;
       if (!scrolling.follow.current.following && element.scrollTop < pinReference - 2) {
         pinnedAtTop.current = false;
-      } else if ((layoutShifted || scrolling.follow.current.following) && nextHeight > 0 && (element.scrollTop < pinTop - 1 || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
+      } else if (nextHeight > 0 && ((scrolling.follow.current.following && element.scrollTop < pinTop - 1) || (pinTop !== previousPinTop && Math.abs(element.scrollTop - previousPinTop) <= 2))) {
         element.scrollTop = pinTop;
         scrolling.follow.current.pendingProgrammaticTop = element.scrollTop;
       }

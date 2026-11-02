@@ -88,12 +88,8 @@ export const FadingText = memo(function FadingText({
   if (rendered.text !== text) {
     setRendered({
       text,
-      prefix: text.startsWith(rendered.text)
-        ? selected
-          ? rendered.prefix
-          : running
-            ? rendered.text.length
-            : text.length
+      prefix: text.startsWith(rendered.text) && (running || selected)
+        ? rendered.prefix
         : text.length,
     });
   } else if (!running && !selected && rendered.prefix !== text.length) {
@@ -111,9 +107,7 @@ export const FadingText = memo(function FadingText({
         className={selected ? undefined : 'dvx-stream-in'}
         onAnimationEnd={() => {
           if (window.getSelection()?.isCollapsed === false) return;
-          setRendered((current) =>
-            current.text === text ? { text, prefix: text.length } : current,
-          );
+          setRendered((current) => ({ text: current.text, prefix: current.text.length }));
         }}
       >
         {text.slice(prefix)}

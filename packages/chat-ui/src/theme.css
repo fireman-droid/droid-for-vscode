@@ -44,12 +44,12 @@
   .markdown-prose strong { font-weight: 700; }
   .markdown-content blockquote {
     margin: 12px 0;
-    padding: 6px 12px;
+    padding: 0 0 0 10px;
     border: 0;
-    border-left: 2px solid color-mix(in srgb, var(--muted-ink) 45%, var(--surface));
+    border-left: 2px solid color-mix(in srgb, var(--muted-ink) 38%, var(--surface));
     border-radius: 0;
     background: transparent;
-    color: var(--ink);
+    color: var(--muted-ink);
     overflow-wrap: anywhere;
   }
   .markdown-content blockquote > :first-child { margin-top: 0; }

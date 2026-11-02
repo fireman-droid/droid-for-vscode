@@ -136,9 +136,8 @@ export function useTranscriptScroll(
     const update = (time: number) => {
       frame.current = null;
       if (element.clientHeight === 0) { lastFrame.current = 0; return; }
-      const runway = syncRunway?.() ?? 0;
+      syncRunway?.();
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
-      const contentBottom = Math.max(0, element.scrollHeight - runway - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
       const waitingForMarkdown = () => (readTarget !== null || settlingSend.current) && column.querySelector('[data-markdown-pending]') !== null;
@@ -182,7 +181,7 @@ export function useTranscriptScroll(
       }
       lastFrame.current = frame.current === null ? 0 : time;
       setFollowingBottom(follow.current.following && navigation.current === null && !bottomNavigation.current);
-      setAway(contentBottom - element.scrollTop > 48);
+      setAway(!follow.current.following && bottom - element.scrollTop > FOLLOW_REJOIN_PX);
       if (navigation.current === null && bottom - element.scrollTop <= FOLLOW_REJOIN_PX)
         onReachedBottom?.();
     };
@@ -240,6 +239,7 @@ export function useTranscriptScroll(
         // onScroll; otherwise one grown line re-arms the follow latch and the
         // next frame drags the reader back to the bottom.
         wheelReleased.current = true;
+        schedule();
         reportLayout?.(JSON.stringify({ source: 'transcript.follow', input: 'wheel',
           deltaY: event.deltaY, following: false, ...sample() }));
       }

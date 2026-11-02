@@ -45,7 +45,7 @@ function InlineCode({ children }: ComponentProps<'code'>) {
   const { thinking } = useContext(MarkdownState);
   const path = actions?.openPath && !thinking ? detectPathLink(nodeText(children)) : null;
   return <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]">
-    {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="text-link hover:underline">
+    {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="hover:underline">
       <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={t("Open {p0}", { p0: path.path })}
         onClick={(event) => { event.preventDefault(); if (!isTextSelectionClick(event)) actions.openPath?.(path); }}>
         {nodeText(children).split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
