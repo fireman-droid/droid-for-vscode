@@ -45,7 +45,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
       {f.choice('autonomyLevel', '默认自主等级', levels.map(value => ({ value, label: levelNames[value] ?? value })))}
     </SettingsSection>
     <SettingsSection title={t("Spec 模式")}>
-      {f.modelPair('specModeModelId', 'specModeReasoningEffort', 'Spec 模型', 'Spec 推理强度', true)}
+      {f.modelPair('specModeModelId', 'specModeReasoningEffort', 'Spec 模型', 'Spec 推理强度', true, '跟随主聊天')}
       {f.row('specSaveDir', '计划保存目录', <SpecDirectoryField value={f.text('specSaveDir')} options={props.snapshot.specDirectories}
         disabled={f.disabled('specSaveDir')} onChange={value => props.update({ specSaveDir: value })} />)}
     </SettingsSection>
@@ -55,7 +55,7 @@ function SessionDefaults(props: DefaultsFieldsProps) {
       <Tabs value={tier} onValueChange={setTier} className="management-default-tier">
         <TabsList animatedIndicator aria-label={t("子任务复杂度")}><TabsTrigger value="light">{t("轻量")}</TabsTrigger><TabsTrigger value="medium">{t("中等")}</TabsTrigger><TabsTrigger value="heavy">{t("复杂")}</TabsTrigger></TabsList>
         {(['light', 'medium', 'heavy'] as const).map(t => <TabsContent key={t} value={t}>
-          {f.modelPair(`subagentModelSettings.${t}Model`, `subagentModelSettings.${t}ReasoningEffort`)}
+          {f.modelPair(`subagentModelSettings.${t}Model`, `subagentModelSettings.${t}ReasoningEffort`, 'Model', '推理强度', true, '跟随主聊天')}
         </TabsContent>)}
       </Tabs>
     </SettingsSection>

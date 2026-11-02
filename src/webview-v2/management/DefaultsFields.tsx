@@ -47,12 +47,12 @@ export function useDefaultsFields(props: DefaultsFieldsProps) {
       onChange={e => update({ [key]: e.target.value === '' ? NaN : Number(e.target.value) })} />);
   const modelOptions = snapshot.models.map(m => ({ value: m.id, label: m.label, disabled: Boolean(m.disabledReason) }));
   const pickerModels = snapshot.models;
-  const modelPair = (modelKey: DefaultField, effortKey: DefaultField, modelLabel = '模型', effortLabel = '推理强度', nullable = false) => {
+  const modelPair = (modelKey: DefaultField, effortKey: DefaultField, modelLabel = 'Model', effortLabel = '推理强度', nullable = false, inheritLabel = 'Droid 默认') => {
     const model = snapshot.models.find(m => m.id === text(modelKey));
-    return row(modelKey, modelLabel, <SettingsModelPicker label={t(modelLabel)} placeholder={t('Droid 默认')} models={pickerModels} modelId={text(modelKey)}
+    return row(modelKey, modelLabel, <SettingsModelPicker label={t(modelLabel)} placeholder={t(inheritLabel)} models={pickerModels} modelId={text(modelKey)}
         reasoningEffort={text(effortKey)} effortLabel={t(effortLabel)}
         disabled={busy || !pickerModels.length} modelDisabled={disabled(modelKey)} effortDisabled={disabled(effortKey)}
-        inherit={nullable ? { label: t('Droid 默认') } : undefined} defaultEffortLabel={nullable ? 'Droid 默认' : undefined}
+        inherit={nullable ? { label: t(inheritLabel) } : undefined} defaultEffortLabel={nullable ? inheritLabel : undefined}
         nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce} onModelChange={id => {
           const next = snapshot.models.find(m => m.id === id);
           const changes: Partial<Record<DefaultField, DefaultValue>> = { [modelKey]: id };

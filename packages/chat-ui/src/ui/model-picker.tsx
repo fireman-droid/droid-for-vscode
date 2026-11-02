@@ -69,17 +69,17 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
         onValueChange={value => {
           const nextId = value === inheritanceValue ? null : value;
           if (nextId !== (modelId ?? null)) onModelChange(nextId);
-          if (onEffortChange) { changeModelsOpen(false); modelTriggerRef.current?.focus(); }
+          if (showEffort) { changeModelsOpen(false); modelTriggerRef.current?.focus(); }
         }}>
         {inherit && showInheritance && <DropdownMenuRadioItem value={inheritanceValue} className="dvx-picker-option" disabled={disabled || modelDisabled}
-          onSelect={event => { if (onEffortChange) event.preventDefault(); }}>
+          onSelect={event => { if (showEffort) event.preventDefault(); }}>
           <span>{inherit.label}</span>{inherited && <Check aria-hidden="true" />}
         </DropdownMenuRadioItem>}
         {groups.map(group => <div key={group} className="dvx-picker-group">
           {group && <div className="dvx-picker-group-label">{group}</div>}
           {filtered.filter(item => (item.source ?? '') === group).map(item => <DropdownMenuRadioItem key={item.id} value={item.id}
             className="dvx-picker-option" disabled={disabled || modelDisabled || Boolean(item.disabledReason)} title={item.disabledReason ?? item.id}
-            onSelect={event => { if (onEffortChange) event.preventDefault(); }}>
+            onSelect={event => { if (showEffort) event.preventDefault(); }}>
             <span>{item.label}{item.disabledReason && <small>{t('Unavailable')}</small>}</span>{item.id === modelId && <Check aria-hidden="true" />}
           </DropdownMenuRadioItem>)}
         </div>)}
@@ -91,14 +91,14 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
     <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="dvx-model-picker-trigger" aria-label={label} disabled={disabled}>
       <span>{title}</span>{showEffort && effort && effort !== title && <small>· {effort}</small>}<ChevronDown aria-hidden="true" />
     </Button></DropdownMenuTrigger>
-    {onEffortChange ? <DropdownMenuContent className="dvx-model-controls" align="end" aria-label={label}>
+    {showEffort ? <DropdownMenuContent className="dvx-model-controls" align="end" aria-label={label}>
       {showEffort && <DropdownMenuSub>
         <DropdownMenuSubTrigger className="dvx-picker-setting" disabled={effortDisabled || Boolean(model?.disabledReason)}>
           <span>{effortLabel ?? t('推理强度')}</span><small>{effort}</small><ChevronRight aria-hidden="true" />
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="dvx-picker-levels" aria-label={effortLabel ?? t('推理强度')}>
           <DropdownMenuRadioGroup value={reasoningEffort ?? (defaultEffortLabel ? defaultValue : model?.defaultReasoning ?? '')}
-            onValueChange={value => onEffortChange(value === defaultValue ? null : value)}>
+            onValueChange={value => onEffortChange?.(value === defaultValue ? null : value)}>
             {defaultEffortLabel && <DropdownMenuRadioItem className="dvx-picker-option" value={defaultValue}>
               <span>{t(defaultEffortLabel)}</span>{reasoningEffort == null && <Check aria-hidden="true" />}
             </DropdownMenuRadioItem>}

@@ -23,7 +23,8 @@ export function useDefaultSettings(state: ManagementState, scope: DefaultsScope,
   const update = (changes: DefaultValues) => setPatch(previous => {
     const next = { ...previous, ...changes };
     for (const key of Object.keys(changes) as (keyof DefaultValues)[]) {
-      if (JSON.stringify(changes[key]) === JSON.stringify(snapshot?.values[key])) delete next[key];
+      const current = snapshot?.values[key];
+      if (JSON.stringify(changes[key]) === JSON.stringify(current) || (changes[key] === null && current === undefined)) delete next[key];
     }
     return next;
   });

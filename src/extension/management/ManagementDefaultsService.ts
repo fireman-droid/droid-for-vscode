@@ -31,12 +31,19 @@ export class ManagementDefaultsService {
     const api = await this.api();
     const fresh = await this.project(await api.settings.getDefaults());
     const patch: Record<string, unknown> = {};
+    const inheritTiers = new Set<'light' | 'medium' | 'heavy'>();
     for (const field of Object.keys(values) as DefaultField[]) {
       if (fresh.locked[field]) throw new Error(fresh.locked[field]);
+      const subagentTier = /^subagentModelSettings\.(light|medium|heavy)(?:Model|ReasoningEffort)$/.exec(field)?.[1] as 'light' | 'medium' | 'heavy' | undefined;
+      if (subagentTier && values[field] === null) {
+        inheritTiers.add(subagentTier);
+        continue;
+      }
       const [parent, child] = field.split('.');
       if (child) { const nested = (patch[parent] ??= {}) as Record<string, unknown>; nested[child] = values[field]; }
       else patch[parent] = values[field];
     }
+    if (inheritTiers.size > 0) patch.subagentInheritTiers = [...inheritTiers];
     const previousLimits = fresh.values.compactionTokenLimitPerModel;
     const changedLimits = isStrictRecord(values.compactionTokenLimitPerModel)
       ? Object.entries(values.compactionTokenLimitPerModel).filter(([id, count]) => !isStrictRecord(previousLimits) || previousLimits[id] !== count).map(([id]) => id) : [];
