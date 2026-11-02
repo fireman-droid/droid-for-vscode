@@ -25,12 +25,13 @@ export interface InlineInputProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   disabled?: boolean;
   maxLength?: number;
   measureText?(value: string): number;
+  consumeCursor?(value: string): number | undefined;
   onContentLayout?(element: HTMLDivElement): void;
 }
 
 /** Shared editing primitive for text interspersed with non-editable, keyboard-addressable atoms. */
 export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste, onCopy, onKeyDown, onInput, onCompositionStart, onCompositionEnd,
-  placeholder, disabled, maxLength = Infinity, measureText, onContentLayout, className, ...props }: InlineInputProps) {
+  placeholder, disabled, maxLength = Infinity, measureText, consumeCursor, onContentLayout, className, ...props }: InlineInputProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const revealAfterEdit = useRef(false);
@@ -52,8 +53,10 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
   const tokenKey = tokens.join('');
   useLayoutEffect(() => {
     const node = root.current!;
-    if (composing.current || (rendered.current === value + tokenKey && inlineText(node) === value)) return;
+    const previousText = inlineText(node);
+    if (composing.current || (rendered.current === value + tokenKey && previousText === value)) return;
     const selected = inlineSelection(node);
+    const atEnd = selected.start === previousText.length && selected.end === previousText.length;
     const focused = node.ownerDocument.activeElement === node;
     const scrollTop = node.scrollTop;
     const fragment = node.ownerDocument.createDocumentFragment();
@@ -81,9 +84,15 @@ export function InlineInput({ ref, value, tokens, renderToken, onChange, onPaste
     if (value.endsWith('\n')) fragment.append(node.ownerDocument.createElement('br'));
     node.replaceChildren(fragment);
     rendered.current = value + tokenKey; setSlots(next);
-    if (focused) setInlineSelection(node, selected.start, selected.end, selected.direction);
+    const requested = consumeCursor?.(value);
+    if (focused) {
+      const start = requested ?? (atEnd ? value.length : Math.min(selected.start, value.length));
+      const end = requested ?? (atEnd ? value.length : Math.min(selected.end, value.length));
+      setInlineSelection(node, start, end, requested !== undefined ? 'forward' : selected.direction);
+      if (requested !== undefined) revealAfterEdit.current = true;
+    }
     node.scrollTop = scrollTop;
-  }, [value, tokenKey, revision]);
+  }, [value, tokenKey, revision, consumeCursor]);
   useLayoutEffect(() => {
     const node = root.current!;
     // The first commit creates atom containers; the next commits their portals.

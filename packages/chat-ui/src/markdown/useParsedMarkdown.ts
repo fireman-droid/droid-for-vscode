@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RootContent } from 'hast';
 import { parseMarkdown } from './parseMarkdown';
+import { hasUnclosedInlineMarkdown } from './markdownStream';
 import { markdownWorkerSource } from './markdownWorkerSource';
 import type { MarkdownParseRequest, MarkdownParseResponse } from './markdownWorkerProtocol';
 import { createMarkdownParser } from './markdownParserQueue';
@@ -28,8 +29,8 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
     const cached = recallMarkdown(text, thinking);
     // Prefixes are useful while a worker parses a stream, but a synchronous
     // render must use the entire current document, including closing fences.
-    if (cached?.text === text) return cached.nodes;
-    const nodes = parseMarkdown(text, thinking);
+    if (cached?.text === text && !streaming) return cached.nodes;
+    const nodes = parseMarkdown(text, thinking, streaming);
     if (!streaming) retainMarkdown({ text, thinking, nodes });
     return nodes;
   }, [offload, text, thinking, streaming]);
@@ -39,17 +40,18 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
     let worker: ReturnType<typeof createMarkdownParser> | null = null;
     let id = 0;
     let active: MarkdownParseRequest | null = null;
-    let completed: { text: string; thinking: boolean } | null = parsed;
+    let activeSynthesized = false;
+    let completed: { text: string; thinking: boolean; synthesized?: boolean } | null = parsed;
     let nodes: readonly { version: number; node: RootContent }[] = [];
     const release = () => {
       worker?.terminate();
-      worker = null; nodes = []; active = null;
+      worker = null; nodes = []; active = null; activeSynthesized = false;
     };
     const send = () => {
       const value = latest.current;
       if (active && (!value.text.startsWith(active.text) || value.thinking !== active.thinking)) release();
       if (active) return;
-      if (completed?.text === value.text && completed.thinking === value.thinking) {
+      if (completed?.text === value.text && completed.thinking === value.thinking && (!completed.synthesized || value.streaming)) {
         if (!value.streaming) release();
         return;
       }
@@ -63,25 +65,30 @@ export function useParsedMarkdown(text: string, thinking: boolean, streaming: bo
         });
       }
       worker.retain(value.streaming);
-      active = { id: ++id, text: value.text, thinking: value.thinking };
+      activeSynthesized = Boolean(value.streaming && hasUnclosedInlineMarkdown(value.text));
+      active = value.streaming
+        ? { id: ++id, text: value.text, thinking: value.thinking, streaming: true }
+        : { id: ++id, text: value.text, thinking: value.thinking };
       worker.postMessage(active);
     };
     const receive = (data: MarkdownParseResponse) => {
       if (!active || data.id !== active.id) return;
       if ('error' in data) { release(); setError(new Error(data.error)); return; }
       const result = active;
+      const synthesized = activeSynthesized;
       nodes = data.nodes.map((entry, index) => {
         const node = entry.node ?? (nodes[index]?.version === entry.version ? nodes[index]!.node : undefined);
         if (!node) throw new Error('Background Markdown returned an invalid node revision.');
         return { version: entry.version, node };
       });
-      completed = result;
+      completed = { text: result.text, thinking: result.thinking, synthesized };
       active = null;
+      activeSynthesized = false;
       // Replacements (for example a different reply) never flash an obsolete
       // result; append-only streams can show the completed prefix immediately.
       if (latest.current.thinking === result.thinking && latest.current.text.startsWith(result.text)) {
         const rendered = { text: result.text, thinking: result.thinking, nodes: nodes.map((entry) => entry.node) };
-        retainMarkdown(rendered);
+        if (!synthesized) retainMarkdown(rendered);
         setParsed(rendered);
       }
       send();

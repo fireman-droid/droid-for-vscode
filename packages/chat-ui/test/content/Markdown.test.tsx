@@ -5,6 +5,8 @@ import { UiEnvironmentProvider } from '../../src/environment';
 import { ReplyView } from '../../src/chat/ReplyView';
 import { ContentProvider } from '../../src/content/context';
 import { Markdown } from '../../src/content/Markdown';
+import { parseMarkdown } from '../../src/markdown/parseMarkdown';
+import type { SyntaxRequest, SyntaxResponse } from '../../src/syntax/syntaxProtocol';
 
 afterEach(cleanup);
 
@@ -103,5 +105,90 @@ describe('V2 Markdown actions', () => {
     expect(screen.getByRole('region', { name: 'text code' }).textContent).toBe('final code payload\n');
     fireEvent.click(screen.getByRole('button', { name: 'Copy reply' }));
     await waitFor(() => expect(copyText).toHaveBeenCalledWith(text));
+  });
+
+  it('reuses settled block node references and projects unclosed code fences in place', () => {
+    const first = 'Settled intro paragraph.\n\n```typescript\nconst a = 1;\n';
+    const second = `${first}const b = 2;\n`;
+    const nodes1 = parseMarkdown(first, false, true);
+    const nodes2 = parseMarkdown(second, false, true);
+    expect(nodes2).toHaveLength(2);
+    expect(nodes2[0]).toBe(nodes1[0]);
+    expect(JSON.stringify(nodes2[1])).toContain('const a = 1;\\nconst b = 2;\\n');
+  });
+
+  it('completes unclosed inline tokens on the live tail block while streaming without touching currency', () => {
+    const { container, rerender } = render(
+      <Markdown text="Price is $100 and **bold text" streaming />,
+    );
+    expect(container.querySelector('strong')?.textContent).toBe('bold text');
+    expect(container.textContent).toContain('Price is $100 and bold text');
+
+    rerender(<Markdown text="Check `src/index.ts" streaming />);
+    expect(container.querySelector('code')?.textContent).toBe('src/index.ts');
+
+    rerender(<Markdown text="Visit [Docs](https://example.com/guide" streaming />);
+    expect(screen.getByRole('link', { name: 'Docs' }).getAttribute('href')).toBe('https://example.com/guide');
+
+    rerender(<Markdown text="Math $x^2 + y^2" streaming />);
+    expect(container.querySelector('.katex')).not.toBeNull();
+
+    rerender(<Markdown text="Price is $100 and **bold text" streaming={false} />);
+    expect(container.querySelector('strong')).toBeNull();
+    expect(container.textContent).toContain('**bold text');
+
+    rerender(<Markdown text={'> ```ts\n> const raw = "**unclosed'} streaming />);
+    expect(container.querySelector('strong')).toBeNull();
+    expect(container.textContent).toContain('const raw = "**unclosed');
+  });
+
+  it('preserves earlier highlighted code line DOM nodes and selection while streaming new lines', async () => {
+    const streamKeys: (string | undefined)[] = [];
+    const createSyntaxWorker = vi.fn(async () => {
+      const worker = {
+        onmessage: null as ((event: MessageEvent<SyntaxResponse>) => void) | null,
+        onerror: null as ((event: ErrorEvent) => void) | null,
+        onmessageerror: null as (() => void) | null,
+        terminate: vi.fn(),
+        postMessage(request: SyntaxRequest) {
+          const doc = request.documents[0]!;
+          streamKeys.push(doc.streamKey);
+          const lines = doc.text.split('\n');
+          const html: Record<number, string> = {};
+          lines.forEach((line, index) => {
+            html[index] = `<span class="hljs-line-${index}">${line}</span>`;
+          });
+          worker.onmessage?.({ data: { id: request.id, documents: [html] } } as MessageEvent<SyntaxResponse>);
+        },
+      };
+      return worker as unknown as Worker;
+    });
+
+    const view = (code: string) => (
+      <UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: vi.fn(async () => {}), createSyntaxWorker }}>
+        <Markdown text={`\`\`\`typescript\n${code}`} streaming />
+      </UiEnvironmentProvider>
+    );
+
+    const { container, rerender } = render(view('const first = 1;\n'));
+    await waitFor(() => expect(container.querySelector('.hljs-line-0')).not.toBeNull());
+    const firstLineSpan = container.querySelector('.hljs-line-0')!;
+
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(firstLineSpan);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(selection.toString()).toBe('const first = 1;');
+
+    rerender(view('const first = 1;\nconst second = 2;\n'));
+    await waitFor(() => expect(container.querySelector('.hljs-line-1')).not.toBeNull());
+
+    expect(container.querySelector('.hljs-line-0')).toBe(firstLineSpan);
+    expect(selection.toString()).toBe('const first = 1;');
+    expect(streamKeys.length).toBeGreaterThanOrEqual(2);
+    expect(streamKeys[0]).toBeTruthy();
+    expect(streamKeys[1]).toBe(streamKeys[0]);
+    selection.removeAllRanges();
   });
 });

@@ -93,6 +93,9 @@ export function createRoutedDaemon(pool: WindowDaemonPool): DaemonApi {
       getRewindInfo: (...args) => sessionResources.getRewindInfo(...args),
       fork: (...args) => sessionResources.fork(...args),
       killWorker: (...args) => sessionResources.killWorker(...args),
+      async listOpenedForSession(id, options) {
+        return (await choose(id)).sessions.listOpened(options);
+      },
       async listOpened(options) {
         const groups = await Promise.all((await pool.all()).map((entry) =>
           entry.connection.droid.sessions.listOpened(options)));

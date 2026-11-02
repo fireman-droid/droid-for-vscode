@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BUSY_MESSAGE_MODE_SETTING } from '../chat/queue/busyMessageSettings';
+import { CHAT_STARFIELD_SETTING } from '../webview/webviewTheme';
 import {
   MANAGEMENT_VERSION, parseManagementRequest, type ManagementAction, type ManagementHostMessage,
   type ManagementPage, type ManagementRequest, type ManagementResult,
@@ -85,6 +86,9 @@ export class ManagementBinding implements vscode.Disposable {
       case 'theme.set':
         await vscode.workspace.getConfiguration('droidvisx').update('theme', action.theme, vscode.ConfigurationTarget.Global);
         return { settings: await s.settings.read() };
+      case 'chat.starfield.set':
+        await vscode.workspace.getConfiguration('droidvisx').update(CHAT_STARFIELD_SETTING, action.enabled, vscode.ConfigurationTarget.Global);
+        return { settings: await s.settings.read() };
       case 'chat.busyMessageMode.set':
         await vscode.workspace.getConfiguration('droidvisx').update(BUSY_MESSAGE_MODE_SETTING, action.mode, vscode.ConfigurationTarget.Global);
         return { settings: await s.settings.read() };
@@ -96,7 +100,7 @@ export class ManagementBinding implements vscode.Disposable {
         return { settings: await s.settings.read() };
       case 'completion.save':
         await s.settings.save(action.preferences, action.setApiKey, action.setNextEditApiKey);
-        return { settings: await s.settings.read(), message: '已保存' };
+        return { settings: await s.settings.read() };
       case 'chat.focus': await vscode.commands.executeCommand('droidvisx.focusView'); return {};
       case 'missions.new': s.newMission(); return {};
       case 'missions.list': {

@@ -63,14 +63,14 @@ export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChan
     port.postMessage({ type: 'webview.diagnostic', kind: 'perf-batch', detail: JSON.stringify({ source: 'composer.layout', sessionId: state.sessionId, ...sample }) });
   }, [port, state.sessionId]);
   const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
-  const turnRunning = (state.turn?.status === 'submitting' || state.turn?.status === 'streaming') && state.interactions.length === 0;
-  const activeTools = useMemo(() => turnRunning ? state.transcript.filter((item) =>
-    item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId) : [], [turnRunning, state.transcript, state.turn?.turnId]);
+  const turnRunning = running && state.interactions.length === 0;
+  const activeTools = useMemo(() => turnRunning && state.turn?.status !== 'stopping' ? state.transcript.filter((item) =>
+    item.kind === 'tool' && item.status === 'running' && item.turnId === state.turn?.turnId) : [], [turnRunning, state.transcript, state.turn?.status, state.turn?.turnId]);
   const waitingForSubagents = activeTools.length > 0 && activeTools.every((item) => item.kind === 'tool' && item.subagent !== undefined &&
     (item.subagent.status === undefined || item.subagent.status === 'running' || item.subagent.status === 'pending'));
   const runningPlaceholder = turnRunning && flow.queueEditingId === null ? <span role="status" aria-label={t('Droid status')} aria-live="polite" className="inline-flex min-w-0 items-center gap-2">
-    <DroidActivity phase={state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
-    <span className="truncate">{state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
+    <DroidActivity phase={state.turn?.status === 'stopping' || state.turn?.compacting ? 'loading' : activeTools.length > 0 ? 'working' : 'thinking'} />
+    <span className="truncate">{state.turn?.status === 'stopping' ? t('Stopping…') : state.turn?.compacting ? t("Compacting conversation…") : waitingForSubagents
       ? activeTools.length === 1 ? t('Waiting for subagent…') : t('Waiting for {count} subagents…', { count: activeTools.length })
       : t(state.turn?.activity === 'working' ? 'Droid is working' : 'Droid is responding')}</span>
   </span> : undefined;

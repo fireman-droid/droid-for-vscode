@@ -128,13 +128,13 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   </div>;
   return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
-      onOpenChange={disclosure.toggle} fileActions={fileActions} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
+      onOpenChange={disclosure.toggle} fileActions={fileActions} buttonRef={disclosure.buttonRef} contentRef={disclosure.contentRef} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
       <div data-ui-notice="" className="flex min-w-0 select-none items-center gap-1">
-        {hasDetails ? <ToolHeader title={title} status={status} /> : <div className="flex min-w-0 flex-1 items-center gap-2 py-1 text-xs text-muted-foreground"><span className="min-w-0 flex-1 truncate" title={title}>{title}</span><span className="shrink-0">{status}</span></div>}
+        {hasDetails ? <ToolHeader ref={disclosure.buttonRef} title={title} status={status} /> : <div className="flex min-w-0 flex-1 items-center gap-2 py-1 text-xs text-muted-foreground"><span className="min-w-0 flex-1 truncate" title={title}>{title}</span><span className="shrink-0">{status}</span></div>}
         {fileActions}
       </div>
       {resultSummary ? <p data-ui-notice="" className="truncate pl-4 text-[11px] text-muted-foreground" title={resultSummary}>{resultSummary}</p> : null}
-      <ToolContent className="space-y-1 pb-1">
+      <ToolContent ref={disclosure.contentRef} className="space-y-1 pb-1">
         {previewBody ? <ActivityResult preview={available!} /> : null}
         {!exploration && item.detail ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre> : null}
         {output ? <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono">{output}</pre> : null}

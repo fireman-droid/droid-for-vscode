@@ -10,15 +10,34 @@ export function readWebviewThemePreference(): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'auto';
 }
 
+export const CHAT_STARFIELD_SETTING = 'chat.starfield';
+
+export function readChatStarfieldEnabled(): boolean {
+  return (
+    vscode.workspace
+      .getConfiguration('droidvisx')
+      .get<boolean>(CHAT_STARFIELD_SETTING, true) !== false
+  );
+}
+
 export function readWebviewBootTheme(): WebviewBootTheme {
   const preference = readWebviewThemePreference();
+  const starfield = readChatStarfieldEnabled();
   if (preference !== 'auto') {
-    return { preference, resolved: preference };
+    return {
+      preference,
+      resolved: preference,
+      ...(starfield ? {} : { starfield: false }),
+    };
   }
   const kind = vscode.window.activeColorTheme.kind;
   const resolved =
     kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast
       ? 'dark'
       : 'light';
-  return { preference, resolved };
+  return {
+    preference,
+    resolved,
+    ...(starfield ? {} : { starfield: false }),
+  };
 }

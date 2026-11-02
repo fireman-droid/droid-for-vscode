@@ -9,7 +9,7 @@ const worker = globalThis as unknown as {
 worker.onmessage = ({ data }) => {
   try {
     if (data.reset) delta = createMarkdownTreeDelta();
-    worker.postMessage({ id: data.id, nodes: delta(parseMarkdown(data.text, data.thinking)) });
+    worker.postMessage({ id: data.id, nodes: delta(parseMarkdown(data.text, data.thinking, data.streaming)) });
   } catch (error) {
     worker.postMessage({ id: data.id, error: error instanceof Error ? error.message : String(error) });
   }

@@ -10,7 +10,7 @@ export const CollapsibleContent = CollapsiblePrimitive.Content;
 // temporarily disabling the grid transition (notably command terminals).
 export function AnimatedCollapsibleContent({ open, visible = open, children, className, ...props }: ComponentProps<'div'> & { open: boolean; visible?: boolean }) {
   return <div data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open || undefined}
-    className={cn('grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none', visible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]', className)} {...props}>
+    className={cn('grid transition-[grid-template-rows,opacity] duration-200 motion-reduce:transition-none', visible ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0', className)} {...props}>
     <div className="min-h-0 overflow-hidden">{children}</div>
   </div>;
 }

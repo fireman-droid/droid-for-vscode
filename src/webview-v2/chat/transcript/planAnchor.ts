@@ -186,3 +186,40 @@ export function isPlanLive(
 ): boolean {
   return running && activeTurnId !== null && anchor.latestTurnId === activeTurnId;
 }
+
+const EMPTY_PLAN_ANCHORS: ReadonlyMap<string, PlanAnchorState> = new Map();
+
+/** Memoizes plan anchor projection across non-plan transcript updates. */
+export function createPlanAnchorSelector() {
+  let previousSignature = '';
+  let previousResult: ReadonlyMap<string, PlanAnchorState> = EMPTY_PLAN_ANCHORS;
+  return (transcript: readonly SessionTranscriptItem[]): ReadonlyMap<string, PlanAnchorState> => {
+    let hasPlanTool = false;
+    for (const item of transcript) {
+      if (item.kind === 'tool' && item.detailKind === 'plan' && item.detail !== undefined && item.status !== 'failed') {
+        hasPlanTool = true;
+        break;
+      }
+    }
+    if (!hasPlanTool) {
+      previousSignature = '';
+      previousResult = EMPTY_PLAN_ANCHORS;
+      return EMPTY_PLAN_ANCHORS;
+    }
+    const parts: string[] = [];
+    for (const item of transcript) {
+      if (item.kind === 'user') {
+        parts.push(`u:${item.id}`);
+      } else if (item.kind === 'tool' && item.detailKind === 'plan' && item.detail !== undefined && item.status !== 'failed') {
+        parts.push(`p:${item.toolUseId}:${item.turnId}:${item.status}:${item.detail}`);
+      }
+    }
+    const signature = parts.join('\u0000');
+    if (signature === previousSignature) {
+      return previousResult;
+    }
+    previousSignature = signature;
+    previousResult = selectPlanAnchors(transcript);
+    return previousResult;
+  };
+}

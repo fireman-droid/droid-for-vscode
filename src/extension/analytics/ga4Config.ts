@@ -358,7 +358,6 @@ export function projectGa4Event(
 
   // 6. Daemon pool & discovery health
   if (
-    event.name === 'daemon.discovery.finished' ||
     event.name === 'daemon.discovery.identity-retry' ||
     event.name === 'daemon.discovery.identity-unavailable' ||
     event.name === 'daemon.discovery.stale-record' ||

@@ -91,7 +91,8 @@ export class DroidViewProvider implements vscode.WebviewViewProvider, vscode.Dis
       if (
         this.webviewView === webviewView &&
         webviewView.visible &&
-        event.affectsConfiguration('droidvisx.theme')
+        (event.affectsConfiguration('droidvisx.theme') ||
+          event.affectsConfiguration('droidvisx.chat.starfield'))
       ) {
         postTheme();
       }

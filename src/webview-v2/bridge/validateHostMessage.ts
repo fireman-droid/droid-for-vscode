@@ -212,10 +212,11 @@ function parseUiTheme(
   value: UnknownRecord,
 ): Extract<HostToWebviewMessage, { type: 'ui.theme' }> | undefined {
   if (
-    !hasExactKeys(value, ['type', 'preference', 'resolved']) ||
+    !hasExactKeys(value, ['type', 'preference', 'resolved'], ['starfield']) ||
     typeof value.preference !== 'string' ||
     !(THEME_PREFERENCES as readonly string[]).includes(value.preference) ||
-    (value.resolved !== 'light' && value.resolved !== 'dark')
+    (value.resolved !== 'light' && value.resolved !== 'dark') ||
+    (value.starfield !== undefined && typeof value.starfield !== 'boolean')
   ) {
     return undefined;
   }
@@ -223,6 +224,7 @@ function parseUiTheme(
     type: 'ui.theme',
     preference: value.preference as ThemePreference,
     resolved: value.resolved,
+    ...(value.starfield === undefined ? {} : { starfield: value.starfield }),
   };
 }
 

@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
     inspect: (key: string) => ({ globalValue: state.values[key] }), update: state.update,
   }) }, window: { showInputBox: state.input },
 }));
-vi.mock('../webview/webviewTheme', () => ({ readWebviewBootTheme: () => ({ resolved: 'dark' }), readWebviewThemePreference: () => 'auto' }));
+vi.mock('../webview/webviewTheme', () => ({ readChatStarfieldEnabled: () => true, readWebviewBootTheme: () => ({ resolved: 'dark' }), readWebviewThemePreference: () => 'auto' }));
 import { ManagementSettingsService } from './managementSettings';
 import { completionSecretKey, DEFAULT_ENDPOINT, MERCURY_EDIT_ENDPOINT, MERCURY_FIM_ENDPOINT } from '../autocomplete/settings';
 

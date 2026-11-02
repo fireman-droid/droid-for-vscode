@@ -39,7 +39,7 @@
   .management-page .management-default-choice-wide[role='combobox'] { width: auto; min-width: 220px; }
   .management-default-toggle { display: flex; align-items: center; gap: 8px; }
   .management-default-toggle small { margin: 0; }
-  .management-default-tier { padding-top: 14px; }
+  .management-default-tier { padding-top: 14px; border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-default-directory { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
   .management-default-directory input { width: 220px; max-width: 100%; }
   .management-default-override { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
@@ -119,9 +119,11 @@
   .management-mission-table time { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .management-mission-unknown { color: var(--muted-ink); }
   .management-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+  .management-collapsible-rows .dvx-settings-row:first-child { border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-advanced { margin-top: 16px; }
   .management-advanced > svg { transition: transform var(--motion-normal) var(--motion-ease); }
   .management-advanced[data-state='open'] > svg { transform: rotate(180deg); }
+  .management-advanced-content .dvx-settings-section { margin-top: 8px; }
   .management-empty { margin: 24px 0; color: var(--muted-ink); font-size: 12px; }
   .management-caption { margin-top: 12px; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; color: var(--muted-ink); }
   .management-caption.text-destructive { color: var(--error-ink); }

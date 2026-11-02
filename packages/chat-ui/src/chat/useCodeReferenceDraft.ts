@@ -21,7 +21,17 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
     onChange(next);
   };
   const format = (body: string) => formatInlineCodeReferences(body, parsed.references, parsed.tokens);
-  const change = (body: string) => commit(format(body));
+  const pendingCursor = useRef<{ body: string; cursor: number } | null>(null);
+  const change = (body: string, cursor?: number) => {
+    pendingCursor.current = cursor === undefined ? null : { body, cursor };
+    commit(format(body));
+  };
+  const consumeCursor = (body: string): number | undefined => {
+    if (pendingCursor.current?.body !== body) return undefined;
+    const { cursor } = pendingCursor.current;
+    pendingCursor.current = null;
+    return cursor;
+  };
   const onPaste = (event: ClipboardEvent<HTMLElement>, target?: InlineInputHandle): boolean => {
     const plain = event.clipboardData.getData('text/plain');
     const reference = decodeCodeReference(event.clipboardData.getData(CODE_REFERENCE_MIME));
@@ -82,7 +92,7 @@ export function useCodeReferenceDraft(value: string, onChange: (value: string) =
     (undo ? history.current.future : history.current.past).push(value);
     history.current.emitted = next; onChange(next);
   };
-  return { ...parsed, body: parsed.inline, change, onPaste, onCopy, onKeyDown,
+  return { ...parsed, body: parsed.inline, change, consumeCursor, onPaste, onCopy, onKeyDown,
     maxLength, measureText: (body: string) => format(body).length,
     remove: (index: number) => change(parsed.inline.replace(parsed.tokens[index]!, '')) };
 }

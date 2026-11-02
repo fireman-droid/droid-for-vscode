@@ -9,12 +9,12 @@ import type { ChatPort } from '../host/chatIntent';
 import type { AssistantWebviewState } from '../state/types';
 import { QuestionCard } from './QuestionCard';
 import { createTranscriptSelector } from './transcript/transcriptGroups';
-import { resolveAssistantStatus } from './transcript/transcriptStatus';
+import { matchesAssistantTurn, replyOperationsLive, resolveAssistantStatus } from './transcript/transcriptStatus';
 import { currentProcessWaiting } from './transcript/activityPresentation';
 import { AssistantReply } from './AssistantReply';
 import { useEditAttachmentIngress } from './useEditAttachmentIngress';
 import { getHistoryNotice } from '../shell/statusMessage';
-import { isPlanLive, selectPlanAnchors } from './transcript/planAnchor';
+import { createPlanAnchorSelector, isPlanLive } from './transcript/planAnchor';
 import { createOperationSummarySelector, summarizeReplyOperations } from './operationSummary';
 import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
@@ -114,9 +114,9 @@ export function Transcript({
     ...ingress,
   };
   const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
-    structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
+    plans: createPlanAnchorSelector(), structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), [state.conversationId]);
   const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
-  const plans = useMemo(() => selectPlanAnchors(items), [items]);
+  const plans = useMemo(() => selectors.plans(items), [items, selectors]);
   const [planChoices, setPlanChoices] = useState<{ conversationId: string | null; values: ReadonlyMap<string, boolean> } | null>(null);
   const currentPlanChoices = planChoices?.conversationId === state.conversationId ? planChoices.values : null;
   const togglePlan = useCallback((id: string, expanded: boolean) => {
@@ -133,7 +133,7 @@ export function Transcript({
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
     ? (turns.find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
-      return descriptor.kind === 'assistant' && descriptor.turnId === state.turn?.turnId;
+      return descriptor.kind === 'assistant' && matchesAssistantTurn(descriptor.items, descriptor.turnId, state.turn?.turnId);
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
   const waiting = useMemo(() => currentProcessWaiting(state.sessionId, state.turn, state.interactions), [state.sessionId, state.turn, state.interactions]);
   const lastReplyId = [...replyTails.keys()].at(-1);
@@ -173,10 +173,8 @@ export function Transcript({
           : waiting;
       const status = resolveAssistantStatus(message.items, message.turnId, activeTurn);
       const summary = replySummaries.get(message.id);
-      const operationsLive =
-        replyPending ||
-        status.type === 'running' ||
-        (status.type === 'incomplete' && status.reason === 'cancelled');
+      const operationsLive = replyOperationsLive(status, replyPending,
+        state.turn?.turnId === message.turnId && state.turn.status === 'stopping');
       return <AssistantReply descriptor={message} status={status} waiting={activeWaiting} replyText={replyPending ? undefined : replyTails.get(message.id)}
         operationSummary={summary} operationsLive={operationsLive} onInteract={stopFollowing}
         completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(message.id)}

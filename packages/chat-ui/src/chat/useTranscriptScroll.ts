@@ -8,8 +8,6 @@ import {
 import { hasTranscriptSelection, readTranscriptSelection } from './transcriptSelection';
 import { isNestedScrollTarget } from '../navigation/nestedScroll';
 
-const SEND_NEAR_BOTTOM_PX = 80;
-
 export function useTranscriptScroll(
   viewport: RefObject<HTMLDivElement | null>,
   content: RefObject<HTMLDivElement | null>,
@@ -18,9 +16,11 @@ export function useTranscriptScroll(
   reportLayout?: (detail: string) => void,
   onReachedBottom?: () => void,
   pauseAutoFollow = false,
+  syncRunway?: () => number,
 ) {
   const follow = useRef(createFollowState());
   const userScrolling = useRef(false);
+  const wheelReleased = useRef(false);
   const [away, setAway] = useState(false);
   const [followingBottom, setFollowingBottom] = useState(false);
   const navigation = useRef<(() => number | undefined) | null>(null);
@@ -47,6 +47,7 @@ export function useTranscriptScroll(
     setFollowingBottom(false);
     follow.current.pendingProgrammaticTop = null;
     userScrolling.current = false;
+    wheelReleased.current = false;
   }, [cancelAnimation]);
   // Floating controls are siblings of the viewport, so native scroll chaining
   // cannot reach it. Keep the non-passive listener on those overlays only.
@@ -95,6 +96,7 @@ export function useTranscriptScroll(
   useLayoutEffect(() => { compensateNavigation(); });
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     cancelAnimation();
+    syncRunway?.();
     const element = viewport.current;
     readTranscriptSelection(element?.parentElement ?? null)?.removeAllRanges();
     follow.current.following = true;
@@ -106,17 +108,14 @@ export function useTranscriptScroll(
     setFollowingBottom(element !== null && !bottomNavigation.current);
     setAway(false);
     scheduleUpdate.current();
-  }, [viewport, writeTop, cancelAnimation]);
+  }, [viewport, writeTop, cancelAnimation, syncRunway]);
   const prepareForSend = useCallback(() => {
-    const element = viewport.current;
-    // Capture before the draft clears and the new question changes either height.
-    sendBehavior.current = element !== null &&
-      element.scrollHeight - element.clientHeight - element.scrollTop <= SEND_NEAR_BOTTOM_PX ? 'auto' : 'smooth';
-  }, [viewport]);
+    sendBehavior.current = 'auto';
+  }, []);
   const followNewQuestion = useCallback(() => {
-    const behavior = sendBehavior.current ?? 'smooth';
-    scrollToBottom(behavior);
-    settlingSend.current = behavior !== 'smooth';
+    sendBehavior.current = null;
+    scrollToBottom('auto');
+    settlingSend.current = true;
   }, [scrollToBottom]);
 
   useLayoutEffect(() => { scrollToBottom('auto'); }, [conversationId, scrollToBottom]);
@@ -137,6 +136,7 @@ export function useTranscriptScroll(
     const update = (time: number) => {
       frame.current = null;
       if (element.clientHeight === 0) { lastFrame.current = 0; return; }
+      syncRunway?.();
       const bottom = Math.max(0, element.scrollHeight - element.clientHeight);
       if (selecting()) stopFollowing();
       const readTarget = navigation.current;
@@ -181,7 +181,7 @@ export function useTranscriptScroll(
       }
       lastFrame.current = frame.current === null ? 0 : time;
       setFollowingBottom(follow.current.following && navigation.current === null && !bottomNavigation.current);
-      setAway(bottom - element.scrollTop > 48);
+      setAway(!follow.current.following && bottom - element.scrollTop > FOLLOW_REJOIN_PX);
       if (navigation.current === null && bottom - element.scrollTop <= FOLLOW_REJOIN_PX)
         onReachedBottom?.();
     };
@@ -189,21 +189,29 @@ export function useTranscriptScroll(
     scheduleUpdate.current = schedule;
     let lastScrollClientHeight = element.clientHeight;
     const onScroll = () => {
+      syncRunway?.();
       const next = sample();
+      const previousScrollHeight = follow.current.lastScrollHeight;
       const layoutChanged = next.clientHeight !== lastScrollClientHeight ||
-        next.scrollHeight !== follow.current.lastScrollHeight;
+        next.scrollHeight !== previousScrollHeight;
+      const shrank = next.scrollHeight < previousScrollHeight;
       lastScrollClientHeight = next.clientHeight;
+      const releasedByGesture = wheelReleased.current;
+      wheelReleased.current = false;
+      const atBottom = next.scrollHeight - next.scrollTop - next.clientHeight <= FOLLOW_REJOIN_PX;
       if (!selecting()) {
         const wasFollowing = follow.current.following;
         applyFollowScroll(follow.current, next);
         if (pauseAutoFollow || navigation.current !== null) follow.current.following = false;
+        else if (releasedByGesture && !atBottom)
+          follow.current.following = false;
         // Finishing replies and virtual-row adjustments are not reading intent.
         // Rejoin only during a user gesture at the current, measured bottom.
-        else if (layoutChanged || !userScrolling.current ||
-          (!wasFollowing && next.scrollHeight - next.scrollTop - next.clientHeight > FOLLOW_REJOIN_PX))
+        else if ((layoutChanged && (!userScrolling.current || shrank || !atBottom)) || !userScrolling.current ||
+          (!wasFollowing && !atBottom))
           follow.current.following = wasFollowing;
       }
-      if (layoutChanged) userScrolling.current = false;
+      if (shrank) userScrolling.current = false;
       schedule();
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -227,6 +235,11 @@ export function useTranscriptScroll(
       setFollowingBottom(follow.current.following);
       userScrolling.current = event.deltaY > 0;
       if (wasFollowing && !follow.current.following) {
+        // A gesture that left the bottom outranks the layout heuristics in
+        // onScroll; otherwise one grown line re-arms the follow latch and the
+        // next frame drags the reader back to the bottom.
+        wheelReleased.current = true;
+        schedule();
         reportLayout?.(JSON.stringify({ source: 'transcript.follow', input: 'wheel',
           deltaY: event.deltaY, following: false, ...sample() }));
       }
@@ -250,6 +263,7 @@ export function useTranscriptScroll(
     let maxHeight = previousHeight;
     let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
+      syncRunway?.();
       const height = element.clientHeight;
       // New virtual rows and the cleared composer settle together. Correct their
       // geometry before paint, then return to the usual smooth streaming follow.
@@ -282,6 +296,9 @@ export function useTranscriptScroll(
     });
     observer.observe(element);
     observer.observe(column);
+    for (const child of column.children) {
+      if (!child.hasAttribute('data-pin-runway')) observer.observe(child);
+    }
     const pendingMarkdown = new MutationObserver(() => { if (navigation.current !== null || settlingSend.current) schedule(); });
     pendingMarkdown.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-markdown-pending'] });
     element.addEventListener('scroll', onScroll, { passive: true });
@@ -306,6 +323,6 @@ export function useTranscriptScroll(
       reducedMotion.removeEventListener('change', schedule);
       cancelAnimation();
     };
-  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow]);
+  }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow, syncRunway]);
   return { follow, followingBottom, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }

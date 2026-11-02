@@ -2,6 +2,8 @@ export interface SyntaxDocument {
   readonly text: string;
   /** Zero-based source lines to return; omitted for a complete code block. */
   readonly lines?: readonly number[];
+  /** Optional stable key for incremental streaming tokenization. */
+  readonly streamKey?: string;
 }
 export interface SyntaxRequest {
   readonly id: number;

@@ -14,7 +14,7 @@ html[data-theme] body {
   font-weight: 400;
 }
 
-html[data-theme] :is(a, code, blockquote) {
+html[data-theme] body :is(a, code, blockquote) {
   color: revert-layer;
   background: revert-layer;
   border-color: revert-layer;
@@ -23,12 +23,12 @@ html[data-theme] :is(a, code, blockquote) {
   font-family: revert-layer;
 }
 
-html[data-theme] :is(a, input, select, textarea):focus {
+html[data-theme] body :is(a, input, select, textarea):focus {
   outline: revert-layer;
   outline-offset: revert-layer;
 }
 
-html[data-theme] blockquote {
+html[data-theme] body blockquote {
   margin: revert-layer;
   border: revert-layer;
 }

@@ -24,7 +24,7 @@ class ControlledWorker {
   complete() {
     const request = this.requests.at(-1)!;
     if (request.reset) this.delta = createMarkdownTreeDelta();
-    this.onmessage?.({ data: { id: request.id, nodes: this.delta(parseMarkdown(request.text, request.thinking)) } } as MessageEvent<MarkdownParseResponse>);
+    this.onmessage?.({ data: { id: request.id, nodes: this.delta(parseMarkdown(request.text, request.thinking, request.streaming)) } } as MessageEvent<MarkdownParseResponse>);
   }
 }
 const padding = Array.from({ length: 120 }, (_, index) => `Paragraph ${index}: ${'a complete local sentence. '.repeat(5)}`).join('\n\n');

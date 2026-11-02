@@ -1,5 +1,5 @@
 import { MAX_BRIDGE_ID_LENGTH } from './interactionProtocol';
-import { isBtwToolActivities, type BtwToolActivity } from './btwToolActivity';
+import { isBtwToolActivities, MAX_BTW_TOOLS, type BtwToolActivity } from './btwToolActivity';
 import { hasExactKeys } from '../validation/strictValidation';
 import { isEnumValue, isSafeModelId } from '../validation/guards';
 import { SESSION_REASONING_EFFORTS } from './bounds';
@@ -30,6 +30,10 @@ export const MAX_BTW_ENTRIES = 20;
 export const MAX_BTW_ANSWER_LENGTH = 32_000;
 /** Bounded SDK-provided thinking text, independent of the answer budget. */
 export const MAX_BTW_THINKING_LENGTH = 32_000;
+/** Most SDK thinking blocks kept per answer. */
+export const MAX_BTW_THINKING_BLOCKS = 64;
+/** Text parts only follow a non-text part, so this bounds every valid sequence. */
+export const MAX_BTW_PARTS = 2 * (MAX_BTW_THINKING_BLOCKS + MAX_BTW_TOOLS) + 1;
 /** Longest status message shown on the card (error/unsupported). */
 export const MAX_BTW_MESSAGE_LENGTH = 512;
 
@@ -42,6 +46,15 @@ export type BtwEntryState = (typeof BTW_ENTRY_STATES)[number];
 export const BTW_ENTRY_PROGRESS = ['waiting', 'thinking', 'tool', 'answering'] as const;
 export type BtwEntryProgress = (typeof BTW_ENTRY_PROGRESS)[number];
 
+/**
+ * One answer's segments in arrival order. Tool parts reference `tools` by id;
+ * a text part spans `answer` from `start` to the next text part.
+ */
+export type BtwEntryPart =
+  | { readonly kind: 'thinking'; readonly id: string; readonly text: string; readonly active: boolean; readonly truncated: boolean; readonly durationMs?: number }
+  | { readonly kind: 'tool'; readonly id: string }
+  | { readonly kind: 'text'; readonly start: number };
+
 /** One question/answer pair on the side-chat card. */
 export interface BtwEntry {
   readonly id: string;
@@ -51,9 +64,7 @@ export interface BtwEntry {
   readonly reasoningEffort?: SessionReasoningEffort;
   /** Accumulated answer text, bounded to MAX_BTW_ANSWER_LENGTH. */
   readonly answer: string;
-  readonly thinking?: string;
-  readonly thinkingTruncated?: boolean;
-  readonly thinkingDurationMs?: number;
+  readonly parts?: readonly BtwEntryPart[];
   readonly state: BtwEntryState;
   /** Turn ended after a user-requested stop; partial text is retained. */
   readonly stopped?: boolean;
@@ -196,10 +207,45 @@ export function parseBtwStopMessage(value: unknown): BtwStopMessage | null {
   return { type: 'btw.stop', sessionId: value.sessionId };
 }
 
+function isDuration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+}
+
+function isBtwEntryParts(value: unknown, answerLength: number, tools: readonly BtwToolActivity[] | undefined): value is readonly BtwEntryPart[] {
+  if (!Array.isArray(value) || value.length > MAX_BTW_PARTS) return false;
+  const toolIds = new Set(tools?.map((tool) => tool.id));
+  const seenThinking = new Set<string>();
+  const seenTools = new Set<string>();
+  let thinkingLength = 0;
+  let lastStart = -1;
+  let previous: unknown;
+  for (const part of value) {
+    if (!isRecord(part)) return false;
+    if (part.kind === 'thinking') {
+      if (!hasExactKeys(part, ['kind', 'id', 'text', 'active', 'truncated'], ['durationMs']) || !isId(part.id) ||
+        seenThinking.has(part.id) || typeof part.text !== 'string' || typeof part.active !== 'boolean' ||
+        typeof part.truncated !== 'boolean' || (part.durationMs !== undefined && !isDuration(part.durationMs))) return false;
+      seenThinking.add(part.id);
+      thinkingLength += part.text.length;
+    } else if (part.kind === 'tool') {
+      if (!hasExactKeys(part, ['kind', 'id']) || !isId(part.id) || !toolIds.has(part.id) || seenTools.has(part.id)) return false;
+      seenTools.add(part.id);
+    } else if (part.kind === 'text') {
+      if (!hasExactKeys(part, ['kind', 'start']) || typeof part.start !== 'number' || !Number.isSafeInteger(part.start) ||
+        previous === 'text' || part.start >= answerLength || (lastStart < 0 ? part.start !== 0 : part.start <= lastStart)) return false;
+      lastStart = part.start;
+    } else {
+      return false;
+    }
+    previous = part.kind;
+  }
+  return thinkingLength <= MAX_BTW_THINKING_LENGTH;
+}
+
 function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: number): BtwEntry | null {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'thinking', 'thinkingTruncated', 'thinkingDurationMs', 'tools', 'stopped']) ||
+    !hasExactKeys(value, ['id', 'question', 'answer', 'state'], ['message', 'progress', 'images', 'modelId', 'reasoningEffort', 'parts', 'tools', 'stopped']) ||
     (value.stopped !== undefined && typeof value.stopped !== 'boolean') ||
     (value.tools !== undefined && !isBtwToolActivities(value.tools)) ||
     !isId(value.id) ||
@@ -210,9 +256,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: 
     (value.reasoningEffort !== undefined && !isEnumValue(value.reasoningEffort, SESSION_REASONING_EFFORTS)) ||
     (!value.question.length && !(Array.isArray(value.images) && value.images.length)) ||
     !isBoundedString(value.answer, MAX_BTW_ANSWER_LENGTH) ||
-    (value.thinking !== undefined && !isBoundedString(value.thinking, MAX_BTW_THINKING_LENGTH)) ||
-    (value.thinkingTruncated !== undefined && typeof value.thinkingTruncated !== 'boolean') ||
-    (value.thinkingDurationMs !== undefined && (typeof value.thinkingDurationMs !== 'number' || !Number.isFinite(value.thinkingDurationMs) || value.thinkingDurationMs < 0 || value.thinkingDurationMs > Number.MAX_SAFE_INTEGER)) ||
+    (value.parts !== undefined && !isBtwEntryParts(value.parts, value.answer.length, value.tools as readonly BtwToolActivity[] | undefined)) ||
     !BTW_ENTRY_STATES.includes(value.state as BtwEntryState)
   ) {
     return null;
@@ -240,9 +284,7 @@ function parseBtwEntry(value: unknown, seenIds: Set<string>, maxQuestionLength: 
     ...(value.modelId === undefined ? {} : { modelId: value.modelId as string }),
     ...(value.reasoningEffort === undefined ? {} : { reasoningEffort: value.reasoningEffort as SessionReasoningEffort }),
     answer: value.answer,
-    ...(value.thinking === undefined ? {} : { thinking: value.thinking as string }),
-    ...(value.thinkingTruncated === undefined ? {} : { thinkingTruncated: value.thinkingTruncated as boolean }),
-    ...(value.thinkingDurationMs === undefined ? {} : { thinkingDurationMs: value.thinkingDurationMs as number }),
+    ...(value.parts === undefined ? {} : { parts: value.parts as readonly BtwEntryPart[] }),
     state: value.state as BtwEntryState,
     ...(value.stopped === undefined ? {} : { stopped: value.stopped as boolean }),
     ...(value.tools === undefined ? {} : { tools: value.tools as readonly BtwToolActivity[] }),

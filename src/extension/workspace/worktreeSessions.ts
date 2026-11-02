@@ -366,29 +366,33 @@ export async function appendWorktreeSessions(options: {
     }
     group.set(sessionId, record);
   }
-  const extras: SessionSummary[] = [];
-  for (const [path, group] of byPath) {
-    let result;
-    try {
-      result = await options.listSessions(path);
-    } catch {
-      continue;
-    }
-    if (result.status !== 'available') {
-      continue;
-    }
-    const entries = result.sessions.filter((entry) => group.has(entry.id));
-    for (const item of options.project(entries)) {
-      const record = group.get(item.id);
-      if (!record) {
-        continue;
+  const groups = await Promise.all(
+    [...byPath.entries()].map(async ([path, group]) => {
+      let result;
+      try {
+        result = await options.listSessions(path);
+      } catch {
+        return [];
       }
-      extras.push({
-        ...item,
-        worktree: { branch: record.branch, path: record.path },
-      });
-    }
-  }
+      if (result.status !== 'available') {
+        return [];
+      }
+      const entries = result.sessions.filter((entry) => group.has(entry.id));
+      const matched: SessionSummary[] = [];
+      for (const item of options.project(entries)) {
+        const record = group.get(item.id);
+        if (!record) {
+          continue;
+        }
+        matched.push({
+          ...item,
+          worktree: { branch: record.branch, path: record.path },
+        });
+      }
+      return matched;
+    }),
+  );
+  const extras = groups.flat();
   if (extras.length === 0) {
     return options.items;
   }

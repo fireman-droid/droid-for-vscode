@@ -23,8 +23,8 @@
   .v2-composer-panel button { @apply outline-none; }
   .v2-composer-panel button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-composer-panel button:disabled { @apply cursor-default; }
-  .v2-composer-panel button:hover:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']):not(.dvx-model-popover button) { background: var(--control-surface-hover); }
-  .v2-composer-panel button:active:not(:disabled):not([role='radio']):not([role='switch']):not([role='checkbox']):not(.dvx-model-popover button) { background: var(--control-surface-active); }
+  .v2-composer-panel button:hover:where(:not(:disabled, [role='radio'], [role='switch'], [role='checkbox'], .dvx-model-popover button, .dvx-context-icon-button, .dvx-limits-tab)) { background: var(--control-surface-hover); }
+  .v2-composer-panel button:active:where(:not(:disabled, [role='radio'], [role='switch'], [role='checkbox'], .dvx-model-popover button, .dvx-context-icon-button, .dvx-limits-tab)) { background: var(--control-surface-active); }
   .v2-composer-panel .dvx-popover-message { @apply m-[5px] break-words text-xs text-muted-foreground; }
   .v2-composer-panel .dvx-error-text { @apply text-destructive; }
   .v2-composer-panel .dvx-settings-divider { @apply mx-0.5 my-[5px] h-px; background: var(--panel-edge); }
@@ -127,7 +127,9 @@
   .v2-composer-panel .dvx-context-head { @apply flex min-h-8 items-center justify-between gap-2 px-3 pt-1; }
   .v2-composer-panel .dvx-context-head-title { @apply text-[13px] font-medium leading-5; }
   .v2-composer-panel .dvx-context-head-actions { @apply inline-flex items-center gap-0.5; }
-  .v2-composer-panel .dvx-context-icon-button { @apply grid size-6 place-items-center rounded text-muted-foreground disabled:opacity-50; }
+  .v2-composer-panel .dvx-context-icon-button { @apply grid size-6 place-items-center rounded border-0 bg-transparent text-muted-foreground outline-none transition-colors disabled:opacity-50; }
+  .v2-composer-panel .dvx-context-icon-button:hover:not(:disabled) { @apply bg-transparent text-foreground; }
+  .v2-composer-panel .dvx-context-icon-button:focus-visible { outline: none; }
   .v2-composer-panel .dvx-context-icon-button svg { @apply size-3.5; }
   .v2-composer-panel .dvx-context-refresh-spinning,
   .v2-composer-panel .dvx-compact-spinner { @apply animate-spin motion-reduce:animate-none; }
@@ -149,9 +151,12 @@
   .v2-composer-panel .dvx-limits-popover { @apply pb-3; }
   .v2-composer-panel .dvx-limits-head { @apply pt-2 pb-1; }
   .v2-composer-panel .dvx-limits-tabs { @apply mr-1 inline-flex items-center overflow-hidden rounded-[5px] border border-[var(--panel-edge)] p-0.5; background: color-mix(in srgb, var(--ink) 3%, transparent); }
-  .v2-composer-panel .dvx-limits-tab { @apply rounded-[3.5px] px-2 py-[3px] text-[11px] font-medium leading-4 text-muted-foreground transition-colors; }
+  .v2-composer-panel .dvx-limits-tab { @apply rounded-[3.5px] border-0 bg-transparent px-2 py-[3px] text-[11px] font-medium leading-4 text-muted-foreground outline-none transition-colors; }
+  .v2-composer-panel .dvx-limits-tab:hover:not(:disabled):not([data-active='true']) { @apply bg-transparent text-foreground; }
+  .v2-composer-panel .dvx-limits-tab:focus-visible { outline: none; }
   .v2-composer-panel .dvx-limits-tab[data-active='true'],
-  .v2-composer-panel .dvx-limits-tab[data-active='true']:hover:not(:disabled) { background: var(--ink); color: var(--surface); }
+  .v2-composer-panel .dvx-limits-tab[data-active='true']:hover:not(:disabled),
+  .v2-composer-panel .dvx-limits-tab[data-active='true']:active:not(:disabled) { background: var(--ink); color: var(--surface); }
   .v2-composer-panel .dvx-limits-body { @apply px-3 pt-1.5; }
   .v2-composer-panel .dvx-limits-list { @apply m-0 grid list-none gap-3.5 p-0; }
   .v2-composer-panel .dvx-limits-item { @apply grid gap-1.5; }

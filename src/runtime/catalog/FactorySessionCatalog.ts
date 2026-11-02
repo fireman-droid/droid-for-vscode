@@ -183,8 +183,10 @@ export async function readWorkerSessionIds({
       const fileName = `${sessionId}${SESSION_SETTINGS_SUFFIX}`;
       for (const directory of directories) {
         const settings = await readBoundedSessionSettings(path.join(directory, fileName));
-        if (settings && hasWorkerTag(settings.tags)) {
-          workerIds.add(sessionId);
+        if (settings) {
+          if (hasWorkerTag(settings.tags)) {
+            workerIds.add(sessionId);
+          }
           return;
         }
       }

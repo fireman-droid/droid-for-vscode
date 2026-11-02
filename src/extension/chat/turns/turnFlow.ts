@@ -152,7 +152,8 @@ export async function consumeTurn(
         break;
       }
 
-      if (ctl.turnState.turn?.status === 'stopping') {
+      // Results of tools that already ran are the only evidence of their edits.
+      if (ctl.turnState.turn?.status === 'stopping' && event.type !== 'tool-result') {
         continue;
       }
 

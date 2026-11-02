@@ -5,7 +5,7 @@ import {
   COMPLETION_SECTION, DEFAULT_ENDPOINT, completionNeedsKey, completionSecretKey, mercuryAlternateEndpoint,
   readCompletionKey, readCompletionSettings, validateCompletionEndpoint,
 } from '../autocomplete/settings';
-import { readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
+import { readChatStarfieldEnabled, readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
 import { readReviewQuestionModel, readReviewQuestionEffort, REVIEW_QUESTION_MODEL_SETTING, REVIEW_QUESTION_EFFORT_SETTING } from '../review/reviewQuestionSettings';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
 
@@ -27,6 +27,7 @@ export class ManagementSettingsService {
     const nextEditHasKey = !validateCompletionEndpoint(nextEdit.endpoint, 'mercury-edit') && Boolean(await readCompletionKey(this.secrets, nextEdit.endpoint));
     return {
       busyMessageMode: readBusyMessageMode(),
+      starfield: readChatStarfieldEnabled(),
       ...status, theme: readWebviewThemePreference(), resolvedTheme: readWebviewBootTheme().resolved, version: this.version,
       completionHasKey: hasKey, nextEditHasKey,
       reviewQuestion: { modelId: readReviewQuestionModel(), reasoningEffort: readReviewQuestionEffort(), inheritedModelId: this.mainModel(), models: await this.questionModels() },
@@ -102,7 +103,7 @@ export class ManagementSettingsService {
       if (key === undefined) throw new Error('已取消，补全设置未保存。');
       return key.trim() || undefined;
     } else if (enabled && completionNeedsKey(endpoint) && !existing) {
-      throw new Error(`${label}尚未配置密钥，请勾选设置 API Key。`);
+      throw new Error(`${label}尚未配置密钥，请先设置 API Key。`);
     }
     return undefined;
   }
