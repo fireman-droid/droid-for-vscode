@@ -53,10 +53,50 @@ describe('V2 request responses', () => {
     };
     const actions = { onAnswer: vi.fn(), onPermission: vi.fn(), onOpenPlan: vi.fn() };
     render(<InteractionPanel requests={[request]} actions={actions} />);
-    await user.click(screen.getByRole('radio', { name: 'All files' }));
-    await user.type(screen.getByRole('textbox', { name: 'Own answer for Scope' }), 'Only the webview');
+    const allFilesRadio = screen.getByRole('radio', { name: 'All files' });
+    const currentFileRadio = screen.getByRole('radio', { name: 'Current file' });
+    const customInput = screen.getByRole<HTMLInputElement>('textbox', { name: 'Own answer for Scope' });
+    await user.click(allFilesRadio);
+    expect(allFilesRadio.getAttribute('aria-checked')).toBe('true');
+    await user.click(allFilesRadio);
+    expect(allFilesRadio.getAttribute('aria-checked')).toBe('false');
+    await user.click(allFilesRadio);
+    expect(allFilesRadio.getAttribute('aria-checked')).toBe('true');
+    await user.type(customInput, 'Only the webview');
+    expect(allFilesRadio.getAttribute('aria-checked')).toBe('false');
+    await user.click(currentFileRadio);
+    expect(currentFileRadio.getAttribute('aria-checked')).toBe('true');
+    expect(customInput.value).toBe('');
+    await user.type(customInput, 'Only the webview');
+    expect(currentFileRadio.getAttribute('aria-checked')).toBe('false');
     await user.dblClick(screen.getByRole('button', { name: 'Submit answers' }));
     expect(actions.onAnswer).toHaveBeenCalledExactlyOnceWith(request, false, [{ index: 2, answer: 'Only the webview' }]);
+  });
+
+  it('submits all selected options and custom input for multi-select questions', async () => {
+    const user = userEvent.setup();
+    const request: PendingInteraction = {
+      sessionId: 'session', turnId: 'turn',
+      request: {
+        kind: 'ask-user', requestId: 'multi-question', toolCallId: 'tool',
+        questions: [{
+          index: 0,
+          topic: '使用场景',
+          question: '这个 skill 主要给谁用？（多选，决定输入来源）',
+          options: ['开发提测前自测', '测试同学排测试计划', 'CI 自动生成'],
+          multiSelect: false,
+        }],
+      },
+    };
+    const actions = { onAnswer: vi.fn(), onPermission: vi.fn(), onOpenPlan: vi.fn() };
+    render(<InteractionPanel requests={[request]} actions={actions} />);
+    await user.click(screen.getByText('开发提测前自测'));
+    await user.click(screen.getByRole('checkbox', { name: '测试同学排测试计划' }));
+    await user.type(screen.getByRole('textbox', { name: 'Own answer for 使用场景' }), '发版复盘');
+    await user.click(screen.getByRole('button', { name: 'Submit answers' }));
+    expect(actions.onAnswer).toHaveBeenCalledExactlyOnceWith(request, false, [
+      { index: 0, answer: '开发提测前自测, 测试同学排测试计划, 发版复盘' },
+    ]);
   });
 
   it('never approves an edited plan until its host-owned draft is ready', async () => {

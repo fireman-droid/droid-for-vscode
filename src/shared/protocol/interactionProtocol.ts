@@ -115,3 +115,26 @@ export interface PlanDocumentStateMessage {
   readonly status: PlanDocumentStatus;
   readonly content?: string;
 }
+
+export function isImplicitMultiSelectQuestion(question: string, topic = ''): boolean {
+  const text = `${topic}\n${question}`;
+  if (/(?:不可|不能|不支持|不允许|禁止|不是|非)多选|(?:仅|只)(?:限|能|可)?单选/u.test(text)) {
+    return false;
+  }
+  const hasMultiSelectHint =
+    /(?:可|支持|允许|可以)(?:单选[、/或与及和]?)?多选|单选[、/或与及和]多选|多选题|多项选择|可(?:选|勾选)多(?:个|项)|(?:一个|1\s*个)或多个|多个选项/u.test(
+      text,
+    ) ||
+    /[（([【][^)）】\]]*(?:多选|multi(?:-?select)?|\bmulti\b)[^)）】\]]*[)）】\]]/iu.test(
+      text,
+    ) ||
+    /^(?:多选|multi(?:-?select)?)$/iu.test(topic.trim()) ||
+    /\b(?:select|choose|check)\s+(?:all\s+that\s+apply|one\s+or\s+more|multiple)\b|\bmulti(?:ple)?[-\s]select\b/iu.test(
+      text,
+    );
+  if (hasMultiSelectHint) {
+    return true;
+  }
+  return false;
+}
+

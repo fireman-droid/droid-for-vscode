@@ -27,6 +27,7 @@ import {
   MAX_PERMISSION_TOOL_NAME_LENGTH,
   MAX_SPEC_PLAN_LENGTH,
   PERMISSION_CONFIRMATION_KINDS,
+  isImplicitMultiSelectQuestion,
   type PermissionConfirmationKind,
 } from '../../shared/protocol/interactionProtocol';
 
@@ -532,25 +533,11 @@ function projectAskUserRequest(
       options: [...question.options],
       multiSelect:
         Boolean(question.multiSelect) ||
-        isImplicitMultiSelectQuestion(question.question),
+        isImplicitMultiSelectQuestion(question.question, question.topic),
     });
   }
 
   return { toolCallId: params.toolCallId, questions };
-}
-
-function isImplicitMultiSelectQuestion(question: string): boolean {
-  if (/(?:不可|不能|不支持|不允许|禁止)多选|单选/u.test(question)) {
-    return false;
-  }
-  return (
-    /(?:可|支持|允许|可以)多选|多选题|多项选择|[（([【]\s*(?:多选|multi(?:-?select)?)\s*[）)】\]]/iu.test(
-      question,
-    ) ||
-    /\b(?:select|choose|check)\s+all\s+that\s+apply\b|\bmulti(?:ple)?[-\s]select\b/iu.test(
-      question,
-    )
-  );
 }
 
 /**
