@@ -48,6 +48,8 @@ export function buildHostSnapshot(ctl: HostSnapshotPort): HostSnapshotProjection
     context: ctl.metadata.context,
     modelCatalog: ctl.metadata.modelCatalog,
     transcript: ctl.recoveryState.transcript.transcript,
+    ...(ctl.recoveryState.historyView && ctl.recoveryState.historyWindow?.sessionIds[0] === ctl.sessionState.sessionId
+      ? { history: ctl.recoveryState.historyView } : {}),
     interactions: ctl.interactions.snapshotPending().filter((pending) =>
       pending.sessionId === ctl.sessionState.sessionId && pending.turnId === ctl.turnState.turn?.turnId &&
       (ctl.turnState.turn.status === 'submitting' || ctl.turnState.turn.status === 'streaming')),

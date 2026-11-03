@@ -1,6 +1,6 @@
-import type { StringFramedDroidClientTransport } from '@factory/droid-sdk/node';
+import type { DroidClientTransport } from '@factory/droid-sdk/node';
 
-export interface ProcessSessionTransport extends StringFramedDroidClientTransport {
+export interface ProcessSessionTransport extends DroidClientTransport {
   connect(): Promise<void>;
 }
 

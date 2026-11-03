@@ -10,6 +10,7 @@ import {
 import { MAX_BRIDGE_ID_LENGTH } from '../../shared/protocol/interactionProtocol';
 import { hasExactKeys, isStrictRecord } from '../../shared/validation/strictValidation';
 import { parseSessionTranscript } from '../bridge/host/transcript';
+import { parseHistoryWindow } from '../bridge/host/history';
 
 export function parseSessionViewerHostMessage(
   value: unknown,
@@ -92,13 +93,15 @@ export function parseSessionViewerHostMessage(
       'lifecycle',
       'stopping',
       'stopError',
-    ], ['refreshError']) ||
+    ], ['refreshError', 'history']) ||
     typeof value.truncated !== 'boolean' ||
     (value.refreshError !== undefined && !isDisplayText(value.refreshError, MAX_SESSION_VIEWER_REASON_LENGTH))
   ) {
     return null;
   }
   const items = parseSessionTranscript(value.items);
+  const history = value.history === undefined ? undefined : parseHistoryWindow(value.history);
+  if (value.history !== undefined && history === undefined) return null;
   if (items === undefined) {
     return null;
   }
@@ -108,6 +111,7 @@ export function parseSessionViewerHostMessage(
     status: value.status,
     target,
     items,
+    ...(history === undefined ? {} : { history }),
     truncated: value.truncated,
     ...(value.refreshError === undefined ? {} : { refreshError: value.refreshError as string }),
     running: value.running,

@@ -60,6 +60,10 @@ export interface DaemonApi {
     | 'fork'
     | 'killWorker'
   > & {
+    getMessagesPage(
+      sessionId: string,
+      options?: { readonly cursor?: string; readonly limit?: number },
+    ): ReturnType<DaemonSessionController['getSessionMessages']>;
     rename?: ConnectedDroid['sessions']['rename'];
     /** Read opened sessions on a known session's owning daemon without scanning the pool. */
     listOpenedForSession?(

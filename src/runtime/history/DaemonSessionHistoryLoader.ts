@@ -3,8 +3,6 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type SessionMessage } from '@factory/droid-sdk';
-
 import { type SessionMissionSummary } from '../../shared/protocol/sessions';
 import { type ToolSubagentSummary } from '../../shared/protocol/transcript';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
@@ -26,7 +24,6 @@ import {
 import { withSubagentInvocationSummaries } from '../subagents/subagentInvocationMatching';
 import { projectSessionMessagesAsync } from './asyncHistoryProjection';
 import { locatePersistedSessionFile } from './persistedSessionMessages';
-import { MAX_RAW_MESSAGE_WINDOW, orderMessagesChronologically, readPersistedHistory, type PersistedHistoryReader } from './persistedHistory';
 import { readMissionRoleFromTags } from './sessionMission';
 import type {
   SessionHistoryLoader,
@@ -34,16 +31,11 @@ import type {
   SessionHistoryResult,
   SubagentHistoryRequest,
 } from './SessionHistory';
+import { unavailableSessionHistory } from './SessionHistory';
 
 /**
- * Daemon-mode history loader: reads a single persisted JSONL snapshot when
- * its format is recognized, otherwise uses `sessions.getMessages` (paged,
- * with `cursor` = the id of the last message of the previous page)
- * instead of spawning a droid CLI process per load (~5s fixed tax).
- * Daemon versions may return pages newest-first or oldest-first, so
- * fetched messages are normalized by their persisted creation time
- * before projection. The spawn-based loader stays as the fallback
- * for process mode and daemon failures.
+ * Reads one official daemon page. Process mode has its own snapshot reader;
+ * a daemon failure never silently switches to a different history source.
  *
  * Field gaps of the daemon message read versus `loadSession()`:
  * - tokenUsage: read from the session's `.settings.json` sidecar
@@ -60,20 +52,15 @@ export interface DaemonFirstHistoryLoaderOptions {
   readonly getDroid: () => Promise<DaemonApi>;
   /** True while this window actually runs sessions over the daemon. */
   readonly isDaemonActive: () => boolean;
-  /** Spawn-based loader used for process mode and daemon failures. */
+  /** Snapshot reader used only for explicitly selected process mode. */
   readonly fallback: SessionHistoryLoader;
   readonly diagnostics?: RuntimeDiagnosticSink;
   readonly sessionsDirectory?: string;
   readonly taskInvocationsFile?: string;
-  readonly readPersistedHistory?: PersistedHistoryReader;
 }
 
 /** getMessages schema cap (same daemon-side zod bound as list). */
 const MESSAGES_PAGE_LIMIT = 100;
-/** Extra bounded headroom so long histories normalize in batches. */
-const RAW_MESSAGE_TRIM_HEADROOM = MESSAGES_PAGE_LIMIT * 10;
-/** Hard page cap against a runaway cursor loop. */
-const MAX_MESSAGE_PAGES = 1_000;
 /** Ledger file bound; the observed file is ~250KB. */
 const MAX_TASK_INVOCATIONS_BYTES = 32 * 1024 * 1024;
 
@@ -103,13 +90,17 @@ export function createDaemonFirstHistoryLoader(
     }
     const startedAt = performance.now();
     try {
-      const persisted = await (options.readPersistedHistory ?? readPersistedHistory)({
-        ...request, sessionsDirectory,
+      const fetched = await (await options.getDroid()).sessions.getMessagesPage(request.sessionId, {
+        limit: request.limit ?? MESSAGES_PAGE_LIMIT,
+        ...(request.cursor === undefined ? {} : { cursor: request.cursor }),
       });
-      const persistedFile = persisted?.file;
-      const fetched = persisted === null
-        ? await fetchSessionMessages(await options.getDroid(), request.sessionId) : null;
-      const projected = persisted?.projected ?? await projectSessionMessagesAsync(fetched!.messages, {
+      if (fetched.hasMore && (!fetched.nextCursor || fetched.nextCursor === request.cursor)) {
+        throw new Error('History cursor did not advance');
+      }
+      // The current public endpoint returns newest first. Reverse, rather than
+      // sorting equal timestamps, to preserve the daemon's stable message order.
+      const messages = [...fetched.messages].reverse();
+      const projected = await projectSessionMessagesAsync(messages, {
         workspaceRoot: request.cwd, sourceSessionId: request.sessionId,
       });
       if (projected.status !== 'available') {
@@ -130,7 +121,6 @@ export function createDaemonFirstHistoryLoader(
         sessionsDirectory,
         request.cwd,
         request.sessionId,
-        persistedFile,
       );
       record({
         level: 'info',
@@ -139,17 +129,16 @@ export function createDaemonFirstHistoryLoader(
           durationMs: Math.round(performance.now() - startedAt),
           outcome: 'ok',
           sessionId: request.sessionId,
-          messages: persisted?.messages ?? fetched!.messages.length,
-          pages: fetched?.pages ?? 0,
-          source: persisted === null ? 'daemon-pages' : 'persisted-snapshot',
-          ...(persisted === null ? {} : { bytes: persisted.bytes, readMs: persisted.readMs, projectMs: persisted.projectMs,
-            isolated: options.readPersistedHistory !== undefined }),
+          messages: messages.length,
+          pages: 1,
+          source: 'daemon-page',
           items: projected.state.transcript.length,
         },
       });
       return {
         status: 'available',
         state,
+        page: { messages, nextCursor: fetched.hasMore ? fetched.nextCursor! : null },
         ...(projected.messageAncestry === undefined ? {} : { messageAncestry: projected.messageAncestry }),
         ...(sidecar.mission === undefined ? {} : { mission: sidecar.mission }),
         ...(sidecar.tokenUsage === undefined ? {} : { tokenUsage: sidecar.tokenUsage }),
@@ -165,7 +154,7 @@ export function createDaemonFirstHistoryLoader(
         },
         detail: error instanceof Error ? (error.stack ?? error.message) : String(error),
       });
-      return options.fallback.loadHistory(request);
+      return unavailableSessionHistory();
     }
   };
 
@@ -206,6 +195,7 @@ export function createDaemonFirstHistoryLoader(
   };
 
   return {
+    supportsPaging: options.isDaemonActive,
     loadHistory,
     async loadSubagentSummaries(
       request: SubagentHistoryRequest,
@@ -215,58 +205,6 @@ export function createDaemonFirstHistoryLoader(
     },
     loadSubagentInvocations: loadInvocations,
   };
-}
-
-/**
- * Pages daemon messages and keeps a chronological rolling window of
- * the newest raw messages, mirroring the projector's own budget.
- * Ordering each bounded window handles both observed newest-first
- * daemon reads and older oldest-first behavior. Parent-chain order is
- * not used here: its disconnected-branch fallback appends old branch
- * messages after the current tip, which places stale content at the
- * transcript bottom after compaction or rewind.
- */
-async function fetchSessionMessages(
-  droid: DaemonApi,
-  sessionId: string,
-): Promise<{ readonly messages: unknown[]; readonly pages: number }> {
-  const window: SessionMessage[] = [];
-  let cursor: string | undefined;
-  let pages = 0;
-  while (pages < MAX_MESSAGE_PAGES) {
-    const batch = await droid.sessions.getMessages(sessionId, {
-      limit: MESSAGES_PAGE_LIMIT,
-      ...(cursor === undefined ? {} : { cursor }),
-    });
-    if (!Array.isArray(batch)) {
-      throw new Error('daemon getMessages returned a non-array');
-    }
-    pages += 1;
-    window.push(...batch);
-    if (window.length > MAX_RAW_MESSAGE_WINDOW + RAW_MESSAGE_TRIM_HEADROOM) {
-      const ordered = orderMessagesChronologically(window);
-      window.splice(0, window.length, ...ordered.slice(-MAX_RAW_MESSAGE_WINDOW));
-    }
-    if (batch.length < MESSAGES_PAGE_LIMIT) {
-      break;
-    }
-    const nextCursor = readMessageId(batch[batch.length - 1]);
-    if (nextCursor === null || nextCursor === cursor) {
-      break;
-    }
-    cursor = nextCursor;
-  }
-  return {
-    messages: orderMessagesChronologically(window).slice(-MAX_RAW_MESSAGE_WINDOW),
-    pages,
-  };
-}
-
-function readMessageId(value: unknown): string | null {
-  if (!isStrictRecord(value) || typeof value.id !== 'string') {
-    return null;
-  }
-  return value.id.length > 0 ? value.id : null;
 }
 
 interface SessionSidecarProjection {

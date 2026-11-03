@@ -198,6 +198,7 @@ export interface AssistantWebviewState {
     readonly seq: number;
   } | null;
   readonly transcript: readonly SessionTranscriptItem[];
+  readonly history?: import('../../shared/protocol/historyPaging').HistoryWindowState | null;
   readonly historyStatus:
     | Extract<HostToWebviewMessage, { type: 'host.snapshot' }>['historyStatus']
     | null;

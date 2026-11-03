@@ -314,7 +314,7 @@ function projectMessage(
       block,
       messageIdentity,
       turnId,
-      messageIndex,
+      typeof value.id === 'string' && value.id.length > 0 ? 0 : messageIndex,
       blockIndex,
       sdkMessageId,
       timestamp,

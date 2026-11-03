@@ -3,6 +3,8 @@ import { bindWebviewLocale, readWebviewLocale } from '../../webview/webviewLocal
 
 import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics';
 import type { SessionHistoryLoader } from '../../../runtime/history/SessionHistory';
+import { SessionHistoryWindow } from '../../../runtime/history/SessionHistoryWindow';
+import type { HistoryDirection, HistoryWindowState } from '../../../shared/protocol/historyPaging';
 import {
   SESSION_VIEWER_PROTOCOL_VERSION,
   type SessionViewerHostMessage,
@@ -34,6 +36,7 @@ export interface SessionViewerPanelTarget {
 }
 
 export interface SessionViewerSource {
+  historyLoader?(target: SessionViewerPanelTarget): SessionHistoryLoader | null;
   isRunning(target: SessionViewerPanelTarget): Promise<boolean | null>;
   stop(target: SessionViewerPanelTarget): Promise<SessionViewerStopOutcome>;
   readTranscript?(target: SessionViewerPanelTarget): {
@@ -50,6 +53,8 @@ export type SessionViewerSourceResolver = (
 ) => SessionViewerSource | null;
 
 interface ViewerEntry {
+  historyWindow: SessionHistoryWindow | null;
+  historyView: HistoryWindowState | null;
   target: SessionViewerPanelTarget;
   readonly panel: vscode.WebviewPanel;
   readonly disposables: vscode.Disposable[];
@@ -134,6 +139,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       readWebviewLocale(),
     );
     const entry: ViewerEntry = {
+      historyWindow: null, historyView: null,
       target,
       panel,
       disposables: [bindWebviewLocale(panel.webview)],
@@ -203,6 +209,11 @@ export class SessionViewerPanelController implements vscode.Disposable {
         this.post(entry, entry.lastSnapshot);
       }
       void this.refresh(entry);
+      return;
+    }
+    if (message.type === 'sessionViewer.history') {
+      if (message.version === entry.historyView?.version && message.revision === entry.historyView.revision)
+        void this.navigate(entry, message.direction);
       return;
     }
     if (entry.target.mode !== 'standard') {
@@ -282,6 +293,14 @@ export class SessionViewerPanelController implements vscode.Disposable {
       if (!this.isCurrent(entry)) {
         return;
       }
+      const viewerHistory = entry.target.subagent ? source?.historyLoader?.(entry.target) : this.history;
+      if (!entry.historyWindow && viewerHistory && (live !== null || loaded?.status === 'available' && loaded.page)) {
+        const window = new SessionHistoryWindow(viewerHistory, entry.target.cwd, [entry.target.sessionId]);
+        await window.open(loaded?.status === 'available' ? loaded : undefined);
+        if (!this.isCurrent(entry)) return;
+        entry.historyWindow = window;
+        entry.historyView = window.snapshot();
+      }
       const wasRunning = entry.running;
       if (running !== null) {
         entry.running = running;
@@ -307,6 +326,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
               status: 'ready',
               target,
               items: live.items,
+              ...(entry.historyView ? { history: entry.historyView } : {}),
               truncated: live.truncated,
               running: entry.running,
               lifecycle: live.lifecycle,
@@ -320,6 +340,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
                 status: 'ready',
                 target,
                 items: loaded.state.transcript,
+                ...(entry.historyView ? { history: entry.historyView } : {}),
                 truncated: loaded.state.truncated,
                 running: entry.running,
                 lifecycle: entry.running ? 'working' : 'completed',
@@ -392,6 +413,31 @@ export class SessionViewerPanelController implements vscode.Disposable {
     }
   }
 
+  private async navigate(entry: ViewerEntry, direction: HistoryDirection): Promise<void> {
+    const window = entry.historyWindow, view = entry.historyView;
+    if (!this.isCurrent(entry) || !window || !view || view.loading) return;
+    entry.historyView = { ...view, loading: direction, error: null };
+    this.repost(entry);
+    try {
+      let next = window;
+      if (direction === 'latest') {
+        const loader = entry.target.subagent
+          ? this.resolveSource(entry.target.kind)?.historyLoader?.(entry.target) : this.history;
+        if (!loader) throw new Error('Invocation history is unavailable');
+        next = new SessionHistoryWindow(loader, window.cwd, window.sessionIds);
+        await next.open();
+      } else await window.navigate(direction);
+      if (!this.isCurrent(entry) || entry.historyWindow !== window) return;
+      entry.historyWindow = next;
+      entry.historyView = next.snapshot();
+    } catch {
+      if (!this.isCurrent(entry) || entry.historyWindow !== window) return;
+      entry.historyView = { ...view, loading: null,
+        error: 'Could not load history. Retry or return to the latest messages.' };
+    }
+    this.repost(entry);
+  }
+
   private async stop(entry: ViewerEntry): Promise<void> {
     if (!this.isCurrent(entry) || !entry.running || entry.stopping) {
       return;
@@ -427,6 +473,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
     }
     const next: SessionViewerSnapshotMessage = {
       ...snapshot,
+      ...(snapshot.status === 'ready' && entry.historyView ? { history: entry.historyView } : {}),
       running: entry.running,
       lifecycle: snapshot.lifecycle,
       stopping: entry.stopping,
@@ -500,6 +547,7 @@ function sameSnapshot(left: SessionViewerSnapshotMessage, right: SessionViewerSn
   }
   return (
     left.truncated === right.truncated &&
+    left.history === right.history &&
     left.refreshError === right.refreshError &&
     left.items.length === right.items.length &&
     left.items.every((item, index) => item === right.items[index])

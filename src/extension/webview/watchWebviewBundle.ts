@@ -17,7 +17,6 @@ const WATCHED_WEBVIEW_ASSETS = [
 const WATCHED_EXTENSION_ASSETS = [
   'extension.cjs',
   'sessionCatalogWorker.cjs',
-  'sessionHistoryWorker.cjs',
   'persistentIdeRelayWorker.cjs',
   'btwAnalysisWorker.cjs',
 ] as const;

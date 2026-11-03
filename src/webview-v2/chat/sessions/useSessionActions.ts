@@ -19,8 +19,7 @@ export function useSessionActions({
 }) {
   // Compaction in-flight latch (10a): set when either entry point
   // fires, cleared when the host answers with a session switch
-  // (success adopts the continuation session) or a session-compact*
-  // diagnostic (blocked/unsupported/failed), with a timeout backstop.
+  // or a session-compact* diagnostic (including in-place success).
   const [compactPending, setCompactPending] = useState(false);
   const compactBaselineRef = useRef<{
     readonly sessionId: string | null;
@@ -39,7 +38,7 @@ export function useSessionActions({
     }
     return null;
   }, [transcript]);
-  const handleCompact = useCallback((): void => {
+  const handleCompact = useCallback((mode?: 'handoff'): void => {
     if (
       sessionId === null ||
       connectionStatus !== 'connected' ||
@@ -50,7 +49,7 @@ export function useSessionActions({
     }
     compactBaselineRef.current = { sessionId, signal: compactSignal };
     setCompactPending(true);
-    post(vscode, { type: 'session.compact', sessionId });
+    post(vscode, { type: 'session.compact', sessionId, ...(mode ? { mode } : {}) });
   }, [
     compactPending,
     compactSignal,

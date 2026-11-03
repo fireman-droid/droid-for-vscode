@@ -30,12 +30,14 @@ export const PERMISSION_CONFIRMATION_KINDS = [
   'create',
   'ask_user',
   'exit_spec_mode',
+  'recommend_mission',
   'propose_mission',
   'start_mission_run',
   'apply_patch',
   'mcp_tool',
   'sandbox_violation',
   'droid_shield_violation',
+  'script',
 ] as const;
 
 export type PermissionConfirmationKind = (typeof PERMISSION_CONFIRMATION_KINDS)[number];

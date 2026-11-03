@@ -16,7 +16,7 @@ export function getPermissionPresentation(request: PermissionInteractionRequest)
     title: 'Droid has completed planning and is ready to implement',
     ...(request.editableSpecContent === undefined ? {} : { planPreview: request.editableSpecContent }),
   };
-  if (kinds.has('propose_mission') || kinds.has('start_mission_run')) return {
+  if (kinds.has('propose_mission') || kinds.has('start_mission_run') || kinds.has('recommend_mission')) return {
     kind: 'mission', eyebrow: `Mission · ${(request.tools[0]?.confirmationKind ?? 'confirmation').replaceAll('_', ' ')}`,
     title: request.tools[0]?.title ?? 'Mission confirmation',
   };

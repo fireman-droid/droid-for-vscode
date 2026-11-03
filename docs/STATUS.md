@@ -7,16 +7,18 @@
 ## 版本与交付
 
 - 当前源码版本为 `0.8.20`，在 `0.8.19` 基础上加入繁星／三体／关闭三种深色聊天背景，并修复 AskUser 多选识别、勾选状态与单选填空互斥切换。
-- 发布前基线为已公开的 `0.8.19`；`0.8.20` 的实际发布状态以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。正式包从合入 `main` 的版本标签构建，两渠道复用同一已校验 VSIX；本轮未授权本地安装。
+- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。历史分页试用包（`01a778b5`）已安装到 Microsoft VS Code；后续 SDK 0.10.0 兼容修复与分页一起通过任务分支 PR 交付，未正式发布，也未安装 SDK 升级后的包。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
-- 官方 Droid CLI 当前为 `0.242.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
+- 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 
 ## 当前源码
 
 | 范围 | 当前实现与边界 |
 | --- | --- |
+| SDK 0.10.0 | 对象 transport、Script 批量权限与 RecommendMission 已适配；普通压缩保留原身份和租约，`/handoff` 显式创建后继，Spec 使用正式交接事件。文件浏览与自定义模型 revision 接口同步新版；默认设置保留已有开放字段，daemon 分页及 IDE 私有兼容补丁保留 |
 | AskUser 问答卡片 | Runtime 与 Webview 共用多选提示识别，支持题目／主题中的括号说明和单选／多选混合表述；单选预设选项与自定义填空互斥，再次点击已选项可取消，多选保留全部已选项并合并补充填空 |
+| 历史分页（任务分支，未发布） | daemon 默认只读最近一页，向上滚动自动续页；三页阅读窗口与实时尾部分离，卸载页可重读，保留跨页工具结果与压缩前驱；查看器复用分页，子任务按调用消息 ID 隔离，导出显式遍历全部页。移除聊天 JSONL 优先读取、自动 Process 回退及专用历史 Worker；保留独立 Process 模式和操作证据的本地读取 |
 | 聊天 | 新提问直接切换置顶，底部动态留白跑道承载首屏静止生长的回复，超出一屏后自动向下跟随，短回复结束时保持留白不回弹；最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。队列预览最多三行；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
 | 管理页 | 常规、模型、补全、会话、任务；共享设置行、搜索筛选、分页和滚动条，Select 弹层不少于触发器宽度并随单行选项内容扩展，列表刷新保留已有内容 |
 | Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
@@ -39,6 +41,10 @@
 - 编辑器集成测试按必需激活事件逐项断言，允许增加其他合法入口，不再固定旧的三项完整清单。
 
 ## 最近验证
+
+- SDK 升级：`typecheck`、`lint:budgets` 与 14 个定向测试文件／570 项通过，覆盖权限、压缩／交接、历史证据、Bridge 及 daemon 连接／恢复。未运行真实模型调用、重启 daemon 或追加浏览器验收；最终 VSIX 与远端 CI 结果以对应 PR 的检查记录为准。
+
+- 历史分页：最终定向回归 23 个文件／178 项、`typecheck`、`lint:budgets` 通过；扩大恢复回归发现的 6 项请求参数断言已修复，相关 80 项复核通过。真实 daemon 1.2.0 的 129 MiB 会话完整读取 121 页／12,090 条，原始 ID 和顺序一致；新增消息后旧游标续读亦与本地记录一致。读取加窗口投影中位约 205ms，区别于约 20ms 的纯 daemon 请求。浏览器服务未连接，新 Host 真实页面尚未验收；按用户要求停止追加页面和回归测试。
 
 - `0.8.20` AskUser 修复：2 个定向测试文件共 28 项、`typecheck` 与 `lint:budgets` 已通过；真实页面点击验收留给用户，未将单元测试视为编辑器验收。发布构建与渠道结果以该版本 Actions 记录为准。
 
@@ -76,7 +82,7 @@
 - 自动恢复不能代替 CLI 登录、安装或协议升级；这些明确的不可用状态保留人工处理入口。没有已知会话 ID 时不自动新建聊天；后台身份不确定、仍有待答权限或正在执行的任务时，不强制迁移 IDE。
 - 常规问答 BYOK 目录的未提交修改仍暂停，未进入本次包。
 - 同一工作区目前只允许一条执行；多聊天可以打开，等待状态提示与并发架构没有在本次改变。
-- SDK 0.9.1 没有独立压缩推理强度。能力是否可配置应按具体操作契约核对。
+- SDK 0.10.0 没有独立压缩推理强度。能力是否可配置应按具体操作契约核对。
 - 当前局部回归和浏览器验证不代表全仓、跨平台、长期运行或全部模型服务已验收。
   Restore／Undo、管理写操作、完整 Mission 生命周期等按具体任务验证。
 - 历史原文和任务状态以 Droid 为权威；本地元数据、快照、UI ACK 或工具路径不能替代

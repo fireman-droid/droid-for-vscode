@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync, mkdirSync, cpSync } from 'node:fs';
+import { appendFileSync, readFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { build } from 'esbuild';
@@ -11,6 +11,8 @@ import { createThirdPartyNotices } from './packages/chat-ui/scripts/thirdPartyNo
 // requires them inside try/catch and falls back to its JS
 // implementation, so leaving them external is safe.
 const optionalWsAddons = ['bufferutil', 'utf-8-validate'];
+// Remove only the retired generated history worker from incremental builds.
+rmSync('dist/extension/sessionHistoryWorker.cjs', { force: true });
 
 const extensionResult = await build({
   entryPoints: ['src/extension/extension.ts'],
@@ -63,14 +65,6 @@ const catalogWorkerResult = await build({
   logLevel: 'info',
 });
 await notices.add(catalogWorkerResult.metafile);
-const historyWorkerResult = await build({
-  entryPoints: ['src/runtime/history/sessionHistoryWorker.ts'],
-  outfile: 'dist/extension/sessionHistoryWorker.cjs',
-  bundle: true, external: optionalWsAddons, packages: 'bundle', platform: 'node',
-  format: 'cjs', target: 'node20', minify: true, keepNames: true, sourcemap: false,
-  legalComments: 'eof', metafile: true, logLevel: 'info',
-});
-await notices.add(historyWorkerResult.metafile);
 const ideRelayWorkerResult = await build({
   entryPoints: ['src/runtime/ide/persistentIdeRelayWorker.ts'],
   outfile: 'dist/extension/persistentIdeRelayWorker.cjs',
@@ -101,9 +95,6 @@ assertExpectedExternals(extensionResult.metafile, {
     path === 'vscode' ||
     isBuiltin(path) ||
     optionalWsAddons.includes(path),
-});
-assertExpectedExternals(historyWorkerResult.metafile, {
-  required: new Set(), allowed: (path) => isBuiltin(path) || optionalWsAddons.includes(path),
 });
 assertExpectedExternals(ideRelayWorkerResult.metafile, {
   required: new Set(), allowed: (path) => isBuiltin(path),

@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from '../../shared/bridgeMessages';
+import { navigateHistory } from './recovery/historyNavigation';
 import { handleAttachmentPreview } from './attachments/attachmentPreview';
 import { handleSystemPrompt } from './capabilities/systemPrompt';
 import { emitIdeState, reconnectControllerIde } from './ideIntegration';
@@ -93,6 +94,9 @@ export function dispatchChatMessage(
   message: Exclude<WebviewToHostMessage, { type: 'btw.prepare' | 'btw.ask' }>,
 ): void {
   switch (message.type) {
+    case 'history.navigate':
+      void navigateHistory(controller, message);
+      return;
     case 'systemPrompt.read':
     case 'systemPrompt.save':
       void handleSystemPrompt(controller, message);
@@ -213,7 +217,7 @@ export function dispatchChatMessage(
       handleModelCatalogRefresh(controller, message.sessionId);
       return;
     case 'session.compact':
-      handleSessionCompact(controller, message.sessionId);
+      handleSessionCompact(controller, message.sessionId, message.mode);
       return;
     case 'session.fork':
       handleSessionFork(controller, message.sessionId);

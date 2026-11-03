@@ -101,7 +101,8 @@ export type CompactPort = TurnContextPort & Pick<HostOperations,
     Pick<SessionLifecycleState, 'sessionOperationInProgress' | 'connection'>;
   readonly catalogState: Readonly<Pick<SessionDirectoryState, 'refreshInProgress'>> & Pick<SessionDirectoryState, 'sessions'>;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
-  readonly recoveryState: Readonly<Pick<ConversationRecoveryState, 'transcript'>>;
+  readonly recoveryState: Readonly<Pick<ConversationRecoveryState, 'transcript'>> &
+    Pick<ConversationRecoveryState, 'historyWindow' | 'historyView'>;
   readonly missionState: Pick<MissionSessionState, 'mission'>;
   readonly effects: Pick<ChatEffects, 'ensureActiveRuntimeWorkspaceCurrent' | 'adoptDurableSuccessor' |
     'activeSessionSummary' | 'commitSessionBinding' | 'loadHistoryTimed' | 'flushRecoveryCheckpointOrReport'>;

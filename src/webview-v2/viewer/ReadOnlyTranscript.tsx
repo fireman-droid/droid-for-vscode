@@ -1,4 +1,5 @@
 import { ReadOnlyTranscriptView } from '@droidvisx/chat-ui/chat/ReadOnlyTranscriptView';
+import type { TranscriptPaging } from '@droidvisx/chat-ui/chat/useHistoryPaging';
 import { memo, useCallback, useMemo, useState } from 'react';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { createTranscriptSelector } from '../chat/transcript/transcriptGroups';
@@ -10,7 +11,7 @@ import { PlanLine } from '../chat/PlanLine';
 import { createOperationSummarySelector, summarizeReplyOperations } from '../chat/operationSummary';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from '../chat/transcriptProjection';
 
-export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, running, truncated = false }: { readonly items: readonly SessionTranscriptItem[]; readonly running: boolean; readonly truncated?: boolean }) {
+export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, running, truncated = false, paging }: { readonly items: readonly SessionTranscriptItem[]; readonly running: boolean; readonly truncated?: boolean; readonly paging?: TranscriptPaging }) {
   const selectors = useMemo(() => ({ transcript: createTranscriptSelector(), operations: createOperationSummarySelector(),
     plans: createPlanAnchorSelector(), structure: createTranscriptStructureSelector(), messages: createTranscriptMessagesSelector() }), []);
   const { descriptors, replyTails, replyTimestamps } = useMemo(() => selectors.transcript(items), [items, selectors]);
@@ -55,5 +56,5 @@ export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, runn
       operationSummary={replySummaries.get(descriptor.id)} operationsLive={operationsLive} onInteract={stopFollowing}
       completedAt={replyPending || status.type === 'running' ? undefined : replyTimestamps.get(descriptor.id)} regenerate={undefined} fork={undefined} />;
   }, [byId, plans, running, turnId, planChoices, pendingIds, lastReplyId, active, replyTails, replySummaries, replyTimestamps]);
-  return <ReadOnlyTranscriptView messages={messages} truncated={truncated} renderMessage={renderMessage} />;
+  return <ReadOnlyTranscriptView messages={messages} truncated={truncated} renderMessage={renderMessage} paging={paging} />;
 });

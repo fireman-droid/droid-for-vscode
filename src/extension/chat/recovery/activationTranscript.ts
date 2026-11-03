@@ -1,5 +1,6 @@
 import type { RuntimeSessionTarget } from '../../../runtime/DroidRuntime';
 import type { SessionHistoryLoader } from '../../../runtime/history/SessionHistory';
+import { SessionHistoryWindow } from '../../../runtime/history/SessionHistoryWindow';
 import { EMPTY_SESSION_TOKEN_USAGE } from '../../../shared/protocol/tokenUsage';
 import {
   createHostTranscriptState,
@@ -18,6 +19,10 @@ export async function prepareActivationTranscript(
   phases?: SessionSwitchTimings,
 ): Promise<HostTranscriptState | null> {
   if (target.kind === 'new') {
+    if (ctl.recoveryState) {
+      ctl.recoveryState.historyWindow = null;
+      ctl.recoveryState.historyView = null;
+    }
     ctl.missionState.mission = null;
     ctl.metadata.tokenUsage = EMPTY_SESSION_TOKEN_USAGE;
     return createHostTranscriptState('complete');
@@ -95,9 +100,25 @@ export async function loadHistoryTimed(
     let combined = createHostTranscriptState('complete');
     let loaded: Awaited<ReturnType<SessionHistoryLoader['loadHistory']>> | null = null;
     const generation = ctl.sessionState.runtimeGeneration;
+    let latest = await ctl.sessionHistory.loadHistory({ cwd, sessionId });
+    if (ctl.sessionState.disposed || ctl.sessionState.runtimeGeneration !== generation) return null;
+    if (latest.status === 'available' && latest.page) {
+      const window = new SessionHistoryWindow(ctl.sessionHistory, cwd, [...sessionIds].reverse());
+      latest = await window.open(latest);
+      if (ctl.sessionState.disposed || ctl.sessionState.runtimeGeneration !== generation) return null;
+      if (ctl.recoveryState) {
+        ctl.recoveryState.historyWindow = window;
+        ctl.recoveryState.historyView = window.snapshot();
+      }
+      return latest;
+    }
+    if (ctl.recoveryState) {
+      ctl.recoveryState.historyWindow = null;
+      ctl.recoveryState.historyView = null;
+    }
     const seen = new Set<string>();
     for (const id of sessionIds) {
-      loaded = await ctl.sessionHistory.loadHistory({ cwd, sessionId: id });
+      loaded = id === sessionId ? latest : await ctl.sessionHistory.loadHistory({ cwd, sessionId: id });
       if (ctl.sessionState.disposed || ctl.sessionState.runtimeGeneration !== generation) return null;
       if (loaded.status !== 'available') {
         throw new Error('Droid session history is unavailable.');

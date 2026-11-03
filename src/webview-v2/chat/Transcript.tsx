@@ -20,6 +20,7 @@ import { ChatStartup } from './ChatStartup';
 import { createTranscriptMessagesSelector, createTranscriptStructureSelector } from './transcriptProjection';
 import { useTranscriptReceipt } from './useTranscriptReceipt';
 import { MissionWorkers } from './MissionWorkers';
+import { historyWindowTranscript } from '../../shared/transcript/historyWindowTranscript';
 
 import { TranscriptView, type TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 export const LiveTranscript = memo(function LiveTranscript({ store, ...props }: { readonly store: ChatStore } & Omit<ComponentProps<typeof Transcript>, 'state'>) {
@@ -60,9 +61,14 @@ export function Transcript({
   readonly ref?: Ref<TranscriptHandle>;
 }) {
   const { t } = useI18n();
-  const items = state.transcript;
-  const historyNotice = getHistoryNotice(state.historyStatus, state.truncated);
-  const running = state.turn?.status === 'submitting' || state.turn?.status === 'streaming';
+  const items = useMemo(() => historyWindowTranscript(state.history, state.transcript), [state.history, state.transcript]);
+  const needsTailRebase = useMemo(() => {
+    if (!state.history || state.history.hasNewer || state.history.tailAnchor || !state.truncated) return false;
+    const ids = new Set(state.transcript.flatMap(item => item.kind === 'user' && item.messageId ? [item.messageId] : []));
+    return !state.history.items.some(item => item.kind === 'user' && item.messageId && ids.has(item.messageId));
+  }, [state.history, state.transcript, state.truncated]);
+  const historyNotice = getHistoryNotice(state.historyStatus, state.history?.truncated ?? state.truncated);
+  const running = !state.history?.hasNewer && (state.turn?.status === 'submitting' || state.turn?.status === 'streaming');
   const view = useRef<TranscriptHandle>(null);
   const stopFollowing = useCallback(() => view.current?.stopFollowing(), []);
   useImperativeHandle(ref, () => ({
@@ -140,6 +146,10 @@ export function Transcript({
   const pendingIds = useMemo(() => new Set(turns.find((row) => row.id === pendingReplyRow)?.messageIds ?? []), [turns, pendingReplyRow]);
   const messages = useMemo(() => selectors.messages(descriptors, replyTails, pendingIds), [descriptors, replyTails, pendingIds, selectors]);
   return <TranscriptView ref={view} messages={messages} conversationId={state.conversationId} sessionKey={state.sessionId}
+    paging={state.history && state.sessionId ? { ...state.history, hasOlder: state.history.hasOlder || needsTailRebase, onRequest: direction => {
+      if (state.sessionId && state.history) port.postMessage({ type: 'history.navigate',
+        sessionId: state.sessionId, version: state.history.version, revision: state.history.revision, direction });
+    } } : undefined}
     pauseAutoFollow={editor.draft?.phase === 'editing'}
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
     historyNotice={historyNotice ? t(historyNotice) : undefined}

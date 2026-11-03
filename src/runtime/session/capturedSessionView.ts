@@ -82,6 +82,9 @@ function copyOptionalSessionMethods(
   if (typeof session.compact === 'function') {
     view.compact = (params) => session.compact!(params);
   }
+  if (typeof session.handoff === 'function') {
+    view.handoff = (params) => session.handoff!(params);
+  }
   if (typeof session.fork === 'function') {
     view.fork = (params) => session.fork!(params);
   }

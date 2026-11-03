@@ -1,7 +1,7 @@
 import { type SessionTranscriptItem } from './transcript';
 import { type ThemePreference } from './shell';
 
-export const SESSION_VIEWER_PROTOCOL_VERSION = 3 as const;
+export const SESSION_VIEWER_PROTOCOL_VERSION = 4 as const;
 export const MAX_SESSION_VIEWER_TITLE_LENGTH = 512;
 export const MAX_SESSION_VIEWER_REASON_LENGTH = 512;
 export const SESSION_VIEWER_TARGET_KINDS = ['daemon-session'] as const;
@@ -31,6 +31,13 @@ export type SessionViewerLifecycle =
 
 export type SessionViewerWebviewMessage =
   | {
+      readonly type: 'sessionViewer.history';
+      readonly protocolVersion: typeof SESSION_VIEWER_PROTOCOL_VERSION;
+      readonly version: string;
+      readonly revision: number;
+      readonly direction: import('./historyPaging').HistoryDirection;
+    }
+  | {
       readonly type: 'sessionViewer.ready';
       readonly protocolVersion: typeof SESSION_VIEWER_PROTOCOL_VERSION;
     }
@@ -51,6 +58,7 @@ export type SessionViewerSnapshotMessage =
       readonly status: 'ready';
       readonly target: SessionViewerTarget;
       readonly items: readonly SessionTranscriptItem[];
+      readonly history?: import('./historyPaging').HistoryWindowState;
       readonly truncated: boolean;
       /** The last readable transcript is retained when a later refresh fails. */
       readonly refreshError?: string;

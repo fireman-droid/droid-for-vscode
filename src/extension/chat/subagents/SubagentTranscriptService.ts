@@ -8,6 +8,8 @@ import { type ToolActivityMessage } from '../../../shared/bridgeMessages';
 import type { HostTranscriptState } from '../../../shared/transcript/hostTranscriptState';
 import type { SubagentActivityItem } from '../../../shared/protocol/subagentProtocol';
 import type { SessionHistoryLoader } from '../../../runtime/history/SessionHistory';
+import { collectSessionHistory } from '../../../runtime/history/collectSessionHistory';
+import { scopedSessionHistory } from '../../../runtime/history/scopedSessionHistory';
 
 import { sessionMessageTurnId } from '../../../shared/transcript/sessionMessageIdentity';
 import { reconcileChildHistory, restoreChildTools } from './childHistoryReconciliation';
@@ -64,6 +66,7 @@ export interface SubagentViewerSnapshot {
 }
 
 interface ChildEntry {
+  historyBoundaries: ReadonlyMap<string, { first?: string; before?: string; ids: ReadonlySet<string> }>;
   readonly childSessionId: string;
   readonly cwd: string;
   readonly rows: Map<string, SubagentInvocation>;
@@ -362,6 +365,12 @@ export class SubagentTranscriptService {
       running: entry.running, lifecycle: entry.lifecycle };
   }
 
+  viewerHistoryLoader(childSessionId: string, invocation: { readonly parentSessionId: string; readonly toolUseId: string }): SessionHistoryLoader | null {
+    const entry = this.byChild.get(childSessionId);
+    const boundary = entry?.historyBoundaries.get(rowKey(invocation.parentSessionId, invocation.toolUseId));
+    return boundary ? scopedSessionHistory(this.history, boundary.first, boundary.before, boundary.ids) : null;
+  }
+
   subscribeViewer(childSessionId: string, listener: () => void): () => void {
     const entry = this.byChild.get(childSessionId);
     if (entry === undefined) {
@@ -453,6 +462,7 @@ export class SubagentTranscriptService {
       return existing;
     }
     const entry: ChildEntry = {
+      historyBoundaries: new Map(),
       childSessionId: value.childSessionId,
       cwd: value.cwd,
       rows: new Map([[key, row]]),
@@ -519,11 +529,12 @@ export class SubagentTranscriptService {
     const wasRunning = entry.running;
     const invocationKey = entry.activeRowKey;
     entry.historyPhase = 'loading';
-    const pending = this.history.loadHistory({ cwd: entry.cwd, sessionId: entry.childSessionId })
+    const pending = collectSessionHistory(this.history, { cwd: entry.cwd, sessionId: entry.childSessionId })
       .then((loaded) => {
         if (this.disposed || this.byChild.get(entry.childSessionId) !== entry) return;
         entry.historyPhase = loaded.status === 'available' ? 'ready' : 'unavailable';
         if (loaded.status === 'available') {
+          entry.historyBoundaries = invocationHistoryBoundaries(entry.rows, loaded.state.transcript, loaded.messageIds);
           entry.state = reconcileChildHistory(loaded.state, before, entry.state,
             wasRunning || entry.running || invocationKey !== entry.activeRowKey);
           this.activate(entry, latestInvocationRowKey(entry, entry.activeRowKey));
@@ -804,6 +815,27 @@ export class SubagentTranscriptService {
   ): void {
     this.rowIssues.set(rowKey(parentSessionId, notice.toolUseId), notice);
   }
+}
+
+function invocationHistoryBoundaries(
+  rows: ReadonlyMap<string, SubagentInvocation>, items: readonly SessionTranscriptItem[], messageIds?: readonly string[],
+): ReadonlyMap<string, { first?: string; before?: string; ids: ReadonlySet<string> }> {
+  if (!messageIds) return new Map();
+  const entries = [...rows.entries()];
+  if (new Set(entries.map(([, row]) => row.toolUseId)).size === 1 &&
+    entries.every(([, row]) => row.promptMessageId === undefined))
+    return new Map(entries.map(([key]) => [key, { ids: new Set(messageIds) }]));
+  const positions = new Map(items.flatMap((item, index) =>
+    item.kind === 'user' && item.messageId ? [[item.messageId, index] as const] : []));
+  if (entries.some(([, row]) => !row.promptMessageId || !positions.has(row.promptMessageId))) return new Map();
+  const prompts = [...new Set(entries.map(([, row]) => row.promptMessageId!))]
+    .sort((left, right) => positions.get(left)! - positions.get(right)!);
+  return new Map(entries.map(([key, row]) => [key, {
+    first: row.promptMessageId!, before: prompts[prompts.indexOf(row.promptMessageId!) + 1],
+    ids: new Set(messageIds.slice(messageIds.indexOf(row.promptMessageId!),
+      prompts[prompts.indexOf(row.promptMessageId!) + 1] === undefined ? undefined :
+        messageIds.indexOf(prompts[prompts.indexOf(row.promptMessageId!) + 1]!))),
+  }]));
 }
 
 function toolMessage(

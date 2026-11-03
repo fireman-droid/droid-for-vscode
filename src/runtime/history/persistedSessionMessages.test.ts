@@ -2,8 +2,6 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DaemonApi } from '../daemon/api';
-import { createDaemonFirstHistoryLoader } from './DaemonSessionHistoryLoader';
 import { readPersistedSessionMessages } from './persistedSessionMessages';
 import * as historyProjection from './asyncHistoryProjection';
 import { unavailableSessionHistory } from './SessionHistory';
@@ -26,16 +24,14 @@ async function fixture(events: unknown[], suffix = '\n') {
   await fs.writeFile(file, [header, ...events].map(event => JSON.stringify(event)).join('\n') + suffix);
   return { directory, file };
 }
-function loader(directory: string,
-  getMessages: (id: string, options?: { cursor?: string; limit?: number }) => Promise<unknown[]> = vi.fn(async () => [])) {
-  const fallback = { loadHistory: vi.fn(async () => unavailableSessionHistory()) };
-  const getDroid = vi.fn(async () => ({ sessions: { getMessages } }) as unknown as DaemonApi);
-  const diagnostics = { record: vi.fn() };
-  return { getDroid, getMessages, fallback, diagnostics, load: createDaemonFirstHistoryLoader({
-    sessionsDirectory: directory, isDaemonActive: () => true, getDroid, fallback, diagnostics,
-  }) };
+async function readHistory(directory: string) {
+  const saved = await readPersistedSessionMessages(directory, 'saved');
+  if (!saved) return unavailableSessionHistory();
+  return historyProjection.projectSessionMessagesAsync(
+    [...saved.messages].sort((left, right) => left.createdAt - right.createdAt),
+    { workspaceRoot: 'C:/workspace', sourceSessionId: 'saved' },
+  );
 }
-const request = { cwd: 'C:/workspace', sessionId: 'saved' };
 
 describe('persisted history snapshot', () => {
   it('keeps tools, large results, image and metadata mappings identical to the public daemon format', async () => {
@@ -79,15 +75,12 @@ describe('persisted history snapshot', () => {
       message('branch', 'assistant', text('updated branch'), 2, 'old'),
       message('tie', 'assistant', text('same timestamp'), 3, 'current'),
     ]);
-    const read = loader(directory);
-    const result = await read.load.loadHistory(request);
+    const result = await readHistory(directory);
     expect(result.status).toBe('available');
     if (result.status !== 'available') return;
     expect(result.state.transcript.map(item => 'text' in item ? item.text : item.kind)).toEqual([
       'old', 'updated branch', 'same timestamp', 'current', 'latest',
     ]);
-    expect(read.getDroid).not.toHaveBeenCalled();
-    expect(read.fallback.loadHistory).not.toHaveBeenCalled();
   });
 
   it('retains the CLI precedence of nested message identity and time fields', async () => {
@@ -102,7 +95,7 @@ describe('persisted history snapshot', () => {
       { id: 'inner-second', parentId: 'inner-first', createdAt: 103, updatedAt: 2 },
       { id: 'inner-first', createdAt: 101, updatedAt: 102 },
     ]);
-    const history = await loader(directory).load.loadHistory(request);
+    const history = await readHistory(directory);
     expect(history).toMatchObject({ status: 'available', state: { transcript: [
       { kind: 'user', text: 'first', timestamp: 101 },
       { kind: 'assistant', text: 'second', timestamp: 103 },
@@ -115,51 +108,15 @@ describe('persisted history snapshot', () => {
       message('prompt', 'user', text('Question'), timestamp),
       message('answer', 'assistant', text('Answer'), timestamp + 30_000, 'prompt'),
     ]);
-    const history = await loader(directory).load.loadHistory(request);
+    const history = await readHistory(directory);
     expect(history).toMatchObject({ status: 'available', state: { transcript: [
       { kind: 'user', text: 'Question', timestamp },
       { kind: 'assistant', text: 'Answer', timestamp: timestamp + 30_000 },
     ] } });
   });
 
-  it.each(['partial tail', 'invalid header', 'invalid record'])('retains daemon pagination for %s', async (kind) => {
-    const { directory, file } = await fixture([message('first', 'user', text('first'))]);
-    if (kind === 'partial tail') await fs.appendFile(file, '{"type":"message","id":');
-    if (kind === 'invalid header') await fs.writeFile(file, JSON.stringify({ ...header, version: 3 }) + '\n');
-    if (kind === 'invalid record') await fs.appendFile(file, '{bad-json}\n');
-    const getMessages = vi.fn(async () => [{ id: 'authoritative', role: 'user', content: text('daemon history'), createdAt: 1 }]);
-    const read = loader(directory, getMessages);
-    const result = await read.load.loadHistory(request);
-    expect(result).toMatchObject({ status: 'available', state: { historyStatus: 'complete',
-      transcript: [{ kind: 'user', text: 'daemon history' }] } });
-    expect(getMessages).toHaveBeenCalledExactlyOnceWith('saved', { limit: 100 });
-    expect(read.fallback.loadHistory).not.toHaveBeenCalled();
-  });
 
-  it('keeps settings sidecar totals and mission identity without connecting a daemon', async () => {
-    const { directory } = await fixture([message('first', 'user', text('first'))]);
-    await fs.writeFile(path.join(directory, 'saved.settings.json'), JSON.stringify({
-      tokenUsage: { inputTokens: 10, outputTokens: 4, cacheCreationTokens: 0, cacheReadTokens: 0, thinkingTokens: 0 },
-      tags: [{ name: 'decompSessionType', metadata: { value: 'worker' } }],
-    }));
-    const read = loader(directory);
-    const result = await read.load.loadHistory(request);
-    expect(result).toMatchObject({ status: 'available', tokenUsage: { inputTokens: 10, outputTokens: 4 },
-      mission: { state: null, role: 'worker' } });
-    expect(read.getDroid).not.toHaveBeenCalled();
-  });
 
-  it('tries the public daemon before the process fallback when snapshot projection is unavailable', async () => {
-    const { directory } = await fixture([message('first', 'user', text('snapshot'))]);
-    vi.spyOn(historyProjection, 'projectSessionMessagesAsync').mockResolvedValueOnce(unavailableSessionHistory());
-    const getMessages = vi.fn(async () => [{ id: 'daemon', role: 'user', content: text('public history'), createdAt: 1 }]);
-    const read = loader(directory, getMessages);
-    expect(await read.load.loadHistory(request)).toMatchObject({ status: 'available', state: {
-      transcript: [{ kind: 'user', text: 'public history' }], historyStatus: 'complete',
-    } });
-    expect(getMessages).toHaveBeenCalledExactlyOnceWith('saved', { limit: 100 });
-    expect(read.fallback.loadHistory).not.toHaveBeenCalled();
-  });
 
   it('reads the initial complete prefix once while the active log grows', async () => {
     const { directory, file } = await fixture([message('first', 'user', text('start'))]);
@@ -186,45 +143,10 @@ describe('persisted history snapshot', () => {
     const elsewhere = path.join(directory, '-different-worktree');
     await fs.mkdir(elsewhere);
     await fs.rename(file, path.join(elsewhere, 'saved.jsonl'));
-    const read = loader(directory);
-    expect(await read.load.loadHistory(request)).toMatchObject({ status: 'available' });
-    expect(read.getDroid).not.toHaveBeenCalled();
+    expect(await readPersistedSessionMessages(directory, 'saved')).not.toBeNull();
   });
 
-  it('projects 6,420 large messages identically while removing 65 repeated whole-file reads', async () => {
-    const events = Array.from({ length: 6_420 }, (_, index) => message(`m-${index}`, index % 2 ? 'assistant' : 'user',
-      text(`message-${index}:` + 'x'.repeat(10_500)), index + 1, index === 0 ? undefined : `m-${index - 1}`));
-    const { directory, file } = await fixture(events);
-    const direct = loader(directory);
-    let start = performance.now();
-    const actual = await direct.load.loadHistory(request);
-    const snapshotMs = performance.now() - start;
-    expect(direct.getDroid).not.toHaveBeenCalled();
 
-    // Emulate the verified CLI implementation, including rereading and parsing
-    // every row on every page. No daemon, model or existing session is contacted.
-    const getMessages = vi.fn(async (_id: string, options?: { cursor?: string }) => {
-      const raw = await fs.readFile(file, 'utf8');
-      const rows = raw.trim().split('\n').slice(1).map(line => {
-        const event = JSON.parse(line) as ReturnType<typeof message>;
-        return { id: event.id, parentId: event.parentId, createdAt: Date.parse(event.timestamp),
-          updatedAt: Date.parse(event.timestamp), ...event.message };
-      }).reverse();
-      const first = options?.cursor === undefined ? 0 : rows.findIndex(row => row.id === options.cursor) + 1;
-      return rows.slice(first, first + 100);
-    });
-    const missing = path.join(directory, 'no-persisted-copy');
-    const paged = loader(missing, getMessages);
-    start = performance.now();
-    const expected = await paged.load.loadHistory(request);
-    const pagedMs = performance.now() - start;
-    expect(actual).toEqual(expected);
-    expect(getMessages).toHaveBeenCalledTimes(65);
-    expect(actual).toMatchObject({ status: 'available', state: { historyStatus: 'partial', truncated: true } });
-    const bytes = (await fs.stat(file)).size;
-    process.stdout.write(JSON.stringify({ scenario: '6420-message-local-history', bytes, snapshotReads: 1, pageReads: 65,
-      snapshotMs: Math.round(snapshotMs), pagedMs: Math.round(pagedMs), avoidedReadBytes: bytes * 64 }) + '\n');
-  }, 60_000);
 });
 
 async function interceptFirstRead(file: string, duringRead: () => Promise<void>): Promise<void> {

@@ -33,7 +33,8 @@ export interface EditResendPort
   readonly attachmentState: Readonly<Pick<AttachmentStagingState, 'sentAttachments'>> &
     Pick<AttachmentStagingState, 'editStage' | 'attachmentIdCounter' | 'pendingAttachments'>;
   readonly queueState: Readonly<Pick<QueueState, 'queuedPrompts'>>;
-  readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
+  readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'> &
+    Partial<Pick<ConversationRecoveryState, 'historyView'>>;
   readonly effects: Pick<
     ChatEffects,
     | 'ensureActiveRuntimeWorkspaceCurrent'

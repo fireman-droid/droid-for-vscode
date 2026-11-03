@@ -25,6 +25,32 @@ import {
 import { createTurnActivityState } from './turns/turnActivityState';
 
 describe('ChatController', () => {
+  it('keeps identity, lineage and usage when compaction retains the current session', async () => {
+    const runtime = Object.assign(createMockRuntime(), {
+      compact: vi.fn(async () => ({ sessionId: 'session-1', removedCount: 3 })),
+    });
+    const { controller, messages } = createController(() => runtime);
+    ready(controller);
+    await waitForConnected(messages);
+    const adopt = vi.spyOn(controller.effects, 'adoptDurableSuccessor');
+    const usage = { inputTokens: 12, outputTokens: 3, cacheReadTokens: 0,
+      cacheCreationTokens: 0, thinkingTokens: 0, factoryCredits: 0.5 };
+    controller.metadata.tokenUsage = { cumulative: usage, lastTurn: usage };
+    controller.handleMessage({ type: 'session.compact', sessionId: 'session-1' });
+    await vi.waitFor(() => expect(lastMessage(messages, 'runtime.diagnostic')).toMatchObject({
+      code: 'session-compacted', severity: 'info',
+    }));
+    expect(adopt).not.toHaveBeenCalled();
+    expect(snapshots(messages).at(-1)).toMatchObject({
+      sessionId: 'session-1', conversationId: 'session-1', connection: { status: 'connected' },
+    });
+    expect(controller.metadata.tokenUsage).toEqual({ cumulative: usage, lastTurn: usage });
+    expect(controller.recoveryState.historyWindow).toBeNull();
+    send(controller, 'session-1', 'after-compact', 'Continue');
+    await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('completed'));
+    controller.dispose();
+  });
+
   it('compacts the session without replacing the canonical Conversation', async () => {
     const runtime = Object.assign(createMockRuntime(), {
       compact: vi.fn(async () => ({

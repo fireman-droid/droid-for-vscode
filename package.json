@@ -445,7 +445,7 @@
   },
   "dependencies": {
     "@droidvisx/chat-ui": "workspace:*",
-    "@factory/droid-sdk": "0.9.1",
+    "@factory/droid-sdk": "0.10.0",
     "@jitl/quickjs-singlefile-cjs-release-sync": "0.32.0",
     "@tanstack/react-virtual": "^3.14.9",
     "class-variance-authority": "0.7.1",

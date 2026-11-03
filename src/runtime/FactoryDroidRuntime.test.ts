@@ -1288,17 +1288,15 @@ describe('FactoryDroidRuntime', () => {
   it('emits spec-handoff before turn completion after a ProceedNewSession approval', async () => {
     type Listener = (notification: Record<string, unknown>) => void;
     const listeners: Listener[] = [];
-    const notify = (sessionId: string, type: string, reason?: string) => {
+    const notify = (sessionId: string, type: string, reason?: string, newSessionId?: string) => {
       for (const listener of [...listeners]) {
         listener({
           method: 'droid.session_notification',
-          params: {
-            sessionId,
-            notification: {
+          params: { sessionId, notification: {
               type,
               ...(reason === undefined ? {} : { reason }),
-            },
-          },
+              ...(newSessionId === undefined ? {} : { newSessionId, initialPrompt: 'Implement the plan', timestamp: 1 }),
+          } },
         });
       }
     };
@@ -1328,10 +1326,11 @@ describe('FactoryDroidRuntime', () => {
           ],
         });
         expect(result.selectedOption).toBe('proceed_new_session');
-        // Same-session notifications and unrelated types never trigger
-        // a handoff on their own.
+        // Only the explicit handoff event under the planning session can trigger adoption.
         notify('session-1', 'agent_turn_completed', 'completed');
-        notify('session-2', 'agent_turn_completed', 'spec_handoff');
+        notify('unrelated-session', 'agent_turn_completed', 'spec_handoff');
+        notify('unrelated-session', 'spec_handoff_session_created', undefined, 'wrong-session');
+        notify('session-1', 'spec_handoff_session_created', undefined, 'session-2');
         yield textDelta('implementing');
         yield successfulResult();
       }),

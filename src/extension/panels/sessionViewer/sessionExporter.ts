@@ -13,6 +13,7 @@ import type {
 } from '../../../runtime/history/SessionHistory';
 import type { RuntimeDiagnosticSink } from '../../../runtime/runtimeDiagnostics';
 import { scrubCredentials } from '../../diagnostics/LocalDiagnostics';
+import { collectSessionHistory } from '../../../runtime/history/collectSessionHistory';
 
 export interface SessionExportMetadata {
   readonly title: string;
@@ -230,7 +231,7 @@ export async function exportActiveSessionAsMarkdown(
   }
 
   try {
-    const history = await deps.loadHistory({ cwd, sessionId });
+    const history = await collectSessionHistory({ loadHistory: deps.loadHistory }, { cwd, sessionId });
     if (history.status === 'unavailable') {
       deps.diagnostics.record({
         level: 'warn',

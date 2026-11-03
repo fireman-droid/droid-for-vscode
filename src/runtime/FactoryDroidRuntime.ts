@@ -505,8 +505,8 @@ export class FactoryDroidRuntime implements DroidRuntime {
   readonly readOperationBody = (request: OperationBodyRequest) => !this.disposed && this.session?.readOperationBody
     ? this.session.readOperationBody(request) : readOperationBody(request);
 
-  compact(): Promise<RuntimeCompactResult> {
-    return compact(this.replacementContext());
+  compact(mode?: 'handoff'): Promise<RuntimeCompactResult> {
+    return compact(this.replacementContext(), mode);
   }
 
   fork(title: string): Promise<RuntimeForkResult> {

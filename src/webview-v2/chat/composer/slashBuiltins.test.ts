@@ -6,7 +6,7 @@ const btwOn = { btwEnabled: true };
 const btwOff = { btwEnabled: false };
 
 describe('resolveBuiltinSlash', () => {
-  it.each(['/compact', '/compress', '/handoff', '/COMPRESS', ' /handoff '])(
+  it.each(['/compact', '/compress', '/COMPRESS'])(
     'maps %s onto the compaction pipeline',
     (text) => {
       expect(resolveBuiltinSlash(text, btwOff)).toEqual({
@@ -14,6 +14,10 @@ describe('resolveBuiltinSlash', () => {
       });
     },
   );
+
+  it.each(['/handoff', ' /HANDOFF '])('keeps %s distinct from in-place compression', (text) => {
+    expect(resolveBuiltinSlash(text, btwOff)).toEqual({ kind: 'compact', mode: 'handoff' });
+  });
 
   it.each(['/new', '/clear', '/Clear'])('maps %s onto session.new', (text) => {
     expect(resolveBuiltinSlash(text, btwOff)).toEqual({ kind: 'new' });

@@ -394,7 +394,7 @@ function adaptDaemonSession(
   };
 
   /**
-   * Replacement operations (rewind/compact/fork) leave the daemon-side
+   * Replacement operations (rewind/handoff/fork) leave the daemon-side
    * source handle usable and return a `newSessionId`; the runtime
    * contract instead expects a new session object. Attach the new
    * session first (keeping the old handle on failure), then detach the
@@ -448,7 +448,7 @@ function adaptDaemonSession(
     );
   };
 
-  return {
+  const adapted: FactoryDroidSession = {
     onNotification: (listener) => session.onNotification(listener),
     readOperationBody: (request) => readOperationBody(request, {
       readMessagePage: (sessionId, options) => droid.sessions.getMessages(sessionId, options),
@@ -606,6 +606,13 @@ function adaptDaemonSession(
     async compact(params) {
       const result = await session.compact(params?.customInstructions);
       return {
+        session: result.newSessionId === session.id ? adapted : await attachReplacement(result.newSessionId),
+        removedCount: result.removedCount,
+      };
+    },
+    async handoff(params) {
+      const result = await session.handoff(params?.customInstructions);
+      return {
         session: await attachReplacement(result.newSessionId),
         removedCount: result.removedCount,
       };
@@ -668,6 +675,7 @@ function adaptDaemonSession(
       return close();
     },
   };
+  return adapted;
 }
 
 function leaseConflictError(heldByPid: number): Error {

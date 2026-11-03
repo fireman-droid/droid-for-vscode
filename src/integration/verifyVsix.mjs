@@ -20,7 +20,6 @@ const expectedEntries = [
   'extension/third-party/TREE-SITTER-GRAMMARS-LICENSES.txt',
   'extension/dist/extension/extension.cjs',
   'extension/dist/extension/sessionCatalogWorker.cjs',
-  'extension/dist/extension/sessionHistoryWorker.cjs',
   'extension/dist/extension/persistentIdeRelayWorker.cjs',
   'extension/dist/extension/btwAnalysisWorker.cjs',
   // Notices for the dependencies bundled into the extension host entry.

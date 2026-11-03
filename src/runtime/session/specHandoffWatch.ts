@@ -1,3 +1,5 @@
+import { SessionNotificationPayloadSchema } from '@factory/droid-sdk';
+import { isStrictRecord } from '../../shared/validation/strictValidation';
 import type { RuntimeInteractionHandler } from '../events/runtimeInteractions';
 
 type PermissionRequest = Parameters<RuntimeInteractionHandler['requestPermission']>[0];
@@ -42,7 +44,6 @@ export function createSpecHandoffWatch({
 
   const planningSessionId = session.id;
   let approved = false;
-  let reasonSeen = false;
   let candidateSessionId: string | null = null;
   let closed = false;
   let unsubscribe = () => {};
@@ -56,7 +57,7 @@ export function createSpecHandoffWatch({
     onClosed();
   };
   const publishIfReady = (): void => {
-    if (closed || !approved || !reasonSeen || candidateSessionId === null) {
+    if (closed || !approved || candidateSessionId === null) {
       return;
     }
     const implementationSessionId = candidateSessionId;
@@ -68,21 +69,13 @@ export function createSpecHandoffWatch({
     if (closed) {
       return;
     }
-    const envelope = readSessionNotificationEnvelope(notification);
-    if (envelope === null) {
-      return;
-    }
-    if (envelope.type === 'agent_turn_completed' && envelope.reason === 'spec_handoff') {
-      reasonSeen = true;
-    }
-    if (
-      candidateSessionId === null &&
-      envelope.sessionId !== undefined &&
-      envelope.sessionId !== planningSessionId &&
-      isSafeSessionId(envelope.sessionId)
-    ) {
-      candidateSessionId = envelope.sessionId;
-    }
+    const params = notification.params;
+    if (!isStrictRecord(params) || params.sessionId !== planningSessionId) return;
+    const parsed = SessionNotificationPayloadSchema.safeParse(params.notification);
+    if (!parsed.success || parsed.data.type !== 'spec_handoff_session_created' ||
+        parsed.data.newSessionId === planningSessionId ||
+        !isSafeSessionId(parsed.data.newSessionId)) return;
+    candidateSessionId ??= parsed.data.newSessionId;
     publishIfReady();
   });
 
@@ -112,25 +105,4 @@ function isSafeSessionId(value: unknown): value is string {
     value.trim() === value &&
     !/[\u0000-\u001f\u007f-\u009f]/.test(value)
   );
-}
-
-function readSessionNotificationEnvelope(raw: Record<string, unknown>): {
-  sessionId?: string;
-  type?: string;
-  reason?: string;
-} | null {
-  const params = raw['params'];
-  if (typeof params !== 'object' || params === null) {
-    return null;
-  }
-  const { sessionId, notification } = params as Record<string, unknown>;
-  if (typeof notification !== 'object' || notification === null) {
-    return null;
-  }
-  const { type, reason } = notification as Record<string, unknown>;
-  return {
-    ...(typeof sessionId === 'string' ? { sessionId } : {}),
-    ...(typeof type === 'string' ? { type } : {}),
-    ...(typeof reason === 'string' ? { reason } : {}),
-  };
 }

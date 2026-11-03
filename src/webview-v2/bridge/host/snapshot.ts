@@ -1,4 +1,5 @@
 import { type HostToWebviewMessage } from '../../../shared/bridgeMessages';
+import { parseHistoryWindow } from './history';
 import { parseIdeState } from '../../../shared/protocol/ideProtocol';
 import {
   MAX_OPEN_PATH_LENGTH,
@@ -59,6 +60,7 @@ export function parseHostSnapshot(
         'truncated',
       ],
       [
+        'history',
         'mission',
         'ide',
         'worktreeCreateAvailable',
@@ -93,6 +95,8 @@ export function parseHostSnapshot(
     return undefined;
   }
   const ide = value.ide === undefined ? undefined : parseIdeState(value.ide);
+  const history = value.history === undefined ? undefined : parseHistoryWindow(value.history);
+  if (value.history !== undefined && (history === undefined || value.sessionId === null)) return undefined;
   if (value.ide !== undefined && ide === undefined) return undefined;
   const mission =
     value.mission === undefined ? undefined : parseSessionMission(value.mission);
@@ -187,6 +191,7 @@ export function parseHostSnapshot(
     context,
     modelCatalog,
     transcript,
+    ...(history === undefined ? {} : { history }),
     ...(interactions === undefined ? {} : { interactions }),
     historyStatus: value.historyStatus,
     truncated: value.truncated,

@@ -32,7 +32,11 @@ function droidWithMessages(
     options?: { limit?: number; cursor?: string },
   ) => Promise<unknown[]>,
 ): () => Promise<DaemonApi> {
-  return async () => ({ sessions: { getMessages } }) as unknown as DaemonApi;
+  return async () => ({ sessions: { getMessagesPage: async (id: string, options: { limit: number; cursor?: string }) => {
+    const messages = await getMessages(id, options);
+    return { messages, hasMore: messages.length === options.limit,
+      nextCursor: messages.length === options.limit ? (messages.at(-1) as { id: string }).id : undefined };
+  } } }) as unknown as DaemonApi;
 }
 
 function textMessage(
@@ -62,10 +66,24 @@ function fallbackLoader(
 }
 
 describe('createDaemonFirstHistoryLoader.loadHistory', () => {
+  it('preserves an opaque continuation even when the page has fewer than 100 messages', async () => {
+    const getMessagesPage = vi.fn(async () => ({
+      messages: [textMessage('m1', 'user', 'saved')], hasMore: true, nextCursor: 'opaque-next',
+    }));
+    const loader = createDaemonFirstHistoryLoader({
+      getDroid: async () => ({ sessions: { getMessagesPage } }) as unknown as DaemonApi,
+      isDaemonActive: () => true, fallback: fallbackLoader(), sessionsDirectory: tempDir(),
+    });
+    await expect(loader.loadHistory({ cwd: '/workspace', sessionId: 'session' }))
+      .resolves.toMatchObject({ page: { nextCursor: 'opaque-next' } });
+    expect(getMessagesPage).toHaveBeenCalledTimes(1);
+    await expect(loader.loadHistory({ cwd: '/workspace', sessionId: 'session', cursor: 'opaque-next' }))
+      .resolves.toEqual(unavailableSessionHistory());
+  });
   it('projects a single-page daemon message read', async () => {
     const getMessages = vi.fn(async () => [
-      textMessage('m1', 'user', 'hello'),
       textMessage('m2', 'assistant', 'world'),
+      textMessage('m1', 'user', 'hello'),
     ]);
     const loader = createDaemonFirstHistoryLoader({
       getDroid: droidWithMessages(getMessages),
@@ -124,7 +142,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     ).toEqual(['oldest question', 'oldest answer', 'latest question', 'latest answer']);
   });
 
-  it('pages newest-first with the last message id as cursor', async () => {
+  it('returns one page and does not eagerly fetch its continuation', async () => {
     const chronological = Array.from({ length: 101 }, (_, index) =>
       textMessage(
         `m${String(index)}`,
@@ -155,16 +173,20 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     if (loaded.status !== 'available') {
       return;
     }
-    expect(loaded.state.transcript).toHaveLength(101);
+    expect(loaded.state.transcript).toHaveLength(100);
     expect(loaded.state.transcript[0]).toMatchObject({
       kind: 'user',
-      text: 'message-0',
+      text: 'message-1',
     });
-    expect(loaded.state.transcript[100]).toMatchObject({
+    expect(loaded.state.transcript[99]).toMatchObject({
       kind: 'user',
       text: 'message-100',
     });
-    expect(getMessages).toHaveBeenCalledTimes(2);
+    expect(getMessages).toHaveBeenCalledTimes(1);
+    expect(loaded.page?.nextCursor).toBe('m1');
+    const older = await loader.loadHistory({ cwd: 'C:\\workspace', sessionId: 'session-1', cursor: loaded.page!.nextCursor! });
+    expect(older).toMatchObject({ status: 'available', state: { transcript: [{ text: 'message-0' }] },
+      page: { nextCursor: null } });
     expect(getMessages).toHaveBeenLastCalledWith('session-1', {
       limit: 100,
       cursor: 'm1',
@@ -208,7 +230,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     ]);
   });
 
-  it('falls back to the spawn loader when the daemon read fails', async () => {
+  it('reports a daemon error without silently changing history sources', async () => {
     const fallbackResult = {
       status: 'available' as const,
       state: {
@@ -232,8 +254,8 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
 
     await expect(
       loader.loadHistory({ cwd: 'C:\\workspace', sessionId: 's1' }),
-    ).resolves.toBe(fallbackResult);
-    expect(fallback.loadHistory).toHaveBeenCalledOnce();
+    ).resolves.toEqual(unavailableSessionHistory());
+    expect(fallback.loadHistory).not.toHaveBeenCalled();
   });
 
   it('uses the fallback directly when the daemon is inactive', async () => {
@@ -330,7 +352,7 @@ describe('createDaemonFirstHistoryLoader.loadHistory', () => {
     await expect(loader.loadHistory({ cwd: 'C:/different-canonical-folder', sessionId: 'saved-mission' }))
       .resolves.toMatchObject({ status: 'available', mission: { state: null, role: 'orchestrator' } });
     expect(fallback.loadHistory).not.toHaveBeenCalled();
-    expect(getMessages).toHaveBeenCalledTimes(version === 2 ? 0 : 1);
+    expect(getMessages).toHaveBeenCalledTimes(1);
   });
 });
 

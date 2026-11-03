@@ -237,6 +237,11 @@ describe('parseWebviewMessage', () => {
       sessionId: 'session-1',
     },
     {
+      type: 'session.compact',
+      sessionId: 'session-1',
+      mode: 'handoff',
+    },
+    {
       type: 'session.fork',
       sessionId: 'session-1',
     },

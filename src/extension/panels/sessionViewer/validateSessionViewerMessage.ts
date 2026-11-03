@@ -3,6 +3,7 @@ import {
   type SessionViewerWebviewMessage,
 } from '../../../shared/protocol/sessionViewerProtocol';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
+import { parseHistoryNavigate } from '../../../shared/protocol/historyPaging';
 
 const MAX_DIAGNOSTIC_DETAIL = 2_048;
 const MAX_DIAGNOSTIC_KIND = 64;
@@ -12,6 +13,13 @@ export function parseSessionViewerWebviewMessage(
 ): SessionViewerWebviewMessage | null {
   if (!isStrictRecord(value) || typeof value.type !== 'string') {
     return null;
+  }
+  if (value.type === 'sessionViewer.history' && Object.keys(value).length === 5 &&
+    value.protocolVersion === SESSION_VIEWER_PROTOCOL_VERSION) {
+    const request = parseHistoryNavigate({ type: 'history.navigate', sessionId: 'viewer',
+      version: value.version, revision: value.revision, direction: value.direction });
+    return request ? { type: 'sessionViewer.history', protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+      version: request.version, revision: request.revision, direction: request.direction } : null;
   }
   if (
     (value.type === 'sessionViewer.ready' || value.type === 'sessionViewer.stop') &&

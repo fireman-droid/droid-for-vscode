@@ -36,6 +36,10 @@ function reduceHostMessage(
     return state;
   }
   switch (event.type) {
+    case 'history.window':
+      return event.sessionId === state.sessionId
+        ? { ...state, sequence: event.sequence, history: event.history }
+        : advance(state, event.sequence);
     case 'file.diff':
     case 'file.diff.invalidate':
     case 'session.attachmentPreview':
