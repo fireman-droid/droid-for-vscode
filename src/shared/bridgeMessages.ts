@@ -222,7 +222,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v55 adds the Factory account projection behind `/limits`.
 // v56 separates paged history windows from the live transcript.
 // v57 adds Script/RecommendMission permissions and explicit compact handoff mode.
-export const BRIDGE_PROTOCOL_VERSION = 57 as const;
+// v58 exposes the Automations management page (management protocol v2).
+export const BRIDGE_PROTOCOL_VERSION = 58 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage

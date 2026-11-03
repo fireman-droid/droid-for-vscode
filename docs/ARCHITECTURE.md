@@ -615,6 +615,20 @@ daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint
 原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开
 追加接口，不使用私有 SDK 字段或直接修改 CLI 历史。
 
+### 本机 Automations 管理
+
+`ManagementBinding` 通过独立 `ManagementAutomationsService` 适配 daemon 公开资源，
+管理协议 v2 携带经过校验的草稿、配置摘要与分页运行记录；不允许前端指定自动化
+根目录或远端 computer。目录按 `machineId` 识别本机，兼容未登记 computer 的旧本地记录。
+Host 每次变更重读配置，拒绝过期摘要；确认运行／启用／删除后再次核对目标和工作区信任。
+模型禁用与强度校验留在 Host，不把 UI 下拉选项作为权限边界。
+
+创建固定 `paused: true` 与 `skipFirstRun: true`；若要另设工作目录，在暂停状态下补写，
+失败明确报告已创建但未完整配置，不自动删除或重试运行。普通编辑不重设共享范围与状态。
+`automations.run()` 只准备提示词；立即运行通过公开 controller 的 `dispatchAutomationRun`
+启动 daemon 跟踪的会话。不替换主聊天，不在扩展中创建定时器，不重放投递结果未知的请求。
+运行历史由 daemon 提供，每页 20 条，保留错误和模型回退信息；不嵌入任意 `VISUAL.html`。
+
 <a id="autocomplete"></a>
 
 ## 编辑器补全的独立路径

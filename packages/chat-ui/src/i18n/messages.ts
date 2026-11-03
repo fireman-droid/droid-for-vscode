@@ -10,6 +10,7 @@ import { extraMessages } from './extra';
 import { templatesMessages } from './templates';
 import { dynamicMessages } from './dynamic';
 import { nativeMessages } from './native';
+import { automationMessages } from './automations';
 
 export const messageEntries: readonly MessageTranslations[] = [
   ...commonMessages,
@@ -23,6 +24,7 @@ export const messageEntries: readonly MessageTranslations[] = [
   ...templatesMessages,
   ...dynamicMessages,
   ...nativeMessages,
+  ...automationMessages,
 ];
 // Chinese aliases support the existing authored Chinese interface copy. English keys win collisions.
 export const messages: Readonly<Record<string, MessageTranslations>> = Object.fromEntries([

@@ -14,6 +14,8 @@ import type { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { FactoryAccountService } from '../account/FactoryAccountService';
 import { LIMITS_REQUEST_FAILED_MESSAGE } from '../../runtime/account/factoryAccount';
 import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
+import { isAutomationAction } from '../../shared/protocol/automationProtocol';
+import type { ManagementAutomationsService } from './ManagementAutomationsService';
 
 export interface ManagementServices {
   readonly settings: ManagementSettingsService;
@@ -29,6 +31,7 @@ export interface ManagementServices {
   readonly newMission: () => void;
   /** Factory sign-in identity and limits for the sidebar footer. */
   readonly account: FactoryAccountService;
+  readonly automations: ManagementAutomationsService;
 }
 
 /** Management owns no chat runtime: opening this panel never replaces the chat. */
@@ -78,6 +81,7 @@ export class ManagementBinding implements vscode.Disposable {
   }
   private async execute(action: ManagementAction): Promise<Partial<ManagementResult>> {
     const s = this.services;
+    if (isAutomationAction(action)) return s.automations.execute(action);
     switch (action.kind) {
       case 'ready': case 'settings.read': return { settings: await s.settings.read() };
       case 'account.read': return { account: await this.readAccount(action.force) };

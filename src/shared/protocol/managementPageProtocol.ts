@@ -8,9 +8,11 @@ import { isBusyMessageMode, type BusyMessageMode } from './queueProtocol';
 import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 import { isFactoryAccountState, type FactoryAccountState } from './factoryAccountProtocol';
+import { isAutomationAction, isAutomationHistory, isManagedAutomation, type AutomationAction,
+  type AutomationHistory, type ManagedAutomation } from './automationProtocol';
 
-export const MANAGEMENT_VERSION = 1 as const;
-export const MANAGEMENT_PAGES = ['general', 'models', 'completion', 'sessions', 'missions'] as const;
+export const MANAGEMENT_VERSION = 2 as const;
+export const MANAGEMENT_PAGES = ['general', 'models', 'completion', 'sessions', 'missions', 'automations'] as const;
 export type ManagementPage = (typeof MANAGEMENT_PAGES)[number];
 export function isManagementPage(value: unknown): value is ManagementPage {
   return typeof value === 'string' && (MANAGEMENT_PAGES as readonly string[]).includes(value);
@@ -67,6 +69,7 @@ export interface ManagedSession {
   readonly active: boolean;
 }
 export type ManagementAction =
+  | AutomationAction
   | { readonly kind: 'ready' | 'settings.read' | 'defaults.read' | 'missions.list' | 'missions.new' | 'chat.focus' }
   | { readonly kind: 'account.read'; readonly force: boolean }
   | { readonly kind: 'defaults.save'; readonly scope: DefaultsScope; readonly patch: DefaultValues }
@@ -100,6 +103,9 @@ export interface ManagementResult {
   readonly nextCursor?: number | null;
   readonly missions?: readonly MissionControlCatalogRow[];
   readonly account?: FactoryAccountState;
+  readonly automations?: readonly ManagedAutomation[];
+  readonly automationHistory?: AutomationHistory;
+  readonly automationId?: string;
 }
 export type ManagementHostMessage = ManagementResult
   | { readonly type: 'management.navigate'; readonly version: typeof MANAGEMENT_VERSION; readonly page: ManagementPage }
@@ -137,7 +143,7 @@ export function parseManagementRequest(value: unknown): ManagementRequest | unde
   else if (['session.view', 'session.export', 'session.folder', 'session.resume', 'missions.open'].includes(String(a.kind))) valid = hasExactKeys(a, ['kind', 'id']) && text(a.id);
   else if (a.kind === 'session.favorite' || a.kind === 'session.archive') valid = hasExactKeys(a, ['kind', 'id', 'value']) && text(a.id) && typeof a.value === 'boolean';
   else if (a.kind === 'session.rename') valid = hasExactKeys(a, ['kind', 'id', 'title']) && text(a.id) && text(a.title, 200);
-  return valid ? value as unknown as ManagementRequest : undefined;
+  return valid || isAutomationAction(a) ? value as unknown as ManagementRequest : undefined;
 }
 
 export function parseManagementHostMessage(value: unknown): ManagementHostMessage | undefined {
@@ -163,6 +169,9 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   if (value.message !== undefined && typeof value.message !== 'string') return undefined;
   if (value.nextCursor !== undefined && value.nextCursor !== null && (typeof value.nextCursor !== 'number' || !Number.isFinite(value.nextCursor))) return undefined;
   if (value.account !== undefined && !isFactoryAccountState(value.account)) return undefined;
+  if (value.automations !== undefined && (!Array.isArray(value.automations) || !value.automations.every(isManagedAutomation))) return undefined;
+  if (value.automationHistory !== undefined && !isAutomationHistory(value.automationHistory)) return undefined;
+  if (value.automationId !== undefined && !text(value.automationId, 256)) return undefined;
   if (value.sessions !== undefined && (!Array.isArray(value.sessions) || !value.sessions.every(s => isStrictRecord(s)
     && text(s.id) && typeof s.title === 'string' && typeof s.cwd === 'string' && ['chat', 'exec'].includes(String(s.kind))
     && typeof s.modifiedTime === 'string' && typeof s.messageCount === 'number'

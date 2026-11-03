@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
+import { MANAGEMENT_VERSION, parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
 
 const config = vi.hoisted(() => ({ value: 'wait', update: vi.fn() }));
 vi.mock('vscode', () => ({
@@ -22,7 +22,7 @@ it('persists the selected mode and returns it to the settings page', async () =>
     receive = callback; return { dispose() {} };
   } }, services, 'general');
   for (const mode of ['steer', 'wait'] as const) {
-    receive({ type: 'management.request', version: 1, requestId: mode, action: { kind: 'chat.busyMessageMode.set', mode } });
+    receive({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: mode, action: { kind: 'chat.busyMessageMode.set', mode } });
     await vi.waitFor(() => expect(post).toHaveBeenLastCalledWith(expect.objectContaining({
       requestId: mode, ok: true, settings: { busyMessageMode: mode },
     })));
@@ -32,6 +32,6 @@ it('persists the selected mode and returns it to the settings page', async () =>
 });
 
 it('rejects unknown delivery modes at the bridge boundary', () => {
-  expect(parseManagementRequest({ type: 'management.request', version: 1, requestId: 'bad',
+  expect(parseManagementRequest({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'bad',
     action: { kind: 'chat.busyMessageMode.set', mode: 'interrupt' } })).toBeUndefined();
 });

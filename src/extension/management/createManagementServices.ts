@@ -12,6 +12,8 @@ import { ManagementSettingsService } from './managementSettings';
 import { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { ManagementServices } from './ManagementBinding';
 import type { FactoryAccountService } from '../account/FactoryAccountService';
+import { ManagementAutomationsService } from './ManagementAutomationsService';
+import { hostText } from '../webview/webviewLocale';
 
 export function createManagementServices(options: {
   context: vscode.ExtensionContext; controller: ChatController; getDroid: () => Promise<DaemonApi>;
@@ -22,6 +24,17 @@ export function createManagementServices(options: {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
   const cwd = () => controller.getEditorWorkspaceContext().cwd;
   return {
+    automations: new ManagementAutomationsService(getDroid, options.daemon,
+      () => controller.getEditorWorkspaceContext().trusted,
+      async (action, name) => {
+        const detail = action === 'delete'
+          ? 'This deletes the automation files and memory. Previous run sessions are retained.'
+          : action === 'resume'
+            ? 'Enable recurring model runs on this machine. Runs may change files and consume credits.'
+            : 'Start a model run now. It may change files and consume credits.';
+        const proceed = hostText('Continue');
+        return await vscode.window.showWarningMessage(`${name}\n${hostText(detail)}`, { modal: true }, proceed) === proceed;
+      }, controller.modelAvailability),
     defaults: new ManagementDefaultsService(getDroid, options.daemon, controller.modelAvailability),
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,

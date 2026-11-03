@@ -12,7 +12,7 @@ import { ManagementApp } from '../management/ManagementApp';
 import { ReviewApp } from '../review/ReviewApp';
 import { MissionSetup } from '../mission/MissionSetup';
 import { SessionViewerApp } from '../viewer/SessionViewerApp';
-import type { ManagementRequest, ManagementSettings } from '../../shared/protocol/managementPageProtocol';
+import { MANAGEMENT_VERSION, type ManagementRequest, type ManagementSettings } from '../../shared/protocol/managementPageProtocol';
 import type { MissionSetupCapabilities } from '../../shared/protocol/missionProtocol';
 import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../shared/protocol/sessionViewerProtocol';
 
@@ -74,7 +74,7 @@ it('switches language from General settings and retains the Mission draft and mo
   }, postManagement: vi.fn((request: ManagementRequest) => {
     queueMicrotask(() => {
       if (request.action.kind === 'language.set') locale(request.action.language === 'auto' ? 'en' : request.action.language);
-      listeners.forEach(listener => listener({ type: 'management.result', version: 1, requestId: request.requestId, ok: true, settings }));
+      listeners.forEach(listener => listener({ type: 'management.result', version: MANAGEMENT_VERSION, requestId: request.requestId, ok: true, settings }));
     });
   }) };
   const user = userEvent.setup();
