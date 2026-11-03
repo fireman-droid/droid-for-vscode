@@ -220,9 +220,11 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v53 retains read-only result previews from ordinary external files.
 // v54 reports card-scoped child-chat opening feedback.
 // v55 adds the Factory account projection behind `/limits`.
-export const BRIDGE_PROTOCOL_VERSION = 55 as const;
+// v56 separates paged history windows from the live transcript.
+export const BRIDGE_PROTOCOL_VERSION = 56 as const;
 
 export type WebviewToHostMessage =
+  | import('./protocol/historyPaging').HistoryNavigateMessage
   | SystemPromptRequest
   | IdeReconnectMessage
   | IdeRefreshMessage
@@ -312,6 +314,7 @@ export type WebviewToHostMessage =
   | ReviewWebviewMessage;
 
 export interface HostSnapshotMessage {
+  readonly history?: import('./protocol/historyPaging').HistoryWindowState;
   readonly type: 'host.snapshot';
   readonly sequence: number;
   readonly conversationId: string | null;
@@ -382,6 +385,7 @@ export interface HostSnapshotMessage {
 }
 
 export type HostToWebviewMessage =
+  | import('./protocol/historyPaging').HistoryWindowMessage
   | SystemPromptResponse
   | HostIdeMessage
   | HostSnapshotMessage

@@ -10,6 +10,14 @@ export const SESSION_HISTORY_UNAVAILABLE_MESSAGE =
 export interface SessionHistoryRequest {
   readonly cwd: string;
   readonly sessionId: string;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Runtime-only page data. Raw messages and official cursors never cross the bridge. */
+export interface SessionHistoryPage {
+  readonly messages: readonly unknown[];
+  readonly nextCursor: string | null;
 }
 
 export interface SubagentHistoryRequest extends SessionHistoryRequest {
@@ -29,6 +37,9 @@ export type SessionHistoryResult =
   | {
       readonly status: 'available';
       readonly state: HostTranscriptState;
+      readonly page?: SessionHistoryPage;
+      /** Host-only raw message identities for exact invocation boundaries. */
+      readonly messageIds?: readonly string[];
       readonly messageAncestry?: readonly HistoryMessageAncestry[];
       /**
        * Read-only mission identity from `loadSession()`
@@ -51,6 +62,7 @@ export type SessionHistoryResult =
     };
 
 export interface SessionHistoryLoader {
+  supportsPaging?(): boolean;
   loadHistory(request: SessionHistoryRequest): Promise<SessionHistoryResult>;
   /**
    * Optional: final subagent invocation summaries for one session,

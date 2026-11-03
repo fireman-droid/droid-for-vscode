@@ -74,6 +74,8 @@ export function createDaemonResources(
             })
           ).messages,
       ),
+    getMessagesPage: (sessionId, options) =>
+      call(() => controller.getSessionMessages({ sessionId, ...options, limit: options?.limit ?? 100 })),
     search: (params) =>
       call(async () => {
         const result = await controller.searchSessions(params);

@@ -27,7 +27,8 @@ export interface HostSnapshotPort
   >;
   readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
   readonly queueState: Readonly<Pick<QueueState, 'queuedPrompts'>>;
-  readonly recoveryState: Readonly<Pick<ConversationRecoveryState, 'transcript'>>;
+  readonly recoveryState: Readonly<Pick<ConversationRecoveryState, 'transcript'> &
+    Partial<Pick<ConversationRecoveryState, 'historyWindow' | 'historyView'>>>;
   readonly missionState: Readonly<Pick<MissionSessionState, 'mission'>>;
   readonly effects: Pick<
     ChatEffects,

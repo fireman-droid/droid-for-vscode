@@ -7,6 +7,8 @@ import { applyTheme } from '../shell/theme';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 import { ReadOnlyTranscript } from './ReadOnlyTranscript';
+import { SESSION_VIEWER_PROTOCOL_VERSION } from '../../shared/protocol/sessionViewerProtocol';
+import { historyWindowTranscript } from '../../shared/transcript/historyWindowTranscript';
 
 export function SessionViewerApp({ vscode }: { readonly vscode: { postMessage(message: unknown): void } }) {
   const { t } = useI18n();
@@ -28,6 +30,12 @@ export function SessionViewerApp({ vscode }: { readonly vscode: { postMessage(me
     {snapshot === null || snapshot.status === 'unavailable' ? <section aria-label={t("Read-only session transcript")} className="v2-chat-rail overflow-auto py-6">
       {snapshot === null ? <DroidLoading label={t("Loading session…")} detail={t("Reading the saved conversation.")} />
         : <p data-ui-notice="" className="grid min-h-[180px] place-items-center text-center text-[11px] text-muted-foreground">{snapshot.reason}</p>}</section>
-      : <ReadOnlyTranscript key={snapshot.target.mode === 'standard' ? snapshot.target.sessionId : snapshot.target.mode} items={snapshot.items} running={snapshot.running} truncated={snapshot.truncated} />}
+      : <ReadOnlyTranscript key={snapshot.target.mode === 'standard' ? snapshot.target.sessionId : snapshot.target.mode}
+        items={historyWindowTranscript(snapshot.history, snapshot.items)}
+        running={snapshot.running && !snapshot.history?.hasNewer} truncated={snapshot.history?.truncated ?? snapshot.truncated}
+        paging={snapshot.history ? { ...snapshot.history, onRequest: direction => vscode.postMessage({
+          type: 'sessionViewer.history', protocolVersion: SESSION_VIEWER_PROTOCOL_VERSION,
+          version: snapshot.history!.version, revision: snapshot.history!.revision, direction,
+        }) } : undefined} />}
   </main></ContentProvider>;
 }

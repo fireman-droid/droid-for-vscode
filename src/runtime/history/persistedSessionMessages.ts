@@ -4,8 +4,7 @@ import { repairParentChainCorruption, type SessionMessage } from '@factory/droid
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { isSafeSessionIdentifier } from '../catalog/SessionCatalog';
 
-// Above the observed 69 MB / 6,420-message transcript. Larger or unfamiliar
-// files retain the daemon pagination path instead of silently losing history.
+// Bounded private-file reader for on-demand operation evidence, not chat loading.
 const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
 const READ_CHUNK_BYTES = 1024 * 1024;
 
@@ -15,8 +14,7 @@ export interface PersistedSessionMessages {
   readonly file: string;
 }
 
-/** Read the same version-2 JSONL consumed by CLI get_session_messages once.
- * The CLI otherwise reads and parses the entire file again for each 100 rows.
+/** Read version-2 JSONL for consumers requiring original operation evidence.
  * A fixed initial byte boundary keeps a growing log from extending this read.
  */
 export async function readPersistedSessionMessages(

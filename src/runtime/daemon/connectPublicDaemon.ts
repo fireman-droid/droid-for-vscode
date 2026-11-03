@@ -57,7 +57,7 @@ export async function connectPublicDaemon(
       supportsTerminalRestoreOnLoad: false,
     },
   });
-  // The extension reads full UI history directly from disk via persistedHistory.ts.
+  // UI history is read separately through the daemon's cursor-paged endpoint.
   // DaemonSessionController hardcodes loadAllMessages=true when clientType==='sdk',
   // forcing droid exec to forward-stream 100MB+ JSONLs instead of using its
   // reverse compaction-anchor reader. Override loadAllMessages=false at the RPC boundary.

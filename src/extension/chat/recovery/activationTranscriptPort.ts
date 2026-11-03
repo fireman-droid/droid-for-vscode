@@ -1,6 +1,7 @@
 import type { HostOperations } from '../hostOperations';
 import type { MissionSessionState } from '../mission/MissionSessionState';
 import type { SessionLifecycleState } from '../sessions/SessionLifecycleState';
+import type { ConversationRecoveryState } from './ConversationRecoveryState';
 export interface ActivationTranscriptPort
   extends Pick<
     HostOperations,
@@ -10,4 +11,5 @@ export interface ActivationTranscriptPort
     Pick<SessionLifecycleState, 'runtimeGeneration' | 'disposed'>
   >;
   readonly missionState: Pick<MissionSessionState, 'mission'>;
+  readonly recoveryState?: Pick<ConversationRecoveryState, 'historyWindow' | 'historyView'>;
 }

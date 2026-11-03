@@ -1,4 +1,5 @@
 import { type WebviewToHostMessage } from './bridgeMessages';
+import { parseHistoryNavigate } from './protocol/historyPaging';
 import { parseAttachmentPreviewRequest } from './protocol/attachmentPreviewProtocol';
 import { parseSystemPromptRequest } from './protocol/systemPromptProtocol';
 import { parseIdeRequest } from './protocol/ideProtocol';
@@ -123,6 +124,7 @@ const parseSubagentMessage: WebviewMessageParser = (value) =>
   parseSubagentWebviewMessage(value) ?? undefined;
 
 const WEBVIEW_MESSAGE_PARSERS = {
+  'history.navigate': parseHistoryNavigate,
   'management.open': parseManagementPageOpen,
   'factory.limits.refresh': parseFactoryLimitsRefresh,
   'systemPrompt.read': parseSystemPromptRequest,

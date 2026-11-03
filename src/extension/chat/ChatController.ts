@@ -57,6 +57,7 @@ import { bindChatSharedServices, type ChatSharedServices } from './chatSharedSer
 import { dispatchChatMessage } from './dispatchChatMessage';
 import { SessionConnectionMaintenance } from './sessions/sessionConnectionMaintenance';
 import { buildHostSnapshot } from './hostSnapshot';
+import { ensureHistoryPaging } from './recovery/ensureHistoryPaging';
 import { readControllerIde, type NativeIdeBackend } from './ideIntegration';
 import type {
   ChatControllerListener,
@@ -374,6 +375,7 @@ export class ChatController {
   }
   emitSnapshot(): void {
     this.emit(buildHostSnapshot(this));
+    void ensureHistoryPaging(this);
   }
   async replayTo(listener: ChatControllerListener): Promise<void> {
     return replayControllerTo(this, listener);

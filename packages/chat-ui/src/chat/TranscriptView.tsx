@@ -1,7 +1,8 @@
 import { useI18n } from '../i18n';
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ChevronUp } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
+import { useHistoryPaging, type TranscriptPaging } from './useHistoryPaging';
 import { Button } from '../ui/button';
 import { buildTurns } from '../navigation/buildTurns';
 import { useTranscriptScroll } from './useTranscriptScroll';
@@ -28,6 +29,7 @@ export interface TranscriptHandle {
   readonly prepareForSend: () => void;
 }
 export interface TranscriptViewProps {
+  readonly paging?: TranscriptPaging;
   readonly messages: readonly TranscriptMessage[];
   readonly conversationId: string | null;
   readonly sessionKey: string | null;
@@ -44,8 +46,6 @@ export interface TranscriptViewProps {
   readonly ref?: Ref<TranscriptHandle>;
 }
 const PINNED_QUESTION_GAP = 12;
-const DEFAULT_MESSAGE_WINDOW = 60;
-const MESSAGE_WINDOW_STEP = 120;
 // Resizing a virtual turn during disclosure motion must not call the business
 // renderer again. New transcript data still arrives through renderMessage.
 const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, renderMessage, placeholder, placeholderHeight }: MessagePresentation & {
@@ -53,7 +53,7 @@ const TranscriptMessageContent = memo(function TranscriptMessageContent({ id, re
 }) {
   return renderMessage(id, { placeholder, placeholderHeight });
 });
-export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, historyNotice, trailingContent, statusContent, onQuote, onBtwQuote, reportLayout, pauseAutoFollow = false, ref }: TranscriptViewProps) {
+export function TranscriptView({ messages, conversationId, sessionKey, sendSignal, renderMessage, leadingContent, historyNotice, trailingContent, statusContent, onQuote, onBtwQuote, reportLayout, pauseAutoFollow = false, paging, ref }: TranscriptViewProps) {
   const { t } = useI18n();
   const selectionRoot = useRef<HTMLDivElement>(null);
   const selecting = useTranscriptSelection(selectionRoot);
@@ -88,20 +88,11 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     }
     return undefined;
   }, [messages]);
-  const allDescriptors = messages;
-  const [windowState, setWindowState] = useState({ sessionId: sessionKey, count: DEFAULT_MESSAGE_WINDOW });
-  const messageWindow = windowState.sessionId === sessionKey ? windowState.count : DEFAULT_MESSAGE_WINDOW;
-  if (windowState.sessionId !== sessionKey) setWindowState({ sessionId: sessionKey, count: DEFAULT_MESSAGE_WINDOW });
-  const hiddenMessageCount = Math.max(0, allDescriptors.length - messageWindow);
-  const descriptors = useMemo(() => allDescriptors.slice(hiddenMessageCount), [allDescriptors, hiddenMessageCount]);
-  const historyAnchor = useRef<{ height: number; top: number } | null>(null);
-  const revealEarlier = () => {
-    const element = viewport.current;
-    pinnedAtTop.current = false;
-    scrolling.stopFollowing();
-    historyAnchor.current = element ? { height: element.scrollHeight, top: element.scrollTop } : null;
-    setWindowState((current) => ({ ...current, count: current.count + MESSAGE_WINDOW_STEP }));
-  };
+  const historyIdentity = paging ? `${paging.version}:${paging.revision}` : sessionKey;
+  const previousHistoryIdentity = useRef(historyIdentity);
+  const historyChanged = previousHistoryIdentity.current !== historyIdentity;
+  previousHistoryIdentity.current = historyIdentity;
+  const descriptors = messages;
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.id, item])), [descriptors]);
   const ids = useMemo(() => [...byId.keys()], [byId]);
   const turns = useMemo(() => buildTurns(descriptors.map((item) => ({
@@ -134,7 +125,10 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const sentFromEmpty =
       sendSignal !== questionState.current.sendSignal ||
       (questions.length === 1 && !messages.at(-1)?.replyEnd);
-    if (lastQuestionId !== undefined && (hadQuestion || sentFromEmpty)) {
+    if (historyChanged) {
+      questionState.current.pinnedId = null;
+      pinnedAtTop.current = false;
+    } else if (lastQuestionId !== undefined && (hadQuestion || sentFromEmpty)) {
       questionState.current.pinnedId = lastQuestionId;
     } else if (lastQuestionId === undefined) {
       questionState.current.pinnedId = null;
@@ -164,6 +158,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       scrolling.writeTop(offset + (adjustments ?? 0), behavior);
     },
   });
+  const historyPaging = useHistoryPaging(paging, viewport, turns, virtualizer, scrolling);
   // Rows above the reading position must retain their anchor in either scroll
   // direction, including when an estimated row receives its first measurement.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
@@ -268,12 +263,6 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   const top = viewport.current?.scrollTop ?? 0;
   const pinOffset = resolvePinOffset(top);
   const virtualItems = virtualizer.getVirtualItems();
-  useLayoutEffect(() => {
-    const anchor = historyAnchor.current, element = viewport.current;
-    if (!anchor || !element) return;
-    historyAnchor.current = null;
-    scrolling.writeTop(anchor.top + element.scrollHeight - anchor.height);
-  }, [hiddenMessageCount, scrolling.writeTop]);
   const questionTops = questions.map((question) => virtualizer.measurementsCache[question.turnIndex]?.start ?? Number.POSITIVE_INFINITY);
   const activeQuestion = findActiveQuestionIndex(questionTops, pinOffset);
   const showNavigator = isScrollableTranscript(effectiveScrollHeight(viewport.current), viewport.current?.clientHeight ?? 0);
@@ -303,13 +292,16 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   });
   const returnToBottom = useCallback(() => {
     setJump(null);
-    scrolling.scrollToBottom();
-  }, [scrolling.scrollToBottom]);
+    historyPaging.toLatest();
+  }, [historyPaging.toLatest]);
   useImperativeHandle(ref, () => ({
     stopFollowing: scrolling.stopFollowing,
     scrollToBottom: returnToBottom,
-    prepareForSend: scrolling.prepareForSend,
-  }), [scrolling.stopFollowing, scrolling.prepareForSend, returnToBottom]);
+    prepareForSend: () => {
+      if (paging?.hasNewer) historyPaging.toLatest();
+      scrolling.prepareForSend();
+    },
+  }), [scrolling.stopFollowing, scrolling.prepareForSend, returnToBottom, paging?.hasNewer, historyPaging.toLatest]);
   const pin = useRef<HTMLDivElement>(null);
   const liveCandidate = virtualizer.getVirtualItemForOffset(questionEntryOffset(pinOffset));
   const liveEntered = liveCandidate !== undefined && hasQuestionEntered(liveCandidate.start, pinOffset);
@@ -382,11 +374,12 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         <div ref={content} className={`v2-chat-rail min-h-full pt-5 ${statusContent ? 'pb-0' : 'pb-3'}`}>
           <div ref={leading} className="flow-root">
             {leadingContent}
-            {(historyNotice || hiddenMessageCount > 0) ? <div role="note" data-ui-notice="" className="v2-history-divider select-none">
+            {(historyNotice || paging) ? <div role="status" data-ui-notice="" className="v2-history-divider select-none">
               <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center">
                 {historyNotice ? <span>{historyNotice}</span> : null}
-                {historyNotice && hiddenMessageCount > 0 ? <span aria-hidden="true">·</span> : null}
-                {hiddenMessageCount > 0 ? <Button variant="plain" size="none" className="v2-history-trigger" onClick={revealEarlier}><ChevronUp aria-hidden="true" /><span>{t("Show earlier messages (")}{hiddenMessageCount} {t("hidden)")}</span></Button> : null}
+                {paging?.loading ? <span>{t("Loading history…")}</span> : null}
+                {paging?.error ? <><span>{t(paging.error)}</span><Button variant="plain" size="none" onClick={historyPaging.retry}>{t("Retry")}</Button></> : null}
+                {paging && !paging.hasOlder && !paging.loading && !paging.error ? <span>{t("Beginning of conversation")}</span> : null}
               </span>
             </div> : null}
           </div>
@@ -397,7 +390,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
                 style={{ '--markdown-row-height': `${row.size}px`, marginTop: index === 0 ? 0 : Math.max(0, row.start - virtualItems[index - 1]!.end) } as CSSProperties}>
                 {turns[row.index].messageIds.map((id) => {
                   const message = byId.get(id)!;
-                  return <div key={id} className={message.replyEnd ? 'pb-5' : 'pb-2'}>
+                  return <div key={id} data-history-id={id} className={message.replyEnd ? 'pb-5' : 'pb-2'}>
                     <TranscriptMessageContent id={id} renderMessage={renderMessage} placeholder={pinned?.id === id && pinEntered} placeholderHeight={pinnedHeight} />
                   </div>;
                 })}
@@ -422,7 +415,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       </>}
       {showNavigator ? <QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /> : null}
       {onQuote ? <SelectionToolbar viewport={viewport} selectionRoot={selectionRoot} onQuote={onQuote} onBtwQuote={onBtwQuote} /> : null}
-      {scrolling.away ? (
+      {scrolling.away || paging?.hasNewer ? (
         <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")} className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
       ) : null}
     </div>

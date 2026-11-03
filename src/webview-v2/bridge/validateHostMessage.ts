@@ -1,4 +1,5 @@
 import { type HostToWebviewMessage } from '../../shared/bridgeMessages';
+import { parseHistoryWindowMessage } from './host/history';
 import { parseAttachmentPreviewResponse } from '../../shared/protocol/attachmentPreviewProtocol';
 import { parseSystemPromptResponse } from '../../shared/protocol/systemPromptProtocol';
 import { parseRewindResult } from '../../shared/protocol/rewindResult';
@@ -80,6 +81,7 @@ const parseCustomModelsMessage: HostMessageParser = (value) =>
   parseCustomModelsHostMessage(value) ?? undefined;
 
 const HOST_MESSAGE_PARSERS = {
+  'history.window': parseHistoryWindowMessage,
   'systemPrompt.state': parseSystemPromptResponse,
   'host.ide': parseHostIde,
   'host.snapshot': parseHostSnapshot,

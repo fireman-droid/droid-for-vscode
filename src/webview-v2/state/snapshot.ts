@@ -87,6 +87,7 @@ export function reduceSnapshotMessage(
           event.queue ?? EMPTY_SESSION_QUEUE_STATE,
         ),
         transcript: hydrateChangesTranscript(event.transcript, event.turn),
+        history: event.history ?? null,
         historyStatus: event.historyStatus,
         truncated: event.truncated,
         interactions: (event.interactions ?? []).map((pending) => {

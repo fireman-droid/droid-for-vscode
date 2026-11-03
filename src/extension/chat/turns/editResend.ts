@@ -4,6 +4,7 @@ import { rewindFilesIncomplete, rewindResultNotice } from '../../../shared/proto
 import { RewindAnchorConflictError, RewindAttachmentError } from '../../../runtime/session/rewindErrors';
 import { MAX_PENDING_ATTACHMENTS } from '../../../shared/protocol/bounds';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
+import { historyWindowTranscript } from '../../../shared/transcript/historyWindowTranscript';
 import { type EditResendRejectReason } from '../../../shared/protocol/turns';
 import {
   truncateFromUserMessage,
@@ -135,7 +136,8 @@ export function handleEditResend(
     emitEditResendRejected(ctl, sessionId, messageId, 'unsupported');
     return;
   }
-  const truncated = truncateFromUserMessage(ctl.recoveryState.transcript, messageId);
+  const truncated = truncateFromUserMessage({ ...ctl.recoveryState.transcript,
+    transcript: historyWindowTranscript(ctl.recoveryState.historyView, ctl.recoveryState.transcript.transcript) }, messageId);
   if (truncated === null) {
     ctl.emitSessionDiagnostic('edit-resend-unsupported', EDIT_RESEND_UNSUPPORTED_MESSAGE);
     emitEditResendRejected(ctl, sessionId, messageId, 'unsupported');
@@ -332,7 +334,7 @@ export function handleEditStageBegin(
   ) {
     return;
   }
-  const index = ctl.recoveryState.transcript.transcript.findIndex(
+  const index = historyWindowTranscript(ctl.recoveryState.historyView, ctl.recoveryState.transcript.transcript).findIndex(
     (item) => item.kind === 'user' && item.messageId === messageId,
   );
   if (index < 0) {
@@ -365,7 +367,8 @@ export function buildEditStageAttachments(
     }));
   }
   const staged: EditStagedAttachment[] = [];
-  const userItem = ctl.recoveryState.transcript.transcript[userItemIndex];
+  const transcript = historyWindowTranscript(ctl.recoveryState.historyView, ctl.recoveryState.transcript.transcript);
+  const userItem = transcript[userItemIndex];
   if (userItem?.kind === 'user' && userItem.attachments !== undefined) {
     for (const meta of userItem.attachments) {
       ctl.attachmentState.attachmentIdCounter += 1;
@@ -383,7 +386,6 @@ export function buildEditStageAttachments(
     }
   }
   // History can place images before text; use the same ownership as rendering.
-  const transcript = ctl.recoveryState.transcript.transcript;
   const owners = userImageOwners(transcript);
   for (const item of transcript) {
     if (staged.length >= MAX_PENDING_ATTACHMENTS) break;
