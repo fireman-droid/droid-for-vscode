@@ -137,4 +137,3 @@ export function isImplicitMultiSelectQuestion(question: string, topic = ''): boo
   }
   return false;
 }
-
