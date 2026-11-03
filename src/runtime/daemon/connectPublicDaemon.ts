@@ -28,7 +28,7 @@ export interface PublicDaemonOptions extends ConnectToDaemonOptions {
   readonly onConnectionState?: (state: DaemonTransportState) => void;
 }
 
-/** SDK 0.9.1 local facade connection policy, owned through its public controller. */
+/** Local connection policy, owned through the SDK's public controller. */
 export async function connectPublicDaemon(
   options: PublicDaemonOptions,
 ): Promise<DaemonApi> {
@@ -55,6 +55,7 @@ export async function connectPublicDaemon(
       maxReconnectDelay: 10000,
       reconnectBackoffFactor: 1.5,
       supportsTerminalRestoreOnLoad: false,
+      defaultMessageLimit: 100,
     },
   });
   // UI history is read separately through the daemon's cursor-paged endpoint.

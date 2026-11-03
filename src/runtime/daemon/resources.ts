@@ -139,8 +139,9 @@ export function createDaemonResources(
       validateDirectory: (cwd) => call(() => controller.validateWorkingDirectory(cwd)),
       checkTrust: (cwd) => call(() => controller.checkFolderTrust(cwd)),
       trust: (cwd) => call(() => controller.trustFolder(cwd)),
-      listFiles: (id, hidden) => call(() => controller.listFiles(id, hidden)),
-      searchFiles: (id, query, max, hidden) => call(() => controller.searchFiles(id, query, max, hidden)),
+      listFiles: (id, showHidden) => call(() => controller.listFiles(id, { showHidden })),
+      searchFiles: (id, query, maxResults, showHidden) =>
+        call(() => controller.searchFiles(id, { query, maxResults, showHidden })),
       getFileContent: (params) => call(() => controller.getWorkspaceFileContent(params)),
     },
     ssh: { installKey: (key) => call(() => controller.installSshKey(key)) },
@@ -152,6 +153,7 @@ export function createDaemonResources(
     feedback: { submitBugReport: (id, comment, logs, source) => call(() => controller.submitBugReport(id, comment, logs, source)) },
     customModels: {
       list: () => call(async () => (await controller.listCustomModels()).models),
+      listWithRevision: () => call(() => controller.listCustomModels()),
       upsert: (params) => call(() => controller.upsertCustomModel(params)),
       delete: (params) => call(() => controller.deleteCustomModel(params)),
     },

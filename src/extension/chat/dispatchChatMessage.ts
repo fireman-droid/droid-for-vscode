@@ -217,7 +217,7 @@ export function dispatchChatMessage(
       handleModelCatalogRefresh(controller, message.sessionId);
       return;
     case 'session.compact':
-      handleSessionCompact(controller, message.sessionId);
+      handleSessionCompact(controller, message.sessionId, message.mode);
       return;
     case 'session.fork':
       handleSessionFork(controller, message.sessionId);

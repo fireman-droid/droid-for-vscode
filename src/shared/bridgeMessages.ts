@@ -221,7 +221,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v54 reports card-scoped child-chat opening feedback.
 // v55 adds the Factory account projection behind `/limits`.
 // v56 separates paged history windows from the live transcript.
-export const BRIDGE_PROTOCOL_VERSION = 56 as const;
+// v57 adds Script/RecommendMission permissions and explicit compact handoff mode.
+export const BRIDGE_PROTOCOL_VERSION = 57 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage

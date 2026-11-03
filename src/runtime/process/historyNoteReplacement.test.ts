@@ -29,6 +29,7 @@ function session(id: string): FactoryDroidSession {
 
 function withReplacement(current: FactoryDroidSession, next: FactoryDroidSession): void {
   current.compact = vi.fn(async () => ({ session: next, removedCount: 1 }));
+  current.handoff = vi.fn(async () => ({ session: next, removedCount: 1 }));
   current.fork = vi.fn(async () => next);
   current.rewind = vi.fn(async () => ({ session: next }));
 }
@@ -36,7 +37,7 @@ function withReplacement(current: FactoryDroidSession, next: FactoryDroidSession
 describe('history notes after Process session replacement', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(['compact', 'fork', 'rewind'] as const)('saves only to the latest session after repeated %s', async (operation) => {
+  it.each(['compact', 'handoff', 'fork', 'rewind'] as const)('saves only to the latest session after repeated %s', async (operation) => {
     const original = session('original');
     const first = session('first');
     const latest = session('latest');
@@ -54,7 +55,7 @@ describe('history notes after Process session replacement', () => {
     for (let count = 0; count < 2; count++) {
       if (operation === 'fork') await runtime.fork('Synthetic fork');
       else if (operation === 'rewind') await runtime.rewind({ messageId: 'synthetic-anchor', forkTitle: 'Synthetic rewind' });
-      else await runtime.compact();
+      else await runtime.compact(operation === 'handoff' ? 'handoff' : undefined);
       expect(runtime.supportsHistoryAppend()).toBe(true);
     }
     await expect(runtime.appendHistoryMessage('Synthetic history-only note')).resolves.toMatchObject({ messageId: expect.any(String) });

@@ -477,7 +477,41 @@ describe('createDaemonDroidSession', () => {
     expect(session.settings.specModeModelId).toBe('model-3');
   });
 
-  it('compacts into a resumed replacement session and detaches the source', async () => {
+  it('compacts in place without releasing the lease or detaching the live handle', async () => {
+    const mock = createDroidMock();
+    mock.created.compact.mockResolvedValue({ newSessionId: 'session-1', removedCount: 5 });
+    const lease = { acquire: vi.fn(() => ({ acquired: true as const })), release: vi.fn() };
+    const session = await createDaemonDroidSession({
+      target: { kind: 'new', cwd: 'C:/workspace' },
+      interactionHandler: cancellingRuntimeInteractionHandler, getDroid: async () => mock.droid, lease,
+    });
+    const claims = lease.acquire.mock.calls.length;
+    await expect(session.compact?.()).resolves.toEqual({ session, removedCount: 5 });
+    expect(mock.sessions.resume).not.toHaveBeenCalled();
+    expect(mock.created.detach).not.toHaveBeenCalled();
+    expect(lease.acquire).toHaveBeenCalledTimes(claims);
+    expect(lease.release).not.toHaveBeenCalled();
+    await session.interrupt();
+    expect(mock.created.interrupt).toHaveBeenCalledOnce();
+    await session.close();
+    expect(lease.release).toHaveBeenCalledExactlyOnceWith('session-1');
+  });
+
+  it('hands off to a resumed successor without invoking ordinary compaction', async () => {
+    const mock = createDroidMock();
+    const runtime = new FactoryDroidRuntime({
+      interactionHandler: cancellingRuntimeInteractionHandler,
+      createSdkSession: createDaemonSessionFactory(async () => mock.droid),
+    });
+    await runtime.initialize('C:/workspace');
+    await expect(runtime.compact('handoff')).resolves.toEqual({ sessionId: 'session-2', removedCount: 5 });
+    expect(mock.created.handoff).toHaveBeenCalledOnce();
+    expect(mock.created.compact).not.toHaveBeenCalled();
+    expect(mock.created.detach).toHaveBeenCalledOnce();
+    await runtime.dispose();
+  });
+
+  it('adopts a successor when the backend returns one for compaction', async () => {
     const mock = createDroidMock();
     const runtime = new FactoryDroidRuntime({
       interactionHandler: cancellingRuntimeInteractionHandler,
@@ -1072,6 +1106,7 @@ function createDaemonSessionMock(
       newSessionId: 'session-2',
       removedCount: 5,
     })),
+    handoff: vi.fn(async () => ({ newSessionId: 'session-2', removedCount: 5 })),
     fork: vi.fn(async () => ({ newSessionId: 'session-2' })),
     rewind: vi.fn(async () => ({
       newSessionId: 'session-2',

@@ -109,12 +109,12 @@ export interface SessionSearchMessage {
 }
 
 /**
- * Compacts the active session's context: Droid summarizes older
- * messages into a continuation session and the host adopts it.
+ * Compact in place, or explicitly hand a summary to a new session.
  */
 export interface SessionCompactMessage {
   readonly type: 'session.compact';
   readonly sessionId: string;
+  readonly mode?: 'handoff';
 }
 
 /**

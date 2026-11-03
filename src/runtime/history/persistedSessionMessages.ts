@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { repairParentChainCorruption, type SessionMessage } from '@factory/droid-sdk';
+import type { SessionMessage } from '@factory/droid-sdk';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import { isSafeSessionIdentifier } from '../catalog/SessionCatalog';
 
@@ -67,15 +67,14 @@ export async function readPersistedSessionMessages(
       const current = await fs.stat(file);
       if (final.size < initial.size || current.ino !== initial.ino || current.dev !== initial.dev ||
         (final.size === initial.size && final.mtimeMs !== initial.mtimeMs)) return null;
-      // CLI: repair parent references, replace duplicate IDs in insertion order,
-      // then return newest first. Keep its tie order before the loader's sort.
+      // Evidence lookup needs original blocks, not repaired conversation ancestry.
+      // Replace duplicate IDs in insertion order and return newest first.
       const unique = new Map<string, SessionMessage>();
-      for (const message of repairParentChainCorruption(messages)) unique.set(message.id, message);
+      for (const message of messages) unique.set(message.id, message);
       return { messages: [...unique.values()].reverse(), bytes: initial.size, file };
     } finally { await handle.close(); }
   } catch {
-    // Private persistence format is an optional fast path. The caller preserves
-    // public daemon pagination, followed by the existing process fallback.
+    // Private persistence is optional evidence; unreadable snapshots stay unavailable.
     return null;
   }
 }

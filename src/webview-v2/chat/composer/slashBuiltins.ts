@@ -2,8 +2,8 @@
  * Composer interception for GUI built-in slash commands
  * (slash-parity-assessment.md §5 S2).
  *
- * The Droid CLI treats `/compress` (canonical), `/compact` and
- * `/handoff` (aliases) as the same compaction command, and `/clear`
+ * `/compress` and `/compact` compact in place; `/handoff` creates
+ * a summary-backed successor. The CLI treats `/clear`
  * as a near-`/new`; typed into the GUI composer they were previously
  * forwarded to the model as prompt text. Navigation commands map to
  * existing panels — read-only local UI state, so they stay available
@@ -34,14 +34,13 @@ export const SLASH_NAV_COMMANDS: readonly {
 ];
 
 export type BuiltinSlashAction =
-  | { readonly kind: 'compact' }
+  | { readonly kind: 'compact'; readonly mode?: 'handoff' }
   | { readonly kind: 'new' }
   | { readonly kind: 'navigate'; readonly target: SlashNavTarget }
   | { readonly kind: 'btw'; readonly question: string }
   | { readonly kind: 'removed' };
 
-/** CLI-parity aliases onto the existing compaction pipeline. */
-const COMPACT_ALIASES = new Set(['compact', 'compress', 'handoff']);
+const COMPACT_ALIASES = new Set(['compact', 'compress']);
 
 /**
  * `/clear` keeps the CLI's "start over" intent through `session.new`;
@@ -86,6 +85,7 @@ export function resolveBuiltinSlash(
   if (COMPACT_ALIASES.has(slug)) {
     return { kind: 'compact' };
   }
+  if (slug === 'handoff') return { kind: 'compact', mode: 'handoff' };
   if (NEW_ALIASES.has(slug)) {
     return { kind: 'new' };
   }

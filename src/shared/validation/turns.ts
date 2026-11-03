@@ -114,11 +114,13 @@ export function parseRuntimeRetry(value: UnknownRecord): RuntimeRetryMessage | u
 export function parseSessionCompact(
   value: UnknownRecord,
 ): SessionCompactMessage | undefined {
-  if (!hasExactKeys(value, ['type', 'sessionId']) || !isId(value.sessionId)) {
+  if (!hasExactKeys(value, value.mode === undefined ? ['type', 'sessionId'] : ['type', 'sessionId', 'mode']) ||
+      !isId(value.sessionId) || (value.mode !== undefined && value.mode !== 'handoff')) {
     return undefined;
   }
 
-  return { type: 'session.compact', sessionId: value.sessionId };
+  return { type: 'session.compact', sessionId: value.sessionId,
+    ...(value.mode === 'handoff' ? { mode: value.mode } : {}) };
 }
 
 export function parseSessionFork(value: UnknownRecord): SessionForkMessage | undefined {

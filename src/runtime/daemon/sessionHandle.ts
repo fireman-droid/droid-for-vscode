@@ -267,6 +267,8 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
   }
   compact: ConnectedDroidSession['compact'] = (instructions) =>
     this.replace(() => this.controller.compactSession(this.id, instructions));
+  handoff: ConnectedDroidSession['handoff'] = (instructions) =>
+    this.replace(() => this.controller.compactSession(this.id, instructions, 'handoff'));
   fork: ConnectedDroidSession['fork'] = (options) =>
     this.replace(() => this.controller.forkSession(this.id, options));
   rewind: ConnectedDroidSession['rewind'] = (params) =>

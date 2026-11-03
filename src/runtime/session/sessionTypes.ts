@@ -73,6 +73,9 @@ export interface FactoryDroidSession {
   compact?(params?: {
     customInstructions?: string;
   }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
+  handoff?(params?: {
+    customInstructions?: string;
+  }): Promise<{ session: FactoryDroidSession; removedCount: number }>;
   fork?(params?: { title?: string }): Promise<FactoryDroidSession>;
   rename?(params: { title: string }): Promise<void>;
   listSkills?(): Promise<{ skills: unknown[] }>;

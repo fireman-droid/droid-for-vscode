@@ -14,7 +14,8 @@ const reasoning = oneOf(Object.values(ReasoningEffort));
 const fields = (validators: Readonly<Record<string, Validator>>): Validator => (value) =>
   isStrictRecord(value) && hasExactKeys(value, [], Object.keys(validators)) &&
   Object.entries(value).every(([key, field]) => validators[key](field));
-const validators: Record<keyof DefaultSettingsPatch, Validator> = {
+// Keep the application's exposed allowlist independent of new SDK defaults.
+const validators = {
   modelId: text, reasoningEffort: reasoning,
   interactionMode: oneOf(Object.values(DroidInteractionMode)),
   autonomyLevel: oneOf(Object.values(AutonomyLevel)),
@@ -41,7 +42,7 @@ const validators: Record<keyof DefaultSettingsPatch, Validator> = {
   }),
   runInWorktree: nullable(boolean), worktreeDirectory: nullable(text),
   worktreeAutoDeleteLimit: nullable((value) => typeof value === 'number' && Number.isInteger(value) && value >= 1),
-};
+} satisfies Partial<Record<keyof DefaultSettingsPatch, Validator>>;
 
 /** Validate the exposed public defaults fields, never accept a full settings file. */
 export function parseDefaultSettingsPatch(input: unknown): DefaultSettingsPatch | null {

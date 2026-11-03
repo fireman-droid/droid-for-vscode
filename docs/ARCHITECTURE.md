@@ -587,7 +587,15 @@ conversationId，Fork／编辑重发建立新 conversation；恢复不再次提�
 共享消息解析依赖基础校验，基础校验不反向调用总解析器。两种模型协议共用
 `customModelValues` 的常量、类型与校验规则，消息格式和公开解析入口保持不变。
 
-### SDK 0.9.1 设置与恢复
+### SDK 0.10.0 设置与恢复
+
+Process transport 直接收发 `JsonRpcMessage` 对象，不重复 JSON 编解码。
+普通 compact 保留原会话与租约，清除旧分页窗口后重读历史；显式 `/handoff` 使用 SDK
+handoff 创建后继会话，才写入 lineage 并迁移绑定。原地压缩保留会话累计与上一轮用量。
+Spec 交接仅接受规划会话下的 `spec_handoff_session_created.newSessionId`，并等待用户
+批准 `proceed_new_session`；不再从其他会话的 turn-completed 通知猜测后继。
+Script 权限作为一个批次批准或拒绝，展示子调用、位置与风险，超长内容明确标记截断；
+RecommendMission 复用任务确认卡。默认设置仍只开放应用现有字段，不随 SDK 扩展自动开放云同步设置。
 
 模型元数据由 Runtime 的正式 `listModels` 目录投影到共享契约，禁用检查保留在 Host
 应用边界，Webview 只负责显示与交互。系统提示使用独立请求／确认消息和 Host 用户配置
@@ -674,7 +682,7 @@ SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit �
 `DroidRuntime` 是 Host 面对的接口，`FactoryDroidRuntime` 管理执行和 session 适配。
 SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产品所需行为。
 
-- SDK 0.9.1 通过公开 `DaemonSessionController`、`MultiSessionStateManager` 连接，
+- SDK 0.10.0 通过公开 `DaemonSessionController`、`MultiSessionStateManager` 连接，
   不访问 `.sessions.controller`。`sessionHandle.ts` 管理 attached handle、替换与 detach；
   权限路由缺 handler 默认取消。detach 不等于关闭 backend，关闭失败不报告成功。
 - `windowDaemonPool.ts` 给每个主聊天分配 daemon/IDE relay，`routedDaemon.ts` 按
@@ -706,6 +714,8 @@ SDK 负责 transport/RPC/协议转换；项目只在以下已知边界补充产�
   在该 daemon 生命周期内一起冻结，登记移除才清文件。依赖 CLI 私有行为，升级必须复核。
 - daemon 聊天历史使用官方 `getMessagesPage` 的 `messages/hasMore/nextCursor`，
   默认只读最近 100 条原始消息；超出展示预算的页缩小官方请求大小，不先扫完整日志。
+  controller 设置 `defaultMessageLimit: 100`，同时保留 `loadAllMessages: false` 兼容补丁：
+  SDK 0.10.0 非 CLI 加载仍默认要求完整消息，单改页大小不能替代该补丁。
   `SessionHistoryWindow` 保留至多三页阅读窗口，缓存按六页／32 MiB 淘汰非窗口页，
   保留页位置供向上、向下重新读取；工具结果跨页按调用 ID 定位来源页并补齐。
   `asyncHistoryProjection.ts` 继续负责让出长投影与隐私筛选；消息 ID 不依赖分页内下标。

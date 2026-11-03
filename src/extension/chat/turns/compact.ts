@@ -17,7 +17,7 @@ export const COMPACT_FAILED_MESSAGE = 'Droid could not compact the conversation.
 const COMPACT_ADOPTION_FAILED_MESSAGE =
   'The conversation was compacted, but the chat could not switch to its new session. Retry to reconnect to the original session, or refresh History to open the compacted session.';
 
-export function handleSessionCompact(ctl: CompactPort, sessionId: string): void {
+export function handleSessionCompact(ctl: CompactPort, sessionId: string, mode?: 'handoff'): void {
   const runtime = ctl.sessionState.runtime;
   if (runtime !== null && !ctl.effects.ensureActiveRuntimeWorkspaceCurrent()) {
     return;
@@ -47,19 +47,20 @@ export function handleSessionCompact(ctl: CompactPort, sessionId: string): void 
   }
 
   ctl.sessionState.sessionOperationInProgress = true;
-  void performCompact(ctl, runtime, sessionId).finally(() => {
+  void performCompact(ctl, runtime, sessionId, mode).finally(() => {
     ctl.sessionState.sessionOperationInProgress = false;
   });
 }
 
 /**
- * Compacts the active session and adopts the continuation session
- * that Droid returns, reloading its summarized transcript.
+ * Reload compacted history without replacing an unchanged session identity.
+ * Handoff (and older backends) may return a successor that must be adopted.
  */
 export async function performCompact(
   ctl: CompactPort,
   runtime: DroidRuntime,
   sessionId: string,
+  mode?: 'handoff',
 ): Promise<void> {
   const generation = ctl.sessionState.runtimeGeneration;
   const cwd = ctl.sessionState.activeRuntimeCwd;
@@ -71,7 +72,7 @@ export async function performCompact(
   let compactedSessionId: string;
   let removedCount: number;
   try {
-    const result = await runtime.compact!();
+    const result = await runtime.compact!(mode);
     compactedSessionId = result.sessionId;
     removedCount = result.removedCount;
   } catch {
@@ -88,57 +89,48 @@ export async function performCompact(
     return;
   }
 
-  const previousTitle = ctl.effects.activeSessionSummary()?.title ?? 'Current session';
-  const adopted = await ctl.effects.adoptDurableSuccessor(
-    conversationId,
-    sessionId,
-    compactedSessionId,
-    'compact',
-  );
-  if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
-    return;
+  const inPlace = compactedSessionId === sessionId;
+  if (!inPlace) {
+    const previousTitle = ctl.effects.activeSessionSummary()?.title ?? 'Current session';
+    const adopted = await ctl.effects.adoptDurableSuccessor(
+      conversationId, sessionId, compactedSessionId, mode ?? 'compact',
+    );
+    if (!ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) return;
+    if (!adopted) {
+      ctl.sessionState.connection = { status: 'unavailable', message: COMPACT_ADOPTION_FAILED_MESSAGE };
+      ctl.emitSessionDiagnostic('session-compact-failed', COMPACT_ADOPTION_FAILED_MESSAGE);
+      ctl.emitSnapshot();
+      return;
+    }
+    ctl.effects.commitSessionBinding({
+      sessionId: compactedSessionId, conversationId,
+      transcript: ctl.recoveryState.transcript, turn: null,
+      catalogEntry: {
+        id: compactedSessionId, title: previousTitle, messageCount: 0,
+        modifiedTime: new Date().toISOString(), active: true, isFavorite: false,
+      },
+    });
   }
-  if (!adopted) {
-    // Compaction committed in Runtime before metadata persistence. A failed
-    // adoption must block sends under the old Host session id.
-    ctl.sessionState.connection = { status: 'unavailable', message: COMPACT_ADOPTION_FAILED_MESSAGE };
-    ctl.emitSessionDiagnostic('session-compact-failed', COMPACT_ADOPTION_FAILED_MESSAGE);
-    ctl.emitSnapshot();
-    return;
-  }
-  // The compacted session stays in the catalog: its file remains on
-  // disk with the full pre-compaction history, and the compaction
-  // divider's "View full history" jump needs it selectable.
-  ctl.effects.commitSessionBinding({
-    sessionId: compactedSessionId,
-    conversationId,
-    transcript: ctl.recoveryState.transcript,
-    turn: null,
-    catalogEntry: {
-      id: compactedSessionId,
-      title: previousTitle,
-      messageCount: 0,
-      modifiedTime: new Date().toISOString(),
-      active: true,
-      isFavorite: false,
-    },
-  });
 
-  let mission: SessionMissionSummary | null = null;
-  let tokenUsage: TokenUsageBreakdown | null = null;
+  // Any page request started before compaction now belongs to an obsolete window.
+  ctl.recoveryState.historyWindow = null;
+  ctl.recoveryState.historyView = null;
+  let mission: SessionMissionSummary | null = inPlace ? ctl.missionState.mission : null;
+  let tokenUsage: TokenUsageBreakdown | null = inPlace ? ctl.metadata.tokenUsage.cumulative : null;
   {
     const loaded = await ctl.effects.loadHistoryTimed(cwd, compactedSessionId);
     if (loaded?.status === 'available') {
       mission = loaded.mission ?? null;
-      tokenUsage = loaded.tokenUsage ?? null;
+      tokenUsage = loaded.tokenUsage ?? tokenUsage;
     }
   }
   if (!ctl.isCurrentSessionOperation(runtime, generation, compactedSessionId, cwd)) {
     return;
   }
   ctl.missionState.mission = mission;
-  // The compacted successor is a new session; its counters restart.
-  ctl.metadata.tokenUsage = { cumulative: tokenUsage, lastTurn: null };
+  ctl.metadata.tokenUsage = {
+    cumulative: tokenUsage, lastTurn: inPlace ? ctl.metadata.tokenUsage.lastTurn : null,
+  };
   ctl.recoveryStore.selectConversation(conversationId);
   const checkpointSaved = await ctl.effects.flushRecoveryCheckpointOrReport();
   if (!ctl.isCurrentSessionOperation(runtime, generation, compactedSessionId, cwd)) return;

@@ -32,7 +32,7 @@ export function useComposerFlow(
   dispatch: Dispatch<AssistantWebviewAction>,
   routes: {
     readonly blocked: boolean;
-    readonly compact: () => void;
+    readonly compact: (mode?: 'handoff') => void;
     readonly navigate: (target: SlashNavTarget) => void;
     readonly openBtw: () => void;
     readonly askBtw: (question: string) => void;
@@ -182,7 +182,7 @@ export function useComposerFlow(
           setCommandNotice('Return to the main chat to switch sessions, start a new task, or compact the conversation.');
           return;
         }
-        if (builtin.kind === 'compact') compact();
+        if (builtin.kind === 'compact') compact(builtin.mode);
         else if (builtin.kind === 'new') post(vscode, { type: 'session.new' });
         else if (builtin.kind === 'navigate') navigate(builtin.target);
         else if (builtin.kind === 'btw') {

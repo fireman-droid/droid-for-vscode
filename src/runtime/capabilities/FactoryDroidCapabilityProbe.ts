@@ -8,7 +8,7 @@ import {
   type ClientAskUserHandler,
   type ClientPermissionHandler,
   type RequestPermissionHandlerResult,
-  type StringFramedDroidClientTransport,
+  type DroidClientTransport,
 } from '@factory/droid-sdk/node';
 
 import {
@@ -148,7 +148,7 @@ export interface CapabilitySession {
   getContextStats(): Promise<unknown>;
 }
 
-export interface CapabilityTransport extends StringFramedDroidClientTransport {
+export interface CapabilityTransport extends DroidClientTransport {
   connect(): Promise<void>;
 }
 
@@ -165,7 +165,7 @@ export interface CapabilitySessionFactory {
 }
 
 export interface CapabilitySessionOpenOptions {
-  readonly transport: StringFramedDroidClientTransport;
+  readonly transport: DroidClientTransport;
   readonly permissionHandler: ClientPermissionHandler;
   readonly askUserHandler: ClientAskUserHandler;
   readonly autoRejectPermissionRequests: true;

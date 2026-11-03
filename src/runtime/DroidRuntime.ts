@@ -438,11 +438,10 @@ export interface DroidRuntime {
   /** Explicit backend capability; process sessions have no Git RPC. */
   supportsGitDiff?(): boolean;
   /**
-   * Compacts the active session's context: Droid summarizes older
-   * messages into a continuation session that this runtime then
-   * targets. Optional: absent when the runtime cannot compact.
+   * Compacts in place by default. Explicit handoff adopts a new session.
+   * Optional: absent when the runtime cannot compact.
    */
-  compact?(): Promise<RuntimeCompactResult>;
+  compact?(mode?: 'handoff'): Promise<RuntimeCompactResult>;
   /**
    * Forks the active session: Droid copies the conversation into a
    * new session that this runtime then targets, while the original

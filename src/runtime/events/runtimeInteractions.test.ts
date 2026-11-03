@@ -18,6 +18,7 @@ import {
   MAX_PERMISSION_OPTIONS,
   MAX_PERMISSION_OPTION_LABEL_LENGTH,
   MAX_PERMISSION_OPTION_VALUE_LENGTH,
+  MAX_PERMISSION_TOOLS,
   MAX_PERMISSION_TOOL_NAME_LENGTH,
   MAX_SPEC_PLAN_LENGTH,
 } from '../../shared/protocol/interactionProtocol';
@@ -607,6 +608,184 @@ describe('runtime permission interactions', () => {
       ),
     ).resolves.toBe(ToolConfirmationOutcome.Cancel);
     expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('projects a Script batch as one atomic card covering every nested operation', async () => {
+    let projected: RuntimePermissionRequest | undefined;
+    const requestPermission = vi.fn(async (request: RuntimePermissionRequest) => {
+      projected = request;
+      return { selectedOption: ToolConfirmationOutcome.ProceedOnce };
+    });
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission }),
+    );
+
+    await expect(
+      callbacks.permissionHandler(
+        permissionRequest([
+          details('script', {
+            impactLevel: 'high',
+            calls: [
+              {
+                toolName: 'Edit',
+                line: 3,
+                column: 1,
+                toolInput: { secret: 'RAW_INPUT_SECRET' },
+                confirmation: {
+                  type: 'edit',
+                  filePath: 'C:\\workspace\\a.ts',
+                  fileName: 'a.ts',
+                  oldContent: 'before',
+                  newContent: 'after',
+                },
+              },
+              {
+                toolName: 'Execute',
+                line: 5,
+                column: 2,
+                toolInput: {},
+                confirmation: {
+                  type: 'exec',
+                  command: 'pnpm',
+                  fullCommand: 'pnpm test',
+                  impactLevel: 'medium',
+                  riskLevelReason: 'Runs project tests',
+                },
+              },
+              {
+                toolName: 'Create',
+                line: 9,
+                column: 4,
+                toolInput: {},
+                confirmation: {
+                  type: 'create',
+                  filePath: 'C:\\workspace\\b.ts',
+                  fileName: 'b.ts',
+                  content: 'export {}',
+                },
+              },
+            ],
+          }),
+        ]),
+      ),
+    ).resolves.toBe(ToolConfirmationOutcome.ProceedOnce);
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    // One tool summary keeps the batch atomic: a single option set that
+    // approves or denies every nested operation together.
+    expect(projected?.toolUses).toHaveLength(1);
+    const toolUse = projected?.toolUses[0];
+    expect(toolUse).toMatchObject({
+      confirmationKind: 'script',
+      title: 'Run script · 3 operations',
+      riskNote: 'Impact: high',
+    });
+    const detail = toolUse?.detail ?? '';
+    expect(detail).toContain('Line 3, column 1');
+    expect(detail).toContain('a.ts');
+    expect(detail).toContain('before');
+    expect(detail).toContain('after');
+    expect(detail).toContain('pnpm test');
+    expect(detail).toContain('Risk: Impact: medium');
+    expect(detail).toContain('Runs project tests');
+    expect(detail).toContain('b.ts');
+    expect(detail).toContain('export {}');
+    expect(JSON.stringify(projected)).not.toContain('RAW_INPUT_SECRET');
+  });
+
+  it('keeps every Script operation visible and marks batches past the display cap', async () => {
+    let projected: RuntimePermissionRequest | undefined;
+    const requestPermission = vi.fn(async (request: RuntimePermissionRequest) => {
+      projected = request;
+      return { selectedOption: ToolConfirmationOutcome.Cancel };
+    });
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission }),
+    );
+    const calls = Array.from({ length: MAX_PERMISSION_TOOLS + 4 }, (_, index) => ({
+      toolName: 'Create',
+      line: index + 1,
+      column: 1,
+      toolInput: {},
+      confirmation: {
+        type: 'create',
+        filePath: `C:\\workspace\\f${index}.ts`,
+        fileName: `f${index}.ts`,
+        content: 'export {}',
+      },
+    }));
+
+    await expect(
+      callbacks.permissionHandler(
+        permissionRequest([
+          details('script', { impactLevel: 'low', calls }),
+        ]),
+      ),
+    ).resolves.toBe(ToolConfirmationOutcome.Cancel);
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    const toolUse = projected?.toolUses[0];
+    expect(toolUse?.confirmationKind).toBe('script');
+    expect(toolUse?.detail).toContain('f0.ts');
+    expect(toolUse?.detail).toContain(`f${MAX_PERMISSION_TOOLS - 1}.ts`);
+    expect(toolUse?.detail).toContain('4 more operations');
+  });
+
+  it('fails closed and reports auto-cancel for an unprojectable Script operation', async () => {
+    const requestPermission = vi.fn();
+    const onAutoCancelled = vi.fn();
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission, onAutoCancelled }),
+    );
+
+    await expect(
+      callbacks.permissionHandler(
+        permissionRequest([
+          details('script', {
+            impactLevel: 'low',
+            calls: [
+              {
+                toolName: 'Future',
+                line: 1,
+                column: 1,
+                toolInput: {},
+                confirmation: { type: 'future_type' },
+              },
+            ],
+          }),
+        ]),
+      ),
+    ).resolves.toBe(ToolConfirmationOutcome.Cancel);
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(onAutoCancelled).toHaveBeenCalledWith({
+      interaction: 'permission',
+      reason: 'invalid-request',
+    });
+  });
+
+  it('projects RecommendMission with its reason', async () => {
+    let projected: RuntimePermissionRequest | undefined;
+    const requestPermission = vi.fn(async (request: RuntimePermissionRequest) => {
+      projected = request;
+      return { selectedOption: ToolConfirmationOutcome.Cancel };
+    });
+    const callbacks = createRuntimeInteractionCallbacks(
+      createHandler({ requestPermission }),
+    );
+
+    await callbacks.permissionHandler(
+      permissionRequest([
+        details('recommend_mission', { reason: 'This work should run as a mission.' }),
+      ]),
+    );
+
+    expect(projected?.toolUses).toEqual([
+      expect.objectContaining({
+        confirmationKind: 'recommend_mission',
+        title: 'Recommend mission',
+        detail: 'This work should run as a mission.',
+      }),
+    ]);
   });
 });
 

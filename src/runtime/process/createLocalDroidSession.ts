@@ -4,7 +4,7 @@ import {
   listModels,
   resumeSession,
   type DroidObservability,
-  type StringFramedDroidClientTransport,
+  type DroidClientTransport,
 } from '@factory/droid-sdk/node';
 import { createCapturedSessionView } from '../session/capturedSessionView';
 import { type RuntimeSessionTarget } from '../DroidRuntime';
@@ -29,7 +29,7 @@ export interface LocalSessionDependencies {
   createSession(options: {
     cwd: string;
     systemPrompt?: import('../../shared/protocol/systemPromptProtocol').SessionSystemPrompt;
-    transport: StringFramedDroidClientTransport;
+    transport: DroidClientTransport;
     observability?: DroidObservability;
     permissionHandler: RuntimeInteractionCallbacks['permissionHandler'];
     askUserHandler: RuntimeInteractionCallbacks['askUserHandler'];
@@ -37,7 +37,7 @@ export interface LocalSessionDependencies {
   resumeSession(
     sessionId: string,
     options: {
-      transport: StringFramedDroidClientTransport;
+      transport: DroidClientTransport;
       observability?: DroidObservability;
       permissionHandler: RuntimeInteractionCallbacks['permissionHandler'];
       askUserHandler: RuntimeInteractionCallbacks['askUserHandler'];
@@ -120,10 +120,13 @@ export async function createLocalDroidSession(
       includeDisabled: true,
       ...observabilityOptions,
     });
-    // SDK replacements are fresh handles. Bind Process capabilities to that
-    // handle, so a later note releases and resumes the replacement session.
+    // In-place compaction keeps its handle; replacements need fresh capabilities.
     if (session.compact) view.compact = async (params) => {
       const result = await session.compact!(params);
+      return { ...result, session: result.session === session ? view : captureProcessSession(result.session) };
+    };
+    if (session.handoff) view.handoff = async (params) => {
+      const result = await session.handoff!(params);
       return { ...result, session: captureProcessSession(result.session) };
     };
     if (session.fork) view.fork = async (params) => captureProcessSession(await session.fork!(params));

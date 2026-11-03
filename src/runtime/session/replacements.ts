@@ -99,13 +99,15 @@ export async function rewind(
 
 export async function compact(
   context: ReplacementContext,
+  mode?: 'handoff',
 ): Promise<RuntimeCompactResult> {
   const session = context.session;
   if (context.active) {
     throw new Error('Droid runtime cannot compact while a turn is active.');
   }
-  if (typeof session.compact !== 'function') {
-    throw new Error('The Droid session does not support compaction.');
+  const operation = mode === 'handoff' ? session.handoff : session.compact;
+  if (typeof operation !== 'function') {
+    throw new Error(`The Droid session does not support ${mode ?? 'compaction'}.`);
   }
 
   const startedAt = performance.now();
@@ -117,7 +119,7 @@ export async function compact(
   let nextSession: FactoryDroidSession;
   let removedCount: number;
   try {
-    const outcome = await session.compact();
+    const outcome = await operation.call(session);
     nextSession = outcome.session;
     removedCount = Number.isSafeInteger(outcome.removedCount) ? outcome.removedCount : 0;
   } catch (error) {
@@ -132,9 +134,8 @@ export async function compact(
     throw error;
   }
 
-  // Compaction continues in a new session; re-apply captured session
-  // metadata so the model catalog survives.
-  context.adoptSession(nextSession, session.availableModels);
+  // Current Droid compacts in place; handoff and older backends can return a successor.
+  if (nextSession !== session) context.adoptSession(nextSession, session.availableModels);
 
   context.recordDiagnostic({
     level: 'info',
