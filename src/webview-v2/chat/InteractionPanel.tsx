@@ -142,8 +142,15 @@ function Questionnaire({ interaction, questions, actions }: {
         <fieldset key={question.index} disabled={waiting} className="space-y-1.5 py-[13px]">
           <legend className="pt-3 text-[13px]"><span className="block text-[10.5px] text-muted-foreground">{question.topic || t("Question {p0}", { p0: question.index + 1 })} · {question.options.length === 0 ? t("open response") : question.multiSelect ? t("multiple choice") : t("single choice")}</span><span>{question.question}</span></legend>
           <QuestionOptions question={question} selected={selected[question.index] ?? []} disabled={waiting}
-            onChange={(values) => setSelected((previous) => ({ ...previous, [question.index]: values }))} />
-          <Input aria-label={t("Own answer for {p0}", { p0: question.topic })} placeholder={question.options.length ? t("Or enter a custom answer…") : t("Enter your answer…")} maxLength={MAX_ASK_USER_ANSWER_LENGTH} value={custom[question.index] ?? ''} onChange={(event) => setCustom((previous) => ({ ...previous, [question.index]: event.target.value }))} />
+            onChange={(update) => {
+              setSelected((previous) => ({ ...previous, [question.index]: typeof update === 'function' ? update(previous[question.index] ?? []) : update }));
+              if (!question.multiSelect) setCustom((previous) => (previous[question.index] ? { ...previous, [question.index]: '' } : previous));
+            }} />
+          <Input aria-label={t("Own answer for {p0}", { p0: question.topic })} placeholder={question.options.length ? t("Or enter a custom answer…") : t("Enter your answer…")} maxLength={MAX_ASK_USER_ANSWER_LENGTH} value={custom[question.index] ?? ''} onChange={(event) => {
+            const value = event.target.value;
+            setCustom((previous) => ({ ...previous, [question.index]: value }));
+            if (!question.multiSelect && value) setSelected((previous) => (previous[question.index]?.length ? { ...previous, [question.index]: [] } : previous));
+          }} />
         </fieldset>
       ))}</div>
       <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--panel-edge)] pt-2 pb-[9px]">
@@ -157,15 +164,19 @@ function Questionnaire({ interaction, questions, actions }: {
 }
 
 function QuestionOptions({ question, selected, disabled, onChange }: {
-  question: AskUserQuestion; selected: readonly number[]; disabled: boolean; onChange(values: readonly number[]): void;
+  question: AskUserQuestion; selected: readonly number[]; disabled: boolean;
+  onChange(values: readonly number[] | ((previous: readonly number[]) => readonly number[])): void;
 }) {
-  const options = question.options.map((option, index) => <label key={option}
-    className="v2-chat-choice v2-question-option flex min-h-9 items-start gap-2 rounded-lg border border-transparent px-[9px] py-[7px] text-xs">
-    {question.multiSelect ? <Checkbox className="mt-0.5" disabled={disabled} checked={selected.includes(index)}
-      onCheckedChange={(checked) => onChange(checked === true ? [...selected, index] : selected.filter((value) => value !== index))} />
-      : <RadioGroupItem className="mt-0.5" value={String(index)} />}
-    <span className="min-w-0 whitespace-pre-wrap">{option}</span>
-  </label>);
+  const options = question.options.map((option, index) => {
+    const id = `question-${question.index}-option-${index}`;
+    return <label key={index} htmlFor={id} onClick={(event) => { if (event.target instanceof HTMLInputElement) event.stopPropagation(); }}
+      className="v2-chat-choice v2-question-option flex min-h-9 items-start gap-2 rounded-lg border border-transparent px-[9px] py-[7px] text-xs">
+      {question.multiSelect ? <Checkbox id={id} className="mt-0.5" disabled={disabled} checked={selected.includes(index)}
+        onCheckedChange={(checked) => onChange((previous) => checked === true ? (previous.includes(index) ? previous : [...previous, index]) : previous.filter((value) => value !== index))} />
+        : <RadioGroupItem id={id} className="mt-0.5" value={String(index)} onClick={(event) => { if (selected.includes(index)) { event.preventDefault(); onChange([]); } }} />}
+      <span className="min-w-0 whitespace-pre-wrap">{option}</span>
+    </label>;
+  });
   return question.multiSelect ? <div className="grid gap-1">{options}</div>
     : <RadioGroup aria-label={question.question} name={`question-${question.index}`} disabled={disabled}
       value={selected[0] === undefined ? '' : String(selected[0])} onValueChange={(value) => onChange([Number(value)])}>{options}</RadioGroup>;

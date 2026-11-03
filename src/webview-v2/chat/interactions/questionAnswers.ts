@@ -1,3 +1,4 @@
+import { isImplicitMultiSelectQuestion } from '../../../shared/protocol/interactionProtocol';
 import type { AskUserQuestion } from '../../../shared/protocol/interactions';
 
 export interface QuestionAnswer {
@@ -28,7 +29,11 @@ export function resolveAnswer(
 export function presentAskUserQuestion(question: AskUserQuestion): AskUserQuestionPresentation {
   const decoded = question.question.replaceAll('\\n', '\n');
   if (!/\[topic\]/iu.test(decoded) || !/\[option\]/iu.test(decoded)) {
-    return { question: question.question, options: question.options, multiSelect: question.multiSelect };
+    return {
+      question: question.question,
+      options: question.options,
+      multiSelect: question.multiSelect || isImplicitMultiSelectQuestion(question.question, question.topic),
+    };
   }
   return {
     question: decoded

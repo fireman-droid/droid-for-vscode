@@ -673,6 +673,57 @@ describe('runtime AskUser interactions', () => {
     });
   });
 
+  it('infers multiSelect from bracketed notes, mixed single/multi wording, and topic hints', async () => {
+    const askUser = vi.fn(async () => ({
+      answers: [
+        { index: 0, answer: 'A, B' },
+        { index: 1, answer: 'C' },
+        { index: 2, answer: 'D' },
+        { index: 3, answer: 'E' },
+      ],
+    }));
+    const callbacks = createRuntimeInteractionCallbacks(createHandler({ askUser }));
+    await callbacks.askUserHandler({
+      toolCallId: 'implicit-multi',
+      questions: [
+        {
+          index: 0,
+          topic: '场景',
+          question: '主要给谁用？（多选，决定输入来源）',
+          options: ['A', 'B'],
+        },
+        {
+          index: 1,
+          topic: '范围（多选）',
+          question: '需要包含哪些模块？',
+          options: ['C', 'D'],
+        },
+        {
+          index: 2,
+          topic: '模式',
+          question: '可单选或多选适用项',
+          options: ['D', 'E'],
+        },
+        {
+          index: 3,
+          topic: '限制',
+          question: '仅限单选，不可多选',
+          options: ['E', 'F'],
+        },
+      ],
+    });
+
+    expect(askUser).toHaveBeenCalledWith({
+      toolCallId: 'implicit-multi',
+      questions: [
+        expect.objectContaining({ index: 0, multiSelect: true }),
+        expect.objectContaining({ index: 1, multiSelect: true }),
+        expect.objectContaining({ index: 2, multiSelect: true }),
+        expect.objectContaining({ index: 3, multiSelect: false }),
+      ],
+    });
+  });
+
   it.each([
     {
       name: 'incomplete answers',
