@@ -6,7 +6,7 @@ description: "为 Droid 扩展构建、打包并校验本地试用 VSIX。用户
 # VSIX 打包与故障收口
 
 隶属 [Droid 开发与交付流水线](../droid-dev-pipeline/SKILL.md)。交付一个与已提交源码对应、通过仓库校验的 VSIX。用户只要求打包时，不追加页面验收、
-模型调用、安装或发布；用户说“我来验证”时不再扩大回归范围。分支提交与正式发版衔接见 [git-branch-release](../git-branch-release/SKILL.md)。
+模型调用、安装或发布；用户说“我来验证”时不再启动任何单元、集成、回归或页面验收。分支提交与正式发版衔接见 [git-branch-release](../git-branch-release/SKILL.md)。
 
 ## 先查事实，不急着重跑
 
@@ -23,7 +23,8 @@ description: "为 Droid 扩展构建、打包并校验本地试用 VSIX。用户
    未安装所需环境时报告阻塞，安装按当前授权处理。
 5. 只有依赖缺失、切换后 lockfile 改变或安装状态不一致，才执行
    `pnpm install --frozen-lockfile`。不升级依赖、不改 lockfile 来绕过构建问题。
-6. 功能修改按项目规则完成必要检查并独立提交，再打最终试用包。
+6. 打包内的检查就是本轮静态与构建验证，不在提交前额外跑一遍。
+   验证通过后按授权整理提交，确认产物对应已提交的生产源码；仅提交或文档变化不重打。
    归属不明的修改留在工作区；有无关生产草稿时不要直接打成可交付包。
 
 每次 Execute 都是新进程。设置 PATH、进入仓库、构建和校验必须放在同一次命令中；
@@ -44,7 +45,9 @@ verify:vsix
 ```
 
 因此正常打包只运行一次 `package:vsix`，再运行 `verify:vsix`。
-不要先手动跑完整 `package:prepare`，接着又让 vsce 的 prepublish 重跑同一套构建。
+不要提前单独跑 `typecheck`、`lint:budgets`、`build:chat-ui`、`build` 或 `package:prepare`，
+接着又让 prepublish 重跑。必要测试依赖公共 UI 时，安排在该次打包之后复用产物。
+若用户已接管验收，不启动这些测试；安装成功后直接交付，不追加检查。
 不并行执行多个写入同一 `dist` 的构建；前一步失败，后一步立即停止。
 
 ### PowerShell 命令模板
