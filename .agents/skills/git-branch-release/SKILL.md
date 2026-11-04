@@ -52,6 +52,7 @@ description: "管理 Droid 项目的 Git 分支基线、精准暂存与原子提
    - 尚有阻塞检查或未完成实现时保持草稿（`gh pr create --draft`）；准备合入时标为就绪（`gh pr ready <pr>`）。
 2. **等待必需 CI 检查**：
    - `main` 分支受保护并要求 `PR checks` 通过。使用 `gh run watch <run-id> --exit-status` 跟进最新提交对应的 `PR checks` 运行结果，不以本地打包或安装成功代替远端 CI。
+   - 构建与补全评估按范围分为独立任务，`PR checks` 保持汇总门禁。相同提交重试使用 `gh run rerun <run-id> --failed`，不重跑已成功的任务，也不在本地补跑整套检查来等待 CI。
 
 ## 5. 合并主线与单产物正式发版（需明确授权）
 
@@ -61,7 +62,7 @@ description: "管理 Droid 项目的 Git 分支基线、精准暂存与原子提
    - 更新根 `package.json` 的 `version`（高于市场已有版本）。
    - 在 `CHANGELOG.md` 顶部新增非空的 `## <version>` 章节，概括本次 Highlights 与 Fixed。
    - 更新 `docs/STATUS.md` 当前版本与交付快照。
-   - 运行 `pnpm run release:check`、`pnpm run typecheck`、`pnpm run lint:budgets` 及必要回归测试，提交 `chore(release): prepare <version> release` 并推送到任务分支。
+   - 运行 `pnpm run release:check`。只改版本号和发布说明不重跑产品回归；若还有生产改动，按项目规则选择一次静态检查或打包验证路线，复用同源码已有结果。提交 `chore(release): prepare <version> release` 并推送到任务分支；最新提交仍须通过远端门禁。
 2. **Squash 合并至 `main` 并打版本标签**：
    - 待最新提交的 `PR checks` 通过后，执行 `gh pr merge <pr> --squash --delete-branch=false`。
    - 执行 `git fetch origin main`，并用 `git diff --quiet origin/main HEAD` 确认 `origin/main` 的代码树与任务分支完全一致。

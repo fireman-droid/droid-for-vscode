@@ -95,7 +95,10 @@ export interface DaemonApi {
   };
   readonly terminals: ConnectedDroid['terminals'];
   readonly updates: ConnectedDroid['updates'];
-  readonly automations: ConnectedDroid['automations'];
+  readonly automations: ConnectedDroid['automations'] & {
+    /** Unlike run(), this starts a tracked daemon-owned run, not just a prompt. */
+    dispatch: DaemonSessionController['dispatchAutomationRun'];
+  };
   readonly workspace: ConnectedDroid['workspace'];
   readonly ssh: ConnectedDroid['ssh'];
   readonly relay: ConnectedDroid['relay'];

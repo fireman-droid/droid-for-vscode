@@ -13,10 +13,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
-    name: PR checks
+  scope:
+    name: Select validation scope
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      base: ${{ steps.scope.outputs.base }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      quality: ${{ steps.scope.outputs.quality }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,55 +47,119 @@ jobs:
           })
           $extension = @($code | Where-Object { $_ -notmatch '^docs/' }).Count -gt 0
           $docs = @($code | Where-Object { $_ -match '^docs/|^\.github/workflows/docs\.yml$' }).Count -gt 0
+          $quality = @($code | Where-Object {
+            $_ -match '^src/(integration/autocomplete-quality|extension/autocomplete|runtime/autocomplete)/|^src/extension/dev/AutocompleteEvaluation\.ts$|^(pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|tsconfig[^/]*\.json|\.github/workflows/pr-checks\.yml)$'
+          }).Count -gt 0
+          if ($files -contains 'package.json') {
+            $previousJson = git show "${base}:package.json"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot read the base package manifest.' }
+            $previous = ($previousJson -join "`n") | ConvertFrom-Json
+            $current = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+            foreach ($field in @('type', 'packageManager', 'engines', 'dependencies', 'devDependencies', 'optionalDependencies', 'pnpm')) {
+              if (($previous.$field | ConvertTo-Json -Depth 100 -Compress) -cne ($current.$field | ConvertTo-Json -Depth 100 -Compress)) {
+                $quality = $true
+              }
+            }
+            foreach ($script in @('pretest:quality', 'test:quality', 'posttest:quality')) {
+              if ($previous.scripts.$script -cne $current.scripts.$script) { $quality = $true }
+            }
+          }
           "base=$base" >> $env:GITHUB_OUTPUT
           "extension=$($extension.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "docs=$($docs.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "Validation scope: extension=$extension, docs=$docs. Prose-only changes skip builds." >> $env:GITHUB_STEP_SUMMARY
+          "quality=$($quality.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "Validation scope: extension=$extension, docs=$docs, quality=$quality. Prose-only changes skip builds." >> $env:GITHUB_STEP_SUMMARY
+
+  validation:
+    name: Build and affected tests
+    needs: scope
+    if: needs.scope.outputs.extension == 'true' || needs.scope.outputs.docs == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.scope.outputs.extension == 'true' || steps.scope.outputs.docs == 'true'
         with:
           node-version: '24'
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        if: steps.scope.outputs.extension == 'true'
+        if: needs.scope.outputs.extension == 'true'
         with:
           run_install: false
       - name: Install extension dependencies
-        if: steps.scope.outputs.extension == 'true'
+        if: needs.scope.outputs.extension == 'true'
         run: pnpm install --frozen-lockfile
       - name: Typecheck, enforce budgets and build VSIX
-        if: steps.scope.outputs.extension == 'true'
+        if: needs.scope.outputs.extension == 'true'
         run: pnpm run package:vsix
       - name: Verify packaged contents
-        if: steps.scope.outputs.extension == 'true'
+        if: needs.scope.outputs.extension == 'true'
         run: pnpm run verify:vsix
       - name: Run tests affected by this pull request
-        if: steps.scope.outputs.extension == 'true'
+        if: needs.scope.outputs.extension == 'true'
         env:
-          CHANGE_BASE: ${{ steps.scope.outputs.base }}
+          CHANGE_BASE: ${{ needs.scope.outputs.base }}
         run: pnpm exec vitest run --changed "$env:CHANGE_BASE" --passWithNoTests
       - name: Install documentation dependencies
-        if: steps.scope.outputs.docs == 'true'
+        if: needs.scope.outputs.docs == 'true'
         run: npm --prefix docs ci --no-audit --no-fund
       - name: Build documentation and check internal links
-        if: steps.scope.outputs.docs == 'true'
+        if: needs.scope.outputs.docs == 'true'
         run: npm --prefix docs run build
 
-      # Run after all Node 24 builds. Keep these tests inside the required
-      # PR checks job so a failed evaluator also blocks the existing gate.
+  quality:
+    name: Completion evaluator tests
+    needs: scope
+    if: needs.scope.outputs.quality == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Select Node 26 for local evaluator tests
-        if: steps.scope.outputs.extension == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '26'
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        if: steps.scope.outputs.extension == 'true'
         with:
           python-version: '3.11'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        if: steps.scope.outputs.extension == 'true'
         with:
           go-version: '1.23.x'
           cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+      - name: Install evaluator dependencies
+        run: pnpm install --frozen-lockfile
       - name: Test local completion evaluators without model requests
-        if: steps.scope.outputs.extension == 'true'
         run: pnpm run test:quality
+
+  checks:
+    # Preserve the required check name while allowing failed jobs to retry independently.
+    name: PR checks
+    needs: [scope, validation, quality]
+    if: ${{ always() }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected check to succeed
+        shell: pwsh
+        env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          $results = $env:CHECK_RESULTS | ConvertFrom-Json
+          if ($results.scope.result -ne 'success') { throw 'Scope selection did not succeed.' }
+          $expected = @{
+            validation = ($results.scope.outputs.extension -eq 'true' -or $results.scope.outputs.docs -eq 'true')
+            quality = ($results.scope.outputs.quality -eq 'true')
+          }
+          foreach ($job in $expected.Keys) {
+            $required = if ($expected[$job]) { 'success' } else { 'skipped' }
+            if ($results.$job.result -ne $required) {
+              throw "$job returned $($results.$job.result); required $required."
+            }
+          }

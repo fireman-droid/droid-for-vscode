@@ -17,6 +17,7 @@ import { ManagementChoice, ManagementRow } from './ManagementFields';
 import { CompletionSettings } from './CompletionSettings';
 import { SessionManagement } from './SessionManagement';
 import { MissionManagement } from './MissionManagement';
+import { AutomationManagement } from './AutomationManagement';
 import { ManagementSidebar } from './ManagementSidebar';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useWebviewLocale } from '../shell/locale';
@@ -86,6 +87,7 @@ function ManagementContent({ transport }: { transport: ManagementTransport }) {
     {visited.has('completion') && s && <div hidden={state.page !== 'completion'}><CompletionSettings state={state} settings={s} /></div>}
     {(visited.has('sessions') || state.page === 'sessions') && <div className="management-list-page" hidden={state.page !== 'sessions'}><SessionManagement state={state} active={state.page === 'sessions'} /></div>}
     {(visited.has('missions') || state.page === 'missions') && <div className="management-list-page" hidden={state.page !== 'missions'}><MissionManagement state={state} active={state.page === 'missions'} /></div>}
+    {(visited.has('automations') || state.page === 'automations') && <div className="management-list-page" hidden={state.page !== 'automations'}><AutomationManagement state={state} active={state.page === 'automations'} /></div>}
     {state.notice && <p role={state.notice.ok ? 'status' : 'alert'} className={`management-caption ${state.notice.ok ? '' : 'text-destructive'}`}>{t(state.notice.message)}</p>}
   </main></ScrollArea></div>;
 }

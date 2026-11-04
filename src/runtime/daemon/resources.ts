@@ -117,6 +117,7 @@ export function createDaemonResources(
     },
     updates: { trigger: () => call(() => controller.triggerUpdate()) },
     automations: {
+      dispatch: (id) => call(() => controller.dispatchAutomationRun(id)),
       list: (base) => call(async () => (await controller.listAutomations(base)).automations),
       run: (id, base, computer) => call(() => controller.runAutomation(id, base, computer)),
       pause: (id, base) => call(() => controller.pauseAutomation(id, base)),

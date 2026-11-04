@@ -3,7 +3,7 @@ import { resolveUiLocale, UI_LOCALES } from '@droidvisx/chat-ui/i18n/locale';
 import { translate } from '@droidvisx/chat-ui/i18n/translate';
 import { messageEntries } from '@droidvisx/chat-ui/i18n/messages';
 import { isUiLocaleRead, parseUiLocale } from '../../shared/protocol/localeProtocol';
-import { parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
+import { MANAGEMENT_VERSION, parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
 
 describe('interface language', () => {
   it.each([
@@ -18,12 +18,12 @@ describe('interface language', () => {
     for (const locale of UI_LOCALES) {
       expect(resolveUiLocale(locale, 'ja')).toBe(locale);
       expect(parseUiLocale({ type: 'ui.locale', preference: locale, resolved: locale })?.resolved).toBe(locale);
-      expect(parseManagementRequest({ type: 'management.request', version: 1, requestId: 'language',
+      expect(parseManagementRequest({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'language',
         action: { kind: 'language.set', language: locale } })).toBeDefined();
     }
     expect(parseUiLocale({ type: 'ui.locale', preference: 'auto', resolved: 'xx' })).toBeUndefined();
     expect(parseUiLocale({ type: 'ui.locale', preference: 'zh-CN', resolved: 'zh-CN', extra: true })).toBeUndefined();
-    expect(parseManagementRequest({ type: 'management.request', version: 1, requestId: 'language',
+    expect(parseManagementRequest({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'language',
       action: { kind: 'language.set', language: 'unsupported' } })).toBeUndefined();
     expect(isUiLocaleRead({ type: 'ui.locale.read' })).toBe(true);
     expect(isUiLocaleRead({ type: 'ui.locale.read', language: 'xx' })).toBe(false);

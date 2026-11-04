@@ -20,9 +20,9 @@ description: "编排 Droid 扩展从工作区核对、界面整改或跨层实�
 - [ ] 2. 任务路由与实现：
       - 2a. 界面布局、信息层级、选择器、工具栏、弹层或共享组件整改 → `practical-ui-refinement`
       - 2b. 跨层业务、恢复、协议或编辑器交互实现 → 按「共享契约 → Host → Runtime → Webview」顺序接通
-- [ ] 3. 验证收口：运行 typecheck、lint:budgets 及受影响的最窄定向测试或真实 Browser Dev Client 验证（用户声明“我来验证”时立即停止追加页面与回归检查）
+- [ ] 3. 只选一条验证路线：不打包时一次 typecheck、lint:budgets 与必要定向测试；需要打包时一次 package:vsix → verify:vsix 覆盖静态检查和构建，必要测试复用该次产物。纯文档/指令/CI 配置只查内容、配置与差异
 - [ ] 4. 文档同步与原子提交 → `git-branch-release`（步骤 2）：按需更新 docs/STATUS.md、DESIGN.md、PLAN.md，精准暂存本任务路径并创建 Conventional Commit 原子提交
-- [ ] 5. VSIX 打包与本地安装（按需）→ `vsix-packaging`：串行执行 package:vsix 与 verify:vsix；仅在获本次明确安装授权后核对 VS Code / Cursor CLI 安装并提示 Reload Window
+- [ ] 5. 本地安装（按需）→ `vsix-packaging`：复用第 3 步已校验且生产源码未变的 VSIX，不为提交或阶段切换重建；仅在获本次明确安装授权后核对编辑器 CLI，安装成功即提示 Reload Window
 - [ ] 6. PR 合并与正式发版（需明确授权）→ `git-branch-release`（步骤 3–5）：推送分支、等待 PR checks 通过、squash 合入 main、打 v<version> 标签、复用同一已校验 VSIX 公开 GitHub Release 与 Open VSX、清理已合入分支
 ```
 
@@ -30,11 +30,12 @@ description: "编排 Droid 扩展从工作区核对、界面整改或跨层实�
 
 1. **工作区与在途工作保护**：开始前先查 `git status --short --branch` 与 `git worktree list`。保留 `.vscode/`、其他任务分支及 `codex/wip-*` worktree，禁止自动 `stash`、`reset --hard`、`clean` 或在脏工作区使用 `git add -A`。
 2. **公共 UI 与分层职责边界**：所有生产 Webview（Chat、Models、Mission、Viewer、Review）统一使用 `packages/chat-ui/src/ui/` 与 `ai-elements/`，禁止业务层直接写原生 `select`、`button`、可见 `input/textarea`、`details/summary` 或用左侧装饰竖线代替信息层级。`packages/chat-ui` 不得反向引用 Runtime、Host、Bridge 或 VS Code API；所有界面提示、占位与状态文案须带 `data-ui-notice=""` 排除出复制结果。
-3. **短交付与“我来验证”即停**：小样式、间距、高度、占位文字和简单局部交互只做一次针对性检查后收口。当用户明确表示“我来验证”或“停止验收”时，立即停止追加浏览器与回归测试，完成静态检查、一次打包校验与原子提交后直接交付。
+3. **短交付与“我来验证”即停**：小改只做一次必要检查。用户说“我来验证”“停止验收”或“安装完我优先体验”后，不再启动单元、集成、回归或浏览器验收；仅完成尚未完成且获准的一次打包、校验、安装。静态检查由打包覆盖，安装成功立即交付，不为补覆盖、反复读日志或核对文档延长等待；明确停止提交时跳过提交。
 4. **CI 环境对齐与单次串行构建**：Windows / PowerShell 下每次 `Execute` 都是独立进程，必须在同一条命令内切入与 CI 一致的 Node 24 与 `pnpm@10.2.0`、进入仓库根目录并串行执行。`package:vsix` 已包含 `typecheck → lint:budgets → build:chat-ui → build`，禁止手动先跑整套构建再重复打包，也禁止并行写入 `dist/`。
 5. **构建、安装、合并与发版授权分离**：生成并校验本地试用 VSIX 不代表获准安装到编辑器；获准本地安装不代表获准合并 `main`；获准合并 `main` 不代表公开发布 Release。每项外部生效动作只按当次明确授权执行，不沿用历史授权。
 6. **正式版单产物一致性**：正式发布必须从已通过 `PR checks` 并 squash 合入 `main` 的干净提交及对应 `v<version>` 标签构建。GitHub Release、Open VSX 与本地 VS Code / Cursor 安装必须复用**同一份已校验 VSIX 与 SHA256**，禁止逐渠道重编、移动已发布标签或覆盖同版本产物。
 7. **文档快照维护**：文档入口为 `docs/README.md`。`docs/STATUS.md` 只写当前版本与验证缺口，`docs/PLAN.md` 只留待办，`docs/DESIGN.md` 只留有效设计约定；原地更新对应小节，不新建临时调研、交接或验收 Markdown。
+8. **检查结果复用**：相同源码与环境的成功结果跨阶段复用。修复后只重跑受影响项；纯文档、指令或 CI 配置修改不启动产品测试和构建。PR 补全评估独立按范围运行，失败只重试失败任务，保留 `PR checks` 汇总门禁。
 
 ## 流程总览
 
@@ -47,11 +48,11 @@ flowchart TD
   QType -->|界面布局/层级/控件优化| UI[2a. practical-ui-refinement]
   QType -->|跨层业务/恢复/协议/纯逻辑| Dev[2b. 契约 -> Host -> Runtime -> UI]
   QType -->|仅分支清理/提交/发版| GitOnly[4/6. git-branch-release]
-  UI --> Verify[3. typecheck + lint:budgets + 最窄验证]
+  UI --> Verify[3. 不打包: 静态检查; 打包: package + verify; 必要定向测试只跑一次]
   Dev --> Verify
   Verify --> Commit[4. git-branch-release: 同步文档并创建原子提交]
-  Commit --> QPack{需要打包或安装 VSIX?}
-  QPack -->|是| Pack[5. vsix-packaging: 构建 + verify:vsix + 获准后安装]
+  Commit --> QPack{获准安装 VSIX?}
+  QPack -->|是| Pack[5. 安装已校验的同源码 VSIX, 不重建]
   QPack -->|否| QRelease{获准合并 main 或正式发版?}
   Pack --> QRelease
   QRelease -->|仅交付分支/PR| PR[git-branch-release: 推送分支并更新 PR]

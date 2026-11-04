@@ -12,6 +12,9 @@ import { ManagementSettingsService } from './managementSettings';
 import { ManagementDefaultsService } from './ManagementDefaultsService';
 import type { ManagementServices } from './ManagementBinding';
 import type { FactoryAccountService } from '../account/FactoryAccountService';
+import { ManagementAutomationsService } from './ManagementAutomationsService';
+import type { AutomationIssue } from './automationData';
+import { hostText } from '../webview/webviewLocale';
 
 export function createManagementServices(options: {
   context: vscode.ExtensionContext; controller: ChatController; getDroid: () => Promise<DaemonApi>;
@@ -21,7 +24,36 @@ export function createManagementServices(options: {
 }): ManagementServices {
   const { context, controller, getDroid, history, viewer, mission, gateway, diagnostics } = options;
   const cwd = () => controller.getEditorWorkspaceContext().cwd;
-  return {
+  const issueKey = 'droidvisx.automationConfigurationIssues';
+  const services: ManagementServices = {
+    automations: new ManagementAutomationsService(getDroid, options.daemon,
+      () => controller.getEditorWorkspaceContext().trusted,
+      async (action, name) => {
+        const detail = action === 'delete'
+          ? 'This deletes the automation files and memory. Previous run sessions are retained.'
+          : 'Enable recurring model runs on this machine. Runs may change files and consume credits.';
+        const proceed = hostText('Continue');
+        return await vscode.window.showWarningMessage(`${name}\n${hostText(detail)}`, { modal: true }, proceed) === proceed;
+      }, controller.modelAvailability, {
+        activeId: () => controller.sessionState.sessionId,
+        view: row => services.viewSession(row),
+        resume: row => services.resumeSession(row),
+        chooseDirectory: async () => {
+          const directory = cwd();
+          const selected = await vscode.window.showOpenDialog({
+            canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+            ...(directory ? { defaultUri: vscode.Uri.file(directory) } : {}),
+          });
+          return selected?.[0]?.fsPath ?? null;
+        },
+      }, {
+        get: id => context.globalState.get<Record<string, AutomationIssue>>(issueKey, {})[id],
+        set: async (id, issue) => {
+          const entries = { ...context.globalState.get<Record<string, AutomationIssue>>(issueKey, {}) };
+          if (issue) entries[id] = issue; else delete entries[id];
+          await context.globalState.update(issueKey, entries);
+        },
+      }),
     defaults: new ManagementDefaultsService(getDroid, options.daemon, controller.modelAvailability),
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,
@@ -69,4 +101,5 @@ export function createManagementServices(options: {
     newMission: () => mission.openNewMission(),
     account: options.account,
   };
+  return services;
 }

@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import type { CompletionPreferences } from '../../shared/protocol/managementPageProtocol';
-import { parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
+import { MANAGEMENT_VERSION, parseManagementRequest } from '../../shared/protocol/managementPageProtocol';
 
 const state = vi.hoisted(() => ({ values: {} as Record<string, unknown>, secrets: new Map<string, string>(),
   update: vi.fn(), input: vi.fn(), store: vi.fn() }));
@@ -78,7 +78,7 @@ it('rejects an ordinary FIM endpoint for edit predictions before saving', async 
 });
 
 it('validates both service drafts and rejects credentials in the bridge payload', () => {
-  const request = { type: 'management.request', version: 1, requestId: 'completion',
+  const request = { type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'completion',
     action: { kind: 'completion.save', preferences, setApiKey: false, setNextEditApiKey: true } };
   expect(parseManagementRequest(request)).toEqual(request);
   expect(parseManagementRequest({ ...request, action: { ...request.action, apiKey: 'not-allowed' } })).toBeUndefined();
