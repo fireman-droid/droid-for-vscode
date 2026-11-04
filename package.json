@@ -417,6 +417,7 @@
     "package:chat-ui": "pnpm run build:chat-ui && pnpm --dir packages/chat-ui pack --pack-destination ../../dist",
     "typecheck:chat-ui": "pnpm --filter @droidvisx/chat-ui typecheck",
     "build": "node esbuild.mjs",
+    "build:extension": "node esbuild.mjs --extension-only",
     "dev:webview": "vite --config vite.webview-v2.config.ts",
     "test:extension": "vitest run src/shared src/extension",
     "test:webview": "vitest run src/webview-v2",
@@ -438,7 +439,9 @@
     "release:assets": "node scripts/checkRelease.mjs --prepare-assets",
     "vscode:prepublish": "pnpm run package:prepare",
     "build:webview": "node scripts/buildWebviewV2.mjs",
-    "sync:webview": "pnpm run build:chat-ui && pnpm run build:webview && node scripts/syncGlobalExtensions.mjs",
+    "sync:webview": "pnpm run build:chat-ui && pnpm run build:webview --production && node scripts/syncGlobalExtensions.mjs --webview-only",
+    "sync:extension": "pnpm run build:extension && node scripts/syncGlobalExtensions.mjs --extension-only",
+    "sync:all": "pnpm run build:chat-ui && pnpm run build && node scripts/syncGlobalExtensions.mjs",
     "benchmark:markdown": "node scripts/benchmarkMarkdown.mjs",
     "benchmark:review": "node scripts/benchmarkReview.mjs",
     "dev:performance": "node scripts/servePerformance.mjs"

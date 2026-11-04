@@ -87,7 +87,9 @@ appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nKilo Code (vendored
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\nContinue (Apache-2.0; autocomplete code via Kilo)\n' + readFileSync('third-party/CONTINUE-LICENSE.txt', 'utf8'));
 appendFileSync('dist/extension/THIRD_PARTY_LICENSES.txt', '\n' + readFileSync('third-party/TREE-SITTER-GRAMMARS-LICENSES.txt', 'utf8'));
 
-execFileSync(process.execPath, ['scripts/buildWebviewV2.mjs', '--production'], { stdio: 'inherit' });
+if (!process.argv.includes('--extension-only')) {
+  execFileSync(process.execPath, ['scripts/buildWebviewV2.mjs', '--production'], { stdio: 'inherit' });
+}
 
 assertExpectedExternals(extensionResult.metafile, {
   required: new Set(['vscode']),
