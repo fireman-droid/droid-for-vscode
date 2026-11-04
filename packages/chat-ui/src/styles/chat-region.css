@@ -373,7 +373,7 @@
     outline: 1px solid var(--focus); outline-offset: -2px;
   }
   .v2-history-divider {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px; min-height: 16px; margin-bottom: 14px;
     color: color-mix(in srgb, var(--muted-ink) 88%, transparent); font-size: 11px; line-height: 16px;
   }
   .v2-history-divider::before, .v2-history-divider::after {

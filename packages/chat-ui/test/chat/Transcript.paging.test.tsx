@@ -14,7 +14,9 @@ vi.mock('@tanstack/react-virtual', async importOriginal => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it.each(['chat', 'read-only'] as const)('%s automatically pages once and anchors the same message on prepend', kind => {
+it.each([
+  ['chat', 0], ['read-only', 0], ['chat', -80], ['read-only', -80],
+] as const)('%s preserves the reading position after a pending scroll of %s px', (kind, movement) => {
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(5000);
@@ -47,14 +49,16 @@ it.each(['chat', 'read-only'] as const)('%s automatically pages once and anchors
     act(() => { fireEvent.scroll(viewport); fireEvent.scroll(viewport); });
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Show earlier messages/)).toBeNull();
+    mounted.rerender(view(messages, { ...paging, loading: 'older' }));
+    act(() => { viewport.scrollTop += movement; fireEvent.scroll(viewport); });
     const prepend: TranscriptMessage[] = Array.from({ length: 10 }, (_, i) =>
       ({ id: `m${i}`, role: 'user', text: `message ${i}` }));
     mounted.rerender(view([...prepend, ...messages], { ...paging, revision: 2 }));
-    expect(viewport.scrollTop).toBe(1220);
+    expect(viewport.scrollTop).toBe(1220 + movement);
     expect(onRequest).toHaveBeenCalledTimes(1);
     mounted.rerender(view([...prepend, ...messages, { id: 'live', role: 'assistant', text: 'new output' }],
       { ...paging, revision: 2 }));
-    expect(viewport.scrollTop).toBe(1220);
+    expect(viewport.scrollTop).toBe(1220 + movement);
   } finally {
     if (previous) Object.defineProperty(HTMLElement.prototype, 'scrollTo', previous);
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
