@@ -9,9 +9,10 @@ import type { MissionControlCatalogRow } from './missionControlPanelProtocol';
 import { isDefaultsPatch, isManagementDefaults, type DefaultsScope, type DefaultValues, type ManagementDefaults } from './managementDefaultsProtocol';
 import { isFactoryAccountState, type FactoryAccountState } from './factoryAccountProtocol';
 import { isAutomationAction, isAutomationHistory, isManagedAutomation, type AutomationAction,
+  isAutomationVisual, isAutomationSessionPage, isAutomationTarget, type AutomationTarget, type AutomationVisual, type AutomationSessionPage,
   type AutomationHistory, type ManagedAutomation } from './automationProtocol';
 
-export const MANAGEMENT_VERSION = 2 as const;
+export const MANAGEMENT_VERSION = 3 as const;
 export const MANAGEMENT_PAGES = ['general', 'models', 'completion', 'sessions', 'missions', 'automations'] as const;
 export type ManagementPage = (typeof MANAGEMENT_PAGES)[number];
 export function isManagementPage(value: unknown): value is ManagementPage {
@@ -106,6 +107,10 @@ export interface ManagementResult {
   readonly automations?: readonly ManagedAutomation[];
   readonly automationHistory?: AutomationHistory;
   readonly automationId?: string;
+  readonly automationVisual?: AutomationVisual;
+  readonly automationSessions?: AutomationSessionPage;
+  readonly automationTarget?: AutomationTarget;
+  readonly automationDirectory?: string | null;
 }
 export type ManagementHostMessage = ManagementResult
   | { readonly type: 'management.navigate'; readonly version: typeof MANAGEMENT_VERSION; readonly page: ManagementPage }
@@ -171,6 +176,10 @@ export function parseManagementHostMessage(value: unknown): ManagementHostMessag
   if (value.account !== undefined && !isFactoryAccountState(value.account)) return undefined;
   if (value.automations !== undefined && (!Array.isArray(value.automations) || !value.automations.every(isManagedAutomation))) return undefined;
   if (value.automationHistory !== undefined && !isAutomationHistory(value.automationHistory)) return undefined;
+  if (value.automationVisual !== undefined && !isAutomationVisual(value.automationVisual)) return undefined;
+  if (value.automationSessions !== undefined && !isAutomationSessionPage(value.automationSessions)) return undefined;
+  if (value.automationTarget !== undefined && !isAutomationTarget(value.automationTarget)) return undefined;
+  if (value.automationDirectory !== undefined && value.automationDirectory !== null && !text(value.automationDirectory, 4096)) return undefined;
   if (value.automationId !== undefined && !text(value.automationId, 256)) return undefined;
   if (value.sessions !== undefined && (!Array.isArray(value.sessions) || !value.sessions.every(s => isStrictRecord(s)
     && text(s.id) && typeof s.title === 'string' && typeof s.cwd === 'string' && ['chat', 'exec'].includes(String(s.kind))

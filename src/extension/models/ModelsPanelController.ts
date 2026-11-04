@@ -55,6 +55,7 @@ export class ModelsPanelController implements vscode.Disposable {
       {
         script: vscode.Uri.joinPath(dist, this.management ? 'management.js' : 'models.js'),
         style: vscode.Uri.joinPath(dist, 'webview.css'),
+        staticFrames: !!this.management,
       },
       undefined,
       readWebviewBootTheme(),

@@ -223,7 +223,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v56 separates paged history windows from the live transcript.
 // v57 adds Script/RecommendMission permissions and explicit compact handoff mode.
 // v58 exposes the Automations management page (management protocol v2).
-export const BRIDGE_PROTOCOL_VERSION = 58 as const;
+// v59 adds automation session destinations, run links, and result dashboards (management v3).
+export const BRIDGE_PROTOCOL_VERSION = 59 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage

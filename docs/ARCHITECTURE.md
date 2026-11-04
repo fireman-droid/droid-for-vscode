@@ -618,16 +618,22 @@ daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint
 ### 本机 Automations 管理
 
 `ManagementBinding` 通过独立 `ManagementAutomationsService` 适配 daemon 公开资源，
-管理协议 v2 携带经过校验的草稿、配置摘要与分页运行记录；不允许前端指定自动化
+管理协议 v3 携带经过校验的草稿、配置摘要、会话关联、隔离看板与分页运行记录；不允许前端指定自动化
 根目录或远端 computer。目录按 `machineId` 识别本机，兼容未登记 computer 的旧本地记录。
 Host 每次变更重读配置，拒绝过期摘要；确认运行／启用／删除后再次核对目标和工作区信任。
 模型禁用与强度校验留在 Host，不把 UI 下拉选项作为权限边界。
 
 创建固定 `paused: true` 与 `skipFirstRun: true`；若要另设工作目录，在暂停状态下补写，
-失败明确报告已创建但未完整配置，不自动删除或重试运行。普通编辑不重设共享范围与状态。
+失败明确报告已创建但未完整配置，不自动删除或重试运行。固定会话绑定仅由创建接口设置，
+创建后回读目标 ID；更新不发送绑定或共享字段，随后回读确认未丢失绑定、共享与计划状态。
+无法确认的配置在 Extension globalState 记录阻止运行的原因，并请求暂停；暂停无法确认时明确警告，
+不伪造暂停成功。配置摘要用于发现跨客户端修改，不等价于 SDK 提供原子 CAS。
 `automations.run()` 只准备提示词；立即运行通过公开 controller 的 `dispatchAutomationRun`
 启动 daemon 跟踪的会话。不替换主聊天，不在扩展中创建定时器，不重放投递结果未知的请求。
-运行历史由 daemon 提供，每页 20 条，保留错误和模型回退信息；不嵌入任意 `VISUAL.html`。
+运行历史由 daemon 提供，每页 20 条，保留类型、错误、耗时、模型回退与投递状态；存在 delivery
+时 sessionId 是投递会话。Host 按任务及运行记录重新解析会话，再复用只读 Viewer 或显式继续聊天。
+看板只读 getVisual 的本地 HTML，不拉取远端 URL；公共 StaticHtmlPreview 在 inert template 中
+过滤活动标签及 URL 属性后放入无权限 sandbox iframe，独立 CSP 禁止脚本和网络。
 
 <a id="autocomplete"></a>
 
