@@ -4,12 +4,12 @@ import { SettingsRow } from '@droidvisx/chat-ui/ui/settings';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/selection';
 import { Tooltip } from '../ui/overlays';
 
-export function ManagementChoice({ label, value, onChange, options, disabled = false, className, hint }: {
-  label: string; value: string; onChange: (value: string) => void; options: readonly (readonly [string, string])[]; disabled?: boolean; className?: string; hint?: string;
+export function ManagementChoice({ label, value, onChange, options, disabled = false, className, hint, align = 'end' }: {
+  label: string; value: string; onChange: (value: string) => void; options: readonly (readonly [string, string])[]; disabled?: boolean; className?: string; hint?: string; align?: 'start' | 'end';
 }) {
   const { t } = useI18n();
   const trigger = <SelectTrigger aria-label={t(label)} className={className}><SelectValue /></SelectTrigger>;
-  return <Select value={value} onValueChange={onChange} disabled={disabled}>{hint ? <Tooltip content={hint}>{trigger}</Tooltip> : trigger}<SelectContent className="management-menu" align="end">
+  return <Select value={value} onValueChange={onChange} disabled={disabled}>{hint ? <Tooltip content={hint}>{trigger}</Tooltip> : trigger}<SelectContent className="management-menu" align={align}>
     {options.map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}
   </SelectContent></Select>;
 }

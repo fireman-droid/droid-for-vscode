@@ -67,7 +67,10 @@
   .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
   /* List reads temporarily lock scope changes without pulsing both labels. */
   .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
-  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 16px); border-radius: 8px; }
+  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 16px); max-height: min(260px, var(--radix-select-content-available-height)); border-radius: 8px; }
+  .management-page .dvx-pagination [role='combobox'] { min-width: 0; height: 28px; padding-inline: 10px; }
+  .management-page .dvx-page-numbers .dvx-control:not([aria-current='page']) { color: var(--muted-ink); }
+  .management-page .dvx-page-numbers .dvx-control[aria-current='page'] { border-color: var(--management-edge); background: var(--control-surface-active) !important; color: var(--strong-ink); }
   .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }
   .management-menu .dvx-menu-item > svg { width: 14px; height: 14px; flex-shrink: 0; }
   .management-menu [role='option'] { padding-right: 24px; white-space: nowrap; }
@@ -88,9 +91,10 @@
   .management-models .models-model-id, .management-models .models-help { font-size: 11px; }
   .management-models .models-row-actions { gap: 6px; }
   .management-models .models-state { font-size: 11px; }
-  .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 112px 28px; align-items: center; gap: 16px; border-bottom: 1px solid var(--management-edge); }
+  .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px 124px 32px; align-items: center; gap: 16px; border-bottom: 1px solid var(--management-edge); }
   .management-session-head { padding: 10px 0; color: var(--muted-ink); font-size: 12px; }
-  .management-session-row { min-height: 60px; padding: 10px 0; }
+  .management-session-row { min-height: 60px; padding: 12px 0; }
+  .management-session-row > :last-child { justify-self: end; }
   .management-page [aria-busy='true'] :is(.management-session-title, .management-mission-title):disabled { opacity: 1; }
   .management-loading-title { display: flex; flex-direction: column; gap: 8px; padding-block: 4px; }
   .management-loading-line { display: block; width: 72%; max-width: 220px; height: 12px; border-radius: 3px; background: var(--management-edge); }
@@ -100,18 +104,26 @@
   .management-session-title > span { display: flex; align-items: center; gap: 6px; max-width: 100%; }
   .management-session-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .management-session-title svg { width: 12px; height: 12px; flex-shrink: 0; }
-  .management-session-title small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
+  :is(.management-session-row, .management-mission-table td) small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
+  .management-mission-table td small { margin-top: 4px; }
   .management-mission-table { width: 100%; min-width: 740px; table-layout: fixed; border-collapse: collapse; text-align: left; }
-  .management-mission-title-col { width: 27%; }
+  .management-mission-title-col { width: 34%; }
   .management-mission-repository-col { width: 18%; }
-  .management-mission-computer-col { width: 15%; }
-  .management-mission-progress-col { width: 21%; }
-  .management-mission-created-col { width: 19%; }
-  .management-mission-table th, .management-mission-table td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--management-edge); vertical-align: middle; }
-  .management-mission-table th { font-size: 12px; font-weight: 400; color: var(--muted-ink); }
+  .management-mission-computer-col { width: 13%; }
+  .management-mission-progress-col { width: 20%; }
+  .management-mission-created-col { width: 15%; }
+  .management-automation-name-col { width: 32%; }
+  .management-automation-status-col { width: 20%; }
+  .management-automation-schedule-col { width: 22%; }
+  .management-automation-next-col { width: 18%; }
+  .management-automation-actions-col { width: 8%; }
+  .management-mission-table th, .management-mission-table td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--management-edge); vertical-align: middle; font-size: 12px; }
+  .management-mission-table th { padding-block: 10px; font-weight: 400; color: var(--muted-ink); }
   .management-mission-table :is(th, td):last-child { padding-right: 0; }
+  .management-automation-table :is(th, td):last-child { text-align: right; }
+  .management-automation-table td:last-child .management-actions { justify-content: flex-end; }
   .management-page .management-mission-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 13px; }
-  .management-mission-status { display: block; margin-top: 4px; font-size: 11px; color: var(--muted-ink); }
+  .management-mission-status { display: block; margin-top: 4px; font-size: 12px; color: var(--muted-ink); }
   .management-mission-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .management-mission-progress { display: flex; align-items: center; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
   .management-mission-progress > [role='progressbar'] { flex: 1; min-width: 0; height: 12px; border-radius: 0; background: color-mix(in srgb, var(--ink) 10%, var(--surface)); mask-image: repeating-linear-gradient(to right, black 0 4px, transparent 4px 6px); }

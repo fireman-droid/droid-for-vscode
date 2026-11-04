@@ -75,12 +75,14 @@ export function AutomationHistory({ row, state, active = true }: {
       <p data-ui-notice="" className="management-caption">{t('Viewing is read-only. Continuing uses the existing chat checks; exec and archived sessions cannot be resumed here.')}</p>
     </article>}
     {history && !history.runs.length && !loading && <p data-ui-notice="" className="management-empty">{t('No runs yet')}</p>}
-    {history && <div className="management-actions justify-end">
-      <span data-ui-notice="" className="management-caption">{history.offset + (history.runs.length ? 1 : 0)}–{history.offset + history.runs.length} / {history.total}</span>
-      <Button variant="plain" size="sm" disabled={disabled || history.offset === 0}
-        onClick={() => void load(Math.max(0, history.offset - AUTOMATION_HISTORY_PAGE_SIZE))}>{t('Previous')}</Button>
-      <Button variant="plain" size="sm" disabled={disabled || history.offset + history.runs.length >= history.total}
-        onClick={() => void load(history.offset + AUTOMATION_HISTORY_PAGE_SIZE)}>{t('Next')}</Button>
+    {history && <div className="dvx-pagination">
+      <span data-ui-notice="" className="dvx-page-range">{history.offset + (history.runs.length ? 1 : 0)}–{history.offset + history.runs.length} / {history.total}</span>
+      <div className="dvx-pagination-controls">
+        <Button variant="plain" size="sm" disabled={disabled || history.offset === 0}
+          onClick={() => void load(Math.max(0, history.offset - AUTOMATION_HISTORY_PAGE_SIZE))}>{t('Previous')}</Button>
+        <Button variant="plain" size="sm" disabled={disabled || history.offset + history.runs.length >= history.total}
+          onClick={() => void load(history.offset + AUTOMATION_HISTORY_PAGE_SIZE)}>{t('Next')}</Button>
+      </div>
     </div>}
   </section>;
 }

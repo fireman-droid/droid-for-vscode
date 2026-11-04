@@ -56,7 +56,7 @@ export function ReviewCommit({ port, sessionId, onClose, initialMode = 'files' }
     {!report?.complete ? <p className="review-commit-notice" role="status">{t("Reading Git status…")}</p> : status?.unavailableReason ? <p className="review-commit-notice review-error" role="alert">{t("Git unavailable:")} {status.unavailableReason}</p> : <>
       <Select value={mode} disabled={pending} onValueChange={value => {
         if (value === 'files' || value === 'staged') { setMode(value); setSelected(new Set()); setPage(0); }
-      }}><SelectTrigger aria-label={t("Commit source")}><SelectValue /></SelectTrigger><SelectContent>
+      }}><SelectTrigger aria-label={t("Commit source")}><SelectValue /></SelectTrigger><SelectContent align="start">
         <SelectItem value="files">{t("Working files · stage selected files in full")}</SelectItem>
         <SelectItem value="staged">{t("Index · preserve staged changes")}</SelectItem>
       </SelectContent></Select>

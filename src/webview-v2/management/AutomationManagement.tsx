@@ -83,8 +83,9 @@ export function AutomationManagement({ state, active }: { state: ManagementState
         </ListToolbar>
         {loading && <p role="status" data-ui-notice="" className="sr-only">{t('Loading automations…')}</p>}
         <ScrollArea orientation="horizontal" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
-          <table className="management-mission-table" aria-busy={loading}>
-            <thead data-ui-notice=""><tr><th>{t('Name')}</th><th>{t('Status')}</th><th>{t('Schedule')}</th><th>{t('Next run')}</th><th>{t('Actions')}</th></tr></thead>
+          <table className="management-mission-table management-automation-table" aria-busy={loading}>
+            <colgroup><col className="management-automation-name-col" /><col className="management-automation-status-col" /><col className="management-automation-schedule-col" /><col className="management-automation-next-col" /><col className="management-automation-actions-col" /></colgroup>
+            <thead data-ui-notice=""><tr><th scope="col">{t('Name')}</th><th scope="col">{t('Status')}</th><th scope="col">{t('Schedule')}</th><th scope="col">{t('Next run')}</th><th scope="col">{t('Actions')}</th></tr></thead>
             <tbody>{!loaded && loading && <AutomationListLoading />}{visible.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => <tr key={row.id}>
               <td><Button variant="plain" size="none" className="management-mission-title" disabled={disabled} onClick={() => open(row.id)}>{row.name}</Button>
                 <small data-ui-notice="">{t(row.targetSessionId ? 'Deliver to a fixed session' : 'New session for each run')}</small></td>
@@ -99,7 +100,7 @@ export function AutomationManagement({ state, active }: { state: ManagementState
           </table>
         </ScrollArea>
         {loaded && !visible.length && !error && <p data-ui-notice="" className="management-empty">{t(rows.length ? 'No matching automations' : 'No local automations yet')}</p>}
-        {loaded && <Pagination label={t('Automation pages')} page={currentPage} pageSize={pageSize} count={visible.length} complete compact
+        {loaded && visible.length > 0 && <Pagination label={t('Automation pages')} page={currentPage} pageSize={pageSize} count={visible.length} complete
           loading={loading} disabled={disabled} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(0); }} />}
       </section>}
     {active && editor && <AutomationEditor row={editor.row} state={state} onClose={() => setEditor(null)}
