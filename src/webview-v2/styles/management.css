@@ -67,14 +67,17 @@
   .management-page [role='tab'][aria-selected='true'] { border-bottom-color: var(--focus); background: transparent; }
   .management-page [data-animated-indicator] [role='tab'][aria-selected='true'] { border-bottom-color: transparent; }
   /* List reads temporarily lock scope changes without pulsing both labels. */
-  .management-menu[data-slot='dropdown-menu-content'] { min-width: 168px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
-  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 16px); max-height: min(260px, var(--radix-select-content-available-height)); border-radius: 8px; }
+  .management-menu[data-slot='dropdown-menu-content'] { width: max-content; min-width: 96px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; }
+  .management-menu[data-slot='select-content'] { width: max-content; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 16px); max-height: min(240px, var(--radix-select-content-available-height)); border-radius: 8px; scrollbar-width: none; }
+  .management-menu[data-slot='select-content']::-webkit-scrollbar { display: none; }
+  .management-time-picker { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+  .management-time-picker [role='combobox'] { min-width: 56px; padding-inline: 8px; }
   .management-page .dvx-pagination [role='combobox'] { min-width: 0; height: 28px; padding-inline: 10px; }
   .management-page .dvx-page-numbers .dvx-control:not([aria-current='page']) { color: var(--muted-ink); }
   .management-page .dvx-page-numbers .dvx-control[aria-current='page'] { border-color: var(--management-edge); background: var(--control-surface-active) !important; color: var(--strong-ink); }
-  .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 8px; font-size: 12px; line-height: 18px; }
+  .management-menu .dvx-menu-item { min-height: 28px; gap: 8px; padding: 5px 10px; font-size: 12px; line-height: 18px; white-space: nowrap; }
   .management-menu .dvx-menu-item > svg { width: 14px; height: 14px; flex-shrink: 0; }
-  .management-menu [role='option'] { padding-right: 24px; white-space: nowrap; }
+  .management-menu [role='option'] { padding-right: 22px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .management-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 12px; }
   .management-search { display: flex; min-width: 120px; flex: 1; align-items: center; gap: 8px; }
   .management-search > svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-ink); }

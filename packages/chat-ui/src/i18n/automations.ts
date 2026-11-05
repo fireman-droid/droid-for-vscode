@@ -90,6 +90,8 @@ export const automationMessages: readonly MessageTranslations[] = [
   ['Saturday', '星期六', '星期六'],
   ['Advanced UTC cron', '高级 UTC cron', '進階 UTC cron'],
   ['Run time', '执行时间', '執行時間'],
+  ['Hour', '小时', '小時'],
+  ['Minute', '分钟', '分鐘'],
   ['Display timezone', '显示时区', '顯示時區'],
   ['Beijing time (UTC+08:00)', '北京时间（UTC+08:00）', '北京時間（UTC+08:00）'],
   ['Stored in UTC. Daylight-saving changes are not automatic.', '以 UTC 保存，不会自动调整夏令时。', '以 UTC 儲存，不會自動調整夏令時間。'],
