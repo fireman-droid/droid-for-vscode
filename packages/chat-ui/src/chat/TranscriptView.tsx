@@ -185,7 +185,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
       : cachedTurn.start;
     const turnStart = Math.ceil(Math.max(cachedTurn.start, domTurnStart));
     const pinTop = Math.max(0, turnStart - PINNED_QUESTION_GAP);
-    const paddingBottom = parseFloat(getComputedStyle(column).paddingBottom) || (statusContent ? 0 : 12);
+    const paddingBottom = parseFloat(getComputedStyle(column).paddingBottom) || 0;
     const naturalHeight = columnRect.height > 0
       ? spacer.getBoundingClientRect().top - columnRect.top + paddingBottom
       : scrollMargin + virtualizer.getTotalSize() + paddingBottom;
@@ -371,7 +371,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
       <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
-        <div ref={content} className={`v2-chat-rail min-h-full pt-5 ${statusContent ? 'pb-0' : 'pb-3'}`}>
+        <div ref={content} className="v2-chat-rail min-h-full pt-5 pb-0">
           <div ref={leading} className="flow-root">
             {leadingContent}
             {(historyNotice || paging) ? <div role="status" data-ui-notice="" className="v2-history-divider select-none">
@@ -390,7 +390,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
                 style={{ '--markdown-row-height': `${row.size}px`, marginTop: index === 0 ? 0 : Math.max(0, row.start - virtualItems[index - 1]!.end) } as CSSProperties}>
                 {turns[row.index].messageIds.map((id) => {
                   const message = byId.get(id)!;
-                  return <div key={id} data-history-id={id} className={message.replyEnd ? 'pb-5' : 'pb-2'}>
+                  return <div key={id} data-history-id={id} className={id === ids.at(-1) && !statusContent ? 'pb-0' : message.replyEnd ? 'pb-5' : 'pb-2'}>
                     <TranscriptMessageContent id={id} renderMessage={renderMessage} placeholder={pinned?.id === id && pinEntered} placeholderHeight={pinnedHeight} />
                   </div>;
                 })}
@@ -399,7 +399,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           </div>
           </ProcessPresentationProvider>
           {trailingContent}
-          {statusContent ? <div className={`bg-background pb-1 pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
+          {statusContent ? <div className={`bg-background pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
             {statusContent}
           </div> : null}
           <div ref={runway} data-pin-runway="" aria-hidden="true" />
