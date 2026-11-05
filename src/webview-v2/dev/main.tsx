@@ -11,6 +11,7 @@ import { ManagementApp } from '../management/ManagementApp';
 import type { ManagementTransport } from '../management/useManagement';
 import { ReviewApp } from '../review/ReviewApp';
 import { parseReviewPanelRequest } from '../../shared/protocol/reviewPanelProtocol';
+import { isManagementPage, parseManagementHostMessage, parseManagementPageOpen } from '../../shared/protocol/managementPageProtocol';
 import '../theme.css';
 
 function mountLiveChat(): void {
@@ -40,12 +41,18 @@ function mountLiveChat(): void {
     return;
   }
   if (management) {
+    const requestedPage = new URLSearchParams(window.location.search).get('page');
+    const page = isManagementPage(requestedPage) ? requestedPage : 'general';
     const transport: ManagementTransport = {
       postMessage: message => runtime.postMessage(message),
       postModelSourceMessage: message => runtime.postMessage(message),
       postManagement: message => runtime.postMessage(message),
       subscribe: listener => {
-        const receive = (event: MessageEvent<unknown>) => listener(event.data);
+        const receive = (event: MessageEvent<unknown>) => {
+          const message = parseManagementHostMessage(event.data);
+          // The browser URL owns the landing page, not the editor binding's default.
+          listener(message?.type === 'management.navigate' ? { ...message, page } : event.data);
+        };
         window.addEventListener('message', receive);
         return () => window.removeEventListener('message', receive);
       },
@@ -54,7 +61,10 @@ function mountLiveChat(): void {
     return;
   }
   const chatPort = { ...runtime, postMessage: (message: Parameters<typeof runtime.postMessage>[0]) => {
-    if (message.type === 'review.panel.open') {
+    const managementTarget = parseManagementPageOpen(message);
+    if (managementTarget || message.type === 'models.open') {
+      window.location.assign(`/live?view=management&page=${managementTarget?.page ?? 'models'}`);
+    } else if (message.type === 'review.panel.open') {
       sessionStorage.setItem('dvx.browser-dev.reviewTarget', JSON.stringify(message));
       window.location.assign('/live?view=review');
     } else runtime.postMessage(message);
