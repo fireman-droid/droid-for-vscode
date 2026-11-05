@@ -7,6 +7,7 @@ import { captureSnapshotBeforeSend } from '../changes/snapshotCapture';
 import type { PendingAttachment } from '../internals';
 import { evaluateTurnStart } from '../operationEligibility';
 import { recoverTransportTurn } from '../recovery/recoverTransportTurn';
+import { readRecoveredTurnOutcome } from '../recovery/recoveredTurnOutcome';
 import type { TurnFlowPort } from './turnFlowPort';
 import { isCurrentTurn } from './turnIdentity';
 import { handleRuntimeEvent } from './turnRuntimeEvents';
@@ -223,6 +224,18 @@ export async function consumeTurn(
     !terminalEventSeen &&
     isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)
   ) {
+    const turn = ctl.turnState.turn!;
+    if (turn.status !== 'stopping') {
+      // A closed stream does not establish failure: the daemon may have saved
+      // the terminal result before its final notification reached this Host.
+      const recovered = await readRecoveredTurnOutcome(runtime, turn);
+      if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
+      if (recovered.status === 'confirmed') {
+        ctl.effects.flushPendingThinking(sessionId, turnId);
+        handleTurnComplete(ctl, sessionId, turnId, recovered.completion);
+        return;
+      }
+    }
     if (ctl.turnState.turn?.status === 'stopping')
       handleTurnComplete(ctl, sessionId, turnId, { type: 'turn-complete', outcome: 'interrupted' });
     else failTurn(ctl, sessionId, turnId, 'runtime-stream-ended');
