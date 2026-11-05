@@ -368,10 +368,13 @@ export function projectGa4Event(
     event.name === 'daemon.sidecar.reconnecting'
   ) {
     const durationMs = safeMetric(attrs.durationMs);
+    const failed = event.name.endsWith('-failed');
     const params: Record<string, string | number> = {
       ...baseParams,
       category: safeToken(event.name.replace(/^daemon\./u, '')),
-      reason: safeToken(attrs.reason ?? attrs.status, 'ok'),
+      reason: safeToken(attrs.reason ?? attrs.status, failed ? 'unknown' : 'ok'),
+      ...(failed ? { outcome: 'failed' } : {}),
+      ...(attrs.phase === undefined ? {} : { phase: safeToken(attrs.phase) }),
       engagement_time_msec: engagementMs(durationMs),
     };
     addOptionalMetric(params, 'duration_ms', durationMs);
