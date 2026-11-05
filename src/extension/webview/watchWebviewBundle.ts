@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
+import { hostText } from './webviewLocale';
 
 const WATCHED_WEBVIEW_ASSETS = [
   'webview.js',
@@ -27,6 +28,7 @@ export interface WatchWebviewBundleOptions {
   readonly debounceMs?: number;
   readonly reloadWebviews?: () => Thenable<unknown>;
   readonly restartExtensionHost?: () => Thenable<unknown>;
+  readonly restartConfirmationMs?: number;
   readonly diagnostics?: RuntimeDiagnosticSink;
 }
 
@@ -67,6 +69,9 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
   let webviewBaseline: string | null = null;
   let extensionBaseline: string | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let restartTimer: ReturnType<typeof setTimeout> | undefined;
+  let requestedExtensionSignature: string | null = null;
+  let restartPending = false;
   const watchers: vscode.FileSystemWatcher[] = [];
   const listeners: vscode.Disposable[] = [];
 
@@ -79,6 +84,50 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
     });
   }
 
+  const reportPendingRestart = async (reason: 'command-failed' | 'not-confirmed'): Promise<void> => {
+    if (disposed) return;
+    options.diagnostics?.record({
+      level: 'warn', name: 'host.extension.hot-reload-pending', attributes: { reason },
+    });
+    try {
+      const retry = hostText('Retry');
+      const answer = await vscode.window.showWarningMessage(
+        hostText('Droid has not restarted to load the update. Save your work and close editors that block restarting, then retry.'),
+        retry,
+      );
+      if (!disposed && answer === retry) requestedExtensionSignature = null;
+    } catch {
+      options.diagnostics?.record({
+        level: 'warn', name: 'host.extension.hot-reload-pending', attributes: { reason: 'notification-failed' },
+      });
+    } finally {
+      restartPending = false;
+      if (!disposed) schedule();
+    }
+  };
+
+  const requestRestart = async (signature: string): Promise<void> => {
+    if (restartPending || requestedExtensionSignature === signature) return;
+    restartPending = true;
+    requestedExtensionSignature = signature;
+    options.diagnostics?.record({
+      level: 'info', name: 'host.extension.hot-reload',
+      attributes: { signature: signature.slice(0, 12), phase: 'requested' },
+    });
+    try {
+      await restartHost();
+      if (disposed) return;
+      // The command can resolve even when VS Code vetoes the restart. A real
+      // restart disposes this activation; a surviving Host still needs action.
+      restartTimer = setTimeout(() => {
+        restartTimer = undefined;
+        void reportPendingRestart('not-confirmed');
+      }, options.restartConfirmationMs ?? 1500);
+    } catch {
+      if (!disposed) await reportPendingRestart('command-failed');
+    }
+  };
+
   const checkAndReload = async (): Promise<void> => {
     if (disposed) return;
     if (options.extensionDirectory) {
@@ -88,21 +137,9 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
         if (extensionBaseline === null) {
           extensionBaseline = nextExt;
         } else if (nextExt !== extensionBaseline) {
-          extensionBaseline = nextExt;
-          const nextWeb = await computeAssetSignature(options.directory, WATCHED_WEBVIEW_ASSETS);
-          if (disposed) return;
-          if (nextWeb) webviewBaseline = nextWeb;
-          options.diagnostics?.record({
-            level: 'info',
-            name: 'host.extension.hot-reload',
-            attributes: { signature: nextExt.slice(0, 12) },
-          });
-          try {
-            await restartHost();
-            return;
-          } catch {
-            // Fall through to webview reload if restartExtensionHost is unavailable.
-          }
+          await requestRestart(nextExt);
+          // Do not combine a new page bundle with a backend that has not restarted.
+          return;
         }
       }
     }
@@ -165,6 +202,7 @@ export function watchWebviewBundle(options: WatchWebviewBundleOptions): vscode.D
       clearTimeout(timer);
       timer = undefined;
     }
+    if (restartTimer !== undefined) clearTimeout(restartTimer);
     for (const listener of listeners.splice(0)) {
       listener.dispose();
     }
