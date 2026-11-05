@@ -1,6 +1,6 @@
 /*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (next-edit/NextEditSuggestionManager.ts). MIT; see third-party/KILO-LICENSE.txt. */
 import * as vscode from "vscode"
-import { nesLog } from "./log"
+import type { NextEditDiagnostic } from "./log"
 import { planInsertion, planReplacement } from "./pendingEdit"
 
 const PENDING_CONTEXT_KEY = "droidvisx.nextEdit.hasPendingSuggestion"
@@ -8,6 +8,7 @@ const PENDING_CONTEXT_KEY = "droidvisx.nextEdit.hasPendingSuggestion"
 export type PendingNextEdit =
   | {
       kind: "replace"
+      suggestionId?: number
       document: vscode.TextDocument
       /** Inclusive start line of the lines being replaced. */
       diffStartLine: number
@@ -22,6 +23,7 @@ export type PendingNextEdit =
     }
   | {
       kind: "insert"
+      suggestionId?: number
       document: vscode.TextDocument
       /** Existing line before insertion, or `lineCount` when appending at EOF. */
       diffStartLine: number
@@ -52,7 +54,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
   private readonly proposedLineDecoration: vscode.TextEditorDecorationType
   private readonly hintDecoration: vscode.TextEditorDecorationType
 
-  constructor(private readonly onAccepted?: () => void) {
+  constructor(private readonly onAccepted?: () => void, private readonly onDiagnostic?: (event: NextEditDiagnostic) => void) {
     // Tints + strikethrough on the lines that will be replaced or removed.
     this.removedLineDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
@@ -85,7 +87,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
         const p = this.pending
         if (!p) return
         if (e.document !== p.document || e.contentChanges.length === 0) return
-        if (e.document.version !== this.pendingVersion) { this.clear(); return }
+        if (e.document.version !== this.pendingVersion) { this.clear("document-version"); return }
         // For "insert" we just confirm the anchor line is still there with its
         // original content; for "replace" we re-check the full range.
         let stillValid = true
@@ -107,9 +109,9 @@ export class NextEditSuggestionManager implements vscode.Disposable {
         } catch {
           stillValid = false
         }
-        if (!stillValid) this.clear()
+        if (!stillValid) this.clear("document-drift")
       }),
-      vscode.window.onDidChangeActiveTextEditor(() => this.clear()),
+      vscode.window.onDidChangeActiveTextEditor(() => this.clear("editor-changed")),
       // When the cursor moves (e.g., post-jump), refresh the hint so it
       // flips between "Tab to jump" and "Tab to apply".
       vscode.window.onDidChangeTextEditorSelection((e) => {
@@ -125,6 +127,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
   }
 
   public setPending(p: PendingNextEdit): void {
+    if (this.pending) this.trace("discarded", this.pending, "superseded")
     this.clearDecorations()
     p = { ...p, replacement: p.replacement.replace(/\r?\n/g, p.document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n") }
     this.pending = p
@@ -135,8 +138,9 @@ export class NextEditSuggestionManager implements vscode.Disposable {
     this.renderDecorations(p)
   }
 
-  public clear(): void {
+  public clear(reason = "cleared"): void {
     if (!this.pending) return
+    this.trace(reason === "dismissed" ? "dismissed" : "discarded", this.pending, reason)
     this.pending = null
     this.clearDecorations()
     void vscode.commands.executeCommand("setContext", PENDING_CONTEXT_KEY, false)
@@ -149,7 +153,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
     const editor = vscode.window.activeTextEditor
     if (!editor || editor.document !== p.document || p.document.version !== this.pendingVersion ||
         !vscode.workspace.isTrusted || editor.selections.length !== 1 || !editor.selection.isEmpty) {
-      this.clear()
+      this.clear(p.document.version !== this.pendingVersion ? "document-version" : "editor-state")
       return
     }
     const cursor = editor.selection.active
@@ -165,7 +169,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
       const target = new vscode.Position(targetLine, targetChar)
       editor.selection = new vscode.Selection(target, target)
       editor.revealRange(new vscode.Range(target, target), vscode.TextEditorRevealType.InCenterIfOutsideViewport)
-      nesLog(`jumped cursor ${cursor.line} -> ${target.line} (pending diff at [${p.diffStartLine}..${p.diffEndLine}])`)
+      this.trace("jumped", p, "off-cursor")
       // Refresh hint immediately so "Tab to apply" is shown.
       this.renderDecorations(p)
     }
@@ -177,7 +181,7 @@ export class NextEditSuggestionManager implements vscode.Disposable {
     const editor = vscode.window.activeTextEditor
     if (!editor || editor.document !== p.document || p.document.version !== this.pendingVersion ||
         !vscode.workspace.isTrusted || editor.selections.length !== 1 || !editor.selection.isEmpty) {
-      this.clear()
+      this.clear(p.document.version !== this.pendingVersion ? "document-version" : "editor-state")
       return
     }
     // Snapshot what we're about to do, then nuke pending state so the upcoming
@@ -187,45 +191,59 @@ export class NextEditSuggestionManager implements vscode.Disposable {
     void vscode.commands.executeCommand("setContext", PENDING_CONTEXT_KEY, false)
 
     let ok = false
-    if (p.kind === "insert") {
-      // Re-validate before applying: the anchor line must still hold its
-      // original text. Without this, edits between the anchor and the insertion
-      // point can shift line numbers and land the insert in the wrong place.
-      const anchorLine = Math.min(p.diffStartLine, editor.document.lineCount - 1)
-      const anchorText = anchorLine >= 0 ? editor.document.lineAt(anchorLine).text : undefined
-      if (anchorText !== p.originalText) {
-        nesLog(`document drifted since suggestion was made — dropping insert at line ${p.diffStartLine}`)
-        return
+    try {
+      if (p.kind === "insert") {
+        // Re-validate before applying: the anchor line must still hold its
+        // original text. Without this, edits between the anchor and the insertion
+        // point can shift line numbers and land the insert in the wrong place.
+        const anchorLine = Math.min(p.diffStartLine, editor.document.lineCount - 1)
+        const anchorText = anchorLine >= 0 ? editor.document.lineAt(anchorLine).text : undefined
+        if (anchorText !== p.originalText) {
+          this.trace("discarded", p, "anchor-mismatch")
+          return
+        }
+        const edit = planInsertion(p, {
+          lineCount: editor.document.lineCount,
+          end: (line) => editor.document.lineAt(line).range.end.character,
+        })
+        const pos = new vscode.Position(edit.line, edit.character)
+        ok = await editor.edit((b) => b.insert(pos, edit.text))
+      } else {
+        const range = new vscode.Range(
+          new vscode.Position(p.diffStartLine, 0),
+          new vscode.Position(p.diffEndLine, p.document.lineAt(p.diffEndLine).range.end.character),
+        )
+        const currentInDoc = editor.document.getText(range)
+        if (currentInDoc !== p.originalText) {
+          this.trace("discarded", p, "range-mismatch")
+          return
+        }
+        const edit = planReplacement(p, {
+          lineCount: editor.document.lineCount,
+          end: (line) => editor.document.lineAt(line).range.end.character,
+        })
+        const target = new vscode.Range(
+          new vscode.Position(edit.start.line, edit.start.character),
+          new vscode.Position(edit.end.line, edit.end.character),
+        )
+        ok = await editor.edit((b) => b.replace(target, edit.text))
       }
-      const edit = planInsertion(p, {
-        lineCount: editor.document.lineCount,
-        end: (line) => editor.document.lineAt(line).range.end.character,
-      })
-      const pos = new vscode.Position(edit.line, edit.character)
-      ok = await editor.edit((b) => b.insert(pos, edit.text))
-      nesLog(`applied insert at line ${pos.line} (${edit.text.length} chars, ok=${ok})`)
-    } else {
-      const range = new vscode.Range(
-        new vscode.Position(p.diffStartLine, 0),
-        new vscode.Position(p.diffEndLine, p.document.lineAt(p.diffEndLine).range.end.character),
-      )
-      const currentInDoc = editor.document.getText(range)
-      if (currentInDoc !== p.originalText) {
-        nesLog(`document drifted since suggestion was made — dropping range [${p.diffStartLine}..${p.diffEndLine}]`)
-        return
-      }
-      const edit = planReplacement(p, {
-        lineCount: editor.document.lineCount,
-        end: (line) => editor.document.lineAt(line).range.end.character,
-      })
-      const target = new vscode.Range(
-        new vscode.Position(edit.start.line, edit.start.character),
-        new vscode.Position(edit.end.line, edit.end.character),
-      )
-      ok = await editor.edit((b) => b.replace(target, edit.text))
-      nesLog(`applied replace at lines [${p.diffStartLine}..${p.diffEndLine}] (ok=${ok})`)
+    } catch (error) {
+      this.trace("apply-failed", p, "editor-error")
+      throw error
     }
+    this.trace(ok ? "accepted" : "apply-failed", p, ok ? "applied" : "editor-rejected")
     if (ok) this.onAccepted?.()
+  }
+
+  private trace(name: NextEditDiagnostic['name'], suggestion: PendingNextEdit, reason: string): void {
+    this.onDiagnostic?.({ name, attributes: {
+      suggestionId: suggestion.suggestionId ?? 0, reason, kind: suggestion.kind,
+      outcome: name === "apply-failed" ? "failed" : name,
+      source: "decoration", characters: suggestion.replacement.length,
+      startLine: suggestion.diffStartLine, endLine: suggestion.diffEndLine,
+      expectedVersion: this.pendingVersion, documentVersion: suggestion.document.version,
+    } })
   }
 
   private renderDecorations(p: PendingNextEdit): void {

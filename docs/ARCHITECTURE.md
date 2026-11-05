@@ -483,6 +483,15 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 
 ### 页面状态和性能
 
+- 补全诊断按本次激活与请求编号关联：`autocomplete.content` 的 `response` 保存模型解码后的返回正文，
+  `candidate` 保存处理后的候选。正文仅落完整本地日志，分为最多 12,000 字符的连续片段并记录 `part/parts`，
+  不因单条 detail 长度限制静默丢尾；沿用 200 MiB 总保留预算，凭据在分片前统一清除，不隐去普通代码。
+  不记录发送给模型的文档上下文或 HTTP 原始报文。Next Edit 在完成原因与代码围栏校验前保存已解码正文，
+  因此拒绝的 token 截断／格式异常也可追查；HTTP 拒绝、JSON 解码失败及未完成的 FIM 流不保存响应正文。
+  过滤规则、共享请求的已输入前缀不匹配、文档／光标失效、内联或装饰提示路径、跳转／丢弃／应用失败与采纳均有独立原因。
+  `suggestion-returned` 只表示交给编辑器的候选，不证明实际显示；Next Edit 的内联采纳命令与装饰编辑成功分别关联候选编号。
+  远程继续使用 `autocomplete_activity`，只投影分类、原因、计数与耗时；不发送内容分片、请求编号、模型名或代码。
+  Next Edit 的 `shown/status/latencyMs` 与统一结果／耗时字段兼容映射，无替换、取消和上下文超时不再默认计为 `ok`。
 - 前端本地统计沿现有 `webview.diagnostic` 进入 Host：`LocalDiagnostics.onHostRecord`
   将 Host 诊断交给 `extension/analytics/projectFrontendEvent.ts`，仅提取已知枚举和数值；
   不转发 SDK 原始日志或诊断 `detail`。当前事件为 `frontend.ready`（启动耗时）、

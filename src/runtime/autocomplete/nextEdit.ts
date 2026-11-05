@@ -74,7 +74,8 @@ export function parseNextEditReplacement(message: string): string {
 }
 
 export async function requestNextEdit(
-  request: Omit<FimRequest, 'prefix' | 'suffix'> & { context: MercuryEditContext; maxContextCharacters: number },
+  request: Omit<FimRequest, 'prefix' | 'suffix'> & { context: MercuryEditContext; maxContextCharacters: number;
+    onResponse?: (content: string, finishReason: string) => void },
 ): Promise<string> {
   const prompt = buildBoundedEditPrompt(request.context, request.maxContextCharacters);
   return requestCompletionTransport(request, {
@@ -88,6 +89,7 @@ export async function requestNextEdit(
     const payload = parsePayload(body);
     const choice = Array.isArray(payload.choices) ? asRecord(payload.choices[0]) : undefined;
     const content = asRecord(choice?.message)?.content;
+    if (typeof content === 'string') request.onResponse?.(content, typeof choice?.finish_reason === 'string' ? choice.finish_reason : 'missing');
     if (choice?.finish_reason !== 'stop' || typeof content !== 'string') {
       throw protocolError('Next Edit did not return a complete replacement. Suggestion hidden.');
     }

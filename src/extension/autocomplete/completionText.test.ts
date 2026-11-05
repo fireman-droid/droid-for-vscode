@@ -158,6 +158,19 @@ describe('completion text', () => {
       .toBe('```ts\nconst x = 1;\n```');
   });
 
+  it.each([
+    ['\n ', '', '', 'empty-response'],
+    ['x()', '', 'x()', 'suffix-exact-match'],
+    ['x()\n```', '', '', 'ambiguous-code-fence'],
+    ['const value = 1;', 'const value = 1;\n', '', 'repeated-previous-line'],
+    ['first();\nlast();', '', '\nlast();', 'suffix-edge-match'],
+    ['consumeNextRecord();\n'.repeat(8), '', '', 'repeating-line-pattern'],
+  ])('identifies the exact filter rule %s (%#)', (text, prefix, suffix, expected) => {
+    const reasons: string[] = [];
+    prepareCompletionWithOutcome(text, prefix, suffix, 'typescript', 'codestral', reason => reasons.push(reason));
+    expect(reasons).toContain(expected);
+  });
+
   const cached: CachedCompletion = {
     uri: 'file:///sample.ts', prefix: 'const value = ', suffix: ';', text: 'calculate()', createdAt: 1000,
   };

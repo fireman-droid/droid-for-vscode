@@ -4,21 +4,23 @@ import type { CompletionContextService, ContextSnippet } from './context/Complet
 import { completionDocumentBlockReason, nextEditSettings, readCompletionSettings, type CompletionSettings } from './settings';
 import { EditHistoryTracker } from './kilo/next-edit/editHistoryTracker';
 import { NextEditSuggestionManager } from './kilo/next-edit/NextEditSuggestionManager';
-import { NextEditPresenter } from './kilo/next-edit/NextEditPresenter';
+import { NextEditPresenter, type NextEditResultEvent } from './kilo/next-edit/NextEditPresenter';
+import type { NextEditDiagnostic } from './kilo/next-edit/log';
 import { nextEditRegion } from './NextEditRegion';
 import type { MercuryEditContext } from '../../runtime/autocomplete/kilo/editPrompt';
 
 /** Adapts Kilo's prediction/history/rendering to Droid's workspace policy and editor lifetime. */
 export class NextEditSupport implements vscode.Disposable {
-  readonly manager = new NextEditSuggestionManager(() => this.accepted());
+  readonly manager = new NextEditSuggestionManager(() => this.accepted(), event => this.onDiagnostic?.(event));
   readonly presenter: NextEditPresenter;
   private readonly history: EditHistoryTracker;
   private readonly lifetime = new AbortController();
   private chainTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly context: CompletionContextService, onError: (error: unknown) => void,
-    onSuggestion: (event: { shown: boolean; latencyMs: number; status: string }) => void,
-    private readonly onAccepted: () => void = () => {}) {
+    onSuggestion: (event: NextEditResultEvent) => void,
+    private readonly onAccepted: () => void = () => {},
+    private readonly onDiagnostic?: (event: NextEditDiagnostic) => void) {
     this.presenter = new NextEditPresenter({ suggestionManager: this.manager, onSuggestion });
     this.history = new EditHistoryTracker({ onError, isFileAllowed: async fsPath => {
       if (this.lifetime.signal.aborted) return false;
@@ -53,8 +55,8 @@ export class NextEditSupport implements vscode.Disposable {
     };
   }
 
-  clear(): void {
-    this.manager.clear();
+  clear(reason = 'cleared'): void {
+    this.manager.clear(reason);
     if (this.chainTimer) clearTimeout(this.chainTimer);
   }
   accepted(): void {

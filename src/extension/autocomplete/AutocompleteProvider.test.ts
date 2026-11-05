@@ -391,7 +391,7 @@ describe('AutocompleteProvider', () => {
 
   it.each([
     ['value', 'suggestion-returned'], ['', 'empty'], ['\n  ', 'empty'], ['value\n' + '```', 'format-rejected'],
-  ])('records the actual result decision without retaining completion contents (%#)', async (response, outcome) => {
+  ])('records local response contents and the result decision without recording request context or credentials (%#)', async (response, outcome) => {
     mocks.request.mockResolvedValue(response);
     await (await requesting(document('sensitiveSource = '))).pending;
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({
@@ -400,15 +400,36 @@ describe('AutocompleteProvider', () => {
     const log = JSON.stringify(mocks.record.mock.calls);
     expect(log).not.toContain('sensitiveSource');
     expect(log).not.toContain('synthetic-provider-key');
-    expect(log).not.toContain('value');
+    const contents = mocks.record.mock.calls.map(([event]) => event).filter(event => event.name === 'autocomplete.content');
+    expect(contents.find(event => event.attributes.stage === 'response')?.detail).toBe(response);
+    expect(contents.find(event => event.attributes.stage === 'candidate')?.detail).toBe(outcome === 'suggestion-returned' ? response : '');
+    const resultId = mocks.record.mock.calls.find(([event]) => event.name === 'autocomplete.result')![0].attributes.id;
+    expect(contents.every(event => event.attributes.id === resultId)).toBe(true);
   });
 
   it('distinguishes an already-present response from a new suggestion in diagnostics', async () => {
     mocks.request.mockResolvedValue('existing()');
     expect(await (await requesting(document('return existing()'), 7)).pending).toEqual([]);
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'autocomplete.result', attributes: expect.objectContaining({ outcome: 'already-present' }),
+      name: 'autocomplete.result', attributes: expect.objectContaining({ outcome: 'already-present', reason: 'suffix-exact-match' }),
     }));
+  });
+
+  it('retains a rejected Next Edit response and its safe protocol explanation under one request id', async () => {
+    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
+    mocks.config.protocol = 'mercury-edit';
+    mocks.nextRequest.mockImplementation(async request => {
+      request.onResponse('```ts\nconst incomplete', 'length');
+      throw new FimCompletionError('protocol', 'Next Edit did not return a complete replacement. Suggestion hidden.');
+    });
+    expect(await (await requesting(document())).pending).toEqual([]);
+    const events = mocks.record.mock.calls.map(([event]) => event);
+    const response = events.find(event => event.name === 'autocomplete.content' && event.attributes.stage === 'response');
+    const failure = events.find(event => event.name === 'autocomplete.failed');
+    expect(response?.detail).toBe('```ts\nconst incomplete');
+    expect(failure).toMatchObject({ attributes: { id: response.attributes.id, code: 'protocol' },
+      detail: 'Next Edit did not return a complete replacement. Suggestion hidden.' });
+    expect(mocks.present).not.toHaveBeenCalled();
   });
 
   it('records transport cancellation with its stage and cause', async () => {

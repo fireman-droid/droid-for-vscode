@@ -598,9 +598,14 @@ export function projectGa4Event(
     event.name === 'autocomplete.next-edit.accepted' ||
     event.name === 'autocomplete.failed' ||
     event.name === 'autocomplete.cancelled' ||
+    event.name === 'autocomplete.skipped' ||
+    event.name === 'autocomplete.discarded' ||
+    event.name === 'autocomplete.next-edit.discarded' ||
+    event.name === 'autocomplete.next-edit.dismissed' ||
+    event.name === 'autocomplete.next-edit.apply-failed' ||
     event.name === 'autocomplete.context.timeout'
   ) {
-    const durationMs = safeMetric(attrs.durationMs);
+    const durationMs = safeMetric(attrs.durationMs ?? attrs.latencyMs);
     const category = event.name === 'autocomplete.result'
       ? 'fim_result'
       : event.name === 'autocomplete.next-edit.result'
@@ -613,11 +618,20 @@ export function projectGa4Event(
               ? 'failed'
               : event.name === 'autocomplete.cancelled'
                 ? 'cancelled'
-                : 'context_timeout';
+                : event.name === 'autocomplete.context.timeout' ? 'context_timeout'
+                  : event.name.slice('autocomplete.'.length).replaceAll(/[.-]/g, '_');
+    const fallbackOutcome = event.name === 'autocomplete.next-edit.result'
+      ? attrs.shown === false || attrs.status === 'no-replacement' ? 'no-replacement'
+        : attrs.shown === true || attrs.status === 'ok' ? 'suggestion-returned' : 'unknown'
+      : category.endsWith('apply_failed') ? 'failed'
+        : category.endsWith('discarded') ? 'discarded'
+          : category.endsWith('dismissed') ? 'dismissed' : category === 'skipped' ? 'skipped'
+            : category === 'cancelled' ? 'cancelled' : category === 'context_timeout' ? 'timeout'
+              : category === 'failed' ? 'failed' : 'ok';
     const params: Record<string, string | number> = {
       ...baseParams,
       category,
-      outcome: safeToken(attrs.outcome ?? attrs.code, 'ok'),
+      outcome: safeToken(attrs.outcome ?? attrs.code, fallbackOutcome),
       phase: safeToken(attrs.phase, 'none'),
       reason: safeToken(attrs.reason ?? attrs.source, 'none'),
       engagement_time_msec: engagementMs(durationMs),

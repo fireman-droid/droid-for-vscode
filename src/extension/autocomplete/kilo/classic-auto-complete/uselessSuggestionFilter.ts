@@ -14,40 +14,42 @@ export type AutocompletePostprocessResult = {
 }
 
 export function suggestionConsideredDuplication(params: AutocompleteSuggestion): boolean {
-  if (DuplicatesFromPrefixOrSuffix(params)) {
-    return true
-  }
+  return duplicationReason(params) !== undefined
+}
 
+function duplicationReason(params: AutocompleteSuggestion): string | undefined {
+  const boundary = DuplicatesFromPrefixOrSuffix(params)
+  if (boundary) return boundary
   // Multiline completions can be "partially duplicated": e.g. the first suggested line
   // repeats the last complete line in the prefix, or the last suggested line repeats
   // the first line in the suffix. Closing delimiters may belong to different nested blocks.
-  if (DuplicatesFromEdgeLines(params)) {
-    return true
-  }
+  const edge = DuplicatesFromEdgeLines(params)
+  if (edge) return edge
 
   // Check if the suggestion contains repetitive phrases that continue from the prefix
   if (containsRepetitivePhraseFromPrefix(params)) {
-    return true
+    return "repeating-tail-block"
   }
 
   // When the suggestion isn't a full line or set of lines, normalize by including
   // the rest of the line in the prefix/suffix and check with the completed line(s)
   const normalized = normalizeToCompleteLine(params)
-  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized))
+  const reason = normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized))
+  return reason ? "normalized-" + reason : undefined
 }
 
-function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
+function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): string | undefined {
   const trimmed = params.suggestion.trim()
-
-  return (
-    trimmed.length === 0 || params.prefix.trimEnd().endsWith(trimmed) || params.suffix.trimStart().startsWith(trimmed)
-  )
+  if (trimmed.length === 0) return "empty-after-processing"
+  if (params.prefix.trimEnd().endsWith(trimmed)) return "prefix-match"
+  if (params.suffix.trimStart().startsWith(trimmed)) return "suffix-match"
+  return undefined
 }
 
-function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): boolean {
+function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): string | undefined {
   const trimmedSuggestion = params.suggestion.trim()
   if (!trimmedSuggestion.includes("\n")) {
-    return false
+    return undefined
   }
 
   const suggestionLines = trimmedSuggestion.split("\n")
@@ -58,14 +60,14 @@ function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): boolean {
   const suffixFirstLine = params.suffix.trimStart().split("\n")[0]?.trim() ?? ""
 
   if (isRepeatedCodeLine(firstSuggestionLine, prefixLastLine)) {
-    return true
+    return "prefix-edge-match"
   }
 
   if (isRepeatedCodeLine(lastSuggestionLine, suffixFirstLine)) {
-    return true
+    return "suffix-edge-match"
   }
 
-  return false
+  return undefined
 }
 
 function isRepeatedCodeLine(suggestionLine: string, contextLine: string): boolean {
@@ -145,6 +147,7 @@ export function postprocessAutocompleteSuggestionWithOutcome(
   params: AutocompleteSuggestion & {
     model: string
     languageId?: string
+    onDecision?: (reason: string) => void
   },
 ): AutocompletePostprocessResult {
   // First, run through the continuedev postprocessing pipeline
@@ -154,6 +157,7 @@ export function postprocessAutocompleteSuggestionWithOutcome(
     prefix: params.prefix,
     suffix: params.suffix,
     preserveFences: ["markdown", "mdx", "plaintext"].includes(params.languageId ?? ""),
+    onDecision: params.onDecision,
   })
 
   if (processedSuggestion === undefined) {
@@ -171,19 +175,22 @@ export function postprocessAutocompleteSuggestionWithOutcome(
     : processedSuggestion
 
   if (!languageFilteredSuggestion.trim()) {
+    params.onDecision?.(languageFilteredSuggestion !== processedSuggestion ? "language-filter-empty" : "empty-after-processing")
     return { text: "", outcome: "empty" }
   }
+  if (languageFilteredSuggestion !== processedSuggestion) params.onDecision?.("language-filter-trimmed")
   if (params.suffix.trimStart().startsWith(languageFilteredSuggestion.trim())) {
+    params.onDecision?.("suffix-trimmed-match")
     return { text: "", outcome: "already-present" }
   }
 
-  if (
-    suggestionConsideredDuplication({
+  const reason = duplicationReason({
       suggestion: languageFilteredSuggestion,
       prefix: params.prefix,
       suffix: params.suffix,
     })
-  ) {
+  if (reason) {
+    params.onDecision?.(reason)
     return { text: "", outcome: "repetition-filtered" }
   }
 

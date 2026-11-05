@@ -43,18 +43,22 @@ export function prepareCompletion(
 /** Preserve the filter decision so diagnostics can separate empty output from rejected code. */
 export function prepareCompletionWithOutcome(
   text: string, prefix: string, suffix: string, languageId: string, model?: string,
+  onDecision?: (reason: string) => void,
 ): CompletionPreparationResult {
-  if (!text.trim()) return { text: '', outcome: 'empty' };
-  if (suffix.startsWith(text)) return { text: '', outcome: 'already-present' };
+  if (!text.trim()) { onDecision?.('empty-response'); return { text: '', outcome: 'empty' }; }
+  if (suffix.startsWith(text)) { onDecision?.('suffix-exact-match'); return { text: '', outcome: 'already-present' }; }
   const allowsFences = ['markdown', 'mdx', 'plaintext'].includes(languageId);
   // Without lexical state an isolated fence may be model markup or legitimate string/comment
   // content. Suppress the whole code suggestion rather than guessing and deleting its lines.
-  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) return { text: undefined, outcome: 'format-rejected' };
+  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) {
+    onDecision?.('ambiguous-code-fence');
+    return { text: undefined, outcome: 'format-rejected' };
+  }
   // The provider supplies the model to enable Kilo's model/language-aware pipeline.
   if (!model) return { text, outcome: 'suggestion-returned' };
   const eol = text.includes('\r\n') || prefix.includes('\r\n') ? '\r\n' : '\n';
   const processed = postprocessAutocompleteSuggestionWithOutcome({ suggestion: text.replace(/\r\n/g, '\n'),
-    prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model });
+    prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model, onDecision });
   return { ...processed, text: processed.text.replace(/\n/g, eol) };
 }
 

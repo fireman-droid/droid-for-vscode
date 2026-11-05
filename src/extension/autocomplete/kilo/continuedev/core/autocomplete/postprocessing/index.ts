@@ -90,30 +90,36 @@ export function postprocessCompletion({
   prefix,
   suffix,
   preserveFences = false,
+  onDecision,
 }: {
   completion: string
   llm: { model: string }
   prefix: string
   suffix: string
   preserveFences?: boolean
+  onDecision?: (reason: string) => void
 }): string | undefined {
   // Don't return empty
   if (isBlank(completion)) {
+    onDecision?.("empty-response")
     return undefined
   }
 
   // Don't return whitespace
   if (isOnlyWhitespace(completion)) {
+    onDecision?.("whitespace-only")
     return undefined
   }
 
   // Dont return if it's just a repeat of the line above
   if (rewritesLineAbove(completion, prefix)) {
+    onDecision?.("repeated-previous-line")
     return undefined
   }
 
   // Filter out repetitions of many lines in a row
   if (isExtremeRepetition(completion)) {
+    onDecision?.("repeating-line-pattern")
     return undefined
   }
 
@@ -122,6 +128,7 @@ export function postprocessCompletion({
     if (completion[0] === " " && completion[1] !== " ") {
       if (prefix.endsWith(" ") && suffix.startsWith("\n")) {
         completion = completion.slice(1)
+        onDecision?.("codestral-leading-space")
       }
     }
 
@@ -130,11 +137,14 @@ export function postprocessCompletion({
     if (suffix.length === 0 && prefix.endsWith("\n\n") && completion.startsWith("\n")) {
       // Remove a single leading \n from the completion
       completion = completion.slice(1)
+      onDecision?.("codestral-leading-newline")
     }
   }
 
   if (llm.model.includes("mercury")) {
-    completion = removePrefixOverlap(completion, prefix)
+    const withoutOverlap = removePrefixOverlap(completion, prefix)
+    if (withoutOverlap !== completion) onDecision?.("prefix-overlap-removed")
+    completion = withoutOverlap
 
     // If completion starts with multiple whitespaces, but the cursor is at the
     // end of the line then it should probably be on a new line
@@ -144,6 +154,7 @@ export function postprocessCompletion({
       (suffix.startsWith("\n") || suffix.trim().length === 0)
     ) {
       completion = "\n" + completion
+      onDecision?.("mercury-newline-added")
     }
   }
 
@@ -151,6 +162,7 @@ export function postprocessCompletion({
 
   if (prefix.endsWith(" ") && completion.startsWith(" ") && /\S/.test(prefix.split("\n").at(-1) ?? "")) {
     completion = completion.slice(1)
+    onDecision?.("leading-space-removed")
   }
 
   // Remove markdown code block delimiters

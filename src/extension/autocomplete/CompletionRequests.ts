@@ -37,7 +37,8 @@ export class CompletionRequests {
   /** VS Code may cancel an unchanged invocation before scheduling its replacement. */
   retainForEditorRefresh(): void { if (this.current) this.current.handoffMs = 250; }
   async run(scope: string, prefix: string, suffix: string, signal: AbortSignal,
-    start: (signal: AbortSignal) => Promise<string>): Promise<string> {
+    start: (signal: AbortSignal) => Promise<string>,
+    onMismatch?: (reason: string, typedCharacters: number, receivedCharacters: number) => void): Promise<string> {
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     let request = findCoveringPendingRequest(scope, prefix, suffix,
       this.current && !this.current.controller.signal.aborted ? [this.current] : []) as Request | null;
@@ -69,8 +70,9 @@ export class CompletionRequests {
       const typed = prefix.slice(captured.prefix.length);
       if (text.startsWith(typed) && (!typed.length || text.length > typed.length)) return text.slice(typed.length);
       // An accepted/fully typed suggestion is exhausted, not a negative result.
+      onMismatch?.(text.startsWith(typed) ? 'suggestion-exhausted' : 'typed-prefix-mismatch', typed.length, text.length);
       if (this.current === captured) this.clear();
-      return this.run(scope, prefix, suffix, signal, start);
+      return this.run(scope, prefix, suffix, signal, start, onMismatch);
     } finally {
       if (rejectCancelled) signal.removeEventListener('abort', rejectCancelled);
       this.release(captured);
