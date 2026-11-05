@@ -83,7 +83,9 @@
   }
   .v2-composer-panel .dvx-model-panel { @apply flex min-h-0 flex-col; }
   .v2-composer-panel .dvx-model-list { @apply grid max-h-[176px] min-h-0 overflow-y-auto overscroll-contain px-1 py-1; }
-  .v2-composer-panel .dvx-model-row { @apply flex h-7 min-w-0 items-center gap-0.5 pr-1; }
+  .v2-composer-panel .dvx-model-row { @apply flex h-7 min-w-0 items-center gap-0.5 rounded pr-1; transition: background-color var(--motion-fast) var(--motion-ease); }
+  .v2-composer-panel .dvx-model-row:hover:has(.dvx-model-choice:enabled),
+  .v2-composer-panel .dvx-model-row:focus-within { background: var(--control-surface-hover); }
   .v2-composer-panel .dvx-model-choice { @apply flex h-7 min-w-0 flex-1 items-center gap-1 pl-1.5 pr-0.5 text-left; }
   .v2-composer-panel .dvx-model-name { @apply min-w-0 truncate text-xs font-normal leading-5; }
   .v2-composer-panel .dvx-model-source { @apply ml-auto shrink-0 text-[10px] text-muted-foreground; }
@@ -95,14 +97,14 @@
   .v2-composer-panel .dvx-model-check { @apply size-3.5 shrink-0 text-muted-foreground; }
   .v2-composer-panel .dvx-model-check { @apply ml-auto mr-1; }
   .v2-composer-panel .dvx-model-row .dvx-model-check { @apply ml-0; }
-  .v2-composer-panel .dvx-model-footer { @apply flex min-w-0 items-center gap-1 border-t border-[var(--panel-edge)] px-1; }
+  .v2-composer-panel .dvx-model-footer { @apply flex min-w-0 items-center gap-1 border-t border-[var(--panel-edge)] px-1 py-0.5; }
   .v2-composer-panel .dvx-model-footer:empty { display: none; }
-  .v2-composer-panel .dvx-model-spec-row { @apply flex h-8 min-w-0 flex-1 items-center gap-2 px-1.5 text-left text-[11px]; }
+  .v2-composer-panel .dvx-model-spec-row { @apply flex h-7 min-w-0 flex-1 items-center gap-2 rounded px-1.5 text-left text-[11px]; }
   .v2-composer-panel .dvx-model-spec-row-label { @apply shrink-0 whitespace-nowrap; }
   .v2-composer-panel .dvx-model-spec-row-right { @apply flex min-w-0 items-center gap-1 overflow-hidden; }
   .v2-composer-panel .dvx-model-spec-row-value { @apply truncate text-[11px] text-muted-foreground; }
   .v2-composer-panel .dvx-model-spec-row .dvx-chevron-down { @apply -rotate-90; }
-  .v2-composer-panel .dvx-model-add-row { @apply flex h-8 w-full items-center gap-2 px-1.5 text-left text-xs text-muted-foreground; }
+  .v2-composer-panel .dvx-model-add-row { @apply flex h-8 w-full items-center gap-2 rounded px-1.5 text-left text-xs text-muted-foreground; }
   .v2-composer-panel .dvx-model-add-icon { @apply size-7 shrink-0 justify-center p-0; }
   .v2-composer-panel .dvx-model-add-row svg { @apply size-3.5; }
   .v2-composer-panel label.dvx-option-row { @apply cursor-pointer; transition: background-color var(--motion-fast) var(--motion-ease); }
@@ -110,8 +112,8 @@
   .v2-composer-panel label.dvx-option-row:has([data-state='checked']) { background: var(--control-surface-active); }
   .v2-composer-panel label.dvx-option-row:has(button:focus-visible) { outline: 1px solid var(--focus); outline-offset: -1px; }
   .v2-composer-panel label.dvx-option-row > button:focus-visible { outline: none; }
-  .v2-composer-panel .dvx-model-popover button:is(:hover, :active):not(:disabled),
-  .v2-composer-panel .dvx-model-popover label.dvx-option-row:is(:hover, :has([data-state='checked'])) { background: transparent; }
+  .v2-composer-panel .dvx-model-popover .dvx-model-choice:is(:hover, :active):not(:disabled) { background: transparent; }
+  .v2-composer-panel .dvx-model-popover :is(.dvx-model-edit, .dvx-model-spec-row, .dvx-model-add-row, .dvx-panel-back, .dvx-panel-action):hover:not(:disabled) { background: var(--control-surface-hover); }
   .v2-composer-panel .dvx-model-popover .dvx-panel-head { @apply min-h-8 px-2 py-1; }
   .v2-composer-panel .dvx-model-popover .dvx-panel-title { @apply text-xs font-normal; }
   .v2-composer-panel label.dvx-option-row:has(button:disabled) { @apply cursor-default opacity-50; }
