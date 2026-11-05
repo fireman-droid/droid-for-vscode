@@ -1,9 +1,7 @@
-import { useState } from 'react';
-import { ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { Button } from '@droidvisx/chat-ui/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@droidvisx/chat-ui/ui/selection';
-import { AnimatedCollapsibleContent, Collapsible, CollapsibleTrigger } from '@droidvisx/chat-ui/ui/collapsible';
 import { SettingsRow, SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import type { AutomationAction, ManagedAutomation } from '../../shared/protocol/automationProtocol';
 import type { ManagementState } from './useManagement';
@@ -25,7 +23,6 @@ export function AutomationDetail({ row, state, active, loading, tab, onTab, onBa
   onBack(): void; onRefresh(): void; onEdit(): void; onAction(action: AutomationAction): void; refreshKey: number;
 }) {
   const { t, locale } = useI18n();
-  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const disabled = loading || state.busy;
   const modelLabel = state.settings?.reviewQuestion.models.find(model => model.id === row.model)?.label || row.model || t('Droid default');
   return <section aria-label={row.name}>
@@ -82,16 +79,7 @@ export function AutomationDetail({ row, state, active, loading, tab, onTab, onBa
             </>}
         </SettingsSection>
         <SettingsSection title={t('Instructions')}>
-          <Collapsible open={instructionsOpen} onOpenChange={setInstructionsOpen}>
-            <SettingsRow label={row.prompt.split(/\r?\n/, 1)[0] || t('Instructions')}>
-              <CollapsibleTrigger asChild>
-                <Button variant="plain" size="sm" className="management-advanced">{t('Show instructions')}<ChevronDown /></Button>
-              </CollapsibleTrigger>
-            </SettingsRow>
-            <AnimatedCollapsibleContent open={instructionsOpen}>
-              <pre className="management-prompt-pre">{row.prompt}</pre>
-            </AnimatedCollapsibleContent>
-          </Collapsible>
+          <pre className="management-prompt-pre">{row.prompt}</pre>
         </SettingsSection>
         <p data-ui-notice="" className="management-caption">{t('Local schedules need this computer awake, online, and running Droid. Closing this page does not pause them.')}</p>
       </TabsContent>

@@ -69,7 +69,7 @@ export function AutomationHistory({ row, state, active = true }: {
       >
         {detail.sessionId && <div className="management-actions">
           <Button variant="outline" size="sm" disabled={disabled} onClick={() => open(detail.id, false)}>{t('View session')}</Button>
-          <Button variant="plain" size="sm" disabled={disabled} onClick={() => open(detail.id, true)}>{t('Continue in chat')}</Button>
+          <Button variant="outline" size="sm" disabled={disabled} onClick={() => open(detail.id, true)}>{t('Continue in chat')}</Button>
         </div>}
       </SettingsRow>
     </SettingsSection>}

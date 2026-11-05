@@ -36,7 +36,7 @@ export function AutomationTarget({ id, sessionId, state, active }: {
   >
     <div className="management-actions">
       <Button variant="outline" size="sm" disabled={state.busy} onClick={() => open(false)}>{t('View target session')}</Button>
-      <Button variant="plain" size="sm" disabled={state.busy || !target?.canResume || !!error} onClick={() => open(true)}>{t('Continue in chat')}</Button>
+      <Button variant="outline" size="sm" disabled={state.busy || !target?.canResume || !!error} onClick={() => open(true)}>{t('Continue in chat')}</Button>
     </div>
   </SettingsRow>;
 }
