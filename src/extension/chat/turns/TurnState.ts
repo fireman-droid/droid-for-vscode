@@ -16,6 +16,9 @@ export class TurnState {
   turnIo: {
     counts: Map<string, number>;
     bytes: number;
+    startedAt?: number;
+    firstResponse?: boolean;
+    reconciled?: boolean;
   } | null = null;
   readonly interactionOpenedAt = new Map<string, number>();
 }

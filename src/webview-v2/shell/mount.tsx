@@ -24,6 +24,10 @@ class RenderBoundary extends Component<
   { readonly failed: boolean }
 > {
   state = { failed: false };
+  componentDidMount(): void {
+    // A completed commit (including the reported failure screen) ends boot.
+    (globalThis as { __dvxBooted?: boolean }).__dvxBooted = true;
+  }
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch(error: Error, info: ErrorInfo): void {
     this.props.report(`${error.name}: ${error.message}\n${info.componentStack ?? ''}`.slice(0, 2048));
@@ -43,7 +47,6 @@ export function mountWebview(children: ReactNode, report: (message: string) => v
   applyBootTheme();
   element.replaceChildren();
   element.removeAttribute('style');
-  (globalThis as { __dvxBooted?: boolean }).__dvxBooted = true;
   createRoot(element).render(
     <WebviewLocaleProvider><RenderBoundary report={report}>
       <PortalContainerProvider container={element}>

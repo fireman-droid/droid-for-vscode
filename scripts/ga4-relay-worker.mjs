@@ -39,6 +39,10 @@ const ALLOWED_PARAM_KEYS = new Set([
   'arch',
   'locale',
   'ext_version',
+  'editor_version',
+  'sdk_version',
+  'build_id',
+  'runtime_mode',
   'surface',
   'category',
   'sub_category',
@@ -168,24 +172,29 @@ export default {
       : 'https://www.google-analytics.com/mp/collect';
     const target = `${ga4Endpoint}?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`;
 
-    const forwardPromise = fetch(target, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (debug) {
-      const response = await forwardPromise;
-      const validation = await response.json().catch(() => null);
-      return jsonResponse({ ok: response.ok, status: response.status, validation, forwarded: payload });
-    }
-
-    if (ctx && typeof ctx.waitUntil === 'function') {
-      ctx.waitUntil(forwardPromise.catch(() => undefined));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    try {
+      const response = await fetch(target, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (debug) {
+        const validation = await response.json().catch(() => null);
+        return jsonResponse({ ok: response.ok, status: response.status, validation, forwarded: payload });
+      }
+      await response.body?.cancel();
+      if (!response.ok) {
+        return jsonResponse({ ok: false, error: 'upstream_rejected' }, response.status === 429 ? 429 : 502);
+      }
+      // HTTP acceptance is not a guarantee that GA4 indexed every event.
       return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*' } });
+    } catch {
+      return jsonResponse({ ok: false, error: 'upstream_unavailable' }, 503);
+    } finally {
+      clearTimeout(timer);
     }
-
-    await forwardPromise.catch(() => undefined);
-    return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*' } });
   },
 };

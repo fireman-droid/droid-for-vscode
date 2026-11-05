@@ -26,6 +26,7 @@ export function createManagementServices(options: {
   const cwd = () => controller.getEditorWorkspaceContext().cwd;
   const issueKey = 'droidvisx.automationConfigurationIssues';
   const services: ManagementServices = {
+    diagnostics,
     automations: new ManagementAutomationsService(getDroid, options.daemon,
       () => controller.getEditorWorkspaceContext().trusted,
       async (action, name) => {
@@ -53,7 +54,7 @@ export function createManagementServices(options: {
           if (issue) entries[id] = issue; else delete entries[id];
           await context.globalState.update(issueKey, entries);
         },
-      }),
+      }, diagnostics),
     defaults: new ManagementDefaultsService(getDroid, options.daemon, controller.modelAvailability),
     settings: new ManagementSettingsService(context.secrets, String(context.extension.packageJSON.version), () => ({
       cwd: cwd(), connection: controller.sessionState.connection.status, ide: controller.readIdeState().status,

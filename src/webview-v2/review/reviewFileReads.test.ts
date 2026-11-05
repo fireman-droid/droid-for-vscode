@@ -46,3 +46,16 @@ it('retains a mounted file outside the preload margin and supplies cached conten
   f.reads.retain(path); f.reads.watch(path);
   expect(f.postMessage).toHaveBeenCalledOnce(); f.reads.dispose();
 });
+it('reports a read timeout without file identity and suppresses it for disposed reads', () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  try {
+    f.reads.watch('file-0.ts');
+    vi.runOnlyPendingTimers();
+    expect(f.postMessage).toHaveBeenCalledWith({ type: 'webview.diagnostic', kind: 'error', detail: 'review.readFile timed out.' });
+    f.reads.dispose();
+    const count = f.postMessage.mock.calls.length;
+    vi.runOnlyPendingTimers();
+    expect(f.postMessage).toHaveBeenCalledTimes(count);
+  } finally { f.reads.dispose(); vi.useRealTimers(); }
+});

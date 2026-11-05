@@ -14,6 +14,7 @@ import { saveHistoryNote } from './historyNote';
 import { DaemonTerminalManager } from '../terminal/DaemonTerminalManager';
 import { manageTerminals, requestDroidUpdate } from './runtimeMaintenance';
 import { choose, ManagementError, type ManagementContext } from './managementUi';
+import { classifyOperationError, recordOperation, type OperationCode, type OperationResultDiagnostic } from '../diagnostics/operationDiagnostics';
 
 /** Native management keeps credentials and executable-source confirmations out of Webviews. */
 export class DroidManagement implements vscode.Disposable {
@@ -30,10 +31,16 @@ export class DroidManagement implements vscode.Disposable {
   async open(section?: ManagementSection, serverName?: string): Promise<void> {
     if (this.disposed) return;
     if (this.operation) {
+      recordOperation(this.controller.diagnostics, 'management', section ? `native.${section}` : 'native.open',
+        performance.now(), { outcome: 'blocked', failureKind: 'busy' });
       await vscode.window.showInformationMessage('Finish or cancel the current Droid management operation first.');
       return;
     }
     const abort = new AbortController();
+    const started = performance.now();
+    let operation: OperationCode = section ? `native.${section}` : 'native.open';
+    // Native handlers can finish after inspection or a cancelled sub-dialog.
+    let diagnostic: OperationResultDiagnostic = { outcome: 'unknown' };
     this.operation = abort;
     const state = this.controller.sessionState;
     const sessionId = state.sessionId;
@@ -71,7 +78,8 @@ export class DroidManagement implements vscode.Disposable {
         { label: 'Save a history-only note…', description: 'Process mode only; does not send to the model', section: 'history-note' as const },
         { label: 'Update Droid', description: 'Request a shared daemon update, with confirmation', section: 'updates' as const },
       ]))?.section;
-      if (!target) return;
+      if (!target) { diagnostic = { outcome: 'cancelled', failureKind: 'cancelled' }; return; }
+      operation = `native.${target}`;
       if (target === 'history-note') { await saveHistoryNote(this.controller, assertCurrent); return; }
       refreshSessions = target === 'archive' || target === 'worktrees';
       if ((target === 'skills' || target === 'mcp' || target === 'terminals') && !this.daemonMode)
@@ -92,9 +100,11 @@ export class DroidManagement implements vscode.Disposable {
       else if (serverName !== undefined) await signInMcp(context, serverName);
       else await manageMcp(context);
     } catch (error) {
+      diagnostic = abort.signal.aborted ? { outcome: 'cancelled', failureKind: 'cancelled' } : classifyOperationError(error);
       if (!abort.signal.aborted) await vscode.window.showErrorMessage(error instanceof ManagementError || error instanceof ModelAvailabilityError
         ? error.message : 'Droid could not complete the management operation. Check the service connection, source and organization policy. Changes already confirmed by Droid are not rolled back.');
     } finally {
+      recordOperation(this.controller.diagnostics, 'management', operation, started, diagnostic);
       abort.abort();
       subscription.dispose();
       if (this.operation === abort) this.operation = null;

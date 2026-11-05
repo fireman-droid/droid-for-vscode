@@ -35,7 +35,7 @@ export function beginTurn(ctl: TurnLifecyclePort, initial: InitialTurn): number 
   const generation = ++ctl.turnState.turnGeneration;
   ctl.effects.discardPendingThinking();
   ctl.diagnostics?.beginTurnScope?.(initial.turnId);
-  ctl.turnState.turnIo = { counts: new Map(), bytes: 0 };
+  ctl.turnState.turnIo = { counts: new Map(), bytes: 0, startedAt: performance.now() };
   ctl.turnState.turn = createRestoredTurn(initial);
   return generation;
 }

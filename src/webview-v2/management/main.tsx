@@ -1,7 +1,8 @@
 import { mountWebview } from '../shell/mount';
+import { reportWebviewRenderError, watchWebviewHandshake } from '../shell/diagnostics';
 import { ManagementApp } from './ManagementApp';
 import type { ManagementTransport } from './useManagement';
-import type { ManagementRequest } from '../../shared/protocol/managementPageProtocol';
+import { parseManagementHostMessage, type ManagementRequest } from '../../shared/protocol/managementPageProtocol';
 import type { ModelsRequest } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelSourceRequest } from '../../shared/protocol/modelSourceProtocol';
 
@@ -16,4 +17,5 @@ const transport: ManagementTransport = {
     return () => window.removeEventListener('message', receive);
   },
 };
-mountWebview(<ManagementApp transport={transport} />, detail => console.error(detail));
+watchWebviewHandshake(value => parseManagementHostMessage(value) !== undefined);
+mountWebview(<ManagementApp transport={transport} />, reportWebviewRenderError);

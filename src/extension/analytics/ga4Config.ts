@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { RuntimeDiagnosticAttribute, RuntimeDiagnosticEvent } from '../../runtime/runtimeDiagnostics';
-import { projectFrontendEvent } from './projectFrontendEvent';
+import { frontendSurface, projectFrontendEvent } from './projectFrontendEvent';
 
 /**
  * Cloudflare Worker GA4 转发地址：
@@ -47,12 +47,21 @@ export interface Ga4EnvironmentMetadata {
   readonly platform: string;
   readonly arch: string;
   readonly language: string;
+  readonly editorVersion?: string;
+  readonly sdkVersion?: string;
+  readonly buildId?: string;
+  readonly runtimeMode?: string;
 }
 
 const SAFE_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const SAFE_LOCALE = /^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/u;
 const SAFE_TOKEN = /^[a-zA-Z0-9._-]{1,32}$/u;
 const MAX_METRIC = 86_400_000;
+const TURN_STAGES = new Map([
+  ['host.turn.accepted', 'accepted'], ['host.turn.rejected', 'rejected'],
+  ['host.turn.first-response', 'first_response'], ['host.turn.settled', 'settled'],
+  ['host.turn.failed', 'failure'],
+]);
 
 export function hashAnonymousClientId(machineId: string): string {
   const source = machineId.trim() || 'anonymous-machine';
@@ -109,6 +118,11 @@ function addOptionalMetric(target: Record<string, string | number>, key: string,
 export function classifyInitFailureReason(outcome: unknown, reason: unknown): string {
   if (outcome === 'available') return 'none';
   const text = typeof reason === 'string' ? reason : '';
+  if (/\b429\b|rate.?limit|too many requests/iu.test(text)) return 'rate_limited';
+  if (/\b402\b|quota|insufficient.?credits|billing|payment required/iu.test(text)) return 'quota';
+  if (/\b401\b|not.logged.in|sign.?in|authentication|unauthorized/iu.test(text)) return 'auth_unavailable';
+  if (/\b403\b|forbidden|permission denied|access denied/iu.test(text)) return 'permission_denied';
+  if (/\b5\d\d\b|service unavailable|internal server error/iu.test(text)) return 'server_error';
   if (/Request timeout.*daemon\.load_session/iu.test(text)) return 'timeout_load_session';
   if (/Request timeout.*daemon\.create_session/iu.test(text)) return 'timeout_create_session';
   if (/Request timeout.*daemon\.initialize_session/iu.test(text)) return 'timeout_init_session';
@@ -167,20 +181,28 @@ export function projectGa4Event(
     arch: normalizeArch(meta.arch),
     locale: normalizeLocale(meta.language),
     ext_version: normalizeVersion(meta.extensionVersion),
+    ...(meta.editorVersion === undefined ? {} : { editor_version: normalizeVersion(meta.editorVersion) }),
+    ...(meta.sdkVersion === undefined ? {} : { sdk_version: normalizeVersion(meta.sdkVersion) }),
+    ...(meta.buildId === undefined ? {} : { build_id: safeToken(meta.buildId) }),
+    ...(meta.runtimeMode === undefined ? {} : { runtime_mode: meta.runtimeMode === 'process' ? 'process' : 'daemon' }),
   };
   const attrs: Readonly<Record<string, RuntimeDiagnosticAttribute>> = event.attributes ?? {};
 
-  if (event.name === 'extension.activated') {
+  if (event.name === 'extension.activated' || event.name === 'extension.activation-started' || event.name === 'extension.activation-failed') {
     return {
       name: 'extension_activated',
-      params: { ...baseParams, engagement_time_msec: 100 },
+      params: { ...baseParams, engagement_time_msec: 100,
+        stage: event.name === 'extension.activated' ? 'ready' : event.name === 'extension.activation-started' ? 'started' : 'failed',
+        ...(event.name === 'extension.activation-failed'
+          ? { failure_kind: classifyInitFailureReason('initialization-failed', event.detail) } : {}),
+        ...(safeMetric(attrs.durationMs) === undefined ? {} : { duration_ms: safeMetric(attrs.durationMs)! }) },
     };
   }
 
   // 1. Frontend boot / render / error / longtask / activity expand
-  const renderMatch = /^(webview|sessionViewer|missionControl)\.render-ok$/u.exec(event.name);
+  const renderMatch = /^(webview|sessionViewer|missionControl|models|management|review)\.render-ok$/u.exec(event.name);
   if (renderMatch) {
-    const surface = renderMatch[1] === 'sessionViewer' ? 'viewer' : renderMatch[1] === 'missionControl' ? 'mission' : 'chat';
+    const surface = frontendSurface(renderMatch[1]!)!;
     const itemsMatch = /\bitems (\d+)\b/u.exec(event.detail ?? '');
     const renderMsMatch = /\brenderMs (\d+)\b/u.exec(event.detail ?? '');
     const durationMs = renderMsMatch ? safeMetric(Number(renderMsMatch[1])) : undefined;
@@ -263,10 +285,15 @@ export function projectGa4Event(
   }
 
   // 2. Runtime initialization ("对话转不回来" root-cause detector)
+  if (event.name === 'runtime.initialize.started') {
+    return { name: 'runtime_init', params: { ...baseParams, stage: 'started',
+      outcome: 'started', target_kind: safeToken(attrs.targetKind), engagement_time_msec: 100 } };
+  }
   if (event.name === 'runtime.initialize.finished') {
     const durationMs = safeMetric(attrs.durationMs);
     const params: Record<string, string | number> = {
       ...baseParams,
+      stage: 'finished',
       outcome: safeToken(attrs.outcome),
       failure_kind: classifyInitFailureReason(attrs.outcome, attrs.reason),
       engagement_time_msec: engagementMs(durationMs),
@@ -326,6 +353,17 @@ export function projectGa4Event(
   }
 
   // 5. Session recovery & UI diagnostics
+  if (event.name === 'host.operation.finished') {
+    const params: Record<string, string | number> = {
+      ...baseParams, category: 'operation_result', surface: safeToken(attrs.surface),
+      code: safeToken(attrs.operation), outcome: safeToken(attrs.outcome),
+      failure_kind: safeToken(attrs.failureKind, attrs.outcome === 'success' ? 'none' : 'unknown'),
+      engagement_time_msec: 100,
+    };
+    addOptionalMetric(params, 'duration_ms', attrs.durationMs);
+    addOptionalMetric(params, 'status_code', attrs.status);
+    return { name: attrs.surface === 'review' ? 'review_activity' : 'session_recovery', params };
+  }
   if (
     event.name === 'host.connection.auto-recovery-started' ||
     event.name === 'host.connection.auto-recovery-failed' ||
@@ -405,6 +443,17 @@ export function projectGa4Event(
   }
 
   // 8. Turn lifecycle, stream errors, stop watchdog, and turn I/O
+  const turnStage = TURN_STAGES.get(event.name);
+  if (turnStage) {
+    const params: Record<string, string | number> = {
+      ...baseParams, category: turnStage, outcome: safeToken(attrs.outcome, turnStage),
+      code: safeToken(attrs.code ?? attrs.reason, 'none'), source: safeToken(attrs.source ?? attrs.kind, 'live'),
+      engagement_time_msec: 100,
+    };
+    if (event.name === 'host.turn.failed') params.failure_kind = classifyInitFailureReason('initialization-failed', event.detail);
+    addOptionalMetric(params, 'duration_ms', attrs.durationMs);
+    return { name: 'turn_lifecycle', params };
+  }
   if (
     event.name === 'runtime.turn.finished' ||
     event.name === 'runtime.stream.error' ||
@@ -428,9 +477,14 @@ export function projectGa4Event(
     const params: Record<string, string | number> = {
       ...baseParams,
       category,
-      outcome: safeToken(attrs.outcome ?? attrs.status, 'ok'),
+      outcome: safeToken(attrs.outcome ?? attrs.status,
+        event.name === 'runtime.stream.error' ? 'failed' : event.name === 'host.turn.watchdog-stop-unconfirmed' ? 'unknown' : 'ok'),
       engagement_time_msec: engagementMs(durationMs),
     };
+    if (event.name === 'runtime.stream.error' || attrs.outcome === 'failed' ||
+        (typeof attrs.outcome === 'string' && attrs.outcome.startsWith('error_'))) {
+      params.failure_kind = classifyInitFailureReason('initialization-failed', event.detail);
+    }
     addOptionalMetric(params, 'duration_ms', durationMs);
     addOptionalMetric(params, 'records', attrs.projectedEventCount ?? attrs.messagesOut);
     addOptionalMetric(params, 'tool_count', attrs.toolStartCount);

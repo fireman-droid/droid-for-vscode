@@ -8,6 +8,7 @@ import {
 import { readChatStarfieldEnabled, readWebviewBootTheme, readWebviewThemePreference } from '../webview/webviewTheme';
 import { readReviewQuestionModel, readReviewQuestionEffort, REVIEW_QUESTION_MODEL_SETTING, REVIEW_QUESTION_EFFORT_SETTING } from '../review/reviewQuestionSettings';
 import type { SessionReasoningEffort } from '../../shared/protocol/settings';
+import { OperationOutcomeError } from '../diagnostics/operationDiagnostics';
 
 export class ManagementSettingsService {
   constructor(private readonly secrets: vscode.SecretStorage, private readonly version: string,
@@ -100,7 +101,7 @@ export class ManagementSettingsService {
         prompt: existing ? '留空保留已保存密钥。' : '密钥保存在编辑器 SecretStorage 中。',
         validateInput: value => value.trim() || existing || !completionNeedsKey(endpoint) ? undefined : '请输入 API Key。',
       });
-      if (key === undefined) throw new Error('已取消，补全设置未保存。');
+      if (key === undefined) throw new OperationOutcomeError('已取消，补全设置未保存。', { outcome: 'cancelled', failureKind: 'cancelled' });
       return key.trim() || undefined;
     } else if (enabled && completionNeedsKey(endpoint) && !existing) {
       throw new Error(`${label}尚未配置密钥，请先设置 API Key。`);

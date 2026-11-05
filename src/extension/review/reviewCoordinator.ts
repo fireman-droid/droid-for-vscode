@@ -49,6 +49,7 @@ import { ReviewScopeRetention } from './reviewScopeRetention';
 import { reviewDisplayVersion } from './reviewReadCache';
 import { ReviewPreviewReads } from './reviewPreviewReads';
 import { ReviewReadQueue } from './reviewReadQueue';
+import { ReviewOperationDiagnostics } from './reviewOperationDiagnostics';
 
 const REVIEW_STORAGE_KEY = 'droidvisx.reviewState';
 const REVIEW_STORAGE_VERSION = 1;
@@ -78,8 +79,10 @@ export class ReviewCoordinator implements vscode.Disposable {
   private readonly watcherRefresh: ReviewWatcherRefresh;
   private readonly previewReads: ReviewPreviewReads;
   private readonly reads = new ReviewReadQueue();
+  private readonly operationDiagnostics: ReviewOperationDiagnostics;
 
   constructor(private readonly options: ReviewCoordinatorOptions) {
+    this.operationDiagnostics = new ReviewOperationDiagnostics(options.diagnostics);
     this.previewReads = new ReviewPreviewReads(options);
     this.retention = new ReviewScopeRetention(options.snapshots);
     this.persisted = readPersistedScopes(
@@ -125,11 +128,13 @@ export class ReviewCoordinator implements vscode.Disposable {
     ];
   }
   start(): void {
-    void this.recoverInterruptedRestore();
+    void this.operationDiagnostics.recover(() => this.disposed ? Promise.resolve()
+      : recoverOperationUndo(this.options.storageDir, this.options.getWorkspaceRoot()));
   }
   handle(message: ReviewWebviewMessage): void {
     if (this.disposed) return;
-    void this.enqueue(() => this.handleNow(message)).catch((error) => {
+    void this.enqueue(() => this.operationDiagnostics.run(message, () => this.handleNow(message),
+      () => !this.disposed && this.options.isSessionCurrent?.(message.sessionId) !== false)).catch((error) => {
       if (!this.disposed)
         this.result(
           message.sessionId,
@@ -138,6 +143,7 @@ export class ReviewCoordinator implements vscode.Disposable {
           false,
           error instanceof Error ? error.message : 'Review operation failed.',
           'requestId' in message ? message.requestId : undefined,
+          false,
         );
     });
   }
@@ -263,18 +269,11 @@ export class ReviewCoordinator implements vscode.Disposable {
     this.pendingOperationRefreshes.clear();
   }
   private enqueue(task: () => Promise<void>, reportFailure = false): Promise<void> {
+    const started = performance.now();
     const result = this.operation.then(() => (this.disposed ? undefined : task()));
     this.operation = result.catch(() => undefined);
-    if (reportFailure) void result.catch(() => this.reportQueueFailure());
+    if (reportFailure) void result.catch(() => this.operationDiagnostics.queueFailed(started));
     return result;
-  }
-  private reportQueueFailure(): void {
-    try {
-      this.options.diagnostics?.record({
-        level: 'warn',
-        name: 'host.review.queue-failed',
-      });
-    } catch {}
   }
   private async handleNow(message: ReviewWebviewMessage): Promise<void> {
     if (this.options.isSessionCurrent?.(message.sessionId) === false) return;
@@ -314,6 +313,7 @@ export class ReviewCoordinator implements vscode.Disposable {
           (response) => this.publish(response),
           message,
           this.requireScope(message),
+          this.options.diagnostics,
         );
     }
   }
@@ -324,6 +324,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     await this.refreshVersions(loaded);
     if (this.disposed) return;
     this.active = loaded;
+    if (loaded.lifecycle === 'unavailable') this.operationDiagnostics.set({ outcome: 'failed', failureKind: 'unavailable' });
     this.publishState(loaded, this.options.publish, message.requestId);
     this.options.diagnostics?.record({ level: 'debug', name: 'host.review.list_ready',
       attributes: { reviewScopeId: loaded.reviewScopeId, fileCount: loaded.files.length,
@@ -660,6 +661,7 @@ export class ReviewCoordinator implements vscode.Disposable {
       active.reviewScopeId !== message.reviewScopeId ||
       active.baseline !== message.baseline
     ) {
+      this.operationDiagnostics.set({ outcome: 'blocked', failureKind: 'conflict' });
       return undefined;
     }
     return active;
@@ -817,6 +819,7 @@ export class ReviewCoordinator implements vscode.Disposable {
     }
     const outcome = await this.applyOperationRestore(scope, fresh);
     if (!outcome.complete) {
+      this.operationDiagnostics.set({ outcome: outcome.written > 0 ? 'partial' : 'failed', failureKind: 'unconfirmed' });
       this.previews.clear();
       await this.reloadActive();
       this.result(
@@ -857,13 +860,6 @@ export class ReviewCoordinator implements vscode.Disposable {
     return outcome;
   }
 
-  private async recoverInterruptedRestore(): Promise<void> {
-    try {
-      if (!this.disposed) await recoverOperationUndo(this.options.storageDir, this.options.getWorkspaceRoot());
-    } catch (error) { this.options.diagnostics?.record({ level: 'warn', name: 'host.review.recovery-blocked',
-      detail: error instanceof Error ? error.message : String(error) }); }
-  }
-
   private noteWorkspaceChange(uri: vscode.Uri): void {
     if (this.disposed) return;
     if (this.active !== null && this.active.scopeKind !== 'operations')
@@ -880,7 +876,9 @@ export class ReviewCoordinator implements vscode.Disposable {
     ok: boolean,
     message: string,
     requestId?: string,
+    recordFailure = true,
   ): void {
+    if (!ok && recordFailure) this.operationDiagnostics.failed();
     this.publish({
       type: 'review.operationResult',
       ...(requestId ? { requestId } : {}),

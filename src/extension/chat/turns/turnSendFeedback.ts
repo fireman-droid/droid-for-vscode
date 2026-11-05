@@ -4,7 +4,7 @@ import type { TurnFlowPort } from './turnFlowPort';
 
 /** A rejected optimistic send needs its own response, without settling the Host's active turn. */
 export function reportSendRejection(
-  ctl: Pick<TurnFlowPort, 'emit' | 'turnState'>,
+  ctl: Pick<TurnFlowPort, 'emit' | 'turnState' | 'recordHost'>,
   sessionId: string,
   turnId: string,
   reason: Extract<TurnStartEligibility, { kind: 'blocked' }>['reason'],
@@ -13,6 +13,7 @@ export function reportSendRejection(
     ctl.emit({ type: 'turn.state', sessionId, turnId, status: ctl.turnState.turn.status });
     return;
   }
+  ctl.recordHost({ level: 'warn', name: 'host.turn.rejected', attributes: { reason, outcome: 'blocked' } });
   ctl.emit({
     type: 'turn.error', sessionId, turnId, code: TURN_SEND_REJECTED_CODE,
     message: reason === 'settings-update-in-progress'

@@ -103,6 +103,7 @@ const openMissionControlCommand = 'droidvisx.openMissionControl';
 
 let activeController: ChatController | undefined,
   activeBrowserDevBridge: BrowserDevBridge | undefined,
+  activeAnalytics: ReturnType<typeof registerLocalFrontendAnalytics> | undefined,
   disposeDaemonSidecar: (() => Promise<void>) | undefined;
 
 /**
@@ -140,7 +141,7 @@ function createSessionLeaseHooks(): SessionLeaseHooks {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(registerEditorCodeReferences());
+  const startedAt = performance.now();
   // globalStorage survives Cursor's per-boot log directory cleanup and
   // aggregates all windows into one per-day file set.
   const logDirectory = vscode.Uri.joinPath(context.globalStorageUri, 'logs').fsPath;
@@ -151,18 +152,32 @@ export function activate(context: vscode.ExtensionContext): void {
     workspace: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null,
     onHostRecord: event => frontendAnalytics?.record(event),
   });
-  frontendAnalytics = registerLocalFrontendAnalytics(context, logDirectory);
+  try {
+    frontendAnalytics = registerLocalFrontendAnalytics(context, logDirectory, { diagnostics });
+    activeAnalytics = frontendAnalytics;
+    diagnostics.record({ level: 'info', name: 'extension.activation-started' });
+    activateServices(context, diagnostics, frontendAnalytics);
+    diagnostics.record({ level: 'info', name: 'extension.activated',
+      attributes: { durationMs: Math.round(performance.now() - startedAt),
+        extensionVersion: (context.extension.packageJSON as { version?: string }).version ?? 'unknown',
+        appName: vscode.env.appName, vscodeVersion: vscode.version } });
+  } catch (error) {
+    diagnostics.record({ level: 'error', name: 'extension.activation-failed',
+      attributes: { durationMs: Math.round(performance.now() - startedAt) },
+      detail: error instanceof Error ? error.message : 'Activation failed' });
+    void frontendAnalytics?.flush();
+    throw error;
+  }
+}
+
+function activateServices(
+  context: vscode.ExtensionContext,
+  diagnostics: LocalDiagnostics,
+  frontendAnalytics: ReturnType<typeof registerLocalFrontendAnalytics>,
+): void {
+  const logDirectory = diagnostics.directory;
+  context.subscriptions.push(registerEditorCodeReferences());
   registerAutocomplete(context, diagnostics);
-  diagnostics.record({
-    level: 'info',
-    name: 'extension.activated',
-    attributes: {
-      extensionVersion:
-        (context.extension.packageJSON as { version?: string }).version ?? 'unknown',
-      appName: vscode.env.appName,
-      vscodeVersion: vscode.version,
-    },
-  });
   const persistence: SessionRecoveryPersistence = {
     get: <T>(key: string) => context.workspaceState.get<T>(key),
     update: (key: string, value: unknown) => context.workspaceState.update(key, value),
@@ -537,6 +552,7 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
   );
   const modelManager = new ModelManager({
+      diagnostics,
       gateway: modelManagementGateway,
       availability: modelAvailability,
       registry: sharedChatServices.providerRegistry,
@@ -731,9 +747,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export async function deactivate(): Promise<void> {
   const controller = activeController,
+    analytics = activeAnalytics,
     browserDevBridge = activeBrowserDevBridge,
     disposeSidecar = disposeDaemonSidecar;
   activeController = undefined;
+  activeAnalytics = undefined;
   activeBrowserDevBridge = undefined;
   disposeDaemonSidecar = undefined;
   const failures: unknown[] = [];
@@ -744,6 +762,7 @@ export async function deactivate(): Promise<void> {
     () => browserDevBridge?.stop(),
     () => controller?.dispose(),
     () => disposeSidecar?.(),
+    () => analytics?.flush(),
   ]) {
     try { await cleanup(); } catch (error) { failures.push(error); }
   }

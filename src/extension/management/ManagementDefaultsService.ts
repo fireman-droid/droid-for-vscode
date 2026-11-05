@@ -3,6 +3,7 @@ import { parseDefaultSettingsPatch } from '../../runtime/daemon/defaultSettings'
 import { DEFAULT_FIELDS, type DefaultField, type DefaultValues, type ManagementDefaults } from '../../shared/protocol/managementDefaultsProtocol';
 import { isStrictRecord } from '../../shared/validation/strictValidation';
 import type { ModelAvailability } from '../models/DisabledModelsStore';
+import { OperationOutcomeError } from '../diagnostics/operationDiagnostics';
 
 type Defaults = Awaited<ReturnType<DaemonApi['settings']['getDefaults']>>;
 const modelPairs = [
@@ -74,7 +75,7 @@ export class ManagementDefaultsService {
     if (!result.success) throw new Error('Droid 未确认保存，请重试。');
     // Render the authoritative defaults returned with the successful write.
     try { return await this.project(result.defaults); }
-    catch { throw new Error('设置已保存，但读取保存结果失败。请刷新默认设置。'); }
+    catch { throw new OperationOutcomeError('设置已保存，但读取保存结果失败。请刷新默认设置。', { outcome: 'partial', failureKind: 'unavailable' }); }
   }
   private async project(defaults: Defaults): Promise<ManagementDefaults> {
     const values: DefaultValues = {};

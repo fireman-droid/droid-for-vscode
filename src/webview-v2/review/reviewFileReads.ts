@@ -2,6 +2,7 @@ import type { ReviewContext, ReviewPanelContext, ReviewPanelFile } from '../../s
 import type { ReviewScopeState } from '../../shared/protocol/reviewProtocol';
 import { createDiffRefreshQueue } from './diffRefreshQueue';
 import { ReviewReadScheduler } from './reviewReadScheduler';
+import { postWebviewDiagnostic } from '../shell/diagnostics';
 
 export interface ReviewFileRead {
   readonly file: ReviewPanelFile | null;
@@ -130,6 +131,7 @@ export class ReviewFileReads {
         this.changed();
       },
       timeout: () => {
+        postWebviewDiagnostic(this.port, 'error', 'review.readFile timed out.');
         if (reader.requestId) this.scheduler.finish(reader.requestId);
         reader.view = { ...reader.view, pending: false, error: 'Could not refresh this diff. Try again.' }; this.changed();
       },

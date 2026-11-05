@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReviewBranchesMessage, ReviewOpenMessage, ReviewScopeKind } from '../../shared/protocol/reviewProtocol';
 import type { ReviewPort } from './useReviewWorkbench';
+import { postWebviewDiagnostic } from '../shell/diagnostics';
 
 /** Correlates scope changes without discarding the last readable comparison. */
 export function useReviewScopeRequests(port: ReviewPort, onError: (message: string | null) => void) {
@@ -20,11 +21,12 @@ export function useReviewScopeRequests(port: ReviewPort, onError: (message: stri
     const id = `review-scope-${++sequence.current}`;
     const timer = setTimeout(() => {
       if (request.current?.id !== id) return;
+      postWebviewDiagnostic(port, 'error', kind === 'scope' ? 'review.open timed out.' : 'review.listBranches timed out.');
       cancel(); onError('This comparison did not finish loading. Refresh or choose the scope again.');
     }, 35_000);
     request.current = { id, sessionId, kind, timer };
     return id;
-  }, [cancel, onError]);
+  }, [cancel, onError, port]);
   const open = useCallback((sessionId: string, scopeKind: ReviewScopeKind, turnId?: string, baseBranch?: string) => {
     setChoosingBranch(scopeKind === 'branch');
     const requestId = start(sessionId, 'scope');
