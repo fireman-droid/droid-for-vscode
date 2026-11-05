@@ -97,7 +97,10 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
       previousFilter.current = { query, unreviewed, tree };
     }
   }, [query, unreviewed, tree, virtual, list.viewport, list.virtualizer]);
-  const visible: VisibleRow[] = virtual ? list.virtualizer.getVirtualItems() : rows.map((row, index) => ({ key: row.key, index, start: 0 }));
+  // Evaluate the disabled range too, so filtering down to a short list clears
+  // the cached virtual scroll offset before the long list is enabled again.
+  const virtualItems = list.virtualizer.getVirtualItems();
+  const visible: VisibleRow[] = virtual ? virtualItems : rows.map((row, index) => ({ key: row.key, index, start: 0 }));
   const visibleGroups = new Map<string, VisibleRow[]>();
   for (const item of visible) {
     const directory = rows[item.index]!.directory;

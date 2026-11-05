@@ -1,6 +1,7 @@
 import type { MessageTranslations } from './translate';
 
 export const extraMessages: readonly MessageTranslations[] = [
+  ["Droid has not restarted to load the update. Save your work and close editors that block restarting, then retry.","Droid 尚未重启以加载更新。请保存工作并关闭阻止重启的编辑器，然后重试。","Droid 尚未重新啟動以載入更新。請儲存工作並關閉阻止重新啟動的編輯器，然後重試。"],
   ["Started in background · PID {pid}","已在后台启动 · PID {pid}","已在背景啟動 · PID {pid}"],
   ["{count} result preview unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
   ["{count} result previews unavailable","{count} 条结果预览不可用","{count} 條結果預覽不可用"],
