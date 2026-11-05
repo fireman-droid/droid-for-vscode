@@ -99,6 +99,34 @@ describe('V2 request responses', () => {
     ]);
   });
 
+  it('steps through multiple questions one at a time before submitting all answers', async () => {
+    const user = userEvent.setup();
+    const request: PendingInteraction = {
+      sessionId: 'session', turnId: 'turn',
+      request: {
+        kind: 'ask-user', requestId: 'multi-step', toolCallId: 'tool',
+        questions: [
+          { index: 0, topic: 'Project', question: 'Which project?', options: ['Canvas', 'Toonflow'], multiSelect: false },
+          { index: 1, topic: 'Version', question: 'Which version handling?', options: ['Save version', 'Task version'], multiSelect: false },
+        ],
+      },
+    };
+    const actions = { onAnswer: vi.fn(), onPermission: vi.fn(), onOpenPlan: vi.fn() };
+    render(<InteractionPanel requests={[request]} actions={actions} />);
+    expect(screen.getByText('1 / 2')).toBeDefined();
+    expect(screen.queryByText('Which version handling?')).toBeNull();
+    await user.click(screen.getByRole('radio', { name: 'Toonflow' }));
+    await user.click(screen.getByRole('button', { name: 'Next step' }));
+    expect(screen.getByText('2 / 2')).toBeDefined();
+    expect(screen.queryByText('Which project?')).toBeNull();
+    await user.click(screen.getByRole('radio', { name: 'Save version' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answers' }));
+    expect(actions.onAnswer).toHaveBeenCalledExactlyOnceWith(request, false, [
+      { index: 0, answer: 'Toonflow' },
+      { index: 1, answer: 'Save version' },
+    ]);
+  });
+
   it('never approves an edited plan until its host-owned draft is ready', async () => {
     const user = userEvent.setup();
     const request: PendingInteraction = {

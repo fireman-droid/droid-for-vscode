@@ -58,6 +58,8 @@ export const chatMessages: readonly MessageTranslations[] = [
   ["Question navigation","问题导航","問題導航"],
   ["Previous question","上一个问题","上一個問題"],
   ["Next question","下一个问题","下一個問題"],
+  ["Previous step","上一题","上一題"],
+  ["Next step","下一题","下一題"],
   ["Quoted context","引用的上下文","引用的上下文"],
   ["Full quoted text","完整引用内容","完整引用內容"],
   ["Read-only session transcript","只读会话记录","只讀會話記錄"],
