@@ -121,6 +121,7 @@ function Questionnaire({ interaction, questions, actions }: {
   const { t } = useI18n();
   const [selected, setSelected] = useState<Record<number, readonly number[]>>({});
   const [custom, setCustom] = useState<Record<number, string>>({});
+  const [step, setStep] = useState(0);
   const [waiting, setWaiting] = useState(false);
   const sent = useRef(false);
   const displayed = questions.map((question) => ({ ...question, ...presentAskUserQuestion(question) }));
@@ -128,6 +129,10 @@ function Questionnaire({ interaction, questions, actions }: {
     index: question.index,
     answer: resolveAnswer(question, { selected: selected[question.index] ?? [], custom: custom[question.index] ?? '' }),
   }));
+  const currentStep = Math.min(step, Math.max(0, displayed.length - 1));
+  const question = displayed[currentStep];
+  const currentAnswer = answers[currentStep]?.answer ?? '';
+  const isLastStep = currentStep >= displayed.length - 1;
   const respond = (cancelled: boolean) => {
     if (sent.current) return;
     sent.current = true;
@@ -135,27 +140,69 @@ function Questionnaire({ interaction, questions, actions }: {
     actions.onAnswer(interaction, cancelled, cancelled ? [] : answers);
   };
   return (
-    <form aria-busy={waiting} className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); respond(false); }}>
-      <header className="shrink-0"><p className="text-[10px] text-muted-foreground">{t("AskUser")}</p><h2 className="text-[14px] font-semibold leading-[21px]">{t("Droid has")} {questions.length} {questions.length === 1 ? t("question") : t("questions")} {t("for you")}</h2></header>
-      <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-      {displayed.map((question) => (
-        <fieldset key={question.index} disabled={waiting} className="space-y-1.5 py-[13px]">
-          <legend className="pt-3 text-[13px]"><span className="block text-[10.5px] text-muted-foreground">{question.topic || t("Question {p0}", { p0: question.index + 1 })} · {question.options.length === 0 ? t("open response") : question.multiSelect ? t("multiple choice") : t("single choice")}</span><span>{question.question}</span></legend>
-          <QuestionOptions question={question} selected={selected[question.index] ?? []} disabled={waiting}
-            onChange={(update) => {
-              setSelected((previous) => ({ ...previous, [question.index]: typeof update === 'function' ? update(previous[question.index] ?? []) : update }));
-              if (!question.multiSelect) setCustom((previous) => (previous[question.index] ? { ...previous, [question.index]: '' } : previous));
+    <form aria-busy={waiting} className="flex min-h-0 flex-col" onSubmit={(event) => {
+      event.preventDefault();
+      if (!isLastStep) {
+        if (currentAnswer && currentAnswer.length <= MAX_ASK_USER_ANSWER_LENGTH) setStep(currentStep + 1);
+        return;
+      }
+      if (answers.every((answer) => answer.answer && answer.answer.length <= MAX_ASK_USER_ANSWER_LENGTH)) respond(false);
+    }}>
+      <header className="shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] text-muted-foreground">{t("AskUser")}</p>
+            <h2 className="text-[13px] font-semibold leading-5">{t("Droid has")} {questions.length} {questions.length === 1 ? t("question") : t("questions")} {t("for you")}</h2>
+          </div>
+          {displayed.length > 1 ? <span data-ui-notice="" className="text-xs tabular-nums text-muted-foreground">{currentStep + 1} / {displayed.length}</span> : null}
+        </div>
+        {displayed.length > 1 ? (
+          <div className="mt-2 flex gap-1.5" role="tablist" aria-label={t("Question navigation")}>
+            {displayed.map((item, idx) => {
+              const answered = Boolean(answers[idx]?.answer);
+              const active = idx === currentStep;
+              return (
+                <Button
+                  key={item.index}
+                  variant="plain"
+                  size="none"
+                  role="tab"
+                  aria-selected={active}
+                  aria-label={item.topic || t("Question {p0}", { p0: idx + 1 })}
+                  disabled={waiting}
+                  onClick={() => setStep(idx)}
+                  className={`h-1.5 flex-1 rounded-full transition-colors ${active ? 'bg-primary' : answered ? 'bg-primary/45 hover:bg-primary/65' : 'bg-border hover:bg-muted-foreground/40'}`}
+                />
+              );
+            })}
+          </div>
+        ) : null}
+      </header>
+      {question ? (
+        <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <fieldset key={question.index} disabled={waiting} className="space-y-1.5 py-2.5">
+            <legend className="pt-1 text-[13px]"><span className="block text-[10.5px] text-muted-foreground">{question.topic || t("Question {p0}", { p0: currentStep + 1 })} · {question.options.length === 0 ? t("open response") : question.multiSelect ? t("multiple choice") : t("single choice")}</span><span>{question.question}</span></legend>
+            <QuestionOptions question={question} selected={selected[question.index] ?? []} disabled={waiting}
+              onChange={(update) => {
+                setSelected((previous) => ({ ...previous, [question.index]: typeof update === 'function' ? update(previous[question.index] ?? []) : update }));
+                if (!question.multiSelect) setCustom((previous) => (previous[question.index] ? { ...previous, [question.index]: '' } : previous));
+              }} />
+            <Input aria-label={t("Own answer for {p0}", { p0: question.topic })} placeholder={question.options.length ? t("Or enter a custom answer…") : t("Enter your answer…")} maxLength={MAX_ASK_USER_ANSWER_LENGTH} value={custom[question.index] ?? ''} onChange={(event) => {
+              const value = event.target.value;
+              setCustom((previous) => ({ ...previous, [question.index]: value }));
+              if (!question.multiSelect && value) setSelected((previous) => (previous[question.index]?.length ? { ...previous, [question.index]: [] } : previous));
             }} />
-          <Input aria-label={t("Own answer for {p0}", { p0: question.topic })} placeholder={question.options.length ? t("Or enter a custom answer…") : t("Enter your answer…")} maxLength={MAX_ASK_USER_ANSWER_LENGTH} value={custom[question.index] ?? ''} onChange={(event) => {
-            const value = event.target.value;
-            setCustom((previous) => ({ ...previous, [question.index]: value }));
-            if (!question.multiSelect && value) setSelected((previous) => (previous[question.index]?.length ? { ...previous, [question.index]: [] } : previous));
-          }} />
-        </fieldset>
-      ))}</div>
+          </fieldset>
+        </div>
+      ) : null}
       <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--panel-edge)] pt-2 pb-[9px]">
         <Button variant="outline" size="sm" disabled={waiting} onClick={() => respond(true)}>{t("Cancel")}</Button>
-        <Button type="submit" size="sm" disabled={waiting || answers.some((answer) => !answer.answer || answer.answer.length > MAX_ASK_USER_ANSWER_LENGTH)}>{t("Submit answers")}</Button>
+        {currentStep > 0 ? <Button variant="outline" size="sm" disabled={waiting} onClick={() => setStep(currentStep - 1)}>{t("Previous step")}</Button> : null}
+        {!isLastStep ? (
+          <Button size="sm" disabled={waiting || !currentAnswer || currentAnswer.length > MAX_ASK_USER_ANSWER_LENGTH} onClick={() => setStep(currentStep + 1)}>{t("Next step")}</Button>
+        ) : (
+          <Button type="submit" size="sm" disabled={waiting || answers.some((answer) => !answer.answer || answer.answer.length > MAX_ASK_USER_ANSWER_LENGTH)}>{t("Submit answers")}</Button>
+        )}
       </div>
       {answers.some((answer) => answer.answer.length > MAX_ASK_USER_ANSWER_LENGTH) ? <p role="alert" className="text-xs text-destructive">{t("An answer is too long. Choose fewer options or shorten your answer.")}</p> : null}
       {waiting ? <p role="status" className="text-xs text-muted-foreground">{t("Waiting for Droid to confirm…")}</p> : null}
@@ -170,7 +217,7 @@ function QuestionOptions({ question, selected, disabled, onChange }: {
   const options = question.options.map((option, index) => {
     const id = `question-${question.index}-option-${index}`;
     return <label key={index} htmlFor={id} onClick={(event) => { if (event.target instanceof HTMLInputElement) event.stopPropagation(); }}
-      className="v2-chat-choice v2-question-option flex min-h-9 items-start gap-2 rounded-lg border border-transparent px-[9px] py-[7px] text-xs">
+      className="v2-chat-choice v2-question-option flex min-h-8 items-start gap-2 rounded-lg border border-transparent px-2 py-1.5 text-xs">
       {question.multiSelect ? <Checkbox id={id} className="mt-0.5" disabled={disabled} checked={selected.includes(index)}
         onCheckedChange={(checked) => onChange((previous) => checked === true ? (previous.includes(index) ? previous : [...previous, index]) : previous.filter((value) => value !== index))} />
         : <RadioGroupItem id={id} className="mt-0.5" value={String(index)} onClick={(event) => { if (selected.includes(index)) { event.preventDefault(); onChange([]); } }} />}
