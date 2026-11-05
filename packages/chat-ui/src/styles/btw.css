@@ -57,7 +57,7 @@
     overflow-anchor: none;
     scrollbar-gutter: stable;
   }
-  .v2-btw-transcript { min-width: 0; padding: 12px 12px 20px; }
+  .v2-btw-transcript { min-width: 0; padding: 12px 12px 0; }
   .v2-btw-empty { max-width: 280px; padding: 20px 4px; user-select: none; }
   .v2-btw-empty-mark { width: 20px; height: 20px; margin-bottom: 12px; color: var(--muted-ink); stroke-width: 1.5; }
   .v2-btw-empty > p { margin-bottom: 6px; font-size: 13px; font-weight: 600; line-height: 20px; }
@@ -117,7 +117,7 @@
   .v2-btw-footer {
     min-width: 0;
     max-height: 65vh;
-    padding: 10px 12px 12px;
+    padding: 0 12px 12px;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;

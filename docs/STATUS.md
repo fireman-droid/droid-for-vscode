@@ -7,7 +7,7 @@
 ## 版本与交付
 
 - 当前源码版本为 `0.8.20`，在 `0.8.19` 基础上加入繁星／三体／关闭三种深色聊天背景，并修复 AskUser 多选识别、勾选状态与单选填空互斥切换。
-- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖与 `codex/style-fix` 至 `c2156f6f` 的 UI 修复已通过 PR #26 合入 main，完整试用包已成功安装到 Microsoft VS Code，未同步 Cursor；版本仍为 `0.8.20`，未覆盖正式发布产物。后续补全诊断修复仅在任务分支，尚未打包安装。
+- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖与 `codex/style-fix` 至 `c2156f6f` 的 UI 修复已通过 PR #26 合入 main，完整试用包已成功安装到 Microsoft VS Code，未同步 Cursor；版本仍为 `0.8.20`，未覆盖正式发布产物。后续聊天间距归零与补全详细诊断已集成，本轮授权一起合并 main 并安装 Microsoft VS Code，实际构建、合并与安装结果以本次交付回执为准；不更新 Cursor、不正式发版。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
@@ -49,7 +49,8 @@
 
 ## 最近验证
 
-- 补全诊断：9 个文件共 208 项定向测试有通过结果，覆盖返回正文分片、具体过滤规则、请求复用不匹配、Next Edit 结果／采纳／失效与远程投影；`typecheck`、`lint:budgets` 通过，最后映射调整仅重跑受影响的 2 文件／29 项及扩展类型与预算检查。未调用真实模型、发送线上测试遥测或进行编辑器验收；未打包安装。主工作区其他未提交补全改动保留，诊断修复使用独立任务分支。
+- 补全诊断：9 个文件共 208 项定向测试有通过结果，覆盖返回正文分片、具体过滤规则、请求复用不匹配、Next Edit 结果／采纳／失效与远程投影；`typecheck`、`lint:budgets` 通过，最后映射调整仅重跑受影响的 2 文件／29 项及扩展类型与预算检查。未调用真实模型、发送线上测试遥测或进行编辑器验收。主工作区其他未提交补全改动保留，诊断修复使用独立任务分支；本轮合并与安装见交付说明。
+- 聊天间距：主聊天与 BTW 的消息区底部及输入框外层顶部固定留白归零，主聊天末条消息的分隔间距与状态区外层底部留白一并移除；保留输入框内部边距、虚拟列表占位和新提问置顶的动态留白跑道。`typecheck`、`lint:budgets` 与滚动／阅读锚点／历史分页 3 个测试文件共 13 项通过；未进行真实页面验收，本轮合并与安装见交付说明。
 
 - 遥测与完整 UI 集成：核心 5 个文件／32 项、页面与业务操作 15 个文件／95 项均有通过结果。页面初跑两个失败来自缺失 connectionId 及泄漏的测试夹具，已修正并仅重跑受影响文件；队列聚合与分类表调整后仅重跑对应 2 文件／18 项。打包内类型检查首次发现测试夹具类型断言，修正后复用已通过的公共 UI 类型检查，续跑其余类型、预算与生产构建，再由同一 vsce 归档器生成完整包；171 个 VSIX 条目、依赖与入口校验通过。UI 修复分支已集成至 `c2156f6f`（9 个提交，含逐题 AskUser）。没有真实模型调用、自动化执行、线上测试遥测或本轮浏览器验收。
 
