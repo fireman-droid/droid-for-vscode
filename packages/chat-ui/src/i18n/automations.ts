@@ -2,6 +2,12 @@ import type { MessageTranslations } from './translate';
 
 export const automationMessages: readonly MessageTranslations[] = [
   ['Automations', '自动化', '自動化'],
+  ['Name', '名称', '名稱'],
+  ['Status', '状态', '狀態'],
+  ['Actions', '操作', '操作'],
+  ['Description', '说明', '說明'],
+  ['Total runs', '累计运行', '累計執行'],
+  ['Recent runs', '最近运行记录', '最近執行記錄'],
   ['New automation', '新建自动化', '新增自動化'],
   ['Edit automation', '编辑自动化', '編輯自動化'],
   ['Create paused', '创建并暂停', '建立並暫停'],

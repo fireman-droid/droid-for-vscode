@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { Button } from '@droidvisx/chat-ui/ui/button';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
+import { SettingsRow, SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { AUTOMATION_HISTORY_PAGE_SIZE, type AutomationHistory as History,
   type ManagedAutomation } from '../../shared/protocol/automationProtocol';
 import type { ManagementState } from './useManagement';
@@ -38,42 +38,41 @@ export function AutomationHistory({ row, state, active = true }: {
   const detail = history?.runs.find(run => run.id === selected);
   const disabled = loading || state.busy;
   return <section aria-label={t('Run history')} className="flex flex-col gap-3">
-    <div className="flex items-start justify-between gap-3">
-      <p data-ui-notice="" className="management-caption">{t('Times use this computer’s timezone. Delivery does not confirm completion of the model response.')}</p>
-      <Button variant="plain" size="icon-sm" aria-label={t('Refresh run history')} disabled={disabled}
-        onClick={() => void load(history?.offset ?? 0)}><RefreshCw className={loading ? 'animate-spin motion-reduce:animate-none' : undefined} /></Button>
-    </div>
-    {loading && <p role="status" data-ui-notice="" className="management-caption">{t('Loading run history…')}</p>}
+    {loading && <p role="status" data-ui-notice="" className="sr-only">{t('Loading run history…')}</p>}
     {error && <p role="alert" data-ui-notice="" className="management-caption text-destructive">{t(error)}</p>}
     <ScrollArea orientation="horizontal" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
-      <table className="management-mission-table" aria-busy={loading}>
-        <thead data-ui-notice=""><tr><th>{t('Started')}</th><th>{t('Type')}</th><th>{t('Status')}</th><th>{t('Delivery')}</th><th>{t('Session')}</th></tr></thead>
+      <table className="management-mission-table management-automation-table" aria-busy={loading}>
+        <colgroup><col className="management-history-started-col" /><col className="management-history-type-col" /><col className="management-history-status-col" /><col className="management-history-delivery-col" /><col className="management-history-session-col" /></colgroup>
+        <thead data-ui-notice=""><tr><th scope="col">{t('Started')}</th><th scope="col">{t('Type')}</th><th scope="col">{t('Status')}</th><th scope="col">{t('Delivery')}</th><th scope="col">{t('Session')}</th></tr></thead>
         <tbody>{history?.runs.map(run => <tr key={run.id}>
-          <td><Button variant="plain" size="none" disabled={disabled} aria-expanded={selected === run.id}
+          <td><Button variant="plain" size="none" className="management-mission-title" disabled={disabled} aria-expanded={selected === run.id}
             onClick={() => setSelected(selected === run.id ? null : run.id)}>{automationTime(run.startedAt, locale)}</Button></td>
           <td data-ui-notice="">{t(run.type === 'create' ? 'Initialization' : run.type === 'run' ? 'Execution' : 'Unknown')}</td>
           <td data-ui-notice="">{t(run.status)}</td>
           <td data-ui-notice="">{run.delivery ? t(run.delivery.status === 'pending' ? 'Pending delivery' : run.delivery.status === 'delivered' ? 'Delivered'
             : run.delivery.status === 'failed' ? 'Delivery failed' : 'Unknown delivery status') : '—'}</td>
-          <td>{run.sessionId ? <Button variant="plain" size="sm" disabled={disabled} onClick={() => open(run.id, false)}>
-            {t(run.delivery ? 'View target session' : 'View run session')}</Button> : <span data-ui-notice="">{t('No linked session')}</span>}</td>
+          <td>{run.sessionId ? <Button variant="plain" size="none" className="management-table-link" disabled={disabled} onClick={() => open(run.id, false)}>
+            {t(run.delivery ? 'View target session' : 'View run session')}</Button> : <span data-ui-notice="" className="text-muted-foreground">{t('No linked session')}</span>}</td>
         </tr>)}</tbody>
       </table>
     </ScrollArea>
-    {detail && <article className="flex flex-col gap-2 rounded-lg border border-border p-3">
-      <h3 data-ui-notice="">{t('Run details')}</h3>
-      <p data-ui-notice="" className="management-caption">{t('Run ID')}: {detail.id}</p>
-      <p data-ui-notice="">{t('Finished')}: {automationTime(detail.completedAt, locale)} · {t('Duration')}: {detail.durationMs === null ? '—' : `${detail.durationMs / 1000}s`}</p>
-      {detail.isRetry && <p data-ui-notice="" className="management-caption">{t('Retry of')}: {detail.originalRunId ?? t('Unknown')}</p>}
-      {detail.error && <p className="text-destructive whitespace-pre-wrap">{detail.error}</p>}
-      {detail.delivery?.reason && <p className="whitespace-pre-wrap">{detail.delivery.reason}</p>}
-      {detail.modelFallback && <p data-ui-notice="" className="management-caption">{t('Model fallback')}: {detail.modelFallback}</p>}
-      {detail.sessionId && <div className="management-actions">
-        <Button variant="plain" size="sm" disabled={disabled} onClick={() => open(detail.id, false)}>{t('View session')}</Button>
-        <Button variant="plain" size="sm" disabled={disabled} onClick={() => open(detail.id, true)}>{t('Continue in chat')}</Button>
-      </div>}
-      <p data-ui-notice="" className="management-caption">{t('Viewing is read-only. Continuing uses the existing chat checks; exec and archived sessions cannot be resumed here.')}</p>
-    </article>}
+    {detail && <SettingsSection title={t('Run details')}>
+      <SettingsRow
+        label={`${t('Finished')}: ${automationTime(detail.completedAt, locale)}`}
+        detail={<span className="flex flex-col gap-1">
+          <span>{t('Duration')}: {detail.durationMs === null ? '—' : `${detail.durationMs / 1000}s`} · {t('Run ID')}: {detail.id}</span>
+          {detail.isRetry && <span>{t('Retry of')}: {detail.originalRunId ?? t('Unknown')}</span>}
+          {detail.modelFallback && <span>{t('Model fallback')}: {detail.modelFallback}</span>}
+          {detail.error && <span className="text-destructive whitespace-pre-wrap">{detail.error}</span>}
+          {detail.delivery?.reason && <span className="whitespace-pre-wrap">{detail.delivery.reason}</span>}
+        </span>}
+      >
+        {detail.sessionId && <div className="management-actions">
+          <Button variant="outline" size="sm" disabled={disabled} onClick={() => open(detail.id, false)}>{t('View session')}</Button>
+          <Button variant="plain" size="sm" disabled={disabled} onClick={() => open(detail.id, true)}>{t('Continue in chat')}</Button>
+        </div>}
+      </SettingsRow>
+    </SettingsSection>}
     {history && !history.runs.length && !loading && <p data-ui-notice="" className="management-empty">{t('No runs yet')}</p>}
     {history && <div className="dvx-pagination">
       <span data-ui-notice="" className="dvx-page-range">{history.offset + (history.runs.length ? 1 : 0)}–{history.offset + history.runs.length} / {history.total}</span>

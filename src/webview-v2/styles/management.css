@@ -1,5 +1,6 @@
 @layer utilities {
   :where(.management-page, .management-dialog) .dvx-control:where(:not([role='checkbox'], [role='radio'], [role='switch'])) { display: inline-flex; align-items: center; gap: 6px; background: transparent !important; color: var(--ink); font-size: 12px; }
+  :where(.management-page, .management-dialog) code { padding: 2px 6px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 6%, var(--surface)); color: var(--ink); font-family: var(--font-mono); font-size: 11px; }
   .management-page { --management-edge: color-mix(in srgb, var(--ink) 10%, var(--surface)); --management-sidebar-width: 204px; display: grid; grid-template-columns: var(--management-sidebar-width) minmax(0, 1fr); transition: grid-template-columns 200ms var(--motion-ease); height: 100%; min-height: 0; overflow: hidden; color: var(--ink); background: var(--surface); font-size: 13px; }
   .management-page[data-sidebar-collapsed='true'] { --management-sidebar-width: 48px; }
   .management-sidebar, .management-heading, .dvx-pagination, .management-mission-status { user-select: none; }
@@ -117,11 +118,24 @@
   .management-automation-schedule-col { width: 22%; }
   .management-automation-next-col { width: 18%; }
   .management-automation-actions-col { width: 8%; }
+  .management-history-started-col { width: 26%; }
+  .management-history-type-col { width: 16%; }
+  .management-history-status-col { width: 16%; }
+  .management-history-delivery-col { width: 22%; }
+  .management-history-session-col { width: 20%; }
   .management-mission-table th, .management-mission-table td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--management-edge); vertical-align: middle; font-size: 12px; }
   .management-mission-table th { padding-block: 10px; font-weight: 400; color: var(--muted-ink); }
   .management-mission-table :is(th, td):last-child { padding-right: 0; }
   .management-automation-table :is(th, td):last-child { text-align: right; }
   .management-automation-table td:last-child .management-actions { justify-content: flex-end; }
+  .management-page .management-table-link { padding: 0; color: var(--muted-ink); font-size: 12px; }
+  .management-page .management-back-link { margin-bottom: 14px; padding: 0; color: var(--muted-ink); font-size: 12px; }
+  .management-code-pill { display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid var(--management-edge); border-radius: 6px; background: color-mix(in srgb, var(--ink) 5%, var(--surface)); color: var(--muted-ink); font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .management-prompt-pre { margin: 0; padding: 14px 0; border-top: 1px solid var(--settings-divider, var(--management-edge)); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.6; }
+  .management-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .management-stat-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px 16px; border: 1px solid var(--management-edge); border-radius: 12px; background: var(--surface); }
+  .management-stat-label { color: var(--muted-ink); font-size: 12px; line-height: 1.3; }
+  .management-stat-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.4; }
   .management-page .management-mission-title { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 13px; }
   .management-mission-status { display: block; margin-top: 4px; font-size: 12px; color: var(--muted-ink); }
   .management-mission-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
@@ -133,6 +147,7 @@
   .management-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
   .management-collapsible-rows .dvx-settings-row:first-child { border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-advanced { margin-top: 16px; }
+  .dvx-settings-row .management-advanced { margin-top: 0; }
   .management-advanced > svg { transition: transform var(--motion-normal) var(--motion-ease); }
   .management-advanced[data-state='open'] > svg { transform: rotate(180deg); }
   .management-advanced-content .dvx-settings-section { margin-top: 8px; }
@@ -172,6 +187,7 @@
     .management-row-control:has(> input[data-slot='input']) { width: 100%; }
     .management-row-control:has(> .management-default-override-add) { width: 100%; }
     .management-session-head, .management-session-row { grid-template-columns: minmax(0, 1fr) 48px 72px 24px; gap: 8px; }
+    .management-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .management-dialog { padding: 16px; top: 4%; max-height: 92dvh; }
   }
 }
