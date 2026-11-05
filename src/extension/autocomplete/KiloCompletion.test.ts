@@ -58,9 +58,11 @@ describe('in-flight completion handoff', () => {
     const first=pool.run('file','x=',';',a.signal,()=>result.promise);
     const firstResult=first.catch(e=>e.name); a.abort();
     const start=vi.fn(async()=> 'correct');
-    const second=pool.run('file','x=4',';',b.signal,start); result.resolve('wrong');
+    const mismatch = vi.fn();
+    const second=pool.run('file','x=4',';',b.signal,start,mismatch); result.resolve('wrong');
     expect(await firstResult).toBe('AbortError'); expect(await second).toBe('correct');
     expect(start).toHaveBeenCalledTimes(1); pool.clear();
+    expect(mismatch).toHaveBeenCalledExactlyOnceWith('typed-prefix-mismatch', 1, 5);
   });
   it('retains a compatible transport across context work longer than the handoff window', async () => {
     vi.useFakeTimers();

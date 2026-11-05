@@ -7,6 +7,34 @@ const metadata = {
 };
 
 it.each([
+  [{ shown: false, status: 'no-replacement', latencyMs: 37 }, 'no-replacement'],
+  [{ shown: true, status: 'ok', latencyMs: 37 }, 'suggestion-returned'],
+  [{ shown: false, outcome: 'no-replacement', durationMs: 37, reason: 'unchanged-region' }, 'no-replacement'],
+])('retains Next Edit decisions and latency without exporting local content', (attributes, outcome) => {
+  const event = projectGa4Event({ level: 'debug', name: 'autocomplete.next-edit.result',
+    attributes: { ...attributes, suggestionId: 71, model: 'private-model', characters: 20 },
+    detail: 'private-code' }, metadata);
+  expect(event).toMatchObject({ name: 'autocomplete_activity',
+    params: { category: 'next_edit_result', outcome, duration_ms: 37, records: 20 } });
+  expect(event?.params).not.toHaveProperty('status_code');
+  expect(JSON.stringify(event)).not.toMatch(/private|suggestionId/);
+  expect(projectGa4Event({ level: 'debug', name: 'autocomplete.content', detail: 'private-code',
+    attributes: { id: 71, stage: 'response' } }, metadata)).toBeUndefined();
+});
+
+it.each([
+  ['autocomplete.next-edit.apply-failed', 'failed'],
+  ['autocomplete.next-edit.discarded', 'discarded'],
+  ['autocomplete.next-edit.dismissed', 'dismissed'],
+  ['autocomplete.skipped', 'skipped'],
+  ['autocomplete.cancelled', 'cancelled'],
+  ['autocomplete.context.timeout', 'timeout'],
+])('never labels %s as a successful suggestion', (name, outcome) => {
+  expect(projectGa4Event({ level: 'debug', name, attributes: { reason: 'editor-state' } }, metadata)?.params)
+    .toMatchObject({ outcome, reason: 'editor-state' });
+});
+
+it.each([
   ['daemon.sidecar.start-failed', 'spawn'],
   ['daemon.sidecar.start-failed', 'connect'],
   ['daemon.sidecar.warm-failed', undefined],

@@ -179,8 +179,10 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     vscode.commands.registerCommand('droidvisx.autocomplete.menu', guarded(menu)),
     vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.acceptOrJump', guarded(() => provider.acceptOrJumpNextEdit())),
     vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.dismiss', () => provider.dismissNextEdit()),
-    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.accepted', () => {
-      diagnostics?.record({ level: 'debug', name: 'autocomplete.next-edit.accepted', attributes: {} });
+    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.accepted', (value?: unknown) => {
+      diagnostics?.record({ level: 'debug', name: 'autocomplete.next-edit.accepted',
+        attributes: { suggestionId: typeof value === 'number' && Number.isSafeInteger(value) ? value : 0,
+          source: 'inline', outcome: 'accepted' } });
       provider.nextEditAccepted();
     }),
     vscode.commands.registerCommand('droidvisx.autocomplete.accepted', (value?: unknown) => {

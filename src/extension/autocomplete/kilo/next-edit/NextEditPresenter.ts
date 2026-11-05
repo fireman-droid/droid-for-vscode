@@ -1,16 +1,21 @@
 /*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (next-edit/NextEditInlineCompletionProvider.ts). MIT; see third-party/KILO-LICENSE.txt. */
 import * as vscode from "vscode"
-import { nesLog } from "./log"
 import type { NextEditSuggestionManager } from "./NextEditSuggestionManager"
 export const INLINE_COMPLETION_ACCEPTED_COMMAND = "droidvisx.autocomplete.nextEdit.accepted"
 export interface SuggestionResult {
+  suggestionId?: number;
   replacement: string; editableRegionStartLine: number; editableRegionEndLine: number;
   latencyMs: number; inputTokens?: number; outputTokens?: number;
+}
+export interface NextEditResultEvent {
+  suggestionId: number; shown: boolean; latencyMs: number; status: string; reason: string;
+  presentation: 'inline' | 'decoration' | 'none'; characters: number; startLine: number; endLine: number;
+  inputTokens?: number; outputTokens?: number;
 }
 export class NextEditPresenter {
   constructor(private readonly deps: {
     suggestionManager: NextEditSuggestionManager;
-    onSuggestion?: (event: { shown: boolean; latencyMs: number; status: string; inputTokens?: number; outputTokens?: number }) => void;
+    onSuggestion?: (event: NextEditResultEvent) => void;
   }) {}
   toCompletionItems(
     document: vscode.TextDocument,
@@ -24,7 +29,7 @@ export class NextEditPresenter {
     )
     const currentText = document.getText(fullRange)
     if (currentText.replace(/\r\n/g, "\n") === suggestion.replacement.replace(/\r\n/g, "\n")) {
-      this.emitNotShown(suggestion)
+      this.emitResult(suggestion, false, "unchanged-region", "none")
       return undefined
     }
 
@@ -51,10 +56,6 @@ export class NextEditPresenter {
     const trimmedLines = proposedLines.slice(prefixLines, proposedLines.length - suffixLines)
     const trimmedReplacement = trimmedLines.join("\n")
 
-    nesLog(
-      `diff at lines [${diffStartLineInFile}..${diffEndLineInFile}], cursor at line ${position.line}, ${trimmedReplacement.length} chars`,
-    )
-
     // VSCode's inline ghost text only renders when the diff starts on the cursor's line.
     // For off-cursor diffs, stash the suggestion in the manager — it renders a
     // decoration-based "jump to next edit" affordance and Tab handles the move/apply.
@@ -69,12 +70,13 @@ export class NextEditPresenter {
         isPureInsertion,
         removesLines,
         suggestion,
+        isPureInsertion ? "insert-region" : removesLines || suggestion.replacement === "" ? "delete-region" : "off-cursor",
       )
       return undefined
     }
     // Same-line diff: clear any prior off-cursor pending state so we don't render
     // two competing affordances.
-    this.deps.suggestionManager?.clear()
+    this.deps.suggestionManager?.clear("inline-replacement")
     return this.renderSameLineItem(
       document,
       position,
@@ -105,17 +107,17 @@ export class NextEditPresenter {
     const cursorLineProposed = proposedLines[prefixLines]
     // A pure deletion at the trim seam has no cursor-line replacement to render.
     if (cursorLineProposed === undefined) {
-      this.emitNotShown(suggestion)
+      this.emitResult(suggestion, false, "no-cursor-line", "none")
       return undefined
     }
     // Native ghost text cannot alter text before the cursor; present that edit
     // through the decoration/apply flow rather than silently discarding it.
     if (!cursorLineProposed.startsWith(cursorLineText.slice(0, position.character))) {
-      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion)
+      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion, "cursor-prefix-mismatch")
       return undefined
     }
     if (cursorLineCurrent && !cursorLineProposed.slice(position.character).startsWith(cursorLineCurrent)) {
-      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion)
+      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion, "cursor-suffix-mismatch")
       return undefined
     }
     const insertText = [
@@ -126,40 +128,37 @@ export class NextEditPresenter {
     // A single-line insert spanning non-blank lines below the cursor can't be
     // represented as inline ghost text — route it to the decoration path.
     if (renderEndLine > position.line) {
-      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion)
+      this.stashOffCursorSuggestion(document, diffStartLine, diffEndLine, trimmedReplacement, false, false, suggestion, "multiline-replacement")
       return undefined
     }
     const renderRange = new vscode.Range(
       position,
       new vscode.Position(renderEndLine, document.lineAt(renderEndLine).range.end.character),
     )
-    if (document.getText(renderRange) === cursorLineCurrent && cursorLineCurrent === insertText) return undefined
+    if (document.getText(renderRange) === cursorLineCurrent && cursorLineCurrent === insertText) {
+      this.emitResult(suggestion, false, "unchanged-insertion", "none")
+      return undefined
+    }
 
     const normalizedInsert = document.eol === vscode.EndOfLine.CRLF ? insertText.replace(/\n/g, "\r\n") : insertText
     const item = new vscode.InlineCompletionItem(normalizedInsert, renderRange, {
       command: INLINE_COMPLETION_ACCEPTED_COMMAND,
       title: "Next Edit Accepted",
+      arguments: [suggestion.suggestionId ?? 0],
     })
-    nesLog(
-      `RENDER range=[${renderRange.start.line}:${renderRange.start.character}..${renderRange.end.line}:${renderRange.end.character}] insertChars=${insertText.length}`,
-    )
-    this.deps.onSuggestion?.({
-      shown: true,
-      latencyMs: suggestion.latencyMs,
-      status: "ok",
-      inputTokens: suggestion.inputTokens,
-      outputTokens: suggestion.outputTokens,
-    })
+    this.emitResult(suggestion, true, "inline-candidate", "inline", normalizedInsert.length, renderRange.start.line, renderRange.end.line)
     return [item]
   }
 
-  private emitNotShown(suggestion: SuggestionResult): void {
+  private emitResult(suggestion: SuggestionResult, shown: boolean, reason: string,
+    presentation: NextEditResultEvent['presentation'], characters = 0,
+    startLine = suggestion.editableRegionStartLine, endLine = suggestion.editableRegionEndLine): void {
     this.deps.onSuggestion?.({
-      shown: false,
+      suggestionId: suggestion.suggestionId ?? 0, shown, reason, presentation, characters, startLine, endLine,
       latencyMs: suggestion.latencyMs,
-      status: "no-replacement",
-      inputTokens: suggestion.inputTokens,
-      outputTokens: suggestion.outputTokens,
+      status: shown ? "ok" : "no-replacement",
+      ...(suggestion.inputTokens === undefined ? {} : { inputTokens: suggestion.inputTokens }),
+      ...(suggestion.outputTokens === undefined ? {} : { outputTokens: suggestion.outputTokens }),
     })
   }
 
@@ -171,13 +170,14 @@ export class NextEditPresenter {
     isPureInsertion: boolean,
     removesLines: boolean,
     suggestion: SuggestionResult,
+    reason: string,
   ): void {
     const mgr = this.deps.suggestionManager
     if (!mgr) {
       // Manager wasn't wired — fall through silently. The classic path
       // already covers same-line completions; this branch only matters in
       // tests or misconfigured embeds.
-      this.emitNotShown(suggestion)
+      this.emitResult(suggestion, false, "missing-manager", "none")
       return
     }
     if (isPureInsertion) {
@@ -193,15 +193,13 @@ export class NextEditPresenter {
         : Math.max(0, Math.min(diffStartLine, document.lineCount - 1))
       mgr.setPending({
         kind: "insert",
+        suggestionId: suggestion.suggestionId,
         document,
         diffStartLine,
         diffEndLine: diffStartLine,
         replacement: trimmedReplacement + "\n",
         originalText: document.lineAt(anchorLine).text,
       })
-      nesLog(
-        `insert suggestion stashed at line ${diffStartLine} (anchor=${anchorLine}, eof=${isEof}, ${trimmedReplacement.length} chars)`,
-      )
     } else {
       const originalRange = new vscode.Range(
         new vscode.Position(diffStartLine, 0),
@@ -209,6 +207,7 @@ export class NextEditPresenter {
       )
       mgr.setPending({
         kind: "replace",
+        suggestionId: suggestion.suggestionId,
         document,
         diffStartLine,
         diffEndLine,
@@ -216,15 +215,8 @@ export class NextEditPresenter {
         removesLines,
         originalText: document.getText(originalRange),
       })
-      nesLog(`replace suggestion stashed at lines [${diffStartLine}..${diffEndLine}]`)
     }
-    this.deps.onSuggestion?.({
-      shown: true,
-      latencyMs: suggestion.latencyMs,
-      status: "ok",
-      inputTokens: suggestion.inputTokens,
-      outputTokens: suggestion.outputTokens,
-    })
+    this.emitResult(suggestion, true, reason, "decoration", trimmedReplacement.length, diffStartLine, diffEndLine)
   }
 
 }

@@ -20,7 +20,7 @@
     margin-inline: auto;
     padding-inline: 9px;
   }
-  .v2-chat-footer { padding-block: 4px 12px; }
+  .v2-chat-footer { padding-block: 0 12px; }
   .v2-composer-dock { min-width: 0; }
   :is(.v2-composer-queue, .v2-composer-changes) {
     --composer-panel-heading-height: 22px;

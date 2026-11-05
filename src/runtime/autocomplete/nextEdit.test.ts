@@ -84,11 +84,12 @@ describe('Mercury Next Edit boundary',()=>{
     expect(()=>buildBoundedEditPrompt({...context,currentFileContent:'x'.repeat(2000)},1000)).toThrow();
   });
   it('uses the edit endpoint contract and rejects token-limited replies',async()=>{
+    const onResponse = vi.fn();
     const fetchMock=vi.fn(async()=>new Response(JSON.stringify({choices:[{finish_reason:'stop',
       message:{content:'```ts\nconst name = 1;\nconsole.log(name);\n```'}}]}),{headers:{'content-type':'application/json'}}));
     vi.stubGlobal('fetch',fetchMock);
     const req={endpoint:'https://api.inceptionlabs.ai/v1/edit/completions',apiKey:'synthetic',model:'mercury-edit-2',
-      maxTokens:256,signal:new AbortController().signal,context,maxContextCharacters:5000};
+      maxTokens:256,signal:new AbortController().signal,context,maxContextCharacters:5000,onResponse};
     expect(await requestNextEdit(req)).toContain('const name');
     const body=JSON.parse((fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1].body as string);
     expect(body.max_tokens).toBe(512);
@@ -97,5 +98,7 @@ describe('Mercury Next Edit boundary',()=>{
     fetchMock.mockImplementationOnce(async()=>new Response(JSON.stringify({choices:[{finish_reason:'length',
       message:{content:'```ts\nx\n```'}}]}),{headers:{'content-type':'application/json'}}));
     await expect(requestNextEdit(req)).rejects.toThrow('complete replacement');
+    expect(onResponse).toHaveBeenLastCalledWith('```ts\nx\n```', 'length');
+    expect(onResponse).toHaveBeenCalledTimes(2);
   });
 });
