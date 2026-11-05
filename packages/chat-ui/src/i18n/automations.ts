@@ -2,6 +2,12 @@ import type { MessageTranslations } from './translate';
 
 export const automationMessages: readonly MessageTranslations[] = [
   ['Automations', '自动化', '自動化'],
+  ['Name', '名称', '名稱'],
+  ['Status', '状态', '狀態'],
+  ['Actions', '操作', '操作'],
+  ['Description', '说明', '說明'],
+  ['Total runs', '累计运行', '累計執行'],
+  ['Recent runs', '最近运行记录', '最近執行記錄'],
   ['New automation', '新建自动化', '新增自動化'],
   ['Edit automation', '编辑自动化', '編輯自動化'],
   ['Create paused', '创建并暂停', '建立並暫停'],
@@ -84,6 +90,8 @@ export const automationMessages: readonly MessageTranslations[] = [
   ['Saturday', '星期六', '星期六'],
   ['Advanced UTC cron', '高级 UTC cron', '進階 UTC cron'],
   ['Run time', '执行时间', '執行時間'],
+  ['Hour', '小时', '小時'],
+  ['Minute', '分钟', '分鐘'],
   ['Display timezone', '显示时区', '顯示時區'],
   ['Beijing time (UTC+08:00)', '北京时间（UTC+08:00）', '北京時間（UTC+08:00）'],
   ['Stored in UTC. Daylight-saving changes are not automatic.', '以 UTC 保存，不会自动调整夏令时。', '以 UTC 儲存，不會自動調整夏令時間。'],

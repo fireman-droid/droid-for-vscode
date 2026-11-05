@@ -91,7 +91,8 @@ Chat、Models、Mission、Viewer、Review 共享公共 UI。
 3. 执行 **Droid: Start Browser Dev Client**，打开它新复制的链接。
 
 这会在 `4173/live` 使用同一套 `ChatApp` 连接当前 Extension Host，页面操作会作用于真实会话。
-管理页使用同一链接，在 `#` 前添加 `?view=management`；连接后打开 Missions，侧栏可切换常规、模型、补全和会话。页面复用生产 `ManagementApp`、管理服务和模型操作处理器，读取真实任务、设置和模型目录。管理页与聊天使用独立消息流，不会互相抢占连接。
+浏览器聊天中的设置与模型管理入口在当前标签页打开管理页，不再转到编辑器面板。也可在同一链接的 `#` 前添加 `?view=management`，默认进入常规；通过 `&page=models` 或 `&page=automations` 指定子页，侧栏可切换其余管理页。页面复用生产 `ManagementApp`、管理服务和模型操作处理器，读取真实任务、设置和模型目录。管理页与聊天使用独立消息流，不会互相抢占连接；同标签页导航沿用已有连接，浏览器后退可返回聊天。
+此入口由 `droidvisx.browserDev.sourceRoot` 对应的源码提供。只修改浏览器入口时，刷新页面即可加载，无须重装扩展；更换源码目录后需 Stop 再 Start。
 Diff 使用 `?view=review`，复用生产 `ReviewApp` 和 Host 的 `ReviewPanelController`，读取真实比较范围和文件。
 浏览器聊天中的 Review 入口会在同一标签页传递所选轮次／文件并打开 Diff；直接打开则使用当前会话的默认范围。
 Review 有独立的鉴权消息流，断开时释放该浏览器面板和问答资源；文件读写与 Git 操作仍走原有 Host 校验。

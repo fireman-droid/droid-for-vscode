@@ -75,7 +75,7 @@ export function MissionManagement({ state, active }: { state: ManagementState; a
       </table>
     </ScrollArea>
     {!pending && !error && visible.length === 0 && <p data-ui-notice="" className="management-empty">{t("没有匹配的任务")}</p>}
-    {loaded && <Pagination label={t('任务分页')} page={currentPage} pageSize={pageSize} count={visible.length} complete compact
+    {loaded && visible.length > 0 && <Pagination label={t('任务分页')} page={currentPage} pageSize={pageSize} count={visible.length} complete
       loading={loading} disabled={state.busy || pending} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(0); }} />}
       </TabsContent>
     </Tabs>
