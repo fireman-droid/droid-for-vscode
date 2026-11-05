@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { Button } from '@droidvisx/chat-ui/ui/button';
+import { Pagination } from '@droidvisx/chat-ui/ui/pagination';
 import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { SettingsRow, SettingsSection } from '@droidvisx/chat-ui/ui/settings';
 import { AUTOMATION_HISTORY_PAGE_SIZE, type AutomationHistory as History,
@@ -17,6 +18,7 @@ export function AutomationHistory({ row, state, active = true }: {
 }) {
   const { t, locale } = useI18n();
   const [history, setHistory] = useState<History | null>(null);
+  const [pageSize, setPageSize] = useState(AUTOMATION_HISTORY_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -35,16 +37,17 @@ export function AutomationHistory({ row, state, active = true }: {
   const open = (runId: string, resume: boolean) => void state.run({
     kind: 'automations.session', id: row.id, runId, offset: history?.offset ?? 0, resume,
   });
-  const detail = history?.runs.find(run => run.id === selected);
+  const visibleRuns = history?.runs.slice(0, pageSize) ?? [];
+  const detail = visibleRuns.find(run => run.id === selected);
   const disabled = loading || state.busy;
   return <section aria-label={t('Run history')} className="flex flex-col gap-3">
     {loading && <p role="status" data-ui-notice="" className="sr-only">{t('Loading run history…')}</p>}
     {error && <p role="alert" data-ui-notice="" className="management-caption text-destructive">{t(error)}</p>}
     <ScrollArea orientation="horizontal" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
-      <table className="management-mission-table management-automation-table" aria-busy={loading}>
+      <table className="management-mission-table" aria-busy={loading}>
         <colgroup><col className="management-history-started-col" /><col className="management-history-type-col" /><col className="management-history-status-col" /><col className="management-history-delivery-col" /><col className="management-history-session-col" /></colgroup>
         <thead data-ui-notice=""><tr><th scope="col">{t('Started')}</th><th scope="col">{t('Type')}</th><th scope="col">{t('Status')}</th><th scope="col">{t('Delivery')}</th><th scope="col">{t('Session')}</th></tr></thead>
-        <tbody>{history?.runs.map(run => <tr key={run.id}>
+        <tbody>{visibleRuns.map(run => <tr key={run.id}>
           <td><Button variant="plain" size="none" className="management-mission-title" disabled={disabled} aria-expanded={selected === run.id}
             onClick={() => setSelected(selected === run.id ? null : run.id)}>{automationTime(run.startedAt, locale)}</Button></td>
           <td data-ui-notice="">{t(run.type === 'create' ? 'Initialization' : run.type === 'run' ? 'Execution' : 'Unknown')}</td>
@@ -74,14 +77,8 @@ export function AutomationHistory({ row, state, active = true }: {
       </SettingsRow>
     </SettingsSection>}
     {history && !history.runs.length && !loading && <p data-ui-notice="" className="management-empty">{t('No runs yet')}</p>}
-    {history && <div className="dvx-pagination">
-      <span data-ui-notice="" className="dvx-page-range">{history.offset + (history.runs.length ? 1 : 0)}–{history.offset + history.runs.length} / {history.total}</span>
-      <div className="dvx-pagination-controls">
-        <Button variant="plain" size="sm" disabled={disabled || history.offset === 0}
-          onClick={() => void load(Math.max(0, history.offset - AUTOMATION_HISTORY_PAGE_SIZE))}>{t('Previous')}</Button>
-        <Button variant="plain" size="sm" disabled={disabled || history.offset + history.runs.length >= history.total}
-          onClick={() => void load(history.offset + AUTOMATION_HISTORY_PAGE_SIZE)}>{t('Next')}</Button>
-      </div>
-    </div>}
+    {history && history.total > 0 && <Pagination label={t('Run history')} page={Math.floor(history.offset / pageSize)} pageSize={pageSize}
+      pageSizes={[10, 20]} count={history.total} complete loading={loading} disabled={disabled}
+      onPage={page => void load(page * pageSize)} onPageSize={size => { setPageSize(size); if (history.offset !== 0) void load(0); }} />}
   </section>;
 }

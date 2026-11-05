@@ -3,8 +3,8 @@ import { useI18n } from '../i18n';
 import { Button } from './button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './selection';
 
-export function Pagination({ label, page, pageSize, count, complete, loading, disabled, onPage, onPageSize }: {
-  label: string; page: number; pageSize: number; count: number; complete: boolean;
+export function Pagination({ label, page, pageSize, pageSizes = [10, 20, 50], count, complete, loading, disabled, onPage, onPageSize }: {
+  label: string; page: number; pageSize: number; pageSizes?: readonly number[]; count: number; complete: boolean;
   loading: boolean; disabled: boolean; compact?: boolean;
   onPage: (page: number) => void; onPageSize: (size: number) => void;
 }) {
@@ -18,7 +18,7 @@ export function Pagination({ label, page, pageSize, count, complete, loading, di
     <div className="dvx-pagination-controls">
       <Select value={String(pageSize)} disabled={disabled} onValueChange={value => onPageSize(Number(value))}>
         <SelectTrigger aria-label={t('每页条数')}><SelectValue /></SelectTrigger>
-        <SelectContent align="end">{[10, 20, 50].map(size => <SelectItem key={size} value={String(size)}>{t('{count} 条 / 页', { count: size })}</SelectItem>)}</SelectContent>
+        <SelectContent align="end">{pageSizes.map(size => <SelectItem key={size} value={String(size)}>{t('{count} 条 / 页', { count: size })}</SelectItem>)}</SelectContent>
       </Select>
       <div className="dvx-page-numbers">
         <Button variant="plain" size="icon-sm" aria-label={t('上一页')} disabled={disabled || page === 0} onClick={() => onPage(page - 1)}><ChevronLeft /></Button>

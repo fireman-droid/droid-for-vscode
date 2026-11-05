@@ -65,9 +65,9 @@ it('requests the next history page without changing or running the automation', 
     },
   }));
   render(<AutomationHistory row={row} state={state(run)} />);
-  await screen.findByText('1–20 / 21');
+  await screen.findByText('1–20 items · 21 items total');
   await user.click(screen.getByRole('button', { name: 'Next', exact: true }));
-  await screen.findByText('21–21 / 21');
+  await screen.findByText('21–21 items · 21 items total');
   expect(run.mock.calls.map(([action]) => action)).toEqual([
     { kind: 'automations.history', id: row.id, offset: 0 },
     { kind: 'automations.history', id: row.id, offset: 20 },
