@@ -7,7 +7,7 @@
 ## 版本与交付
 
 - 当前源码版本为 `0.8.20`，在 `0.8.19` 基础上加入繁星／三体／关闭三种深色聊天背景，并修复 AskUser 多选识别、勾选状态与单选填空互斥切换。
-- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖与 `codex/style-fix` 至 `c2156f6f` 的 UI 修复已通过 PR #26 合入 main，完整试用包已成功安装到 Microsoft VS Code，未同步 Cursor；版本仍为 `0.8.20`，未覆盖正式发布产物。后续聊天间距归零与补全详细诊断已集成，本轮授权一起合并 main 并安装 Microsoft VS Code，实际构建、合并与安装结果以本次交付回执为准；不更新 Cursor、不正式发版。
+- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖及 `codex/style-fix` UI 修复经 PR #26 合入，聊天间距归零与补全详细诊断经 PR #27 合入 main；最新完整试用包已成功安装到 Microsoft VS Code，未更新 Cursor。版本仍为 `0.8.20`，未覆盖正式发布产物。后续 Composer 菜单对齐修复仅在任务分支，尚未打包安装。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
@@ -48,6 +48,8 @@
 - `daemon_health` 的 sidecar 启动／预热失败明确标记 `outcome=failed`，缺失原因使用 `unknown`，并保留已有 spawn／connect 阶段；不把失败默认标为 `ok`，不上传原始错误内容。
 
 ## 最近验证
+
+- Composer 菜单对齐：主输入框左侧模式菜单改为左对齐，右侧模型／上下文菜单右对齐；消息编辑栏右侧模式菜单保持右对齐。未改变菜单内容、宽度或选择行为；`typecheck`、`lint:budgets` 与现有 ComposerControls 1 项交互测试通过，未新增样式断言，未进行真实页面验收。
 
 - 补全诊断：9 个文件共 208 项定向测试有通过结果，覆盖返回正文分片、具体过滤规则、请求复用不匹配、Next Edit 结果／采纳／失效与远程投影；`typecheck`、`lint:budgets` 通过，最后映射调整仅重跑受影响的 2 文件／29 项及扩展类型与预算检查。未调用真实模型、发送线上测试遥测或进行编辑器验收。主工作区其他未提交补全改动保留，诊断修复使用独立任务分支；本轮合并与安装见交付说明。
 - 聊天间距：主聊天与 BTW 的消息区底部及输入框外层顶部固定留白归零，主聊天末条消息的分隔间距与状态区外层底部留白一并移除；保留输入框内部边距、虚拟列表占位和新提问置顶的动态留白跑道。`typecheck`、`lint:budgets` 与滚动／阅读锚点／历史分页 3 个测试文件共 13 项通过；未进行真实页面验收，本轮合并与安装见交付说明。

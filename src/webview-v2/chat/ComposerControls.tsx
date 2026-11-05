@@ -88,7 +88,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
         className={`h-6 min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
-      <PopoverContent side="top" align={kind === 'model' || kind === 'mode' ? 'end' : 'start'} sideOffset={8}
+      <PopoverContent side="top" align={kind === 'model' || kind === 'context' || (kind === 'mode' && editorOwner) ? 'end' : 'start'} sideOffset={8}
         className={`v2-composer-panel overflow-y-auto rounded-lg p-0 max-h-[min(520px,var(--radix-popover-content-available-height))] ${kind === 'mode' ? 'w-max min-w-[144px]' : kind === 'model' ? 'w-max min-w-[220px] max-w-[min(320px,calc(100vw-16px))]' : 'w-[var(--radix-popover-trigger-width)]'}`}
         data-editor-popup-owner={editorOwner}>
         {kind === 'settings' ? <SettingsPopover id={`${id}-settings`} view={view} settings={state.settings} skills={state.skills} mcp={state.mcp} plugins={state.plugins} showModeControl={false}
