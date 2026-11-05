@@ -282,6 +282,7 @@ pnpm run test:integration
 | --- | --- |
 | `pnpm run build:chat-ui` | 公共 UI 包及类型声明 |
 | `pnpm run build:webview` | 独立前端资源，输出 `dist/webview-v2/` |
+| `pnpm run build:extension` | 只构建 Extension Host 与 Worker，不重建页面 |
 | `pnpm run build` | 扩展、Worker 与六个生产 Webview 入口，页面输出 `dist/webview/` |
 | `pnpm run package:vsix` | 串行执行打包前检查与构建，生成统一 VSIX |
 | `npm --prefix docs run build` | 文档静态站与站内文件链接检查 |
@@ -294,6 +295,22 @@ pnpm run test:integration
 一个 PR 应包含具体问题、改后行为、必要文档和实际运行的验证。提交前检查 `git diff` 与暂存区，
 保留无关改动，不提交密钥、日志、依赖目录、`dist/` 或 VSIX。
 产品事实写入 [STATUS](STATUS.md)，架构和视觉约束分别更新 [ARCHITECTURE](ARCHITECTURE.md) 与 [DESIGN](DESIGN.md)。
+
+### 日常热更新，不重装 VSIX
+
+已安装同版本扩展时，按改动选择一个命令，同时更新 Microsoft VS Code 和 Cursor：
+
+| 命令 | 更新范围 |
+| --- | --- |
+| `pnpm run sync:webview` | 公共 UI 与生产页面，正确构建到 `dist/webview/`，不复制后端 |
+| `pnpm run sync:extension` | Extension Host 与 Worker，不构建或复制页面 |
+| `pnpm run sync:all` | 前后端都改变时，统一构建后同步 |
+
+同步仅更新各编辑器安装登记中的当前同版本扩展，不覆盖旧版本目录、安装清单或用户数据；
+内容相同的文件不重复写入。可追加 `--dry-run` 构建并检查目标，不修改安装目录。
+编辑器中现有监听会刷新页面；后端变化会重启扩展宿主，可能短暂影响其他扩展，
+应在没有进行中的操作时执行。这是构建后自动刷新／宿主重启，不是保存源码即无感替换。
+扩展版本、清单注册项或依赖安装布局变化仍使用 VSIX，不用热更新代替正式发布。
 
 <a id="build-install"></a>
 
