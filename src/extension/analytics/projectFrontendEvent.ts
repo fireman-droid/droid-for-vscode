@@ -1,6 +1,11 @@
 import type { RuntimeDiagnosticEvent } from '../../runtime/runtimeDiagnostics';
 
-type Surface = 'chat' | 'viewer' | 'mission';
+type Surface = 'chat' | 'viewer' | 'mission' | 'models' | 'management' | 'review';
+const surfaces: Record<string, Surface> = {
+  webview: 'chat', sessionViewer: 'viewer', missionControl: 'mission',
+  models: 'models', management: 'management', review: 'review',
+};
+export function frontendSurface(prefix: string): Surface | undefined { return surfaces[prefix]; }
 export type FrontendEvent =
   | { name: 'frontend.ready'; attributes: { surface: Surface; durationMs: number } }
   | { name: 'frontend.error'; attributes: { surface: Surface; category: 'error' | 'unhandledrejection' | 'boot-timeout' | 'handshake-timeout' } }
@@ -15,9 +20,9 @@ function metric(value: unknown): value is number {
 
 /** Local statistics contain only classified events and measurements, never diagnostic prose. */
 export function projectFrontendEvent(event: RuntimeDiagnosticEvent): FrontendEvent | undefined {
-  const match = /^(webview|sessionViewer|missionControl)\.(.+)$/u.exec(event.name);
+  const match = /^(webview|sessionViewer|missionControl|models|management|review)\.(.+)$/u.exec(event.name);
   if (!match) return undefined;
-  const surface = match[1] === 'sessionViewer' ? 'viewer' : match[1] === 'missionControl' ? 'mission' : 'chat';
+  const surface = surfaces[match[1]!]!;
   const kind = match[2];
   if ((errorKinds as readonly string[]).includes(kind)) {
     if (kind === 'error' && BENIGN_RESIZE_OBSERVER_ERROR.test(event.detail ?? '')) {

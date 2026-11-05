@@ -8,6 +8,8 @@ import type { ModelAvailability } from '../models/DisabledModelsStore';
 import { automationFields, isLocalAutomation, projectAutomation, projectAutomationRun, requireAutomationSuccess,
   sameAutomationBinding, type AutomationEntry, type AutomationIssue, type AutomationIssueStore } from './automationData';
 import { automationSessionPage, findAutomationSession, type AutomationSessionAccess } from './AutomationSessions';
+import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
+import { OperationOutcomeError, classifyOperationError, recordOperation, type OperationResultDiagnostic } from '../diagnostics/operationDiagnostics';
 
 type CreateParams = Parameters<DaemonApi['automations']['create']>[0];
 type Confirmation = 'resume' | 'delete';
@@ -27,10 +29,24 @@ export class ManagementAutomationsService {
       get: id => this.memoryIssues.get(id),
       set: async (id, issue) => { if (issue) this.memoryIssues.set(id, issue); else this.memoryIssues.delete(id); },
     },
+    private readonly diagnostics?: RuntimeDiagnosticSink,
   ) {}
 
   async execute(action: AutomationAction): Promise<Partial<ManagementResult>> {
     if (!isAutomationAction(action)) throw new Error('Invalid automation request.');
+    const started = performance.now();
+    let diagnostic: OperationResultDiagnostic | undefined;
+    try {
+      const result = await this.executeNow(action, value => { diagnostic = value; });
+      recordOperation(this.diagnostics, 'management', action.kind, started, diagnostic ??
+        { outcome: result.ok === false ? 'partial' : action.kind === 'automations.run' ? 'accepted' : 'success' });
+      return result;
+    } catch (error) {
+      recordOperation(this.diagnostics, 'management', action.kind, started, classifyOperationError(error));
+      throw error;
+    }
+  }
+  private async executeNow(action: AutomationAction, outcome: (value: OperationResultDiagnostic) => void): Promise<Partial<ManagementResult>> {
     if (!this.daemon) throw new Error('Automations require daemon mode.');
     const api = await this.getDroid();
     const automations = api.automations;
@@ -82,13 +98,16 @@ export class ManagementAutomationsService {
     this.assertTrusted();
     if (action.kind === 'automations.directory') {
       if (!this.sessions) throw new Error('The directory picker is unavailable.');
-      return { automationDirectory: await this.sessions.chooseDirectory() };
+      const automationDirectory = await this.sessions.chooseDirectory();
+      if (automationDirectory === null) outcome({ outcome: 'cancelled', failureKind: 'cancelled' });
+      return { automationDirectory };
     }
-    if (action.kind === 'automations.create') return this.create(api, action.draft);
+    if (action.kind === 'automations.create') return this.create(api, action.draft, outcome);
     let row = await this.target(api, action.id, action.revision);
     if (!projectAutomation(row).editable) throw new Error('This automation is managed elsewhere or has unsupported settings.');
     if (action.kind === 'automations.resume' || action.kind === 'automations.delete') {
       if (!await this.confirm(action.kind.slice('automations.'.length) as Confirmation, row.name)) {
+        outcome({ outcome: 'cancelled', failureKind: 'cancelled' });
         return { message: 'Automation action cancelled.' };
       }
       this.assertTrusted();
@@ -113,7 +132,8 @@ export class ManagementAutomationsService {
         if (row.status === 'running') throw new Error('This automation is already running.');
         let result;
         try { result = await automations.dispatch(row.id); }
-        catch { throw new Error('Run dispatch could not be confirmed. Refresh run history before trying again.'); }
+        catch { throw new OperationOutcomeError('Run dispatch could not be confirmed. Refresh run history before trying again.',
+          { outcome: 'unknown', failureKind: 'unconfirmed' }); }
         if (!result.success) throw new Error(result.error.message);
         return { automationId: row.id, message: 'Run request accepted. Check run history for execution and delivery status.' };
       }
@@ -132,7 +152,7 @@ export class ManagementAutomationsService {
     }
   }
 
-  private async create(api: DaemonApi, draft: AutomationDraft): Promise<Partial<ManagementResult>> {
+  private async create(api: DaemonApi, draft: AutomationDraft, outcome: (value: OperationResultDiagnostic) => void): Promise<Partial<ManagementResult>> {
     await this.validateDraft(api, draft);
     this.assertTrusted();
     const id = `automation-${randomUUID()}`;
@@ -171,6 +191,7 @@ export class ManagementAutomationsService {
       // Never retry a create or delete a partial scaffold. Its ID remains navigable.
       try { return await this.pauseUnverified(api, id); }
       catch (pauseError) {
+        outcome(classifyOperationError(pauseError));
         return { ok: false, automationId: id, message: pauseError instanceof Error ? pauseError.message : UNVERIFIED };
       }
     }
@@ -222,9 +243,11 @@ export class ManagementAutomationsService {
       requireAutomationSuccess(await api.automations.pause(id));
       if ((await this.target(api, id)).status !== 'paused') throw new Error(UNVERIFIED);
     } catch {
-      throw new Error('Configuration is unverified and the schedule could not be confirmed paused. Check it in Droid before leaving it unattended.');
+      throw new OperationOutcomeError('Configuration is unverified and the schedule could not be confirmed paused. Check it in Droid before leaving it unattended.',
+        { outcome: 'unknown', failureKind: 'unconfirmed' });
     }
-    throw new Error('Configuration could not be verified. The schedule was paused; review it before enabling.');
+    throw new OperationOutcomeError('Configuration could not be verified. The schedule was paused; review it before enabling.',
+      { outcome: 'partial', failureKind: 'unconfirmed' });
   }
   private async assertNotRunning(api: DaemonApi, row: AutomationEntry): Promise<void> {
     if (row.status === 'running') throw new Error('Wait for the current run to finish before deleting this task.');

@@ -20,6 +20,7 @@ import {
   readWebviewThemePreference,
 } from '../../webview/webviewTheme';
 import { parseSessionViewerWebviewMessage } from './validateSessionViewerMessage';
+import { WebviewStartupDiagnostics } from '../../webview/webviewDiagnostics';
 
 export const SESSION_VIEWER_REFRESH_MS = 2_500;
 export const LIVE_VIEWER_REFRESH_MS = 80;
@@ -155,8 +156,12 @@ export class SessionViewerPanelController implements vscode.Disposable {
       sourceSubscription: null,
     };
     this.entries.set(key, entry);
+    const frontend = new WebviewStartupDiagnostics('sessionViewer', this.diagnostics);
     entry.disposables.push(
+      frontend,
       panel.webview.onDidReceiveMessage((value: unknown) => {
+        if (frontend.handle(value)) return;
+        if (parseSessionViewerWebviewMessage(value)?.type === 'sessionViewer.ready') frontend.ready();
         this.handleMessage(entry, value);
       }),
       panel.onDidDispose(() => {
@@ -195,14 +200,7 @@ export class SessionViewerPanelController implements vscode.Disposable {
       });
       return;
     }
-    if (message.type === 'webview.diagnostic') {
-      this.diagnostics?.record({
-        level: 'warn',
-        name: `sessionViewer.${message.kind}`,
-        detail: message.detail,
-      });
-      return;
-    }
+    if (message.type === 'webview.diagnostic') return;
     if (message.type === 'sessionViewer.ready') {
       this.postTheme(entry);
       if (entry.lastSnapshot !== null) {

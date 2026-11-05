@@ -16,8 +16,12 @@ import { LIMITS_REQUEST_FAILED_MESSAGE } from '../../runtime/account/factoryAcco
 import type { FactoryAccountState } from '../../shared/protocol/factoryAccountProtocol';
 import { isAutomationAction } from '../../shared/protocol/automationProtocol';
 import type { ManagementAutomationsService } from './ManagementAutomationsService';
+import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
+import { classifyOperationError, OperationOutcomeError, recordOperation } from '../diagnostics/operationDiagnostics';
+import { WebviewStartupDiagnostics } from '../webview/webviewDiagnostics';
 
 export interface ManagementServices {
+  readonly diagnostics?: RuntimeDiagnosticSink;
   readonly settings: ManagementSettingsService;
   readonly defaults: ManagementDefaultsService;
   readonly sessions: ManagementSessionCatalog;
@@ -40,11 +44,15 @@ export class ManagementBinding implements vscode.Disposable {
   private busy = false;
   private ready = false;
   private readonly subscriptions: vscode.Disposable[];
+  private readonly frontend: WebviewStartupDiagnostics;
   constructor(private readonly webview: Pick<vscode.Webview, 'postMessage' | 'onDidReceiveMessage'>, private readonly services: ManagementServices,
-    private page: ManagementPage) {
+    private page: ManagementPage, watchStartup = false) {
+    this.frontend = new WebviewStartupDiagnostics('management', services.diagnostics, watchStartup);
     this.subscriptions = [
       webview.onDidReceiveMessage((value: unknown) => {
+        if (this.frontend.handle(value)) return;
         const request = parseManagementRequest(value);
+        if (request?.action.kind === 'ready') this.frontend.ready();
         if (request) void this.run(request);
       }),
       vscode.workspace.onDidChangeConfiguration(event => {
@@ -59,23 +67,39 @@ export class ManagementBinding implements vscode.Disposable {
   }
   private async refreshSettings(): Promise<void> {
     if (!this.ready || this.busy || this.disposed) return;
+    const started = performance.now();
     try { this.post({ type: 'management.settings', version: MANAGEMENT_VERSION, settings: await this.services.settings.read() }); }
-    catch { void vscode.window.showErrorMessage('Droid 管理页无法刷新设置，请在管理页重试。'); }
+    catch (error) {
+      recordOperation(this.services.diagnostics, 'management', 'settings.read', started, classifyOperationError(error));
+      void vscode.window.showErrorMessage('Droid 管理页无法刷新设置，请在管理页重试。');
+    }
   }
   private async run(request: ManagementRequest): Promise<void> {
+    const started = performance.now();
     const base = { type: 'management.result', version: MANAGEMENT_VERSION, requestId: request.requestId } as const;
     if (request.action.kind === 'account.read') {
       const account = await this.readAccount(request.action.force);
+      recordOperation(this.services.diagnostics, 'management', request.action.kind, started,
+        account.status === 'unavailable' ? { outcome: 'failed', failureKind: 'unavailable' }
+          : account.status === 'ready' && account.limitsError ? { outcome: 'partial', failureKind: 'unavailable' } : { outcome: 'success' });
       this.post({ ...base, ok: true, account });
       return;
     }
-    if (this.busy) { this.post({ ...base, ok: false, message: '请等待当前操作完成。' }); return; }
+    if (this.busy) {
+      recordOperation(this.services.diagnostics, 'management', request.action.kind, started, { outcome: 'blocked', failureKind: 'busy' });
+      this.post({ ...base, ok: false, message: '请等待当前操作完成。' }); return;
+    }
     this.busy = true;
     try {
       const data = await this.execute(request.action);
+      if (!isAutomationAction(request.action)) recordOperation(this.services.diagnostics, 'management', request.action.kind, started, {
+        outcome: data.ok === false ? 'failed' : request.action.kind === 'session.export' ? 'unknown'
+          : ['session.view', 'session.resume', 'missions.open', 'missions.new'].includes(request.action.kind) ? 'accepted' : 'success',
+      });
       this.post({ ...base, ok: true, ...data });
       if (request.action.kind === 'ready') { this.ready = true; this.navigate(this.page); }
     } catch (error) {
+      if (!isAutomationAction(request.action)) recordOperation(this.services.diagnostics, 'management', request.action.kind, started, classifyOperationError(error));
       this.post({ ...base, ok: false, message: error instanceof Error ? error.message : '操作未完成，请重试。' });
     } finally { this.busy = false; }
   }
@@ -89,22 +113,22 @@ export class ManagementBinding implements vscode.Disposable {
       case 'defaults.save': return { defaults: await s.defaults.save(action.patch), message: '默认设置已保存，当前聊天保持不变。' };
       case 'theme.set':
         await vscode.workspace.getConfiguration('droidvisx').update('theme', action.theme, vscode.ConfigurationTarget.Global);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'chat.starfield.set':
         await vscode.workspace.getConfiguration('droidvisx').update(CHAT_STARFIELD_SETTING, action.enabled, vscode.ConfigurationTarget.Global);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'chat.busyMessageMode.set':
         await vscode.workspace.getConfiguration('droidvisx').update(BUSY_MESSAGE_MODE_SETTING, action.mode, vscode.ConfigurationTarget.Global);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'language.set':
         await vscode.workspace.getConfiguration('droidvisx').update('language', action.language, vscode.ConfigurationTarget.Global);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'reviewQuestion.model.set':
         await s.settings.saveQuestionModel(action.modelId, action.reasoningEffort);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'completion.save':
         await s.settings.save(action.preferences, action.setApiKey, action.setNextEditApiKey);
-        return { settings: await s.settings.read() };
+        return this.updatedSettings();
       case 'chat.focus': await vscode.commands.executeCommand('droidvisx.focusView'); return {};
       case 'missions.new': s.newMission(); return {};
       case 'missions.list': {
@@ -129,6 +153,13 @@ export class ManagementBinding implements vscode.Disposable {
         }
         return {};
       }
+    }
+  }
+  private async updatedSettings(): Promise<Partial<ManagementResult>> {
+    try { return { settings: await this.services.settings.read() }; }
+    catch (error) {
+      throw new OperationOutcomeError(error instanceof Error ? error.message : '操作未完成，请重试。',
+        { ...classifyOperationError(error), outcome: 'partial' });
     }
   }
   /**
@@ -164,5 +195,5 @@ export class ManagementBinding implements vscode.Disposable {
   private post(message: ManagementHostMessage): void {
     if (!this.disposed) void this.webview.postMessage(message);
   }
-  dispose(): void { this.disposed = true; for (const subscription of this.subscriptions) subscription.dispose(); }
+  dispose(): void { this.disposed = true; this.frontend.dispose(); for (const subscription of this.subscriptions) subscription.dispose(); }
 }

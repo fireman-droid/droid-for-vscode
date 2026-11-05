@@ -3,6 +3,8 @@ import type {
   ReviewScopeKind,
   ReviewWebviewMessage,
 } from '../../shared/protocol/reviewProtocol';
+import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
+import { classifyOperationError, recordOperation } from '../diagnostics/operationDiagnostics';
 
 type Unsequenced<T> = T extends { readonly sequence: number }
   ? Omit<T, 'sequence'>
@@ -32,9 +34,15 @@ export async function runAgentReview(
         readonly baselineLabel: string;
       }
     | undefined,
+  diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
 ): Promise<void> {
-  if (scope === undefined) return;
+  const started = performance.now();
+  if (scope === undefined || runner === undefined) {
+    recordOperation(diagnostics, 'review', 'review.runAgentReview', started, { outcome: 'blocked', failureKind: 'unavailable' });
+    if (scope === undefined) return;
+  }
   if (scope.scopeKind !== 'workspace' && scope.scopeKind !== 'branch') {
+    if (runner) recordOperation(diagnostics, 'review', 'review.runAgentReview', started, { outcome: 'blocked', failureKind: 'invalid-data' });
     publish({
       type: 'review.agentReviewState',
       sessionId: message.sessionId,
@@ -53,6 +61,7 @@ export async function runAgentReview(
   });
   try {
     const run = await runner.run(scope);
+    recordOperation(diagnostics, 'review', 'review.runAgentReview', started, { outcome: 'accepted' });
     const state = {
       sessionId: message.sessionId,
       reviewScopeId: message.reviewScopeId,
@@ -60,21 +69,26 @@ export async function runAgentReview(
     };
     publish({ type: 'review.agentReviewState', ...state, status: 'running' });
     void run.completion.then(
-      () =>
+      () => {
+        recordOperation(diagnostics, 'review', 'review.runAgentReview', started, { outcome: 'success' });
         publish({
           type: 'review.agentReviewState',
           ...state,
           status: 'complete',
-        }),
-      () =>
+        });
+      },
+      error => {
+        recordOperation(diagnostics, 'review', 'review.runAgentReview', started, classifyOperationError(error));
         publish({
           type: 'review.agentReviewState',
           ...state,
           status: 'failed',
           message: 'Agent Review did not complete.',
-        }),
+        });
+      },
     );
-  } catch {
+  } catch (error) {
+    recordOperation(diagnostics, 'review', 'review.runAgentReview', started, classifyOperationError(error));
     publish({
       type: 'review.agentReviewState',
       sessionId: message.sessionId,

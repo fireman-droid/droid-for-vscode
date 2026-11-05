@@ -20,6 +20,35 @@ it.each([
   expect(JSON.stringify(event)).not.toMatch(/Private|private-project|credentials/);
 });
 
+it.each([
+  ['runtime.stream.error', 'failed'],
+  ['host.turn.watchdog-stop-unconfirmed', 'unknown'],
+] as const)('never reports %s as ok without an explicit outcome', (name, outcome) => {
+  expect(projectGa4Event({ level: 'error', name, detail: 'HTTP 403 private-secret' }, metadata)?.params)
+    .toMatchObject({ outcome });
+});
+
+it.each(['models', 'management', 'review', 'sessionViewer', 'missionControl'])('collects %s frontend failure without its prose', surface => {
+  const event = projectGa4Event({ level: 'error', name: `${surface}.error`, detail: 'private-code at C:/private-project' }, metadata);
+  expect(event?.name).toBe('frontend_error');
+  expect(JSON.stringify(event)).not.toMatch(/private-code|private-project/);
+});
+
+it('projects business results and final reconciled turns separately from transport termination', () => {
+  const operation = projectGa4Event({ level: 'warn', name: 'host.operation.finished',
+    attributes: { operation: 'automations.run', surface: 'management', outcome: 'accepted', durationMs: 20,
+      prompt: 'private-prompt', path: 'private-path', id: 'private-id' } }, metadata);
+  expect(operation).toMatchObject({ name: 'session_recovery',
+    params: { category: 'operation_result', code: 'automations.run', outcome: 'accepted', duration_ms: 20 } });
+  expect(JSON.stringify(operation)).not.toContain('private');
+  expect(projectGa4Event({ level: 'info', name: 'host.turn.settled',
+    attributes: { outcome: 'completed', source: 'durable', durationMs: 50 } }, metadata)).toMatchObject({
+    name: 'turn_lifecycle', params: { category: 'settled', outcome: 'completed', source: 'durable' },
+  });
+  expect(projectGa4Event({ level: 'warn', name: 'host.turn.failed', detail: 'HTTP 429 private',
+    attributes: { code: 'runtime-stream-failed' } }, metadata)?.params.failure_kind).toBe('rate_limited');
+});
+
 it('retains explicit classifications and the successful warmup reason', () => {
   expect(projectGa4Event({
     level: 'error', name: 'daemon.sidecar.start-failed',

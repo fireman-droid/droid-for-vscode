@@ -50,9 +50,10 @@ function harness() {
     if (issue) issueMap.set(id, issue); else issueMap.delete(id);
   } };
   const api = { automations, models, workspace, sessions } as unknown as DaemonApi;
-  const service = new ManagementAutomationsService(async () => api, true, trusted, confirm, undefined, access, issues);
+  const diagnostics = { record: vi.fn() };
+  const service = new ManagementAutomationsService(async () => api, true, trusted, confirm, undefined, access, issues, diagnostics);
   const row = async (id = 'daily') => (await service.execute({ kind: 'automations.list' })).automations!.find(item => item.id === id)!;
-  return { entry, entries, automations, trusted, confirm, models, workspace, sessions, sessionRows, access, issues, api, service, row };
+  return { entry, entries, automations, trusted, confirm, models, workspace, sessions, sessionRows, access, issues, api, service, row, diagnostics };
 }
 
 describe('local Automation management', () => {
@@ -83,6 +84,9 @@ describe('local Automation management', () => {
     const h = harness(); h.automations.update.mockResolvedValue({ success: false, error: 'cannot apply' });
     const result = await h.service.execute({ kind: 'automations.create', draft: { ...draft, workingDirectory: 'C:/repo' } });
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining('paused') });
+    expect(h.diagnostics.record).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: 'host.operation.finished', attributes: expect.objectContaining({ operation: 'automations.create', outcome: 'partial' }),
+    }));
     const row = await h.row(result.automationId);
     expect(row.blockedReason).toBeTruthy();
     await expect(h.service.execute({ kind: 'automations.resume', id: row.id, revision: row.revision })).rejects.toThrow('verified');
@@ -110,6 +114,11 @@ describe('local Automation management', () => {
     expect(h.confirm).not.toHaveBeenCalled();
     expect(h.automations.dispatch).toHaveBeenCalledExactlyOnceWith('daily');
     expect(h.automations.run).not.toHaveBeenCalled();
+    expect(h.diagnostics.record).toHaveBeenLastCalledWith({
+      name: 'host.operation.finished', level: 'info',
+      attributes: { operation: 'automations.run', surface: 'management', outcome: 'accepted', durationMs: expect.any(Number) },
+    });
+    expect(JSON.stringify(h.diagnostics.record.mock.calls)).not.toMatch(/daily|Daily checks|Inspect and report|uuid|sessionId/);
   });
   it('retains enable/delete confirmation and never retries an ambiguous dispatch failure', async () => {
     const h = harness(); const row = await h.row();
@@ -121,9 +130,13 @@ describe('local Automation management', () => {
     expect(h.automations.resume).not.toHaveBeenCalled();
     expect(h.automations.delete).not.toHaveBeenCalled();
     expect(h.automations.dispatch).not.toHaveBeenCalled();
+    expect(h.diagnostics.record.mock.calls.slice(-2).map(([event]) => event.attributes.outcome)).toEqual(['cancelled', 'cancelled']);
     h.automations.dispatch.mockRejectedValueOnce(new Error('connection lost'));
     await expect(h.service.execute({ kind: 'automations.run', id: row.id, revision: row.revision })).rejects.toThrow('Refresh run history');
     expect(h.automations.dispatch).toHaveBeenCalledTimes(1);
+    expect(h.diagnostics.record).toHaveBeenLastCalledWith(expect.objectContaining({
+      attributes: expect.objectContaining({ operation: 'automations.run', outcome: 'unknown', failureKind: 'unconfirmed' }),
+    }));
   });
   it('rechecks configuration after confirmation and rejects stale writes', async () => {
     const h = harness(); const row = await h.row();
@@ -152,6 +165,9 @@ describe('local Automation management', () => {
     h.automations.update.mockRejectedValue(new Error('offline'));
     h.automations.pause.mockRejectedValue(new Error('offline'));
     await expect(h.service.execute({ kind: 'automations.update', id: row.id, revision: row.revision, draft })).rejects.toThrow('could not be confirmed paused');
+    expect(h.diagnostics.record).toHaveBeenLastCalledWith(expect.objectContaining({
+      attributes: expect.objectContaining({ operation: 'automations.update', outcome: 'unknown', failureKind: 'unconfirmed' }),
+    }));
   });
   it('blocks untrusted writes and unavailable independent models before dispatch', async () => {
     const h = harness(); const row = await h.row();

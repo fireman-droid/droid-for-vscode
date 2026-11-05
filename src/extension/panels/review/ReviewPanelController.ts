@@ -20,9 +20,12 @@ import { reviewWorkspaceRoot } from '../../review/reviewWorkspaceRoot';
 import { ReviewQuestionHost } from '../../review/ReviewQuestionHost';
 import { REVIEW_QUESTION_MODEL_SETTING } from '../../review/reviewQuestionSettings';
 import { isUiLocaleRead } from '../../../shared/protocol/localeProtocol';
+import { WebviewStartupDiagnostics, recordWebviewDiagnostic } from '../../webview/webviewDiagnostics';
+import { classifyOperationError, recordOperation, type OperationCode } from '../../diagnostics/operationDiagnostics';
 
 export class ReviewPanelController implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
+  private frontend: WebviewStartupDiagnostics | undefined;
   private target: { sessionId: string; root: string; turnId?: string; toolUseId?: string; path?: string } | null = null;
   private ready = false;
   private committing = false;
@@ -102,10 +105,12 @@ export class ReviewPanelController implements vscode.Disposable {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
     });
     this.panel = panel;
+    this.frontend = new WebviewStartupDiagnostics('review', this.controller.diagnostics);
     const locale = bindWebviewLocale(panel.webview);
     const receive = panel.webview.onDidReceiveMessage(value => this.handleMessage(value));
     const dispose = panel.onDidDispose(() => {
       receive.dispose(); locale.dispose(); dispose.dispose();
+      this.frontend?.dispose(); this.frontend = undefined;
       if (this.panel === panel) { this.questions.reset(); this.panel = null; this.ready = false; this.target = null; this.cancelPendingOpen(); }
     });
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
@@ -122,10 +127,15 @@ export class ReviewPanelController implements vscode.Disposable {
     this.target = null;
   }
   handleMessage(value: unknown): void {
+    if (recordWebviewDiagnostic(value, 'review', this.controller.diagnostics)) return;
+    const started = performance.now();
     const request = parseReviewPanelRequest(value) ?? parseWebviewMessage(value);
+    const operation: OperationCode = request?.type === 'reviewPanel.openNative' ? 'review.openNative'
+      : request?.type === 'reviewPanel.gitStatus' ? 'review.gitStatus'
+      : request?.type === 'reviewPanel.commit' ? 'review.commit' : 'review.panel';
     const requestId = request && 'requestId' in request && isId(request.requestId) ? request.requestId : undefined;
     const sessionId = request && 'sessionId' in request && isId(request.sessionId) ? request.sessionId : this.target?.sessionId;
-    void this.handle(value).catch(error => this.postError(error, requestId, sessionId));
+    void this.handle(value).catch(error => this.postError(error, requestId, sessionId, operation, started));
   }
   private current(): boolean {
     return !this.invalidated && !!this.target && this.target.sessionId === this.controller.sessionState.sessionId &&
@@ -243,6 +253,7 @@ export class ReviewPanelController implements vscode.Disposable {
     const message = parseReviewPanelRequest(value);
     if (this.browserPost && message?.type === 'review.panel.open') { this.open(message); return; }
     if (message?.type === 'reviewPanel.ready') {
+      this.frontend?.ready();
       this.ready = true;
       this.initialize();
       if (!this.target) this.postContext();
@@ -254,14 +265,19 @@ export class ReviewPanelController implements vscode.Disposable {
     if (message?.type === 'reviewPanel.readFile' || message?.type === 'reviewPanel.openNative') {
       const request = { ...message, sessionId: target.sessionId };
       if (message.type === 'reviewPanel.openNative') {
+        const started = performance.now();
         const result = await this.review.openNative(request);
         if (result !== 'opened-diff') throw new Error('The native Diff could not be opened.');
+        recordOperation(this.controller.diagnostics, 'review', 'review.openNative', started, { outcome: 'success' });
       } else {
+        const started = performance.now();
         try {
           const result = await this.review.readFile(request);
+          recordOperation(this.controller.diagnostics, 'review', 'review.readFile', started, { outcome: 'success' });
           if (this.target === target && this.current()) this.post({ type: 'reviewPanel.file', ...result,
             requestId: message.requestId, reviewScopeId: message.reviewScopeId, path: message.path, error: null });
         } catch (error) {
+          recordOperation(this.controller.diagnostics, 'review', 'review.readFile', started, classifyOperationError(error));
           if (this.target === target && this.current()) this.post({
             type: 'reviewPanel.file', requestId: message.requestId, reviewScopeId: message.reviewScopeId,
             path: message.path, version: '', patch: '', truncated: false,
@@ -285,9 +301,11 @@ export class ReviewPanelController implements vscode.Disposable {
       const current = () => this.target === target && this.current() && !this.writing();
       if (!current()) throw new Error('Wait for the active turn to finish before committing.');
       this.committing = true;
+      const started = performance.now();
       try {
         const result = await this.git.commit(target.root, message.paths, message.message, current,
           { snapshotId: message.snapshotId, mode: message.mode });
+        recordOperation(this.controller.diagnostics, 'review', 'review.commit', started, { outcome: result.ok ? 'success' : 'failed' });
         if (this.target === target && this.current()) {
           this.post({ type: 'git.commitResult', sequence: 0, sessionId: target.sessionId, turnId: 'review',
             ...result, ...(result.ok ? { subject: message.message.split('\n')[0]!.slice(0, MAX_GIT_COMMIT_SUBJECT_LENGTH) } : {}) });
@@ -324,7 +342,10 @@ export class ReviewPanelController implements vscode.Disposable {
       : this.controller.recoveryStore.readLatestOperations(conversationId);
   }
   private async postGitStatus(target: NonNullable<ReviewPanelController['target']>): Promise<void> {
+    const started = performance.now();
     const status = await this.git.status(target.root, new Set());
+    recordOperation(this.controller.diagnostics, 'review', 'review.gitStatus', started,
+      status.available ? { outcome: 'success' } : { outcome: 'failed', failureKind: 'unavailable' });
     if (this.target !== target || !this.current()) return;
     if (status.available) for (const page of gitStatusPages(status))
       this.post({ type: 'git.status', sequence: 0, sessionId: target.sessionId, turnId: 'review', branch: status.branch, ...page });
@@ -332,7 +353,8 @@ export class ReviewPanelController implements vscode.Disposable {
       branch: null, files: [], unavailableReason: status.reason });
   }
   private postTheme(): void { this.post({ type: 'ui.theme', ...readWebviewBootTheme() }); }
-  private postError(error: unknown, requestId?: string, sessionId?: string): void {
+  private postError(error: unknown, requestId?: string, sessionId?: string, operation: OperationCode = 'review.panel', started = performance.now()): void {
+    recordOperation(this.controller.diagnostics, 'review', operation, started, classifyOperationError(error));
     this.post({ type: 'reviewPanel.error', message: error instanceof Error ? error.message : 'Review operation failed.',
       ...(requestId ? { requestId } : {}), ...(sessionId ? { sessionId } : {}) });
   }

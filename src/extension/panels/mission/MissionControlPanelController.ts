@@ -32,6 +32,7 @@ import {
   readWebviewThemePreference,
 } from '../../webview/webviewTheme';
 import { parseWebviewMessage } from '../../../shared/validateMessage';
+import { WebviewStartupDiagnostics } from '../../webview/webviewDiagnostics';
 import type {
   MissionControlCatalogSource,
   MissionControlCatalogOperation as CatalogOperation,
@@ -242,8 +243,12 @@ export class MissionControlPanelController implements vscode.Disposable {
       ready: false,
     };
     this.panelEntry = entry;
+    const frontend = new WebviewStartupDiagnostics('missionControl', this.diagnostics);
     entry.disposables.push(
+      frontend,
       panel.webview.onDidReceiveMessage((value: unknown) => {
+        if (frontend.handle(value)) return;
+        if (parseMissionControlPanelWebviewMessage(value)?.type === 'missionControl.ready') frontend.ready();
         if (modelSourcePreference.handleMessage(value)) return;
         this.handleMessage(entry, value);
       }),
@@ -347,14 +352,7 @@ export class MissionControlPanelController implements vscode.Disposable {
     if (message === undefined) {
       return;
     }
-    if (message.type === 'webview.diagnostic') {
-      this.diagnostics?.record({
-        level: 'warn',
-        name: `missionControl.${message.kind}`,
-        detail: message.detail,
-      });
-      return;
-    }
+    if (message.type === 'webview.diagnostic') return;
     if (message.type === 'missionControl.ready') {
       if (entry.ready) {
         return;

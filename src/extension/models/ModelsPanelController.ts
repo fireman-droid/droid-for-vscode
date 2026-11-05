@@ -36,11 +36,11 @@ export class ModelsPanelController implements vscode.Disposable {
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] },
     );
-    const models = new ModelsBinding(panel.webview, this.manager);
+    const models = new ModelsBinding(panel.webview, this.manager, this.management?.diagnostics ?? this.manager.diagnostics, !this.management);
     const entry: PanelEntry = { panel, subscriptions: [models] };
     this.entry = entry;
     if (this.management) {
-      entry.management = new ManagementBinding(panel.webview, this.management, page);
+      entry.management = new ManagementBinding(panel.webview, this.management, page, true);
       entry.subscriptions.push(entry.management);
     }
     entry.subscriptions.push(

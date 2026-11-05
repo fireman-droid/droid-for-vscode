@@ -67,6 +67,23 @@ function createCoordinator(
 }
 
 describe('ReviewCoordinator reload recovery', () => {
+  it('reports unavailable comparison loading without leaking the session or scope identity', async () => {
+    const diagnostics = { record: vi.fn() };
+    const coordinator = createCoordinator({ get: () => undefined, update: async () => {} },
+      vi.fn(), undefined, undefined, undefined, diagnostics);
+    try {
+      coordinator.handle({ type: 'review.open', sessionId: 'private-session', scopeKind: 'branch' });
+      await coordinator.replay('private-session');
+      expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'host.operation.finished', attributes: {
+          surface: 'review', operation: 'review.open', outcome: 'failed', failureKind: 'unavailable', durationMs: expect.any(Number),
+        },
+      }));
+      const results = diagnostics.record.mock.calls.filter(([event]) => event.name === 'host.operation.finished');
+      expect(results).toHaveLength(1);
+      expect(JSON.stringify(results)).not.toContain('private');
+    } finally { coordinator.dispose(); }
+  });
   it('shows confirmed historical excerpts in Agent Turn when full snapshots are missing', async () => {
     const operations = editsFor('old.txt');
     const snapshots = { read: () => undefined, readTreeBytes: vi.fn(async () => undefined) } as unknown as TurnSnapshotStore;
@@ -735,6 +752,11 @@ describe('ReviewCoordinator reload recovery', () => {
         level: 'warn',
         name: 'host.review.queue-failed',
       });
+      expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'host.operation.finished', attributes: expect.objectContaining({
+          surface: 'review', operation: 'review.queue', outcome: 'failed', failureKind: 'queue',
+        }),
+      }));
       expect(unhandled).not.toHaveBeenCalled();
       expect(publish).toHaveBeenLastCalledWith(
         expect.objectContaining({

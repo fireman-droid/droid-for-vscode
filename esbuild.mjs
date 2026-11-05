@@ -25,6 +25,7 @@ const extensionResult = await build({
   platform: 'node',
   format: 'cjs',
   target: 'node20',
+  define: { __DROID_BUILD_ID__: JSON.stringify(new Date().toISOString().replace(/[:.]/gu, '-')) },
   minify: true,
   // The Droid SDK and host code branch on error/class names at runtime;
   // keep identifiers stable while still compressing the bundle.

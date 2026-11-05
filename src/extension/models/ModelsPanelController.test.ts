@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const vscodeMock = vi.hoisted(() => {
-  let receive: ((value: unknown) => void) | undefined;
+  const receivers = new Set<(value: unknown) => void>();
   let disposePanel: (() => void) | undefined;
   const disposable = () => ({ dispose() {} });
   const postMessage = vi.fn(async (_message: unknown) => true);
@@ -19,8 +19,8 @@ const vscodeMock = vi.hoisted(() => {
       asWebviewUri: (uri: unknown) => uri,
       postMessage,
       onDidReceiveMessage: (listener: (value: unknown) => void) => {
-        receive = listener;
-        return disposable();
+        receivers.add(listener);
+        return { dispose: () => { receivers.delete(listener); } };
       },
     },
   };
@@ -42,7 +42,7 @@ const vscodeMock = vi.hoisted(() => {
       getConfiguration: () => ({ get: () => 'auto' }),
       onDidChangeConfiguration: disposable,
     },
-    receive: (value: unknown) => receive?.(value),
+    receive: (value: unknown) => { for (const listener of receivers) listener(value); },
     panel,
     postMessage,
   };
@@ -53,9 +53,11 @@ vi.mock('vscode', () => ({ ...vscodeMock, env: { language: 'en' },
 import { ModelsPanelController } from './ModelsPanelController';
 import type { ModelManager } from './ModelManager';
 import { MODEL_MANAGER_VERSION } from '../../shared/protocol/modelManagerProtocol';
+import type { ManagementServices } from '../management/ManagementBinding';
 
 afterEach(() => vi.clearAllMocks());
-function fixture() {
+function fixture(management = false) {
+  const diagnostics = { record: vi.fn() };
   const execute = vi.fn(async () => ({ message: 'Saved' }));
   const snapshot = vi.fn(async () => ({
     connections: [],
@@ -66,7 +68,8 @@ function fixture() {
   }));
   const controller = new ModelsPanelController(
     {} as never,
-    { execute, snapshot } as unknown as ModelManager,
+    { execute, snapshot, diagnostics } as unknown as ModelManager,
+    management ? { diagnostics } as unknown as ManagementServices : undefined,
   );
   controller.open();
   const send = (requestId: string, action: unknown) =>
@@ -76,11 +79,11 @@ function fixture() {
       requestId,
       action,
     });
-  return { controller, execute, send };
+  return { controller, execute, snapshot, send, diagnostics };
 }
 describe('Models panel operation lifetime', () => {
   it('releases ownership after native cancellation and refreshes before confirming the next request', async () => {
-    const { controller, execute, send } = fixture();
+    const { controller, execute, send, diagnostics } = fixture();
     send('cancelled', { kind: 'verifyModel', rawIndex: 0, expectedModel: 'model', connectionId: 'gateway' });
     await vi.waitFor(() =>
       expect(vscodeMock.postMessage).toHaveBeenCalledWith(
@@ -92,6 +95,11 @@ describe('Models panel operation lifetime', () => {
       ),
     );
     expect(execute).not.toHaveBeenCalled();
+    expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'host.operation.finished', attributes: expect.objectContaining({
+        surface: 'models', operation: 'verifyModel', outcome: 'cancelled',
+      }),
+    }));
     send('next', { kind: 'refresh' });
     await vi.waitFor(() =>
       expect(vscodeMock.postMessage).toHaveBeenCalledWith(
@@ -107,6 +115,28 @@ describe('Models panel operation lifetime', () => {
     );
     expect(sent.at(-2)?.type).toBe('models.snapshot');
     expect(sent.at(-1)?.type).toBe('models.result');
+    controller.dispose();
+  });
+  it('routes a shared Management/Models panel diagnostic once with the Management surface', () => {
+    const { controller, diagnostics } = fixture(true);
+    vscodeMock.receive({ type: 'webview.diagnostic', kind: 'error', detail: 'render failed' });
+    expect(diagnostics.record).toHaveBeenCalledExactlyOnceWith({ level: 'warn', name: 'management.error', detail: 'render failed' });
+    controller.dispose();
+  });
+  it('records private model failures and confirmed changes with a failed refresh as distinct outcomes', async () => {
+    const { controller, execute, snapshot, send, diagnostics } = fixture();
+    const action = { kind: 'renameModel', rawIndex: 0, expectedModel: 'private-model', name: 'private-name', connectionId: 'private-connection' };
+    execute.mockRejectedValueOnce(Object.assign(new Error('secret-token /private/path'), { status: 403 }));
+    send('private-request', action);
+    await vi.waitFor(() => expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'host.operation.finished', attributes: expect.objectContaining({ operation: 'renameModel', outcome: 'failed', failureKind: 'permission' }),
+    })));
+    snapshot.mockRejectedValueOnce(new Error('private refresh error'));
+    send('second-private-request', action);
+    await vi.waitFor(() => expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'host.operation.finished', attributes: expect.objectContaining({ operation: 'renameModel', outcome: 'partial' }),
+    })));
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toMatch(/private|secret/);
     controller.dispose();
   });
   it('aborts an in-flight operation on disposal and does not post its late result', async () => {

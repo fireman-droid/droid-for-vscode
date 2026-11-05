@@ -16,7 +16,7 @@ export function AutomationActions({ row, disabled, onAction, onEdit, onHistory, 
   return <div className="management-actions">
     {primary && <>
       <Button variant="outline" size="sm" disabled={disabled || runDisabled} onClick={() => onAction({ kind: 'automations.run', id: row.id, revision: row.revision })}>{t('Run now')}</Button>
-      <Button variant="plain" size="sm" disabled={disabled || !row.editable} onClick={onEdit}>{t('Edit')}</Button>
+      <Button variant="outline" size="sm" disabled={disabled || !row.editable} onClick={onEdit}>{t('Edit')}</Button>
     </>}
     <DropdownMenu><DropdownMenuTrigger asChild>
       <Button variant="plain" size="icon-sm" aria-label={t('Automation actions for {p0}', { p0: row.name })} disabled={disabled}><MoreHorizontal /></Button>

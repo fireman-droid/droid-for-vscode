@@ -26,9 +26,10 @@ import type { WebviewToHostMessage } from '../../../shared/bridgeMessages';
 beforeEach(() => vi.clearAllMocks());
 it('uses the same scoped file reader for a browser without opening an editor panel', async () => {
   const post = vi.fn();
+  const diagnostics = { record: vi.fn() };
   const handleMessage = vi.fn();
   const state = { sessionId: 's1', conversationId: null, activeRuntimeCwd: 'C:/work', connection: { status: 'connected' }, disposed: false };
-  const chat = { sessionState: state, subscribe: () => ({ dispose() {} }), handleMessage,
+  const chat = { sessionState: state, subscribe: () => ({ dispose() {} }), handleMessage, diagnostics,
     getWorkspaceContext: () => ({ cwd: 'C:/work', trusted: true }),
     metadata: { modelCatalog: { status: 'ready', items: [] }, settings: { value: null } },
     effects: { readLatestConversationChanges: () => undefined },
@@ -37,15 +38,25 @@ it('uses the same scoped file reader for a browser without opening an editor pan
   const review = new ReviewPanelController({} as never, chat, { readFile } as unknown as ReviewCoordinator,
     { status: vi.fn(), commit: vi.fn() }, {} as SessionViewerPanelController, post);
   review.open();
+  review.handleMessage({ type: 'webview.diagnostic', kind: 'error', detail: 'caught render failure' });
+  expect(diagnostics.record).toHaveBeenCalledExactlyOnceWith({ level: 'warn', name: 'review.error', detail: 'caught render failure' });
   review.handleMessage({ type: 'reviewPanel.ready' });
   expect(fake.create).not.toHaveBeenCalled();
   expect(handleMessage).toHaveBeenCalledWith({ type: 'review.open', sessionId: 's1', scopeKind: 'workspace' });
   expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.context', valid: true, sessionId: 's1' }));
   review.handleMessage({ type: 'reviewPanel.readFile', requestId: 'r1', reviewScopeId: 'scope1', baseline: 'head:index', path: 'a.ts', context: 3 });
   await vi.waitFor(() => expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'reviewPanel.file', requestId: 'r1', patch: '@@ -1 +1 @@\n-a\n+b' })));
+  readFile.mockRejectedValueOnce(new DOMException('private path', 'TimeoutError'));
+  review.handleMessage({ type: 'reviewPanel.readFile', requestId: 'private-request', reviewScopeId: 'scope1', baseline: 'head:index', path: 'private.ts', context: 3 });
+  await vi.waitFor(() => expect(diagnostics.record).toHaveBeenCalledWith(expect.objectContaining({
+    name: 'host.operation.finished', attributes: expect.objectContaining({
+      surface: 'review', operation: 'review.readFile', outcome: 'failed', failureKind: 'timeout',
+    }),
+  })));
+  expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('private');
   state.sessionId = 's2';
   review.handleMessage({ type: 'reviewPanel.readFile', requestId: 'r2', reviewScopeId: 'scope1', baseline: 'head:index', path: 'a.ts', context: 3 });
-  expect(readFile).toHaveBeenCalledOnce();
+  expect(readFile).toHaveBeenCalledTimes(2);
   review.dispose();
 });
 it('reuses its editor tab, scopes messages to Chat and never stops Chat when closed', async () => {

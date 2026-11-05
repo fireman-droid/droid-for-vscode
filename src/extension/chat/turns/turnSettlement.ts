@@ -131,6 +131,7 @@ export function failTurn(
   ctl.turnState.turn.compacting = false;
   const finalCause = formatTurnErrorMessage(errorMessage);
   const message = finalCause ?? ctl.turnState.turn.runtimeError ?? TURN_FAILURE_MESSAGE;
+  ctl.recordHost({ level: 'warn', name: 'host.turn.failed', attributes: { code, outcome: 'failed' }, detail: message });
   // turn.error updates the live view only. Persist every cause not already
   // projected by a runtime error, including failures before the stream starts.
   if (message !== ctl.turnState.turn.runtimeError) {
@@ -194,6 +195,10 @@ export function emitTurnState(
     attributes: { status },
   });
   if (status === 'completed' || status === 'interrupted' || status === 'failed') {
+    const io = ctl.turnState.turnIo;
+    if (io) ctl.recordHost({ level: status === 'failed' ? 'warn' : 'info', name: 'host.turn.settled',
+      attributes: { outcome: status, source: io.reconciled ? 'durable' : ctl.turnState.turn?.recovery ? 'recovered' : 'live',
+        ...(io.startedAt === undefined ? {} : { durationMs: Math.round(performance.now() - io.startedAt) }) } });
     ctl.effects.clearTurnWatchdog();
     flushTurnIo(ctl);
     ctl.diagnostics?.endTurnScope?.();

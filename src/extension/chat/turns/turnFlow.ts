@@ -142,6 +142,14 @@ export async function consumeTurn(
         return;
       }
 
+      const io = ctl.turnState.turnIo;
+      if (io && !io.firstResponse && (event.type === 'tool-start' ||
+          ((event.type === 'text-delta' || event.type === 'thinking-delta') && event.text.length > 0))) {
+        io.firstResponse = true;
+        ctl.recordHost({ level: 'info', name: 'host.turn.first-response',
+          attributes: { durationMs: Math.round(performance.now() - (io.startedAt ?? performance.now())) } });
+      }
+
       if (event.type === 'turn-complete') {
         ctl.effects.flushPendingThinking(sessionId, turnId);
         terminalEventSeen = true;
@@ -231,6 +239,7 @@ export async function consumeTurn(
       const recovered = await readRecoveredTurnOutcome(runtime, turn);
       if (!isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
       if (recovered.status === 'confirmed') {
+        if (ctl.turnState.turnIo) ctl.turnState.turnIo.reconciled = true;
         ctl.effects.flushPendingThinking(sessionId, turnId);
         handleTurnComplete(ctl, sessionId, turnId, recovered.completion);
         return;

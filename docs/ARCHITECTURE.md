@@ -495,7 +495,7 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   `droidvisx.localAnalytics.enabled` 默认开启，配置变化立即停止或恢复新事件记录。
   同时 `Ga4RelayReporter`（`extension/analytics/Ga4RelayReporter.ts` 与 `ga4Config.ts`）
   支持在配置了转发地址（`DEFAULT_GA4_RELAY_ENDPOINT` 或 `droidvisx.telemetry.endpoint`）
-  且 `droidvisx.telemetry.enabled` 开启时，将 SHA-256 哈希后的匿名 `client_id` 与 18 类全链路白名单事件
+  且 `droidvisx.telemetry.enabled` 与编辑器 `env.isTelemetryEnabled` 同时开启时，将 SHA-256 哈希后的设备标识与 18 类白名单事件
   （`extension_activated`、`frontend_ready`、`frontend_render`、`frontend_error`、`frontend_longtask`、`activity_expand`、
   `runtime_init`、`session_history`、`session_switch`、`session_recovery`、`daemon_health`、`ide_relay`、
   `turn_lifecycle`、`context_window`、`subagent_lifecycle`、`tool_execution`、`review_activity`、`autocomplete_activity`）
@@ -504,6 +504,23 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   统计中没有聊天正文、代码、文件路径、错误原文或凭据，原完整本地诊断保持独立。命令 `droidvisx.openLocalAnalytics`
   （“Droid：查看本地统计”）打开当前窗口的统计输出；既有 `droidvisx.exportDiagnostics`
   在写入队列完成后，将统计文件和原诊断一起打入用户手动选择的本地 ZIP。
+- 遥测按 250ms 窗口、每批最多 25 条串行发送，待发队列上限 250 条；溢出只在本地聚合计数。
+  网络错误、超时、408／429／5xx 最多重试两次，其他 HTTP 拒绝不重试；关闭开关、变更端点或销毁时丢弃队列并取消在途请求。
+  停用时尽力 flush，最多等待 1.5 秒，不落盘重放。投递、重试、失败与丢弃记录为仅本地 `telemetry.delivery`，
+  不递归上报。重试可能重复已被接收但响应丢失的事件，不能将这些事件数当作精确计费或审计记录。
+- 保持现有远程事件名／字段兼容：`extension_activated.stage` 区分 started／ready／failed，
+  `runtime_init.stage` 区分 started／finished；旧数据无 stage。
+  `turn_lifecycle.category` 新增 accepted／rejected／first_response／failure／settled，
+  成功率使用 settled 的 completed／failed／interrupted，不将 turn_finished（传输结束）或 turn_io 混作最终结果。
+  首次响应指非空正文、思考或工具开始，恢复回合耗时只计算本次 Host 的观察窗口；无终态不能直接推断故障。
+  模型／管理操作结果复用 `session_recovery/category=operation_result`，Review 复用 `review_activity`；
+  仅投影固定操作代码、结果、失败分类与耗时，自动化派发 accepted 不代表执行或投递成功。
+- Chat、Viewer、Mission、Models、Management、Review 的诊断按页面来源投影；共享的模型／管理面板只保留一个诊断接收者。
+  非聊天入口的 React 错误边界显式回报捕获的渲染异常；React 提交后才标记 bundle 挂载完成，
+  Host 与前端分别检查 ready 请求和有效响应，超时、收到响应或销毁后清理监听，不接管全局 Extension Host 异常。
+- 构建标识、编辑器版本、SDK 版本与运行模式为可选环境字段；CLI 未提供版本时不伪造。
+  新 Worker 白名单加入这些字段，并等待上游 HTTP 回执后再确认；部署旧 Worker 时新环境字段会被过滤，
+  现有事件和补点仍可发送。GA4 HTTP 接受不等于数据已入库，事件参数查询还取决于对应自定义维度配置。
 - `webview-v2/state/` 是根 reducer 的唯一实现；`host/` 是生产 Host 消息接线。
   附件、交互、队列等 reducer/helper 位于 `chat/` 对应业务目录，各页面按需复用，
   不保留旧页面、复制状态实现或反向兼容导出桶。

@@ -57,7 +57,7 @@
     overflow-anchor: none;
     scrollbar-gutter: stable;
   }
-  .v2-btw-transcript { min-width: 0; padding: 8px 12px 24px; }
+  .v2-btw-transcript { min-width: 0; padding: 12px 12px 20px; }
   .v2-btw-empty { max-width: 280px; padding: 20px 4px; user-select: none; }
   .v2-btw-empty-mark { width: 20px; height: 20px; margin-bottom: 12px; color: var(--muted-ink); stroke-width: 1.5; }
   .v2-btw-empty > p { margin-bottom: 6px; font-size: 13px; font-weight: 600; line-height: 20px; }
@@ -75,23 +75,15 @@
   .v2-btw-turn { min-width: 0; }
   .v2-btw-turn + .v2-btw-turn { margin-top: 16px; }
   .v2-btw-question {
-    position: sticky;
-    top: 0;
-    z-index: 2;
     display: flex;
     justify-content: flex-end;
     min-width: 0;
-    padding-block: 6px 8px;
-    background: var(--surface);
+    margin-bottom: 8px;
   }
   .v2-btw-question-content {
     width: fit-content;
     max-width: 88%;
-    max-height: min(160px, 30vh);
-    padding: 7px 12px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-x: contain;
+    padding: 8px 12px;
     border: 1px solid var(--chat-edge, var(--panel-edge));
     border-radius: 14px 14px 3px 14px;
     background: var(--soft-surface);
@@ -125,7 +117,7 @@
   .v2-btw-footer {
     min-width: 0;
     max-height: 65vh;
-    padding: 0 12px 12px;
+    padding: 10px 12px 12px;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -152,7 +144,6 @@
   .v2-btw-queued p > span { margin-right: 6px; font-weight: 500; }
   .v2-btw-composer {
     position: relative;
-    margin-top: 6px;
     padding: 10px;
     border: 1px solid var(--panel-edge);
     border-radius: 12px;

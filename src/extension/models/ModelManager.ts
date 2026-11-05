@@ -27,6 +27,8 @@ import {
   projectConnections,
   projectManagedModels,
 } from './modelProjection';
+import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
+import { OperationOutcomeError, classifyOperationError, type OperationResultDiagnostic } from '../diagnostics/operationDiagnostics';
 
 export interface ModelApplyState {
   readonly activeModelId: string | null;
@@ -34,6 +36,7 @@ export interface ModelApplyState {
   readonly message: string;
 }
 export interface ModelManagerDependencies {
+  readonly diagnostics?: RuntimeDiagnosticSink;
   readonly gateway: ModelManagementGateway;
   readonly registry: ProviderRegistry;
   readonly discovery: CustomModelDiscoveryGateway;
@@ -47,13 +50,18 @@ export interface ModelActionResult {
   readonly connectionId?: string;
   readonly discovered?: readonly DiscoveredCustomModel[];
 }
-export class ModelManagerError extends Error {}
+export class ModelManagerError extends OperationOutcomeError {
+  constructor(message: string, diagnostic: OperationResultDiagnostic = { outcome: 'failed', failureKind: 'unknown' }) {
+    super(message, diagnostic);
+  }
+}
 
 /** Global configuration ownership, independent of the chat panel's lifetime. */
 export class ModelManager {
   private busy = false;
   private readonly tests = new Map<string, ModelVerification>();
   constructor(private readonly deps: ModelManagerDependencies) {}
+  get diagnostics(): RuntimeDiagnosticSink | undefined { return this.deps.diagnostics; }
 
   async snapshot(): Promise<ModelsSnapshot> {
     const [rows, loaded] = await Promise.all([
@@ -157,6 +165,8 @@ export class ModelManager {
           } catch (error) {
             throw new ModelManagerError(
               `${added} models saved before import stopped. ${modelManagerFailure(error)}`,
+              added > 0 ? { outcome: 'partial', failureKind: classifyOperationError(error).failureKind ?? 'unknown' }
+                : classifyOperationError(error),
             );
           }
           added++;
@@ -259,7 +269,7 @@ export class ModelManager {
     const typed = await this.deps.promptKey();
     signal.throwIfAborted();
     if (typed === undefined || typed.trim() === '')
-      throw new ModelManagerError('API key entry cancelled. No model was changed.');
+      throw new ModelManagerError('API key entry cancelled. No model was changed.', { outcome: 'cancelled', failureKind: 'cancelled' });
     const value = typed.trim();
     await this.deps.registry.rememberApiKey(connection.protocol, connection.baseUrl, value);
     signal.throwIfAborted();
@@ -277,7 +287,7 @@ export class ModelManager {
     const key = draft.setApiKey ? await this.deps.promptKey() : undefined;
     signal.throwIfAborted();
     if (draft.setApiKey && (key === undefined || key.trim() === '')) {
-      throw new ModelManagerError('API key entry cancelled. Connection was not saved.');
+      throw new ModelManagerError('API key entry cancelled. Connection was not saved.', { outcome: 'cancelled', failureKind: 'cancelled' });
     }
     const endpointChanged = old !== undefined &&
       connectionKey(old.protocol, old.baseUrl) !== connectionKey(draft.protocol, draft.baseUrl);
@@ -323,6 +333,7 @@ export class ModelManager {
         } catch (error) {
           throw new ModelManagerError(
             `Connection saved; ${updated} model configurations updated before an error. Review the refreshed list. ${modelManagerFailure(error)}`,
+            { outcome: 'partial', failureKind: classifyOperationError(error).failureKind ?? 'unknown' },
           );
         }
       }

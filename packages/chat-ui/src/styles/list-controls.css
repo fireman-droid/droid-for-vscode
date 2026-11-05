@@ -7,9 +7,10 @@
   .dvx-list-filters > .dvx-control { height: 30px; border-radius: 8px; }
   .dvx-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 16px; color: var(--muted-ink); font-size: 12px; font-variant-numeric: tabular-nums; user-select: none; }
   .dvx-page-range { margin-right: auto; }
-  .dvx-pagination-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
-  .dvx-page-numbers, .dvx-page-number { display: inline-flex; align-items: center; gap: 2px; }
+  .dvx-pagination-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+  .dvx-pagination [role='combobox'] { width: auto; min-width: 0; height: 28px; padding-inline: 10px; justify-content: space-between; border-radius: 8px; font-size: 12px; }
+  .dvx-page-numbers, .dvx-page-number { display: inline-flex; align-items: center; gap: 4px; }
   .dvx-page-gap { min-width: 20px; text-align: center; }
-  .dvx-pagination .dvx-control[aria-current='page'] { border: 1px solid var(--edge); border-radius: 6px; color: var(--ink); }
-  .dvx-pagination .dvx-control { justify-content: center; }
+  .dvx-page-numbers .dvx-control { justify-content: center; min-width: 28px; height: 28px; padding-inline: 6px; border: 1px solid transparent; border-radius: 8px; color: var(--muted-ink); }
+  .dvx-page-numbers .dvx-control[aria-current='page'] { border-color: var(--edge); background: var(--control-surface-active); color: var(--strong-ink, var(--ink)); font-weight: 500; }
 }

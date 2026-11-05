@@ -13,10 +13,11 @@ async function setup(read: () => Promise<RuntimeTurnOutcome | null>) {
     yield { type: 'turn-identity', backendTurnId: 'submission' };
   }), { readTurnOutcome: vi.fn(read) });
   const { controller, messages } = createController(() => runtime);
+  const record = vi.spyOn(controller, 'recordHost');
   controllers.push(controller);
   ready(controller); await waitForConnected(messages);
   send(controller, 'session-1', 'ui-turn', 'Continue');
-  return { controller, runtime, messages };
+  return { controller, runtime, messages, record };
 }
 
 it.each([
@@ -29,6 +30,9 @@ it.each([
   expect(result.runtime.readTurnOutcome).toHaveBeenCalledExactlyOnceWith('submission');
   expect(result.runtime.sendTurn).toHaveBeenCalledOnce();
   expect(result.runtime.interrupt).not.toHaveBeenCalled();
+  const settled = result.record.mock.calls.map(([event]) => event).filter(event => event.name === 'host.turn.settled');
+  expect(settled).toHaveLength(1);
+  expect(settled[0]?.attributes).toMatchObject({ outcome: status, source: 'durable' });
 });
 
 it.each(['missing', 'wrong-turn', 'query-failed'] as const)('does not infer success from a %s outcome', async kind => {
@@ -41,6 +45,9 @@ it.each(['missing', 'wrong-turn', 'query-failed'] as const)('does not infer succ
   await vi.waitFor(() => expect(turnStates(result.messages).at(-1)?.status).toBe('failed'));
   expect(result.messages).toContainEqual(expect.objectContaining({ type: 'turn.error', code: 'runtime-stream-ended' }));
   expect(result.runtime.sendTurn).toHaveBeenCalledOnce();
+  expect(result.record.mock.calls.map(([event]) => event)).toContainEqual(expect.objectContaining({
+    name: 'host.turn.settled', attributes: expect.objectContaining({ outcome: 'failed' }),
+  }));
 });
 
 it('ignores an old outcome after the current turn changes during the lookup', async () => {
@@ -54,4 +61,24 @@ it('ignores an old outcome after the current turn changes during the lookup', as
   await new Promise(resolve => setImmediate(resolve));
   expect(result.controller.turnState.turn).toMatchObject({ turnId: 'replacement', status: 'streaming' });
   expect(result.runtime.sendTurn).toHaveBeenCalledOnce();
+  expect(result.record.mock.calls.map(([event]) => event).filter(event => event.name === 'host.turn.settled')).toHaveLength(0);
+});
+
+it('records one first response and one final result for a streamed reply', async () => {
+  const runtime = createMockRuntime(async function* () {
+    yield { type: 'text-delta', text: 'private reply' };
+    yield { type: 'text-delta', text: 'more private reply' };
+    yield { type: 'turn-complete', outcome: 'success' };
+  });
+  const { controller, messages } = createController(() => runtime);
+  controllers.push(controller);
+  const record = vi.spyOn(controller, 'recordHost');
+  ready(controller); await waitForConnected(messages);
+  send(controller, 'session-1', 'ui-turn', 'private prompt');
+  await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('completed'));
+  const lifecycle = record.mock.calls.map(([event]) => event).filter(event =>
+    event.name === 'host.turn.first-response' || event.name === 'host.turn.settled');
+  expect(lifecycle.map(event => event.name)).toEqual(['host.turn.first-response', 'host.turn.settled']);
+  expect(lifecycle[0]?.attributes?.durationMs).toBeGreaterThanOrEqual(0);
+  expect(JSON.stringify(lifecycle)).not.toContain('private');
 });

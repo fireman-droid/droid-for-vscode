@@ -7,12 +7,16 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { registerLocalFrontendAnalytics } from './registerLocalFrontendAnalytics';
 import { exportDiagnosticsBundle } from '../diagnostics/exportDiagnostics';
 
-const host = vi.hoisted(() => ({ enabled: true, target: '', show: vi.fn(),
+const host = vi.hoisted(() => ({ enabled: true, telemetry: false, target: '', show: vi.fn(),
+  telemetryListeners: new Set<() => void>(),
   commands: new Map<string, () => void>(),
   listeners: new Set<(event: { affectsConfiguration(key: string): boolean }) => void>(),
 }));
 vi.mock('vscode', () => ({
-  version: 'test', env: { appName: 'test', isTelemetryEnabled: false },
+  version: 'test', env: { appName: 'test', get isTelemetryEnabled() { return host.telemetry; },
+    onDidChangeTelemetryEnabled: (listener: () => void) => {
+      host.telemetryListeners.add(listener); return { dispose: () => host.telemetryListeners.delete(listener) };
+    } },
   Uri: { file: (fsPath: string) => ({ fsPath }), joinPath: (base: { fsPath: string }, ...parts: string[]) => ({ fsPath: [base.fsPath, ...parts].join('/') }) },
   commands: {
     registerCommand: (name: string, callback: () => void) => { host.commands.set(name, callback); return { dispose: () => host.commands.delete(name) }; },
@@ -31,7 +35,7 @@ vi.mock('vscode', () => ({
   },
 }));
 const directories: string[] = [];
-afterEach(async () => { host.enabled = true; host.show.mockClear(); await Promise.all(directories.splice(0)
+afterEach(async () => { host.enabled = true; host.telemetry = false; host.show.mockClear(); await Promise.all(directories.splice(0)
   .map(directory => rm(directory, { recursive: true, force: true }))); });
 
 /** Read ZIP central-directory entries to verify the actual archive, not a mocked exporter call. */
@@ -86,4 +90,34 @@ it('registers local viewing, honors its own switch, and exports real statistics 
   subscriptions.forEach(disposable => disposable.dispose());
   expect(host.commands.size).toBe(0);
   expect(host.listeners.size).toBe(0);
+});
+
+it('requires both telemetry switches and immediately follows the editor privacy setting', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'droid-telemetry-switch-'));
+  directories.push(directory);
+  const subscriptions: vscode.Disposable[] = [];
+  const context = { subscriptions, extension: { packageJSON: { version: '0.8.20' } } } as unknown as vscode.ExtensionContext;
+  const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
+  const analytics = registerLocalFrontendAnalytics(context, directory, { fetchImpl: fetcher as typeof fetch });
+  analytics.record({ level: 'info', name: 'extension.activated' });
+  await analytics.flush();
+  expect(fetcher).not.toHaveBeenCalled();
+  host.telemetry = true;
+  host.telemetryListeners.forEach(listener => listener());
+  analytics.record({ level: 'info', name: 'extension.activated' });
+  await analytics.flush();
+  expect(fetcher).toHaveBeenCalledOnce();
+  analytics.record({ level: 'info', name: 'extension.activated' });
+  host.telemetry = false;
+  host.telemetryListeners.forEach(listener => listener());
+  await analytics.flush();
+  expect(fetcher).toHaveBeenCalledOnce();
+  host.enabled = false;
+  host.telemetry = true;
+  host.telemetryListeners.forEach(listener => listener());
+  analytics.record({ level: 'info', name: 'extension.activated' });
+  await analytics.flush();
+  expect(fetcher).toHaveBeenCalledOnce();
+  subscriptions.forEach(disposable => disposable.dispose());
+  expect(host.telemetryListeners.size).toBe(0);
 });

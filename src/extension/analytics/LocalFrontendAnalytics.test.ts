@@ -113,6 +113,7 @@ describe('local frontend statistics', () => {
         name: 'extension.activated',
         attributes: { workspace: 'C:/secret-project' },
       });
+      await analytics.flush();
       analytics.record({
         level: 'info',
         name: 'webview.perf-batch',
@@ -124,6 +125,7 @@ describe('local frontend statistics', () => {
           prompt: 'secret-prompt',
         }),
       });
+      await analytics.flush();
       analytics.record({
         level: 'error',
         name: 'runtime.initialize.finished',
@@ -133,6 +135,7 @@ describe('local frontend statistics', () => {
           reason: 'Request timeout after 30000ms: daemon.load_session (5822ceb1-db75-4d77-a12f-781f0831a27f)',
         },
       });
+      await analytics.flush();
       analytics.record({
         level: 'info',
         name: 'runtime.history.daemon',
@@ -148,6 +151,7 @@ describe('local frontend statistics', () => {
           items: 2000,
         },
       });
+      await analytics.flush();
       relay.configure({ enabled: false, endpoint: 'https://droid-ga4.example.workers.dev/collect' });
       analytics.record({ level: 'error', name: 'webview.error', detail: 'should not be sent when disabled' });
 
@@ -168,6 +172,7 @@ describe('local frontend statistics', () => {
               arch: 'x64',
               locale: 'zh-cn',
               ext_version: '0.8.16',
+              stage: 'ready',
               engagement_time_msec: 100,
             },
           },
@@ -206,6 +211,7 @@ describe('local frontend statistics', () => {
               locale: 'zh-cn',
               ext_version: '0.8.16',
               outcome: 'initialization-failed',
+              stage: 'finished',
               failure_kind: 'timeout_load_session',
               duration_ms: 30446,
               engagement_time_msec: 30446,

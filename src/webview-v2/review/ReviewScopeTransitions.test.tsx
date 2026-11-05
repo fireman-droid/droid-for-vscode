@@ -44,10 +44,11 @@ it('keeps readable content while switching and ignores stale errors, state and u
 });
 it('times out only the current scope request and resets it when the target becomes invalid', () => {
   vi.useFakeTimers();
-  const { view, latest } = setup();
+  const { view, latest, port } = setup();
   act(() => view.result.current.openScope('staged'));
   const request = latest();
   act(() => vi.advanceTimersByTime(35_000));
+  expect(port.postMessage).toHaveBeenCalledWith({ type: 'webview.diagnostic', kind: 'error', detail: 'review.open timed out.' });
   expect(view.result.current.scopePending).toBe(false);
   expect(view.result.current.error).toContain('did not finish');
   expect(view.result.current.file?.patch).toContain('saved');
