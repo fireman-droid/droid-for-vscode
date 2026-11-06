@@ -97,6 +97,8 @@ export interface TurnSnapshotStore {
   ): Promise<string | undefined>;
   capturePaths(scope: TurnSnapshotScope, paths: readonly string[]): Promise<void>;
   markDispatched?(scope: TurnSnapshotScope): Promise<void>;
+  /** Release a reservation only when its caller has not started runtime execution. */
+  discardPreparation?(scope: TurnSnapshotScope): Promise<void>;
   readPendingCapture?(): Promise<TurnSnapshotScope | undefined>;
   diff(scope: TurnSnapshotScope): Promise<ReadonlyMap<string, FileChangeStat>>;
   readTreeFile(scope: TurnSnapshotScope, path: string): Promise<string | undefined>;
@@ -156,6 +158,12 @@ export function createTurnSnapshotStore(
   const retained = new Map<string, { count: number; record: TurnSnapshotRecord | undefined }>();
   const running = new Map<string, () => void>();
   const leases = new Map<string, WorkspaceTurnLease>();
+  const finishCapture = async (key: string): Promise<void> => {
+    running.get(key)?.();
+    running.delete(key);
+    const lease = leases.get(key);
+    if (lease) { await lease.finish(); leases.delete(key); }
+  };
   const blobCaches = new Map<string, WorkspaceBlobCache>();
   const blobCacheFor = (root: string): WorkspaceBlobCache => {
     let cache = blobCaches.get(root);
@@ -606,12 +614,7 @@ export function createTurnSnapshotStore(
           captured = await captureNow(scope, phase);
           return captured;
         } finally {
-          if (phase === 'after' || captured === undefined) {
-            running.get(key)?.();
-            running.delete(key);
-            const lease = leases.get(key);
-            if (lease) { await lease.finish(); leases.delete(key); }
-          }
+          if (phase === 'after' || captured === undefined) await finishCapture(key);
         }
       });
     },
@@ -624,6 +627,9 @@ export function createTurnSnapshotStore(
         if (!lease || closing) throw new Error('The workspace baseline reservation is unavailable. The request was not sent.');
         await lease.dispatch();
       });
+    },
+    discardPreparation(scope) {
+      return enqueue(() => finishCapture(turnKey(scope)));
     },
     async diff(scope) {
       const record = recordFor(scope);

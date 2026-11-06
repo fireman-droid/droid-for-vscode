@@ -42,6 +42,7 @@ export function beginTurn(ctl: TurnLifecyclePort, initial: InitialTurn): number 
 
 /** Drop local display ownership without publishing a backend terminal outcome. */
 export function clearTurn(ctl: Pick<TurnLifecyclePort, 'turnState'>): void {
+  ctl.turnState.turn?.preparing?.abort();
   ctl.turnState.turn = null;
   ctl.turnState.turnIo = null;
 }

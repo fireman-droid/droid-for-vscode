@@ -388,6 +388,9 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   `hash-object --no-filters` 避免 clean filter／换行转换；旧记录保留原有部分覆盖语义。
   工具启动通知只预热已保存的基线，恢复中的会话也不能从当前磁盘补造 before。
   `workspaceTurnLease.ts` 按真实目录在窗口间排队，持有到 after 采集结束；等待可以取消。
+  `clearTurn()` 取消 preparation；`consumeTurn()` 的 finally 只在尚未调用 Runtime 发送时，
+  通过 `discardPreparation()` 排入快照存储队列，释放原 scope 的 retain 与 lease，不补造 after。
+  即使 dispatch reservation 已持久化，未进入 Runtime 的准备仍按此路径回收；释放失败明确发布诊断。
   Host 退出时保留已发送轮次的目录归属，恢复原会话并确认结束后收尾，不以 Host PID 消失判断后台停止。
   收尾采集失败会显示记录不完整；失去原采集窗口后不能重读当前文件冒充历史 after。
   快照说明文件变化，不证明作者。无原始基线不回退 HEAD，忽略且未捕获的文件不当空文件。

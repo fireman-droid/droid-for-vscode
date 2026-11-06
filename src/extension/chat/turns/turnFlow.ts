@@ -103,6 +103,7 @@ export async function consumeTurn(
   attachments?: readonly RuntimeAttachment[],
   beforeSnapshot?: Promise<void>,
 ): Promise<void> {
+  let dispatched = false;
   let terminalEventSeen = false;
   let completeEvent: Extract<RuntimeEvent, { type: 'turn-complete' }> | null = null;
 
@@ -135,6 +136,7 @@ export async function consumeTurn(
     delete ctl.turnState.turn!.preparing;
     ctl.effects.armTurnWatchdog(sessionId, turnId);
     ctl.effects.startLiveChanges(sessionId, turnId);
+    dispatched = true;
     for await (const event of runtime.sendTurn(text, attachments)) {
       if (
         !isCurrentTurn(ctl, runtime, runtimeGeneration, turnGeneration, sessionId, turnId)
@@ -217,6 +219,15 @@ export async function consumeTurn(
         completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
       else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed',
         error instanceof Error ? error.message : typeof error === 'string' ? error : undefined);
+    }
+  } finally {
+    if (!dispatched) {
+      try { await ctl.turnSnapshots?.discardPreparation?.({ sessionId, turnId }); }
+      catch {
+        ctl.emit({ type: 'runtime.diagnostic', sessionId, turnId, severity: 'error',
+          code: 'turn-preparation-release-failed',
+          message: 'The unsent reply could not release its workspace reservation. Reopen this session before retrying.' });
+      }
     }
   }
 
