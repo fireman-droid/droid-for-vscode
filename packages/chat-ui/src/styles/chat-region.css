@@ -47,9 +47,11 @@
   .v2-chat-startup h2 { margin: 0 0 8px; color: var(--ink); font-size: 20px; font-weight: 500; line-height: 28px; letter-spacing: -.02em; }
   .v2-startup-description { color: var(--muted-ink); font-size: 13px; line-height: 20px; }
   .v2-startup-actions { display: grid; gap: 2px; margin-top: 20px; }
-  .v2-startup-action { display: flex; min-height: 30px; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin-inline: -8px; padding: 4px 8px; border-radius: 6px; color: var(--muted-ink); text-align: left; font-size: 13px; line-height: 20px; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
-  .v2-startup-action svg { width: 15px; height: 15px; flex-shrink: 0; }
-  .v2-startup-action:hover, .v2-startup-action:active { background: var(--control-surface-hover); color: var(--ink); }
+  .v2-startup-action { display: flex; min-height: 30px; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin-inline: -8px; padding: 4px 8px; border-radius: 6px; color: var(--muted-ink); text-align: left; font-size: 13px; line-height: 20px; transition: color 160ms var(--motion-ease); }
+  .v2-startup-action svg { width: 15px; height: 15px; flex-shrink: 0; opacity: .65; transition: opacity 160ms var(--motion-ease); }
+  .v2-startup-action:is(:hover, :focus-visible):not(:disabled) { color: var(--ink); }
+  .v2-startup-action:is(:hover, :focus-visible):not(:disabled) svg { opacity: 1; }
+  .v2-startup-action:active:not(:disabled) { color: var(--strong-ink); }
   .v2-startup-action:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
   .v2-chat-composer {
     position: relative;
@@ -117,6 +119,7 @@
   .v2-composer-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   .v2-composer-send:disabled { background: var(--soft-surface); color: var(--muted-ink); opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
+    .v2-startup-action, .v2-startup-action svg { transition: none; }
     .v2-chat-composer, .v2-composer-send { transition: none; }
   }
   .v2-chat-composer > .v2-staged-attachments { padding: 8px 10px 0; }
