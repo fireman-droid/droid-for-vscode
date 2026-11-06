@@ -163,6 +163,12 @@ export function dispatchChatMessage(
       handleRewindInfo(controller, message.sessionId, message.messageId);
       return;
     case 'runtime.retry':
+      if (controller.sessionState.initialization === null && controller.sessionState.runtime === null &&
+        !controller.sessionState.sessionOperationInProgress && message.sessionId === controller.sessionState.sessionId &&
+        controller.sessionState.connection.status === 'unavailable') {
+        void handleReady(controller);
+        return;
+      }
       handleRetry(controller, message.sessionId);
       return;
     case 'permission.respond':

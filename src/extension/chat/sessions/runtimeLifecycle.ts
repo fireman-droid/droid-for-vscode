@@ -77,8 +77,10 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
 }
 
 export async function handleReady(ctl: RuntimeLifecyclePort): Promise<void> {
-  if (ctl.sessionState.initialization) {
-    await ctl.sessionState.initialization;
+  const existing = ctl.sessionState.initialization;
+  if (existing) {
+    await existing;
+    if (ctl.sessionState.initialization !== existing) return;
     await waitForWorkspaceTransition(ctl);
     if (ctl.sessionState.disposed) {
       return;
@@ -96,8 +98,21 @@ export async function handleReady(ctl: RuntimeLifecyclePort): Promise<void> {
     return;
   }
 
-  ctl.sessionState.initialization = startup(ctl);
-  await ctl.sessionState.initialization;
+  const generation = ctl.sessionState.runtimeGeneration;
+  const workspace = ctl.getWorkspaceContext();
+  const initialization = startup(ctl).catch(() => {
+    if (ctl.sessionState.initialization !== initialization || ctl.sessionState.disposed ||
+      ctl.sessionState.runtimeGeneration !== generation ||
+      !isSameWorkspaceContext(workspace, ctl.getWorkspaceContext())) return;
+    ctl.sessionState.initialization = null;
+    const message = 'Droid could not initialize this session. Retry to read the saved state again.';
+    ctl.sessionState.connection = { status: 'unavailable', message };
+    ctl.emitSessionDiagnostic('session-initialization-failed', message);
+    ctl.emitSnapshot();
+  });
+  ctl.sessionState.initialization = initialization;
+  await initialization;
+  if (ctl.sessionState.initialization !== initialization) return;
   if (ctl.sessionState.sessionId !== null) {
     await ctl.reviewCoordinator?.replay(ctl.sessionState.sessionId);
   }

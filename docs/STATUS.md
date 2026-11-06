@@ -35,7 +35,7 @@
 | Review | 操作与整轮改动、Git 比较、全文／片段、受限的操作 Undo 和 SDK Restore；问答为选区下方撑开单双栏 Diff 布局的行间 AI 批注，整体限高 `min(60vh, 480px)`，正文内滚动，保留流式、停止、追问及折叠草稿，有内容时 Escape 只折叠、显式关闭结束问答。选择其他代码后点击“在这里继续”才移动同一问答并追加源码引用，保留回复与草稿、不新建线程；首发基础上下文固定，新增引用随提问文本送往 Host。离线预览默认模型有效，约 4.1 秒本地回复始终基于固定示例，不读取新文件或调用真实模型。真实入口仍复用同一 Host 控制器；文件列表筛选缩短时清空旧虚拟滚动偏移，恢复长列表不跳回旧底部 |
 | 工作区回合准备 | 切会话取消尚未提交 Runtime 的准备，释放该轮工作区租约且不伪造 after；已提交的后台回合继续保留租约，等待真实结束后收尾 |
 | 恢复存储 | 主聊天使用工作区独立文件，原子写入后 Memento 只留标记；正文预算优先将可信旧操作转为原会话／工具／文件摘要引用，无可信来源标为 evicted，不按正文体积删除会话身份、谱系或待发队列；结构数量和字段上限保留 |
-| 恢复 | 打开的会话在 SDK 快速重连结束后每 30 秒继续恢复原连接；Host 自动恢复已知会话及空闲 IDE，回到窗口／侧栏时检查；不重发消息，不中断运行中的后台。失联后台仅在确认旧进程退出后允许替代，身份无法核实不另起任务 |
+| 恢复 | 首次恢复读取失败显示不可用，同一控制器后续 ready／Retry 可重新读取，不把失败当空恢复；打开的会话在 SDK 快速重连结束后每 30 秒继续恢复原连接；Host 自动恢复已知会话及空闲 IDE，回到窗口／侧栏时检查；不重发消息，不中断运行中的后台。失联后台仅在确认旧进程退出后允许替代，身份无法核实不另起任务 |
 | 回合终态核对 | 流结束但未收到完成事件时，按本次提交的后台回合 ID 读取持久化结果；确认成功／中断／失败后使用对应终态。未知结果不推断成功，查询期间已切换会话或回合则丢弃迟到结果，不重发请求 |
 | 热更新重启反馈 | 后端更新请求重启后，旧激活实例仍存活或命令失败时显示三语言提示与“重试”。未重启时不推进后端基线、不自动反复重试，也不把新页面加载到旧后端；不强制关闭编辑器或停止进程 |
 | 遥测覆盖与投递 | 同时遵守插件与编辑器遥测开关；有界队列、批量串行、有限重试、停用取消与仅本地投递记录。补齐激活／初始化阶段、发送接受／拒绝、首次响应与核对后的最终结果，流错误不再默认标记成功。模型／管理／Review 启动诊断及非聊天页渲染异常已接线；模型、管理、自动化派发与 Review 操作结果区分失败、取消、部分完成和无法确认。自动化 accepted 仅表示派发受理，不观察编辑器关闭期间的后台调度。继续使用既有 18 类远程事件；Worker 回执修复与新增环境字段仍待部署，未将本地测试视为线上送达证明 |
@@ -65,6 +65,7 @@
   | --- | --- |
   | 未提交准备回收 | `ChatController.preparation.test.ts` 3、`changes/snapshotCapture.test.ts` 6、`turnSnapshots.test.ts` 18、`ChatController.sessions.test.ts` 26 |
   | 恢复正文预算 | `SessionRecoveryStore.budget.test.ts` 2、`SessionRecoveryStore.test.ts` 22、`createPersistentSessionRecoveryStore.test.ts` 9、`operationEvidenceState.test.ts` 4、`runtime/tools/operationBody.test.ts` 9 |
+  | 初始化失败重试 | `ChatController.initializationRetry.test.ts` 3、`ChatController.startupSelection.test.ts` 3、`ChatController.childStartup.test.ts` 2、`ChatController.retryRecovery.test.ts` 7、`ChatController.workspaceSwitch.test.ts` 16 |
 
   `typecheck` 通过；`lint:budgets` 首次发现快照文件超限，复用局部清理函数后通过，并通过受影响的扩展类型检查及准备／快照回归。
   未改真实恢复文件或锁，未做真实 daemon／模型验收，未打包安装。

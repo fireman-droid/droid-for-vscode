@@ -214,6 +214,9 @@ flowchart TD
 
 - `chat/sessions/` 管理启动、目录、切换和 Runtime 生命周期；`startupTarget.ts`
   处理已选目标不在最近目录中的情况，不因“最近 50 条没有”就断言会话不存在。
+  `runtimeLifecycle.ts` 在首次初始化失败时核对 Promise、Runtime 代次与工作区归属，清除本次占位并发布不可用状态；
+  后续 ready 可重新读取恢复状态。`dispatchChatMessage.ts` 只在尚无 Runtime 的初始化失败状态将 Retry 接回该入口，
+  已有 Runtime 的重试仍走原连接恢复路径，不重发 prompt。
 - `SessionWorkspaceContext` 分开保存编辑器窗口目录与所选聊天目录。管理页恢复只接受
   已加载目录中的 ID，并按记录目录重新校验；`getWorkspaceContext()` 随聊天绑定，
   供发送、重试、侧聊、历史和文件适配使用，`getEditorWorkspaceContext()` 用于管理页
