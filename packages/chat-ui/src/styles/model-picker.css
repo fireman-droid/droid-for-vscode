@@ -16,13 +16,13 @@
   .dvx-picker-option > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dvx-picker-option small { display: inline; margin-left: 6px; color: var(--muted-ink); font-size: 10px; }
   .dvx-picker-option > svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--ink); }
-  .dvx-picker-option:where(:hover, :focus-visible, [data-highlighted], [data-state='checked']) { background: var(--control-surface-hover); }
+  .dvx-picker-option[data-state='checked']:not([data-highlighted], :focus-visible) { background: var(--control-surface-hover); }
   .dvx-model-controls { width: max-content; min-width: max(220px, var(--radix-dropdown-menu-trigger-width, 0px)); max-width: min(320px, calc(100vw - 16px), var(--radix-dropdown-menu-content-available-width, 100vw)); }
   .dvx-picker-setting { min-height: 34px; gap: 14px; }
   .dvx-picker-setting > span { flex-shrink: 0; }
   .dvx-picker-setting > small { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-ink); }
   .dvx-picker-setting > svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--muted-ink); }
-  .dvx-picker-setting[data-state='open'] { background: var(--control-surface-hover); }
+  .dvx-picker-setting[data-state='open']:not([data-disabled]) { background: var(--menu-highlight-surface); }
   .dvx-picker-levels { width: max-content; min-width: 168px; max-width: min(calc(100vw - 16px), var(--radix-dropdown-menu-content-available-width, 100vw)); }
   .dvx-picker-empty { padding: 12px; font-size: 12px; color: var(--muted-ink); }
 }

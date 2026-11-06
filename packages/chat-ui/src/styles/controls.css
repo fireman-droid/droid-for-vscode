@@ -52,15 +52,15 @@
   }
   .dvx-tab { border-radius: var(--control-radius) var(--control-radius) 0 0; }
   .dvx-menu-item {
+    --menu-highlight-surface: color-mix(in srgb, var(--ink) 9%, var(--overlay-surface));
     outline: none;
-    transition: background-color var(--motion-fast) var(--motion-ease),
-      color var(--motion-fast) var(--motion-ease);
+    transition: background-color 150ms var(--motion-ease),
+      color 150ms var(--motion-ease);
   }
-  .dvx-menu-item:where([data-highlighted], :focus-visible) {
-    background: var(--hover-surface);
+  .dvx-menu-item:where([data-highlighted], :focus-visible):not(:disabled, [data-disabled], [aria-disabled='true']) {
+    background: var(--menu-highlight-surface);
     color: var(--ink);
   }
-  .dvx-menu-item:focus-visible:not([data-highlighted]) { outline: 1px solid var(--control-border-focus, var(--focus)); outline-offset: -1px; }
   .dvx-resize-handle { position: absolute; inset: 0 0 0 auto; z-index: 1; width: 8px; cursor: col-resize; touch-action: none; user-select: none; outline: none; }
   .dvx-resize-handle::after { content: ''; position: absolute; inset: 0 0 0 auto; width: 2px; background: transparent; }
   .dvx-resize-handle[data-edge='left'], .dvx-resize-handle[data-edge='left']::after { inset: 0 auto 0 0; }

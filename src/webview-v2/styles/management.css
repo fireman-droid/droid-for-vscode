@@ -57,7 +57,6 @@
   .management-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; }
   :where(.management-page, .management-dialog) .dvx-control:where(:not([role='checkbox'], [role='radio'], [role='switch'])):hover:not(:disabled) { color: var(--strong-ink); }
   .management-page .management-nav:is(:hover, :focus-visible):not([aria-current='page']) { background: var(--control-surface-hover) !important; color: var(--strong-ink); }
-  .management-menu .dvx-menu-item[data-highlighted] { background: var(--control-surface-hover); color: var(--strong-ink); }
   .management-page .dvx-control > svg, .management-dialog .dvx-control > svg { width: 14px; height: 14px; flex-shrink: 0; }
   .management-page [role='combobox'] { width: auto; min-width: 110px; height: var(--settings-control-height); max-width: 100%; border-color: var(--management-edge); border-radius: var(--settings-control-radius); }
   .management-page .management-choice-wide[role='combobox'] { width: auto; min-width: 184px; }
