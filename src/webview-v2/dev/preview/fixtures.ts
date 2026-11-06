@@ -2,6 +2,8 @@ import type { ManagementSettings } from '../../../shared/protocol/managementPage
 import type { ReviewScopeState } from '../../../shared/protocol/reviewProtocol';
 import type { ReviewRecordedEntry } from '../../../shared/protocol/reviewPanelProtocol';
 import type { StudioConfig } from '../studioRuntime';
+import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from '../../../shared/protocol/missionControlPanelProtocol';
+import type { MissionControlSetupSnapshotMessage } from '../../../shared/protocol/missionControlSetupProtocol';
 
 declare const __DVX_VERSION__: string;
 
@@ -22,6 +24,24 @@ export function previewSettings(config: StudioConfig): ManagementSettings {
       { id: 'factory/gpt-5.6', label: 'GPT-5.6', reasoning: ['low', 'medium', 'high'] },
       { id: 'factory/claude-opus-4-6', label: 'Claude Opus 4.6', reasoning: ['low', 'medium', 'high'] },
     ] },
+  };
+}
+
+export function createMissionSetupPreview(settings: ManagementSettings, sequence: number, task = ''): MissionControlSetupSnapshotMessage {
+  const models = settings.reviewQuestion.models;
+  const orchestrator = { modelId: models[0]!.id, reasoningEffort: 'high' as const };
+  const inherited = { mode: 'same-as-orchestrator' as const, ...orchestrator };
+  return {
+    type: 'missionControl.setup.snapshot', protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+    sequence, setupRevision: 1, workspaceAuthorityRevision: 1, chatOwnerRevision: 1,
+    phase: 'draft', availability: 'ready', reason: null, readiness: null,
+    draft: { task, orchestrator, worker: inherited, validator: inherited, scrutinyEnabled: true, userTestingEnabled: true },
+    capabilities: {
+      currentChat: orchestrator, catalogStatus: 'ready',
+      catalog: models.map(model => ({ id: model.id, displayName: model.label, isCustom: false,
+        supportedReasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'high' })),
+      preferences: { worker: inherited, validator: inherited, scrutinyEnabled: true, userTestingEnabled: true },
+    },
   };
 }
 

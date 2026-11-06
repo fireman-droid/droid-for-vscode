@@ -8,9 +8,12 @@ import { getStudioScenario } from '../scenarios';
 import { createModelsPreviewSnapshot } from '../modelsPreviewTransport';
 import { createPanelPreview } from '../panelPreview';
 import type { StudioConfig } from '../studioRuntime';
-import { previewSettings, reviewEntries, reviewScope } from './fixtures';
+import { createMissionSetupPreview, previewSettings, reviewEntries, reviewScope } from './fixtures';
 import { createReplyPlayback } from './replyPlayback';
 import { createReviewPlayback } from './reviewPlayback';
+import { MISSION_BRIDGE_PROTOCOL_VERSION, parseMissionWebviewMessage } from '../../../shared/protocol/missionProtocol';
+import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION } from '../../../shared/protocol/missionControlPanelProtocol';
+import { parseMissionControlSetupWebviewMessage, type MissionControlSetupSnapshotMessage } from '../../../shared/protocol/missionControlSetupProtocol';
 
 export const PREVIEW_NOTICE = 'Preview only: this action was not executed. No backend is connected.';
 export const PREVIEW_VIEWS = ['chat', 'management', 'models', 'mission', 'viewer', 'review', 'btw'] as const;
@@ -35,6 +38,7 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
   const panels = createPanelPreview(config);
   const models = createModelsPreviewSnapshot();
   const settings = previewSettings(config);
+  let missionSetup: MissionControlSetupSnapshotMessage | null = null;
   const emit = (message: unknown, valid: () => boolean = () => true): void => {
     const current = epoch;
     queueMicrotask(() => {
@@ -53,6 +57,7 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
   const replay = () => {
     epoch++;
     persistedState = {};
+    missionSetup = null;
     reviewPlayback.reset();
     playback.reset();
   };
@@ -93,6 +98,37 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
       else block();
       emit({ type: 'models.result', version: MODEL_MANAGER_VERSION, requestId: modelRequest.requestId,
         ok: read, message: read ? 'Fixed example models. No provider was contacted.' : PREVIEW_NOTICE });
+      return;
+    }
+    const missionRequest = parseMissionWebviewMessage(request);
+    if (missionRequest?.type === 'mission.panel.open' || missionRequest?.type === 'mission.dismissSetup') {
+      const setup = missionRequest.type === 'mission.panel.open' && missionRequest.target === 'setup';
+      emit({ type: 'missionControl.route', protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION, route: setup ? 'new-mission' : 'catalog' });
+      if (setup) {
+        missionSetup = createMissionSetupPreview(settings, ++sequence, missionRequest.task);
+        emit(missionSetup);
+        callbacks.notice('Offline Mission setup preview. Draft changes stay in this tab; Start Mission is not connected.');
+      } else {
+        missionSetup = null;
+        if (missionRequest.type === 'mission.panel.open') callbacks.navigate('mission');
+      }
+      return;
+    }
+    const draftUpdate = parseMissionControlSetupWebviewMessage(request);
+    if (draftUpdate?.type === 'missionControl.setup.update' && missionSetup) {
+      if (draftUpdate.setupRevision === missionSetup.setupRevision &&
+        draftUpdate.workspaceAuthorityRevision === missionSetup.workspaceAuthorityRevision &&
+        draftUpdate.chatOwnerRevision === missionSetup.chatOwnerRevision) {
+        missionSetup = { ...missionSetup, draft: draftUpdate.draft, setupRevision: missionSetup.setupRevision + 1, sequence: ++sequence };
+      }
+      emit(missionSetup);
+      return;
+    }
+    if (missionRequest?.type === 'mission.start') {
+      block();
+      emit({ type: 'mission.controlResult', protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION,
+        sequence: ++sequence, scope: 'selected-chat', requestId: missionRequest.requestId,
+        action: 'start', status: 'rejected', rejectionCode: 'unavailable' });
       return;
     }
     switch (request.type) {

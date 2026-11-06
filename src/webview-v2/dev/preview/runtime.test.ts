@@ -7,6 +7,8 @@ import { isReviewPanelFile } from '../../../shared/protocol/reviewPanelProtocol'
 import { parseReviewQuestionResponse } from '../../../shared/protocol/reviewQuestionProtocol';
 import { readHostMessage } from '../../bridge/validateHostMessage';
 import { createPreviewRuntime, PREVIEW_NOTICE } from './runtime';
+import { MISSION_BRIDGE_PROTOCOL_VERSION } from '../../../shared/protocol/missionProtocol';
+import { MISSION_CONTROL_PANEL_PROTOCOL_VERSION, parseMissionControlPanelHostMessage } from '../../../shared/protocol/missionControlPanelProtocol';
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 function setup() {
@@ -23,6 +25,34 @@ function setup() {
   return { runtime, notice, navigate, emitted, receive, fetch, acquire };
 }
 const flush = () => new Promise<void>(resolve => queueMicrotask(resolve));
+
+it('opens the chat Mission setup, keeps draft edits local and rejects starting a real Mission', async () => {
+  const h = setup();
+  const envelope = { protocolVersion: MISSION_BRIDGE_PROTOCOL_VERSION, scope: 'selected-chat' };
+  h.runtime.postMessage({ ...envelope, type: 'mission.panel.open', requestId: 'open', target: 'setup', task: 'Preview task' });
+  await flush();
+  const initial = h.emitted().find(message => message.type === 'missionControl.setup.snapshot');
+  expect(h.emitted().map(parseMissionControlPanelHostMessage)).toContainEqual(expect.objectContaining({ type: 'missionControl.route', route: 'new-mission' }));
+  expect(parseMissionControlPanelHostMessage(initial)).toMatchObject({ type: 'missionControl.setup.snapshot', draft: { task: 'Preview task' } });
+  h.runtime.postMessage({ type: 'missionControl.setup.update', protocolVersion: MISSION_CONTROL_PANEL_PROTOCOL_VERSION,
+    requestId: 'draft', setupRevision: initial.setupRevision, workspaceAuthorityRevision: initial.workspaceAuthorityRevision,
+    chatOwnerRevision: initial.chatOwnerRevision, draft: { ...initial.draft, task: 'Edited preview task' } });
+  await flush();
+  const updated = h.emitted().at(-1);
+  expect(parseMissionControlPanelHostMessage(updated)).toMatchObject({ type: 'missionControl.setup.snapshot', draft: { task: 'Edited preview task' } });
+  h.runtime.postMessage({ ...envelope, type: 'mission.start', requestId: 'start', ...updated.draft });
+  await flush();
+  expect(h.emitted().map(readHostMessage)).toContainEqual(expect.objectContaining({
+    type: 'mission.controlResult', requestId: 'start', status: 'rejected', action: 'start', rejectionCode: 'unavailable',
+  }));
+  expect(h.notice).toHaveBeenCalledWith(PREVIEW_NOTICE);
+  h.runtime.postMessage({ ...envelope, type: 'mission.dismissSetup', requestId: 'close', snapshotRevision: 0 });
+  await flush();
+  expect(parseMissionControlPanelHostMessage(h.emitted().at(-1))).toMatchObject({ type: 'missionControl.route', route: 'catalog' });
+  expect(h.emitted().some(message => message.type === 'mission.snapshot' || message.status === 'accepted')).toBe(false);
+  expect(h.fetch).not.toHaveBeenCalled(); expect(h.acquire).not.toHaveBeenCalled();
+  h.runtime.dispose();
+});
 
 it('boots validated production state and replays child activity after subscription without live access', async () => {
   const h = setup();
