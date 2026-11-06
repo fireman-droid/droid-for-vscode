@@ -1,13 +1,13 @@
 # 当前状态
 
-核对日期：2026-11-05。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-11-06。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
 - 当前源码版本为 `0.8.20`，在 `0.8.19` 基础上加入繁星／三体／关闭三种深色聊天背景，并修复 AskUser 多选识别、勾选状态与单选填空互斥切换。
-- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖及 `codex/style-fix` UI 修复经 PR #26 合入，聊天间距归零与补全详细诊断经 PR #27 合入 main；最新完整试用包已成功安装到 Microsoft VS Code，未更新 Cursor。版本仍为 `0.8.20`，未覆盖正式发布产物。后续 Composer 菜单对齐修复仅在任务分支，尚未打包安装。
+- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖及 `codex/style-fix` UI 修复经 PR #26 合入，聊天间距归零与补全详细诊断经 PR #27 合入 main；对应完整试用包已成功安装到 Microsoft VS Code，未更新 Cursor。版本仍为 `0.8.20`，未覆盖正式发布产物。Composer 菜单对齐已修复并通过定向检查，本轮授权合并 main 并安装完整 Microsoft VS Code 试用包；构建、合并与安装结果以本次交付回执为准，不更新 Cursor、不正式发版。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
