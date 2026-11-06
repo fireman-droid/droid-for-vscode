@@ -15,7 +15,9 @@ import { createPreviewRuntime, isPreviewView, type PreviewView, PREVIEW_VIEWS } 
 import '../../theme.css';
 import './preview.css';
 
-const config = parseStudioConfig(window.location.search);
+const params = new URLSearchParams(window.location.search);
+if (!params.has('scenario')) params.set('scenario', 'conversation');
+const config = parseStudioConfig(params.toString());
 const initialView = new URLSearchParams(window.location.search).get('view');
 const runtime = createPreviewRuntime(config, {
   notice: message => window.dispatchEvent(new CustomEvent('preview.notice', { detail: message })),
@@ -32,8 +34,9 @@ const labels: Record<PreviewView, string> = {
 
 function PreviewApp() {
   const [view, setView] = useState<PreviewView>(isPreviewView(initialView) ? initialView : 'chat');
-  const [notice, setNotice] = useState('Fixed example data. No Droid backend, real workspace or account is connected.');
+  const [notice, setNotice] = useState('Local simulation. Send a message to play a 12-second example; Stop and Queue use the production controls. No model, tools or workspace are connected.');
   const navigate = (next: PreviewView) => {
+    runtime.suspend();
     setView(next);
     const url = new URL(window.location.href);
     url.searchParams.set('view', next);
@@ -63,7 +66,7 @@ function PreviewApp() {
     : <ChatApp port={runtime} />;
   return <div className="preview-shell">
     <header data-ui-notice="" className="preview-toolbar">
-      <strong>Offline UI preview</strong>
+      <strong>Offline UI simulation</strong>
       <Select value={view} onValueChange={value => { if (isPreviewView(value)) navigate(value); }}>
         <SelectTrigger aria-label="Preview page"><SelectValue /></SelectTrigger>
         <SelectContent>{PREVIEW_VIEWS.map(value => <SelectItem key={value} value={value}>{labels[value]}</SelectItem>)}</SelectContent>
@@ -77,7 +80,7 @@ function PreviewApp() {
         <SelectContent>{(['full-workflow', 'conversation', 'empty', 'ask-user', 'permission'] as const).map(value =>
           <SelectItem key={value} value={value}>{getStudioScenario(value).label}</SelectItem>)}</SelectContent>
       </Select>
-      <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>Reset examples</Button>
+      <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>Reset simulation</Button>
     </header>
     <p data-ui-notice="" role="status" className="preview-notice">{notice}</p>
     <section className="preview-product" aria-label={`${labels[view]} production UI`}

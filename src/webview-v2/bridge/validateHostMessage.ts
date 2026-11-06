@@ -26,6 +26,8 @@ import {
   type UnknownRecord,
 } from '../../shared/validation/strictValidation';
 import { parseSubagentActivityMessage, parseSubagentOpenResultMessage } from '../../shared/protocol/subagentProtocol';
+import { parseSubagentSnapshotMessage } from '../../shared/protocol/subagentInspectionProtocol';
+import { parseSessionTranscript } from './host/transcript';
 import {
   parseRewindInfo,
   parseSessionAttachmentsMessage,
@@ -115,6 +117,7 @@ const HOST_MESSAGE_PARSERS = {
   'subagent.update': parseSubagentUpdate,
   'subagent.activity': (value) => parseSubagentActivityMessage(value) ?? undefined,
   'subagent.open.result': (value) => parseSubagentOpenResultMessage(value) ?? undefined,
+  'subagent.snapshot': (value) => parseSubagentSnapshotMessage(value, parseSessionTranscript),
   'transcript.image': parseTranscriptImage,
   'changes.update': parseChangesUpdate,
   'file.diff': parseFileDiffMessage,

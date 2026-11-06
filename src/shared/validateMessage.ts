@@ -33,6 +33,7 @@ import {
   type UnknownRecord,
 } from './validation/strictValidation';
 import { parseSubagentWebviewMessage } from './protocol/subagentProtocol';
+import { parseSubagentInspectMessage } from './protocol/subagentInspectionProtocol';
 import {
   parseAttachmentAddEditor,
   parseAttachmentAddGitChanges,
@@ -230,6 +231,7 @@ const WEBVIEW_MESSAGE_PARSERS = {
   'btw.stop': (value) => parseBtwStopMessage(value) ?? undefined,
   'subagent.panel': parseSubagentMessage,
   'subagent.open': parseSubagentMessage,
+  'subagent.inspect': parseSubagentInspectMessage,
   'queue.add': (value) => parseQueueAddMessage(value) ?? undefined,
   'queue.update': (value) => parseQueueUpdateMessage(value) ?? undefined,
   'queue.remove': (value) => parseQueueRemoveMessage(value) ?? undefined,

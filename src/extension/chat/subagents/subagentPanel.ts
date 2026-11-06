@@ -6,6 +6,8 @@ import { type SessionTranscriptItem } from '../../../shared/protocol/transcript'
 import type { SubagentActivityItem, SubagentOpenResultMessage } from '../../../shared/protocol/subagentProtocol';
 import type { SubagentPanelPort } from './subagentPanelPort';
 import type { SubagentViewerSnapshot } from './SubagentTranscriptService';
+import type { SubagentInspectMessage } from '../../../shared/protocol/subagentInspectionProtocol';
+import { cancelSubagentInspection, inspectSubagent } from './subagentInspection';
 
 interface SubagentPanelState {
   sessionId: string | null;
@@ -100,7 +102,12 @@ export function handleSubagentOpen(
   }).catch(() => report('failed'));
 }
 
+export function handleSubagentInspect(ctl: SubagentPanelPort, request: SubagentInspectMessage): void {
+  inspectSubagent(ctl, request, () => ensureMapping(ctl));
+}
+
 export function stopSubagentPanelPoll(ctl: SubagentPanelPort): void {
+  cancelSubagentInspection(ctl.sessionState);
   const state = stateOf(ctl);
   state.unsubscribe?.();
   state.unsubscribe = null;

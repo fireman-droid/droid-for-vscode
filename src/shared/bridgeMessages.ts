@@ -180,6 +180,7 @@ import type {
   SubagentPanelMessage,
 } from './protocol/subagentProtocol';
 import type { SessionTokenUsageState } from './protocol/tokenUsage';
+import type { SubagentInspectMessage, SubagentSnapshotMessage } from './protocol/subagentInspectionProtocol';
 import type { ToolActivityMessage } from './protocol/toolProtocol';
 
 // Version 3: git commit flow messages (git.requestStatus/git.commit
@@ -224,7 +225,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v57 adds Script/RecommendMission permissions and explicit compact handoff mode.
 // v58 exposes the Automations management page (management protocol v2).
 // v59 adds automation session destinations, run links, and result dashboards (management v3).
-export const BRIDGE_PROTOCOL_VERSION = 59 as const;
+// v60 adds read-only inline subagent inspection without opening an external viewer.
+export const BRIDGE_PROTOCOL_VERSION = 60 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage
@@ -306,6 +308,7 @@ export type WebviewToHostMessage =
   | BtwDismissMessage
   | BtwStopMessage
   | SubagentPanelMessage
+  | SubagentInspectMessage
   | SubagentOpenMessage
   | QueueAddMessage
   | QueueUpdateMessage
@@ -439,6 +442,7 @@ export type HostToWebviewMessage =
   | UiThemeMessage
   | CustomModelsHostMessage
   | SubagentActivityMessage
+  | SubagentSnapshotMessage
   | SubagentOpenResultMessage
   | CanvasFeedbackDraftMessage
   | MissionHostMessage

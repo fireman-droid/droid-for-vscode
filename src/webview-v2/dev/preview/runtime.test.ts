@@ -32,27 +32,22 @@ it('boots validated production state and replays child activity after subscripti
   expect(readHostMessage(snapshot)).toMatchObject({ type: 'host.snapshot', sessionId: 'studio-session' });
   expect(snapshot.transcript.some((item: { kind: string }) => item.kind === 'tool')).toBe(true);
   h.receive.mockClear();
-  h.runtime.postMessage({ type: 'subagent.panel', sessionId: 'studio-session' });
+  h.runtime.postMessage({ type: 'subagent.panel', sessionId: 'studio-session', open: true });
   await flush();
   expect(h.emitted().map(readHostMessage)).toContainEqual(expect.objectContaining({ type: 'subagent.activity' }));
   expect(h.fetch).not.toHaveBeenCalled(); expect(h.acquire).not.toHaveBeenCalled();
   h.runtime.dispose();
 });
 
-it('rejects model verification, saved settings and chat sends with correlated results and no changes', async () => {
+it('rejects model verification and saved settings with correlated results and no changes', async () => {
   const h = setup();
   h.runtime.postMessage({ type: 'models.request', version: MODEL_MANAGER_VERSION, requestId: 'verify',
     action: { kind: 'verifyModel', rawIndex: 0, expectedModel: 'gateway-reasoner', connectionId: 'gateway' } });
   h.runtime.postMessage({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'save',
     action: { kind: 'theme.set', theme: 'light' } });
-  h.runtime.postMessage({ type: 'turn.send', sessionId: 'studio-session', turnId: 'send', text: 'Do real work' });
-  h.runtime.postMessage({ type: 'queue.add', sessionId: 'studio-session', queueId: 'queue', text: 'Do real work later' });
   await flush();
   expect(h.emitted().map(parseModelsHostMessage)).toContainEqual(expect.objectContaining({ requestId: 'verify', ok: false }));
   expect(h.emitted().map(parseManagementHostMessage)).toContainEqual(expect.objectContaining({ requestId: 'save', ok: false }));
-  expect(h.emitted().map(readHostMessage)).toContainEqual(expect.objectContaining({ type: 'turn.error', turnId: 'send', code: 'turn-send-rejected' }));
-  expect(h.emitted().map(readHostMessage)).toContainEqual(expect.objectContaining({ type: 'queue.state',
-    rejected: { queueId: 'queue', text: 'Do real work later', reason: PREVIEW_NOTICE } }));
   h.runtime.postMessage({ type: 'models.request', version: MODEL_MANAGER_VERSION, requestId: 'read', action: { kind: 'refresh' } });
   h.runtime.postMessage({ type: 'management.request', version: MANAGEMENT_VERSION, requestId: 'settings', action: { kind: 'settings.read' } });
   await flush();

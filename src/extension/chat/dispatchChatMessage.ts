@@ -62,7 +62,7 @@ import {
   handleSessionUnarchive,
   handleWorktreeCreateSession,
 } from './sessions/sessionDirectory';
-import { handleSubagentOpen, handleSubagentPanel } from './subagents/subagentPanel';
+import { handleSubagentInspect, handleSubagentOpen, handleSubagentPanel } from './subagents/subagentPanel';
 import {
   handleEditResend,
   handleEditStageBegin,
@@ -230,6 +230,9 @@ export function dispatchChatMessage(
       return;
     case 'subagent.panel':
       handleSubagentPanel(controller, message.sessionId, message.open);
+      return;
+    case 'subagent.inspect':
+      handleSubagentInspect(controller, message);
       return;
     case 'subagent.open':
       handleSubagentOpen(

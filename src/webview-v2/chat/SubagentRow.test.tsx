@@ -100,3 +100,31 @@ it('stops only a Host-authorized navigation entry and keeps pending stop request
   fireEvent.click(pending);
   expect(port.postMessage).toHaveBeenCalledTimes(1);
 });
+
+it('opens mapped Task entries inline while preserving external agent.chat.open for Mission entries', () => {
+  const navigation: AgentChatNavigationMessage = {
+    type: 'agent.chat.navigation', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION,
+    parentSessionId: 'parent-1', currentKey: null,
+    agents: [
+      { key: 'task:task-1', title: 'Inspect the active module', role: 'scout', status: 'running' },
+      { key: 'mission:worker-1', title: 'Implement feature worker', role: 'worker', status: 'running' },
+    ],
+  };
+  const port = { postMessage: vi.fn() };
+  const onInspectTask = vi.fn();
+  const tasks = new Map([['task-1', { turnId: 'turn-1', toolUseId: 'task-1' }]]);
+  const rendered = render(<AgentNavigation navigation={navigation} port={port} tasks={tasks} inspectedToolUseId={null} onInspectTask={onInspectTask} />);
+  fireEvent.click(screen.getByRole('button', { name: /2 Agents/ }));
+  const taskButton = screen.getByRole('button', { name: /^Inspect the active module/ });
+  fireEvent.click(taskButton);
+  expect(onInspectTask).toHaveBeenCalledExactlyOnceWith('turn-1', 'task-1');
+  expect(port.postMessage).not.toHaveBeenCalled();
+
+  rendered.rerender(<AgentNavigation navigation={navigation} port={port} tasks={tasks} inspectedToolUseId="task-1" onInspectTask={onInspectTask} />);
+  expect(screen.getByRole('button', { name: /^Inspect the active module/ }).getAttribute('aria-current')).toBe('page');
+
+  fireEvent.click(screen.getByRole('button', { name: /^Implement feature worker/ }));
+  expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({
+    type: 'agent.chat.open', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId: 'parent-1', key: 'mission:worker-1',
+  });
+});

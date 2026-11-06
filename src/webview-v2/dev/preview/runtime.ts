@@ -2,7 +2,6 @@ import { BRIDGE_PROTOCOL_VERSION } from '../../../shared/bridgeMessages';
 import { MANAGEMENT_VERSION, parseManagementRequest, type ManagementPage } from '../../../shared/protocol/managementPageProtocol';
 import { MODEL_MANAGER_VERSION, parseModelsRequest } from '../../../shared/protocol/modelManagerProtocol';
 import { MODEL_SOURCE_VERSION } from '../../../shared/protocol/modelSourceProtocol';
-import { TURN_SEND_REJECTED_CODE } from '../../../shared/protocol/turns';
 import { parseClipboardWrite } from '../../../shared/protocol/clipboardProtocol';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
 import { getStudioScenario } from '../scenarios';
@@ -10,6 +9,8 @@ import { createModelsPreviewSnapshot } from '../modelsPreviewTransport';
 import { createPanelPreview } from '../panelPreview';
 import type { StudioConfig } from '../studioRuntime';
 import { previewSettings, reviewEntries, reviewScope } from './fixtures';
+import { createReplyPlayback } from './replyPlayback';
+import { createReviewPlayback } from './reviewPlayback';
 
 export const PREVIEW_NOTICE = 'Preview only: this action was not executed. No backend is connected.';
 export const PREVIEW_VIEWS = ['chat', 'management', 'models', 'mission', 'viewer', 'review', 'btw'] as const;
@@ -26,6 +27,7 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
   let persistedState: unknown = {};
   let sequence = 0;
   let disposed = false;
+  let epoch = 0;
   let landingPage: ManagementPage = 'general';
   const listeners = new Set<(message: unknown) => void>();
   const messages = getStudioScenario(config.scenario).build(() => ++sequence);
@@ -33,22 +35,32 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
   const panels = createPanelPreview(config);
   const models = createModelsPreviewSnapshot();
   const settings = previewSettings(config);
-  const emit = (message: unknown): void => {
+  const emit = (message: unknown, valid: () => boolean = () => true): void => {
+    const current = epoch;
     queueMicrotask(() => {
-      if (disposed) return;
+      if (disposed || current !== epoch || !valid()) return;
       for (const listener of listeners) listener(message);
       window.dispatchEvent(new MessageEvent('message', { data: message }));
     });
   };
+  const playback = createReplyPlayback(messages, () => ++sequence, emit);
+  const reviewModels = settings.reviewQuestion.models.map(({ id, label }) => ({ id, label }));
+  const preferredReviewModel = settings.reviewQuestion.modelId ?? settings.reviewQuestion.inheritedModelId;
+  const reviewPlayback = createReviewPlayback(reviewModels,
+    reviewModels.find(model => model.id === preferredReviewModel)?.id ?? reviewModels[0]?.id ?? null,
+    config.scenario === 'failure', emit);
   const block = () => callbacks.notice(PREVIEW_NOTICE);
   const replay = () => {
-    for (const message of messages) {
-      emit({ ...message, ...('sequence' in message ? { sequence: ++sequence } : {}) });
-    }
+    epoch++;
+    persistedState = {};
+    reviewPlayback.reset();
+    playback.reset();
   };
   const postMessage = (value: unknown): void => {
     if (disposed || !isStrictRecord(value) || typeof value.type !== 'string') return;
     const request = value;
+    if (reviewPlayback.handle(request)) return;
+    if (playback.handle(request)) return;
     const management = parseManagementRequest(request);
     if (management) {
       const kind = management.action.kind;
@@ -99,9 +111,6 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
           mode: request.type === 'ui.modelSource.set' ? request.mode : 'mixed' });
         if (request.type === 'ui.modelSource.set') callbacks.notice('Model filter changed locally for this preview only.');
         return;
-      case 'subagent.panel':
-        for (const message of messages) if (message.type === 'subagent.activity') emit({ ...message, sequence: ++sequence });
-        return;
       case 'ui.theme.set':
         block();
         emit({ type: 'ui.theme', preference: config.theme, resolved: config.theme === 'light' ? 'light' : 'dark' });
@@ -109,13 +118,6 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
       case 'session.setting.update':
         block();
         emit({ type: 'session.settings', sequence: ++sequence, sessionId: snapshot.sessionId, settings: snapshot.settings });
-        return;
-      case 'queue.add':
-      case 'queue.update':
-        block();
-        emit({ type: 'queue.state', sequence: ++sequence, sessionId: request.sessionId,
-          items: snapshot.queue?.items ?? [], paused: snapshot.queue?.paused ?? null,
-          rejected: { queueId: request.queueId, text: request.text, reason: PREVIEW_NOTICE } });
         return;
       case 'management.open':
         landingPage = request.page as ManagementPage;
@@ -172,15 +174,6 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
         emit({ type: 'review.agentReviewState', sequence: ++sequence, sessionId: reviewScope.sessionId,
           reviewScopeId: reviewScope.reviewScopeId, status: 'failed', message: PREVIEW_NOTICE });
         return;
-      case 'reviewQuestion.models':
-        emit({ type: request.type, sessionId: request.sessionId, status: 'ready',
-          items: settings.reviewQuestion.models.map(({ id, label }) => ({ id, label })), selectedId: null, error: null });
-        return;
-      case 'reviewQuestion.ask':
-        block();
-        emit({ type: 'reviewQuestion.state', sessionId: request.sessionId, questionId: request.questionId,
-          state: { status: 'error', message: PREVIEW_NOTICE, pendingQuestion: null, entries: [] } });
-        return;
       case 'codeReference.resolve':
         emit({ type: 'codeReference.result', requestId: request.requestId, reference: null });
         return;
@@ -195,11 +188,6 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
         );
         return;
       }
-      case 'turn.send':
-        block();
-        emit({ type: 'turn.error', sequence: ++sequence, sessionId: request.sessionId, turnId: request.turnId,
-          code: TURN_SEND_REJECTED_CODE, message: PREVIEW_NOTICE, retryable: false });
-        return;
       default:
         block();
     }
@@ -209,7 +197,8 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
     setState: (state: unknown) => { persistedState = state; },
     postMessage, postManagement: postMessage, postModelSourceMessage: postMessage,
     subscribe(listener: (message: unknown) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    dispose() { disposed = true; listeners.clear(); },
+    suspend() { epoch++; playback.cancel(); reviewPlayback.reset(); },
+    dispose() { disposed = true; epoch++; playback.cancel(); reviewPlayback.reset(); listeners.clear(); },
     replay,
   };
 }

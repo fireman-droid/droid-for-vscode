@@ -72,9 +72,12 @@ export function AgentSection({ count, running, children }: {
   </Collapsible>;
 }
 
-export function AgentNavigation({ navigation, port }: {
+export function AgentNavigation({ navigation, port, tasks, inspectedToolUseId, onInspectTask }: {
   readonly navigation: AgentChatNavigationMessage;
   readonly port: ChatPort;
+  readonly tasks?: ReadonlyMap<string, { readonly turnId: string; readonly toolUseId: string }>;
+  readonly inspectedToolUseId?: string | null;
+  readonly onInspectTask?: (turnId: string, toolUseId: string) => void;
 }) {
   const { t } = useI18n();
   if (navigation.parentSessionId === null || navigation.agents.length === 0) return null;
@@ -82,8 +85,17 @@ export function AgentNavigation({ navigation, port }: {
   const running = navigation.agents.filter((agent) => agent.status === 'running').length;
   return <AgentSection count={navigation.agents.length} running={running}>
     {navigation.agents.map((agent) => {
-      const row = presentNavigationAgent(agent, navigation.currentKey, {
-        open: () => port.postMessage({ type: 'agent.chat.open', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key }),
+      const taskId = agent.key.startsWith('task:') ? agent.key.slice('task:'.length) : null;
+      const taskTarget = taskId !== null ? tasks?.get(taskId) : undefined;
+      const activeKey = taskTarget && inspectedToolUseId === taskTarget.toolUseId ? agent.key : navigation.currentKey;
+      const row = presentNavigationAgent(agent, activeKey, {
+        open: () => {
+          if (taskTarget && onInspectTask) {
+            onInspectTask(taskTarget.turnId, taskTarget.toolUseId);
+            return;
+          }
+          port.postMessage({ type: 'agent.chat.open', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key });
+        },
         stop: () => port.postMessage({ type: 'agent.chat.stop', protocolVersion: AGENT_CHAT_PROTOCOL_VERSION, parentSessionId, key: agent.key }),
       });
       return <li key={agent.key} className="flex min-w-0 items-center">
