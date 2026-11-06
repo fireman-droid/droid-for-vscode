@@ -228,6 +228,10 @@ flowchart TD
 - `SessionRecoveryStore` 持久化的是扩展专属元数据：选择、节点关联、未发队列、
   轮次/Changes 索引、有界操作证据与恢复标记，不是另一份聊天全文或图片缓存。
   历史正文从 Droid 来；旧 display payload 不参与按位置拼接。
+  writer 与 `conversationRecoveryParser.ts` 共用 `recoveryTextUnits()`，正文预算仅统计历史文本和 inline 操作正文；
+  身份、节点、队列继续按字段与结构上限校验，不随正文预算删除整份 Conversation。
+  `operationEvidenceState.ts` 优先压缩最旧 inline 正文：可信工具结果复用 `operationBodyReference.ts`
+  生成绑定原 source session／call／file 的摘要引用，无来源则标记 `unavailable/evicted`，不保留虚假 ready 状态。
 - Compact/Handoff 可换 backend session 而保留同一 Conversation；Fork/Rewind
   建立新 Conversation。历史用 SDK 消息 ID 接回本地轮次/Diff 索引，不能靠相似正文认领。
 - 轮次 `sessionId` 是执行与文件快照来源；Fork/Rewind 中继承的轮次可以指向父

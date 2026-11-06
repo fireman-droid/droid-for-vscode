@@ -52,9 +52,10 @@ import {
   isOperationDiff,
   isToolExecutionPhase,
 } from '../../shared/protocol/operationDiff';
+import { inlineOperationTextUnits } from './operationEvidenceState';
 
-// Metadata/history budget. Queued prompts are bounded independently by
-// MAX_RECOVERY_CONVERSATIONS * MAX_QUEUED_MESSAGES * MAX_TURN_TEXT_LENGTH.
+// Only cached history and inline evidence consume this budget. Identity, lineage
+// and queued prompts retain their independent field/count bounds.
 export const MAX_RECOVERY_TEXT_UNITS = MAX_SESSION_TRANSCRIPT_TEXT_UNITS;
 
 export interface ParsedConversationRecoveryState {
@@ -156,7 +157,7 @@ function parseCurrent(
     conversation.nodes.forEach((node) => sessionIds.add(node.sessionId));
     conversations.push(conversation);
   }
-  if (recoveryTextUnits(conversations, selected) > MAX_RECOVERY_TEXT_UNITS) {
+  if (recoveryTextUnits(conversations) > MAX_RECOVERY_TEXT_UNITS) {
     return undefined;
   }
   return {
@@ -197,7 +198,7 @@ function parseV1(
       ),
     );
   }
-  if (recoveryTextUnits(conversations, selectedSessionId) > MAX_RECOVERY_TEXT_UNITS) {
+  if (recoveryTextUnits(conversations) > MAX_RECOVERY_TEXT_UNITS) {
     return undefined;
   }
   return {
@@ -691,58 +692,11 @@ function sanitizeQueuedTexts(texts: readonly unknown[]): readonly string[] {
   return safe;
 }
 
-function recoveryTextUnits(
-  conversations: readonly ConversationRecoveryRecord[],
-  selectedConversationId: string | null,
-): number {
-  let total = selectedConversationId?.length ?? 0;
-  for (const conversation of conversations) {
-    total +=
-      conversation.conversationId.length +
-      conversation.activeSessionId.length +
-      transcriptTextUnits(conversation.display.transcript);
-    for (const node of conversation.nodes) {
-      total +=
-        node.sessionId.length +
-        (node.parentConversationId?.length ?? 0) +
-        (node.parentSessionId?.length ?? 0) +
-        (node.anchorTurnId?.length ?? 0);
-    }
-    for (const turn of conversation.turns) {
-      total +=
-        turn.turnId.length +
-        turn.sessionId.length +
-        (turn.prompt?.length ?? 0) +
-        (turn.messageId?.length ?? 0);
-      for (const file of turn.files) {
-        total += file.path.length;
-      }
-      for (const operation of turn.toolOperations ?? []) {
-        total += operation.toolUseId.length + operation.toolName.length;
-        if (operation.operationDiff.status === 'ready') {
-          total +=
-            (operation.operationDiff.callId?.length ?? 0) +
-            (operation.operationDiff.sourceSessionId?.length ?? 0);
-          for (const file of operation.operationDiff.files) {
-            total +=
-              file.path.length +
-              (file.previousPath?.length ?? 0) +
-              file.patch.length +
-              (file.submittedContent?.length ?? 0) +
-              (file.message?.length ?? 0);
-          }
-        }
-      }
-    }
-  }
-  return total;
-}
-
-function transcriptTextUnits(state: HostTranscriptState): number {
-  return (
-    state.historyStatus.length +
-    state.transcript.reduce((total, item) => total + transcriptItemTextUnits(item), 0)
-  );
+export function recoveryTextUnits(conversations: readonly ConversationRecoveryRecord[]): number {
+  return conversations.reduce((total, conversation) => total +
+    conversation.display.transcript.transcript.reduce((sum, item) => sum + transcriptItemTextUnits(item), 0) +
+    conversation.turns.reduce((sum, turn) => sum +
+      (turn.toolOperations ?? []).reduce((units, operation) => units + inlineOperationTextUnits(operation.operationDiff), 0), 0), 0);
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

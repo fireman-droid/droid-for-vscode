@@ -1,6 +1,34 @@
 import { MAX_SESSION_TRANSCRIPT_ITEMS } from '../../shared/bridgeMessages';
 import { enrichOperationDiff, type OperationDiff } from '../../shared/protocol/operationDiff';
-import type { ConversationToolOperation } from './conversationRecoveryState';
+import { operationBodyReference } from '../../runtime/tools/operationBodyReference';
+import type { ConversationRecoveryRecord, ConversationToolOperation } from './conversationRecoveryState';
+
+export function inlineOperationTextUnits(diff: OperationDiff): number {
+  return diff.status === 'ready' ? diff.files.reduce(
+    (total, file) => total + file.patch.length + (file.submittedContent?.length ?? 0), 0) : 0;
+}
+
+/** Retain source-bound references; evidence without a trustworthy source is explicitly evicted. */
+export function compactOldestOperationBody(conversation: ConversationRecoveryRecord): ConversationRecoveryRecord | undefined {
+  for (const turn of conversation.turns) {
+    const operation = turn.toolOperations?.find(entry => inlineOperationTextUnits(entry.operationDiff) > 0);
+    if (!operation || operation.operationDiff.status !== 'ready') continue;
+    const diff = operation.operationDiff;
+    const { callId, sourceSessionId } = diff;
+    const compacted: OperationDiff = diff.source === 'tool-result' && callId && sourceSessionId
+      ? { ...diff, files: diff.files.map(file => {
+          if (!file.patch.length && !file.submittedContent?.length) return file;
+          const { submittedContent: _submittedContent, ...metadata } = file;
+          return { ...metadata, patch: '', bodyRef: operationBodyReference(sourceSessionId, callId, file) };
+        }) }
+      : { status: 'unavailable', reason: 'evicted' };
+    return { ...conversation, turns: conversation.turns.map(entry => entry === turn
+      ? { ...turn, toolOperations: turn.toolOperations!.map(candidate => candidate === operation
+          ? { ...candidate, operationDiff: compacted } : candidate) }
+      : entry) };
+  }
+  return undefined;
+}
 
 export function mergeToolOperations(
   previous: readonly ConversationToolOperation[],
