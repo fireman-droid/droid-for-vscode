@@ -129,6 +129,8 @@ export const commonMessages: readonly MessageTranslations[] = [
   ["Ask","提问","提問"],
   ["Continue here","在这里继续","在這裡繼續"],
   ["Connection details","连接详情","連線詳情"],
+  ["Search connections or models","搜索渠道或模型","搜尋渠道或模型"],
+  ["Save each section separately. Closing does not undo applied changes.","各区分别保存，关闭窗口不会撤销已生效的操作。","各區分別儲存，關閉視窗不會撤銷已生效的操作。"],
   ["Applies to model pickers, not this list.","用于模型选择器，不筛选此列表。","用於模型選擇器，不篩選此清單。"],
   ["Unreviewed","未审阅","未審閱"],
   ["Reviewed","已审阅","已審閱"],

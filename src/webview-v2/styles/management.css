@@ -88,17 +88,30 @@
   .management-models > .management-heading { margin-bottom: 20px; }
   .models-source-preference { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 16px; }
   .models-source-preference .models-help { font-size: 12px; }
-  .management-channel { padding: 16px 0 8px; border-bottom: 1px solid var(--management-edge, var(--panel-edge)); }
-  .management-channel-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-bottom: 4px; }
-  .management-channel-heading > div:first-child { min-width: 0; }
-  .management-channel h2 { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
-  .models-channel-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-  .models-channel-count { color: var(--muted-ink); font-size: 12px; }
-  .management-channel-heading .management-actions { min-width: 0; max-width: 100%; flex-shrink: 1; gap: 4px; }
-  .models-channel-details { padding: 6px 0 12px; color: var(--muted-ink); font-size: 12px; }
-  .models-channel-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-  .models-channel-url { margin-top: 4px; overflow-wrap: anywhere; font-family: var(--font-mono); }
-  .management-models .models-connection-toggle { margin-left: -8px; }
+  .models-connection-list { margin-top: 16px; }
+  .management-models .models-connection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: 16px; width: 100%; min-height: 68px; padding: 12px 8px; border-bottom: 1px solid var(--management-edge); text-align: left; white-space: normal; }
+  .models-connection-row:hover:not(:disabled) { background: var(--control-surface-hover) !important; }
+  .models-connection-row:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .models-connection-copy { display: grid; min-width: 0; gap: 4px; }
+  .models-connection-copy .models-connection-name { color: var(--strong-ink); font-size: 14px; font-weight: 500; }
+  .models-connection-endpoint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-ink); font-size: 12px; }
+  .models-connection-meta { display: grid; gap: 4px; color: var(--muted-ink); font-size: 12px; text-align: right; }
+  .management-dialog.models-workspace-dialog { max-width: 820px; height: min(760px, 86dvh); overflow: hidden; }
+  .models-workspace-scroll { flex: 1; min-height: 0; }
+  .models-workspace-content { padding-right: 12px; }
+  .models-connection-workspace { display: flex; min-width: 0; flex-direction: column; gap: 24px; }
+  .models-workspace-section { min-width: 0; padding-top: 12px; }
+  .models-workspace-section + .models-workspace-section { border-top: 1px solid var(--panel-edge); }
+  .models-workspace-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .models-workspace-section-heading h3 { font-size: 14px; font-weight: 500; }
+  .models-workspace-section-heading h3 > span { margin-left: 6px; color: var(--muted-ink); font-size: 12px; font-weight: 400; }
+  .models-connection-fields { display: grid; gap: 10px; font-size: 12px; }
+  .models-connection-fields > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; }
+  .models-connection-fields dt { color: var(--muted-ink); }
+  .models-connection-fields dd { min-width: 0; overflow-wrap: anywhere; }
+  .models-connection-url { font-family: var(--font-mono); }
+  .models-workspace-footer { display: flex; flex-shrink: 0; justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--panel-edge); }
+  .models-workspace-dialog .models-form-actions { position: static; }
   .management-models .models-list { gap: 0; margin-top: 8px; }
   .management-models .models-model-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px auto; grid-template-areas: 'info status actions'; align-items: center; gap: 8px 12px; min-height: 64px; padding: 12px 0; border: 0; border-radius: 0; background: transparent; }
   .models-model-row > div:first-child { grid-area: info; }
@@ -120,6 +133,8 @@
   }
   @container (max-width: 380px) {
     .management-models .models-model-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'status' 'actions'; }
+    .management-models .models-connection-row { gap: 8px; padding-inline: 0; }
+    .models-connection-meta { font-size: 11px; }
   }
   .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px 124px 32px; align-items: center; gap: 16px; border-bottom: 1px solid var(--management-edge); }
   .management-session-head { padding: 10px 0; color: var(--muted-ink); font-size: 12px; }
