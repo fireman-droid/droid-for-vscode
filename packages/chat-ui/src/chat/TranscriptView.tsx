@@ -196,6 +196,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const nextMinHeight = `${minColumnHeight}px`;
     if (column.style.minHeight !== nextMinHeight) column.style.minHeight = nextMinHeight;
     if (spacer.style.height !== '0px') spacer.style.height = '0px';
+    // Keep the same runway/target, but let the send transition reach it.
+    if (scrolling.sendBehavior.current === 'smooth') return nextHeight;
     if (pinnedAtTop.current) {
       // Runway height changes with every streamed line, so layout stability can
       // never decide whether the reader left the pin. Compare against the pin

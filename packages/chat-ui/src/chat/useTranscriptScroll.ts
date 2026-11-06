@@ -27,6 +27,7 @@ export function useTranscriptScroll(
   const navigationTop = useRef<number | null>(null);
   const bottomNavigation = useRef(false);
   const sendBehavior = useRef<ScrollBehavior | null>(null);
+  const sendMotion = useRef<{ from: number; started: number | null } | null>(null);
   const settlingSend = useRef(false);
   const frame = useRef<number | null>(null);
   const lastFrame = useRef(0);
@@ -39,6 +40,7 @@ export function useTranscriptScroll(
     navigationTop.current = null;
     bottomNavigation.current = false;
     sendBehavior.current = null;
+    sendMotion.current = null;
     settlingSend.current = false;
   }, []);
   const stopFollowing = useCallback(() => {
@@ -94,8 +96,11 @@ export function useTranscriptScroll(
     if (previous !== null && bounded !== previous) writeTop(element.scrollTop + bounded - previous);
   }, [viewport, writeTop]);
   useLayoutEffect(() => { compensateNavigation(); });
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', sending = false) => {
+    const motion = sending ? sendMotion.current ?? { from: viewport.current?.scrollTop ?? 0, started: null } : null;
     cancelAnimation();
+    sendMotion.current = motion;
+    sendBehavior.current = motion === null ? null : 'smooth';
     syncRunway?.();
     const element = viewport.current;
     readTranscriptSelection(element?.parentElement ?? null)?.removeAllRanges();
@@ -110,11 +115,12 @@ export function useTranscriptScroll(
     scheduleUpdate.current();
   }, [viewport, writeTop, cancelAnimation, syncRunway]);
   const prepareForSend = useCallback(() => {
-    sendBehavior.current = 'auto';
+    sendBehavior.current = 'smooth';
   }, []);
   const followNewQuestion = useCallback(() => {
-    sendBehavior.current = null;
-    scrollToBottom('auto');
+    const animate = sendBehavior.current === 'smooth' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // A confirmed message replacing its optimistic row keeps the same clock.
+    scrollToBottom(animate ? 'smooth' : 'auto', animate);
     settlingSend.current = true;
   }, [scrollToBottom]);
 
@@ -148,11 +154,17 @@ export function useTranscriptScroll(
         const distance = bounded - element.scrollTop;
         const elapsed = lastFrame.current === 0 ? 16 : Math.min(64, Math.max(1, time - lastFrame.current));
         const blend = 1 - Math.exp(-elapsed / (readTarget ? 70 : 55));
-        if (Math.abs(distance) > 1) {
+        if (Math.abs(distance) > 1 || sendMotion.current !== null) {
           settledFrames = 0;
           const step = Math.sign(distance) * Math.min(Math.abs(distance), Math.max(1, Math.abs(distance) * blend));
           const previousTop = element.scrollTop;
-          writeTop(reducedMotion.matches || settlingSend.current ? bounded : previousTop + step);
+          const motion = sendMotion.current;
+          if (motion !== null) {
+            motion.started ??= time - 16;
+            const progress = reducedMotion.matches ? 1 : Math.min(1, (time - motion.started) / 200);
+            writeTop(motion.from + (bounded - motion.from) * (1 - (1 - progress) ** 3));
+            if (progress === 1) { sendMotion.current = null; sendBehavior.current = null; }
+          } else writeTop(reducedMotion.matches || settlingSend.current ? bounded : previousTop + step);
           // Chromium can clamp/quantize scrollTop before the integer geometry
           // target is reached. A blocked write must not keep an idle RAF alive.
           if (Math.abs(element.scrollTop - previousTop) > 0.01) schedule();
@@ -179,6 +191,7 @@ export function useTranscriptScroll(
         settlingSend.current = false;
         settledFrames = 0;
       }
+      if (!settlingSend.current) { sendMotion.current = null; sendBehavior.current = null; }
       lastFrame.current = frame.current === null ? 0 : time;
       setFollowingBottom(follow.current.following && navigation.current === null && !bottomNavigation.current);
       setAway(!follow.current.following && bottom - element.scrollTop > FOLLOW_REJOIN_PX);
@@ -267,7 +280,7 @@ export function useTranscriptScroll(
       const height = element.clientHeight;
       // New virtual rows and the cleared composer settle together. Correct their
       // geometry before paint, then return to the usual smooth streaming follow.
-      if (settlingSend.current && follow.current.following && !selecting()) {
+      if (settlingSend.current && sendMotion.current === null && follow.current.following && !selecting()) {
         writeTop(Math.max(0, element.scrollHeight - height));
         settledFrames = 0;
       }
@@ -278,7 +291,7 @@ export function useTranscriptScroll(
         maxHeight = Math.max(maxHeight, height);
         // Composer/window layout changes preserve the bottom immediately.
         // Only transcript growth and explicit navigation use the eased target.
-        if (follow.current.following && navigation.current === null && !bottomNavigation.current && !selecting()) {
+        if (follow.current.following && navigation.current === null && !bottomNavigation.current && sendMotion.current === null && !selecting()) {
           writeTop(Math.max(0, element.scrollHeight - height));
         }
         if (reportLayout && diagnosticTimer === undefined) {
@@ -324,5 +337,5 @@ export function useTranscriptScroll(
       cancelAnimation();
     };
   }, [viewport, content, writeTop, stopFollowing, cancelAnimation, compensateNavigation, reportLayout, onReachedBottom, pauseAutoFollow, syncRunway]);
-  return { follow, followingBottom, away, navigation, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
+  return { follow, followingBottom, away, navigation, sendBehavior, stopFollowing, scrollToBottom, scrollToTarget, writeTop, wheelOverlayRef, prepareForSend, followNewQuestion };
 }
