@@ -45,6 +45,10 @@ export interface SessionRecoveryPersistence {
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
+type RecoveryStorage = Omit<SessionRecoveryPersistence, 'get'> & {
+  get<T>(key: string): T | undefined | PromiseLike<T | undefined>;
+};
+
 export type SessionRecoveryCache = HostTranscriptState;
 
 export class SessionRecoveryStore {
@@ -62,7 +66,7 @@ export class SessionRecoveryStore {
   private disposed = false;
 
   constructor(
-    private readonly persistence: SessionRecoveryPersistence,
+    private readonly persistence: RecoveryStorage,
     private readonly storageKey = SESSION_RECOVERY_STORAGE_KEY,
     private readonly debounceMs = SESSION_RECOVERY_DEBOUNCE_MS,
     _imageArtifacts: ConversationImageArtifactStore | null = null,
@@ -72,9 +76,9 @@ export class SessionRecoveryStore {
     if (this.disposed) {
       return;
     }
-    const parsed = parseConversationRecoveryState(
-      withoutCachedHistory(this.persistence.get<unknown>(this.storageKey)),
-    );
+    const saved = await this.persistence.get<unknown>(this.storageKey);
+    if (this.disposed) return;
+    const parsed = parseConversationRecoveryState(withoutCachedHistory(saved));
     this.conversations.clear();
     this.sessionOwners.clear();
     this.selectedConversationId = parsed?.selectedConversationId ?? null;

@@ -244,7 +244,7 @@ function activateServices(
   // store, catalog, and history loader the controller uses.
   const recoveryStore = createPersistentSessionRecoveryStore(
     persistence,
-    context.globalStorageUri,
+    context.storageUri,
   );
   const catalogReader = new SessionCatalogReader(context.asAbsolutePath('dist/extension/sessionCatalogWorker.cjs'));
   context.subscriptions.push(catalogReader);
