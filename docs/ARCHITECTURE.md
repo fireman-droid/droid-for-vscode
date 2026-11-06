@@ -226,6 +226,8 @@ flowchart TD
   前置失败保留旧绑定，目标加载失败保留目标绑定，重试不混用两个目录的会话 ID。
 - `chat/recovery/activationTranscript.ts` 装配历史与 Conversation 关联，
   `runtime/history/` 从 Droid 读取并投影；`recovery.ts` 处理已运行轮次的后续对账和检查点。
+  `chat/recovery/recoveryTurnProjection.ts` 统一投影本地 turn ID、backend turn ID、状态和错误，
+  由 `recovery.ts` 与 `changes/publishTurnChanges.ts` 共用，避免迟到的旧轮 Changes 回填丢掉当前轮后台身份。
 - Runtime 和权威历史都就绪后才能接管并开放发送；加载期间工作区或代次变化，
   旧候选必须释放，不能覆盖用户刚选择的新会话。关闭失败保留失败事实，允许重试。
 - `SessionRecoveryStore` 持久化的是扩展专属元数据：选择、节点关联、未发队列、

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { projectDurableTurnOutcome, type DaemonTurnOutcome, type RuntimeTurnOutcome } from '../../runtime/turnOutcome';
+import type { ConversationRecoveryRecord } from '../recovery/conversationRecoveryState';
 import {
   available, catalogEntry, createCatalog, createController, createHostTranscriptState,
   createMemoryPersistence, createMockRuntime, ready, SessionRecoveryStore, turnStates,
@@ -40,6 +41,60 @@ it('persists the exact submission identity before allowing the runtime generator
   resume.resolve();
   await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('completed'));
   expect(sent).toHaveBeenCalledOnce();
+});
+
+it('preserves the active backend identity when an earlier turn publishes delayed changes', async () => {
+  const persistence = createMemoryPersistence();
+  const updates: { conversations: readonly ConversationRecoveryRecord[] }[] = [];
+  const update = persistence.update.bind(persistence);
+  vi.spyOn(persistence, 'update').mockImplementation(async (key, value) => {
+    updates.push(structuredClone(value) as { conversations: readonly ConversationRecoveryRecord[] });
+    await update(key, value);
+  });
+  const store = new SessionRecoveryStore(persistence, 'recovery', 0);
+  const finish = deferred<void>();
+  const diff = deferred<readonly { path: string; additions: number; deletions: number }[]>();
+  const runtime = createMockRuntime(async function* (text) {
+    if (text === 'second') {
+      yield { type: 'turn-identity', backendTurnId: 'backend-b' };
+      yield { type: 'text-delta', text: 'Still running B' };
+      await finish.promise;
+    }
+    yield successfulTurn();
+  });
+  const { controller, messages } = createController(() => runtime, undefined, undefined, store);
+  controllers.push(controller);
+  ready(controller);
+  await waitForConnected(messages);
+  vi.spyOn(controller.effects, 'resolveSettledChangeFiles').mockImplementation(async (_sessionId, turnId) =>
+    turnId === 'turn-a' ? diff.promise : []);
+  try {
+    send(controller, 'session-1', 'turn-a', 'first');
+    await vi.waitFor(() => expect(turnStates(messages).at(-1)?.status).toBe('completed'));
+    send(controller, 'session-1', 'turn-b', 'second');
+    await vi.waitFor(() => expect(controller.turnState.turn).toMatchObject({ turnId: 'turn-b', backendTurnId: 'backend-b', status: 'streaming' }));
+    diff.resolve([{ path: 'earlier.ts', additions: 1, deletions: 0 }]);
+    await vi.waitFor(() => expect(messages).toContainEqual(expect.objectContaining({ type: 'changes.update', turnId: 'turn-a', state: 'settled' })));
+    // Freeze the first publication, before a normal checkpoint/dispose could repair it.
+    const saved = updates.find(state => state.conversations.some(conversation =>
+      conversation.display.turn?.turnId === 'turn-b' && conversation.turns.some(turn => turn.turnId === 'turn-a' && turn.changesSettled)));
+    expect(saved?.conversations[0]?.display.turn).toMatchObject({ turnId: 'turn-b', backendTurnId: 'backend-b' });
+    const restored = new SessionRecoveryStore({ get: <T>() => saved as T | undefined, update: async () => {} }, 'recovery', 0);
+    const resumed = Object.assign(createMockRuntime(), {
+      readSessionWorkingState: vi.fn(async () => 'idle' as const),
+      readTurnOutcome: vi.fn(async () => projectDurableTurnOutcome('session-1', 'backend-b', {
+        type: 'agent_turn_outcome', turnId: 'backend-b', reason: 'error' as DaemonTurnOutcome['reason'], resultKind: 'text',
+      })),
+    });
+    const replay = createController(() => resumed, undefined, createCatalog([catalogEntry('session-1')]), restored,
+      { loadHistory: async () => ({ status: 'available', state: createHostTranscriptState('complete') }) });
+    controllers.push(replay.controller);
+    ready(replay.controller);
+    await waitForConnected(replay.messages);
+    await vi.waitFor(() => expect(turnStates(replay.messages).at(-1)?.status).toBe('failed'));
+    expect(resumed.readTurnOutcome).toHaveBeenCalledExactlyOnceWith('backend-b');
+    expect(resumed.sendTurn).not.toHaveBeenCalled();
+  } finally { diff.resolve([]); finish.resolve(); }
 });
 
 it('does not submit when its recovery identity checkpoint cannot be saved', async () => {

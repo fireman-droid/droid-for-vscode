@@ -21,6 +21,7 @@ import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn, restorePendingTools } from './recoveredHistoryForCurrentTurn';
 import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
 import { settleRecoveredSnapshot } from './settleRecoveredSnapshot';
+import { projectRecoveryTurn } from './recoveryTurnProjection';
 
 export /**
  * Poll cadence for a daemon-side turn recovered after a reload. The
@@ -553,7 +554,7 @@ export function scheduleRecoveryCheckpoint(ctl: RecoveryPort): void {
         checkpoint.conversationId,
         checkpoint.sessionId,
         ctl.recoveryState.transcript,
-        displayTurn(ctl),
+        projectRecoveryTurn(ctl.turnState.turn),
       );
     }
   }, SESSION_RECOVERY_DEBOUNCE_MS);
@@ -570,7 +571,7 @@ export function checkpointRecoveryTranscript(ctl: RecoveryPort): void {
       ctl.sessionState.conversationId,
       ctl.sessionState.sessionId,
       ctl.recoveryState.transcript,
-      displayTurn(ctl),
+      projectRecoveryTurn(ctl.turnState.turn),
     );
   }
 }
@@ -674,24 +675,6 @@ export async function persistActivationRecoveryCheckpoint(
     return 'failed';
   }
   return isCurrent() ? 'saved' : 'stale';
-}
-
-function displayTurn(ctl: RecoveryPort): {
-  readonly turnId: string;
-  readonly backendTurnId?: string;
-  readonly status: TurnStatus;
-  readonly error?: string;
-} | null {
-  return ctl.turnState.turn === null
-    ? null
-    : {
-        turnId: ctl.turnState.turn.turnId,
-        ...(ctl.turnState.turn.backendTurnId === undefined ? {} : { backendTurnId: ctl.turnState.turn.backendTurnId }),
-        status: ctl.turnState.turn.status,
-        ...(ctl.turnState.turn.error === undefined
-          ? {}
-          : { error: ctl.turnState.turn.error }),
-      };
 }
 
 export /**
