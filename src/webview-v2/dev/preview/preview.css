@@ -1,0 +1,13 @@
+/* Only the preview frame. Product visuals come from the production theme. */
+.preview-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.preview-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 1px solid var(--edge);
+  background: var(--soft-surface); flex-shrink: 0;
+}
+.preview-toolbar strong { margin-right: 8px; font-size: 12px; }
+.preview-notice {
+  margin: 0; padding: 6px 12px; font-size: 12px; color: var(--muted-ink);
+  border-bottom: 1px solid var(--edge); flex-shrink: 0;
+}
+.preview-product { flex: 1; min-height: 0; min-width: 0; width: 100%; margin: 0 auto; overflow: hidden; }

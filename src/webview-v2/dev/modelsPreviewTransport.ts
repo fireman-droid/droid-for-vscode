@@ -5,10 +5,8 @@ import type {
 import { MODEL_MANAGER_VERSION } from '../../shared/protocol/modelManagerProtocol';
 import type { ModelsTransport } from '../models/useModels';
 
-export function createModelsPreviewTransport() {
-  const listeners = new Set<(value: unknown) => void>();
-  let failNextSave = false;
-  let snapshot: ModelsSnapshot = {
+export function createModelsPreviewSnapshot(): ModelsSnapshot {
+  return {
     connections: [
       {
         id: 'gateway',
@@ -57,6 +55,12 @@ export function createModelsPreviewTransport() {
     canApply: true,
     applyMessage: 'Preview chat is idle. No real provider requests are made.',
   };
+}
+
+export function createModelsPreviewTransport() {
+  const listeners = new Set<(value: unknown) => void>();
+  let failNextSave = false;
+  let snapshot = createModelsPreviewSnapshot();
   const emit = (message: ModelsHostMessage): void => {
     for (const listener of listeners) listener(message);
   };
@@ -187,21 +191,7 @@ export function createModelsPreviewTransport() {
             ),
           };
         } else if (action.kind === 'verifyModel') {
-          snapshot = {
-            ...snapshot,
-            models: snapshot.models.map((item) =>
-              item.rawIndex === action.rawIndex
-                ? {
-                    ...item,
-                    test: {
-                      status: 'passed',
-                      message: `Simulated reply from ${action.expectedModel}. No real call.`,
-                      latencyMs: 320,
-                    },
-                  }
-                : item,
-            ),
-          };
+          result = { ...result, ok: false, message: 'Preview only: model verification was not executed.' };
         } else if (action.kind === 'useModel') {
           if (snapshot.canApply)
             snapshot = {

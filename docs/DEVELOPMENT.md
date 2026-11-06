@@ -54,6 +54,35 @@ pnpm install --frozen-lockfile
 功能联调默认使用下方的真实 Browser Dev Client；Studio 仅用于隔离的展示场景，
 不能用模拟结果替代真实 Host 验证。
 
+### 不连接后台的同源 UI 预览
+
+```sh
+pnpm run dev:preview
+```
+
+打开 <http://127.0.0.1:4178/>。独立入口默认展示包含对话、工具和子代理的固定场景；
+顶部预览工具栏可切换 Chat、Settings、Models、Mission、Viewer、Review 与 BTW，
+以及主题和聊天示例。菜单、折叠、设置页签、Diff 展示复用真实生产组件。
+Settings 的常规／补全页使用固定设置，会话列表是示例，任务与自动化列表为空；
+Review 只读固定记录的改动，不读取本机文件或 Git。
+
+此入口不导入 Browser Dev Client，不读取连接凭据，也不连接 Droid、VS Code 或模型服务。
+发送、保存设置、模型验证、文件操作等会明确提示未执行；模型验证不会显示虚构的通过结果。
+剪贴板仅在主动复制时使用浏览器 API。预览不代表真实后台功能已验收。
+
+`packages/chat-ui/src/` 和 `src/webview-v2/` 是预览与扩展共用的组件／样式源码，
+Vite 直接解析公共包源码，无需先构建公共包。修改**启动预览的同一源码目录**会更新浏览器；
+其他 worktree 不会自动同步，已安装插件仍需重新构建并安装才能反映修改。
+固定数据与本地适配仅在 `src/webview-v2/dev/`，独立入口位于其 `preview/` 子目录，
+并复用已有 Studio 示例，不要把业务界面复制到这里。
+生产页面构建会拒绝 dev 入口依赖。
+
+需要静态产物时执行 `pnpm run build:preview`，输出到 `dist/ui-preview/`；
+用 `pnpm run serve:preview` 在同一 loopback URL 提供它，不要求 `file://`。
+这两个预览命令不会构建或安装 VSIX。端口固定 `4178`，占用时明确失败。
+
+### 原有 Scenario Studio
+
 ```sh
 pnpm run dev:webview
 ```

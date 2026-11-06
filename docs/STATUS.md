@@ -36,6 +36,7 @@
 
 ## 开发与测试结构
 
+- 独立离线 UI 预览通过 `dev:preview` 在 `127.0.0.1:4178` 使用生产 Chat、Settings、Models、Mission、Viewer、Review 与 BTW 组件和样式；固定数据与本地 Bridge 隔离在 dev 入口，未连接真实后台，危险操作明确未执行。公共 UI 直接解析源码；修改启动预览的同一目录可刷新浏览器，其他 worktree 和已安装插件不会自动同步。静态产物使用 `build:preview`／`serve:preview`，不打包或安装 VSIX，说明见 DEVELOPMENT。
 - 旧 Figma 原型工程与过期设计截图已移出当前源码；生产页面、文档截图和第三方许可保留。
 - 22 个公共 UI 测试及两份 DOM/输入辅助文件归入 `packages/chat-ui/test/`；应用业务测试仍就近存放。
   默认 Vitest 收集范围包含公共包，文件预算覆盖测试目录；两份无消费者的旧组件转导出已移除。
@@ -48,6 +49,8 @@
 - `daemon_health` 的 sidecar 启动／预热失败明确标记 `outcome=failed`，缺失原因使用 `unknown`，并保留已有 spawn／connect 阶段；不把失败默认标为 `ok`，不上传原始错误内容。
 
 ## 最近验证
+
+- 离线 UI 预览：4 个定向文件／10 项测试通过，覆盖固定数据协议、发送／设置／模型验证拒绝、源码依赖隔离和既有 live 路由；公共 UI、Extension、旧 Webview 类型检查及预算通过，修正预览适配中的冗余类型比较后新版 Webview 类型检查通过。最终 `build:preview` 成功，保留大 chunk 体积提示。独立浏览器检查通过 7 页渲染、子代理折叠、设置导航及拒绝后解除忙碌、模型验证不假成功、Review 分栏／折叠和发送拒绝后可重发；资源记录确认加载同一 worktree 的生产组件，相关动作后未见 XHR／fetch、跨源或 live 资源，但未做完整 WebSocket 抓包或编辑 HMR 实测。以上为固定数据预览检查，不代表真实 Host 验收；未打包 VSIX、安装或连接真实后台。
 
 - Composer 菜单对齐：主输入框左侧模式菜单改为左对齐，右侧模型／上下文菜单右对齐；消息编辑栏右侧模式菜单保持右对齐。未改变菜单内容、宽度或选择行为；`typecheck`、`lint:budgets` 与现有 ComposerControls 1 项交互测试通过，未新增样式断言，未进行真实页面验收。
 
