@@ -164,19 +164,19 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>
         : <DeferredDiffChunk key={block.index} count={block.rows.length} changes={block.changes} defer={defer} observe={observe}
-          pinned={!!question && question.row >= block.index && question.row < block.index + block.rows.length || !!reference && block.rows.some(row => {
+          pinned={!!question && ((question.inlineRow != null && question.inlineRow >= block.index && question.inlineRow < block.index + block.rows.length) || (question.endRow >= block.index && question.endRow < block.index + block.rows.length)) || !!reference && block.rows.some(row => {
             const side = reference.side ?? 'after';
             const line = split ? (row as DiffRow)[side === 'before' ? 'left' : 'right'] : row as InlineDiffLine;
             return line?.[side] != null && line[side]! >= reference.startLine && line[side]! <= reference.endLine;
           })}>
           {() => block.rows.map((row, index) => {
             const rowIndex = block.index + index;
-            const questionSide = question && rowIndex >= question.startRow && rowIndex <= question.row ? question.side : undefined;
+            const questionSide = question && rowIndex >= question.startRow && rowIndex <= question.endRow ? question.side : undefined;
             return <Fragment key={index}>
               {split
                 ? <SplitRow row={row as DiffRow} index={rowIndex} syntax={syntax} words={words} questionSide={questionSide} />
                 : <UnifiedRow line={row as InlineDiffLine} index={rowIndex} syntax={syntax} words={words} questionSide={questionSide} />}
-              {question?.inline && question.row === rowIndex ? question.inline : null}
+              {question?.inline && question.inlineRow === rowIndex ? question.inline : null}
             </Fragment>;
           })}
         </DeferredDiffChunk>)}

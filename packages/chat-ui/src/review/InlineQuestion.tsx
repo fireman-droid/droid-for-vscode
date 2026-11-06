@@ -32,7 +32,25 @@ function formatCollapsedSummary(raw: string): string {
     .trim();
 }
 
-export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabled, message, actions, onSend, onStop, onClose, maxLength, focusRequested, onFocused }: {
+export function InlineQuestion({
+  entries,
+  draft,
+  onDraft,
+  busy,
+  stopping,
+  disabled,
+  message,
+  actions,
+  onSend,
+  onStop,
+  onClose,
+  maxLength,
+  focusRequested,
+  onFocused,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
+  hasDraftEdit: externalHasDraftEdit,
+}: {
   entries: readonly InlineQuestionEntry[];
   draft: string;
   onDraft(value: string): void;
@@ -47,14 +65,24 @@ export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabl
   maxLength: number;
   focusRequested: boolean;
   onFocused(): void;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  hasDraftEdit?: boolean;
 }) {
   const { t } = useI18n();
   const { assistantName } = useUiEnvironment();
   const bodyId = useId();
-  const [collapsed, setCollapsed] = useState(false);
+  const [localCollapsed, setLocalCollapsed] = useState(false);
+  const collapsed = controlledCollapsed ?? localCollapsed;
+  const setCollapsed = (next: boolean) => {
+    setLocalCollapsed(next);
+    onCollapsedChange?.(next);
+  };
   const initialDraft = useRef(draft);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const input = useRef<InlineInputHandle>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
   const references = useCodeReferenceDraft(draft, onDraft, maxLength);
   const activeEntry = entries.find((entry) => entry.state === 'streaming');
   const activeProgress = activeEntry ? (activeEntry.progress ?? (activeEntry.answer ? 'answering' : 'waiting')) : undefined;
@@ -73,8 +101,15 @@ export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabl
       onFocused();
     }
   }, [focusRequested, onFocused]);
+  useEffect(() => {
+    const node = threadRef.current;
+    if (node && stickToBottom.current) {
+      node.scrollTop = node.scrollHeight;
+    }
+  }, [entries, busy]);
   const send = () => {
     if (!disabled && !busy && draft.trim()) {
+      stickToBottom.current = true;
       setCollapsed(false);
       onSend();
     }
@@ -132,7 +167,14 @@ export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabl
         <AnimatedCollapsibleContent id={bodyId} open={!collapsed}>
           <div className="review-question-body">
             {entries.length > 0 || busy ? (
-              <div className="review-question-thread">
+              <div
+                ref={threadRef}
+                className="review-question-thread"
+                onScroll={(event) => {
+                  const node = event.currentTarget;
+                  stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+                }}
+              >
                 {entries.map((entry) => {
                   const showEntryThinking =
                     entry.state === 'streaming' &&
@@ -181,7 +223,7 @@ export function InlineQuestion({ entries, draft, onDraft, busy, stopping, disabl
                     if (event.key === 'Escape') {
                       event.preventDefault();
                       event.stopPropagation();
-                      const hasDraftEdit = Boolean(draft.trim()) && draft !== initialDraft.current;
+                      const hasDraftEdit = externalHasDraftEdit ?? (Boolean(draft.trim()) && draft !== initialDraft.current);
                       if (entries.length > 0 || busy || hasDraftEdit) {
                         setCollapsed(true);
                         queueMicrotask(() => triggerRef.current?.focus({ preventScroll: true }));

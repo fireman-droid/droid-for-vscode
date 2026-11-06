@@ -127,6 +127,7 @@ export const commonMessages: readonly MessageTranslations[] = [
   ["Commit message","提交说明","提交說明"],
   ["Code question","代码问答","程式碼問答"],
   ["Ask","提问","提問"],
+  ["Continue here","在这里继续","在這裡繼續"],
   ["Unreviewed","未审阅","未審閱"],
   ["Reviewed","已审阅","已審閱"],
   ["Task details","任务详情","任務詳情"],

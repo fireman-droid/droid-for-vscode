@@ -17,10 +17,13 @@
     flex-direction: column;
     width: 100%;
     min-width: 0;
+    max-height: min(60vh, 480px);
+    overflow: hidden;
     background: color-mix(in srgb, var(--soft-surface) 38%, var(--surface));
   }
   .review-question-bar {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 6px;
     min-height: 28px;
@@ -76,9 +79,13 @@
   .review-question-body {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: calc(min(60vh, 480px) - 30px);
     gap: 8px;
     padding: 2px 12px 10px 26px;
     min-width: 0;
+    overflow: hidden;
   }
   .review-question-thinking {
     display: inline-flex;
@@ -108,8 +115,13 @@
   .review-question-thread {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 10px;
     min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
   }
   .review-question-exchange {
     display: flex;
@@ -137,6 +149,7 @@
   }
   .review-question-compose-row {
     display: flex;
+    flex-shrink: 0;
     align-items: flex-end;
     gap: 8px;
     min-width: 0;
@@ -152,7 +165,7 @@
   .review-question-editor > .review-question-input:not([data-empty]) + .v2-btw-input-placeholder { display: none; }
   .review-question-compose-row .review-question-input {
     min-height: 22px;
-    max-height: 112px;
+    max-height: 84px;
     padding: 1px 0;
     font-size: 12.5px;
     line-height: 20px;
