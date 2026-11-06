@@ -128,6 +128,8 @@ export const commonMessages: readonly MessageTranslations[] = [
   ["Code question","代码问答","程式碼問答"],
   ["Ask","提问","提問"],
   ["Continue here","在这里继续","在這裡繼續"],
+  ["Connection details","连接详情","連線詳情"],
+  ["Applies to model pickers, not this list.","用于模型选择器，不筛选此列表。","用於模型選擇器，不篩選此清單。"],
   ["Unreviewed","未审阅","未審閱"],
   ["Reviewed","已审阅","已審閱"],
   ["Task details","任务详情","任務詳情"],

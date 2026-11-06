@@ -17,10 +17,18 @@ import { AddModels, type ModelsPageState } from './AddModels';
 import { ModelList } from './ModelList';
 import { ModelSourceSelect, ModelSourceProvider } from './ModelSourceControl';
 import { PROTOCOLS } from './protocols';
+import { ScrollArea } from '../ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 export function ModelsApp({ transport }: { readonly transport: ModelsTransport }) {
   const postSource = useCallback((message: ModelSourceRequest) => transport.postModelSourceMessage?.(message), [transport]);
-  return <ModelSourceProvider postMessage={postSource}><ModelsPage transport={transport} /></ModelSourceProvider>;
+  return <ModelSourceProvider postMessage={postSource}>
+    <div className="management-page models-standalone">
+      <ScrollArea className="management-scroll" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
+        <main className="management-main"><ModelsPage transport={transport} /></main>
+      </ScrollArea>
+    </div>
+  </ModelSourceProvider>;
 }
 
 export function ModelsPage({ transport }: { readonly transport: ModelsTransport }) {
@@ -59,8 +67,11 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
       </header>
       {!panelOpen && <ModelsFeedback page={page} />}
       {snapshot === null ? <div data-ui-notice="" className="management-empty" role="status">{busy ? t("正在读取模型配置…") : <><p>{t("模型配置读取失败")}</p><Button variant="plain" onClick={() => void run({ kind: 'refresh' })}>{t("重新读取")}</Button></>}</div> : <>
-        <ListToolbar label={t('搜索已配置模型')} placeholder={t('搜索模型')} value={search} onChange={setSearch}>
+        <div className="models-source-preference">
           <ModelSourceSelect disabled={disabled} />
+          <p data-ui-notice="" className="models-help">{t("Applies to model pickers, not this list.")}</p>
+        </div>
+        <ListToolbar label={t('搜索已配置模型')} placeholder={t('搜索模型')} value={search} onChange={setSearch}>
           <Select value={filter} onValueChange={setFilter} disabled={disabled}><SelectTrigger aria-label={t("渠道筛选")}><SelectValue /></SelectTrigger><SelectContent className="management-menu">
             <SelectItem value="all">{t("全部渠道")}</SelectItem>{snapshot.connections.map(c => <SelectItem value={c.id} key={c.id}>{c.name}</SelectItem>)}
           </SelectContent></Select>
@@ -69,22 +80,29 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
         {snapshot.connections.filter(c => filter === 'all' || filter === c.id).map(c => {
           const models = snapshot.models.filter(m => m.connectionId === c.id);
           const visible = models.filter(m => `${m.model} ${m.displayName}`.toLowerCase().includes(search.toLowerCase()));
-          return <section className="management-channel" key={c.id}>
-            <header className="management-channel-heading"><div><h2>{c.name}</h2>
-              <p data-ui-notice="" className="models-channel-meta"><span>{PROTOCOLS[c.protocol].name}</span><span>{c.hasKey ? t("密钥已保存") : t("未配置密钥")}</span></p>
-              <p className="models-channel-url">{c.baseUrl}</p></div>
-              <div className="management-actions"><Button variant="plain" size="sm" disabled={disabled} onClick={() => addModels(c)} aria-label={t("向{p0}添加模型", { p0: c.name })}><Plus />{t("添加模型")}</Button>
-                <Button variant="plain" size="icon-sm" disabled={disabled} aria-label={t("{p0}的渠道设置", { p0: c.name })} title={t("渠道设置")}
-                  onClick={() => { page.setSelectedId(c.id); manager.setNotice(null); page.setConnectionForm({ connection: c }); }}><Settings2 /></Button>
+          return <Collapsible key={c.id} asChild><section className="management-channel">
+            <header className="management-channel-heading"><div className="models-channel-title">
+              <h2>{c.name}</h2><span data-ui-notice="" className="models-channel-count">{models.length} {t("模型")}</span>
+            </div>
+              <div className="management-actions"><Button variant="ghost" size="sm" disabled={disabled} onClick={() => addModels(c)} aria-label={t("向{p0}添加模型", { p0: c.name })}><Plus />{t("添加模型")}</Button>
+                <Button variant="ghost" size="sm" disabled={disabled} aria-label={t("{p0}的渠道设置", { p0: c.name })} title={t("渠道设置")}
+                  onClick={() => { page.setSelectedId(c.id); manager.setNotice(null); page.setConnectionForm({ connection: c }); }}><Settings2 />{t("渠道设置")}</Button>
                 <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={disabled} aria-label={t("{p0} 的更多操作", { p0: c.name })}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent className="management-menu" align="end">
                   <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias({ host: new URL(c.baseUrl).host, name: c.providerName || new URL(c.baseUrl).host }); }}><Pencil />{t("服务商别名")}</DropdownMenuItem>
                   <DropdownMenuItem disabled={models.length > 0} onSelect={() => void run({ kind: 'deleteConnection', connectionId: c.id })}><Trash2 />{t("移除空渠道")}</DropdownMenuItem>
                 </DropdownMenuContent></DropdownMenu>
               </div>
             </header>
+            <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="models-connection-toggle">{t("Connection details")}</Button></CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="models-channel-details">
+                <p data-ui-notice="" className="models-channel-meta"><span>{PROTOCOLS[c.protocol].name}</span><span>{c.hasKey ? t("密钥已保存") : t("未配置密钥")}</span></p>
+                <p className="models-channel-url">{c.baseUrl}</p>
+              </div>
+            </CollapsibleContent>
             <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={action => { void run(action); }} onEdit={editModel} />
             {visible.length === 0 && <p data-ui-notice="" className="management-caption">{models.length ? t("没有匹配的模型") : t("尚未添加模型")}</p>}
-          </section>;
+          </section></Collapsible>;
         })}
         {snapshot.connections.length === 0 && <div data-ui-notice="" className="management-empty"><p>{t("还没有渠道")}</p><Button variant="plain" disabled={disabled} onClick={createChannel}><Plus />{t("创建渠道")}</Button></div>}
       </>}
