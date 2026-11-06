@@ -117,34 +117,43 @@ function saveProviderConnection(
     return;
   }
   ctl.customModelState.customModelsOp = true;
-  const apiKey =
-    message.setApiKey === true
-      ? (ctl.promptProviderApiKey?.() ?? Promise.resolve(undefined))
-      : Promise.resolve(undefined);
-  void apiKey
-    .then((key) =>
-      ctl.providerRegistry!.save({
-        displayName: message.displayName,
-        protocol: message.protocol,
-        rootUrl: message.rootUrl,
-        ...(key === undefined || key.length === 0 ? {} : { apiKey: key }),
-        ...(message.providerId === undefined ? {} : { id: message.providerId }),
-      }),
-    )
-    .then(
-      () => {
-        ctl.customModelState.customModelsOp = false;
+  void (async () => {
+    const key =
+      message.setApiKey === true
+        ? await ctl.providerRegistry!.promptApiKey(
+            message.protocol,
+            message.rootUrl,
+            () => ctl.promptProviderApiKey?.() ?? Promise.resolve(undefined),
+            { reuseStored: false, remember: false },
+          )
+        : undefined;
+    if (message.setApiKey === true && key === undefined) {
+      return false;
+    }
+    await ctl.providerRegistry!.save({
+      displayName: message.displayName,
+      protocol: message.protocol,
+      rootUrl: message.rootUrl,
+      ...(key === undefined ? {} : { apiKey: key }),
+      ...(message.providerId === undefined ? {} : { id: message.providerId }),
+    });
+    return true;
+  })().then(
+    (saved) => {
+      ctl.customModelState.customModelsOp = false;
+      if (saved) {
         refreshProviders(ctl, message.sessionId);
-      },
-      () => {
-        ctl.customModelState.customModelsOp = false;
-        emitProviderModels(ctl, message.sessionId, {
-          status: 'error',
-          providers: [],
-          message: 'Could not save this connection.',
-        });
-      },
-    );
+      }
+    },
+    () => {
+      ctl.customModelState.customModelsOp = false;
+      emitProviderModels(ctl, message.sessionId, {
+        status: 'error',
+        providers: [],
+        message: 'Could not save this connection.',
+      });
+    },
+  );
 }
 
 function refreshProviders(ctl: CustomModelsHost, sessionId: string): void {
@@ -194,28 +203,30 @@ async function fetchProviderModels(
   if (ctl.customModelState.customModelsOp || ctl.modelDiscovery === undefined) {
     return;
   }
-  const key = await requireProviderKey(ctl, provider);
-  if (key === undefined) {
-    emitDiscovery(ctl, sessionId, {
-      status: 'error',
-      message: 'Add an API key to this connection before fetching models.',
-    });
-    return;
-  }
   ctl.customModelState.customModelsOp = true;
-  emitDiscovery(ctl, sessionId, { status: 'loading' });
   try {
-    const items = await ctl.modelDiscovery.discover({
-      provider: provider.protocol,
-      baseUrl: resolveHttpApiBase(provider.protocol, provider.rootUrl),
-      apiKey: key,
-    });
-    emitDiscovery(ctl, sessionId, { status: 'ready', items });
-  } catch {
-    emitDiscovery(ctl, sessionId, {
-      status: 'error',
-      message: 'Could not fetch models from this connection.',
-    });
+    const key = await requireProviderKey(ctl, provider);
+    if (key === undefined) {
+      emitDiscovery(ctl, sessionId, {
+        status: 'error',
+        message: 'Add an API key to this connection before fetching models.',
+      });
+      return;
+    }
+    emitDiscovery(ctl, sessionId, { status: 'loading' });
+    try {
+      const items = await ctl.modelDiscovery.discover({
+        provider: provider.protocol,
+        baseUrl: resolveHttpApiBase(provider.protocol, provider.rootUrl),
+        apiKey: key,
+      });
+      emitDiscovery(ctl, sessionId, { status: 'ready', items });
+    } catch {
+      emitDiscovery(ctl, sessionId, {
+        status: 'error',
+        message: 'Could not fetch models from this connection.',
+      });
+    }
   } finally {
     ctl.customModelState.customModelsOp = false;
   }
@@ -230,18 +241,17 @@ async function testProviderModel(
   if (ctl.customModelState.customModelsOp) {
     return;
   }
-  const key = await requireProviderKey(ctl, provider);
-  if (key === undefined) {
-    rememberTest(ctl, provider.id, model, {
-      status: 'failed',
-      summary: 'Add an API key to this connection before testing a model.',
-      latencyMs: 0,
-    });
-    refreshProviders(ctl, sessionId);
-    return;
-  }
   ctl.customModelState.customModelsOp = true;
   try {
+    const key = await requireProviderKey(ctl, provider);
+    if (key === undefined) {
+      rememberTest(ctl, provider.id, model, {
+        status: 'failed',
+        summary: 'Add an API key to this connection before testing a model.',
+        latencyMs: 0,
+      });
+      return;
+    }
     rememberTest(
       ctl,
       provider.id,
@@ -267,18 +277,17 @@ async function testAllProviderModels(
   if (ctl.customModelState.customModelsOp || ctl.daemonCustomModels === undefined) {
     return;
   }
-  const key = await requireProviderKey(ctl, provider);
-  if (key === undefined) {
-    ctl.customModelState.providerTests.set(provider.id, {
-      status: 'failed',
-      summary: 'Add an API key to this connection before testing models.',
-      latencyMs: 0,
-    });
-    refreshProviders(ctl, sessionId);
-    return;
-  }
   ctl.customModelState.customModelsOp = true;
   try {
+    const key = await requireProviderKey(ctl, provider);
+    if (key === undefined) {
+      ctl.customModelState.providerTests.set(provider.id, {
+        status: 'failed',
+        summary: 'Add an API key to this connection before testing models.',
+        latencyMs: 0,
+      });
+      return;
+    }
     const rows = (await (await ctl.daemonCustomModels()).list())
       .filter((row) => belongsToProvider(row, provider))
       .slice(0, 16);
@@ -462,18 +471,14 @@ async function requireProviderKey(
   ctl: CustomModelsHost,
   provider: ProviderConnection,
 ): Promise<string | undefined> {
-  const stored = await readProviderKey(ctl, provider);
-  if (stored !== undefined) {
-    return stored;
-  }
-  const typed = await ctl.promptProviderApiKey?.();
-  if (typed === undefined || typed.length === 0) {
+  if (ctl.providerRegistry === undefined) {
     return undefined;
   }
-  const value = typed.trim();
-  if (value.length === 0) return undefined;
-  await ctl.providerRegistry?.rememberApiKey(provider.protocol, provider.rootUrl, value);
-  return value;
+  return ctl.providerRegistry.promptApiKey(
+    provider.protocol,
+    provider.rootUrl,
+    () => ctl.promptProviderApiKey?.() ?? Promise.resolve(undefined),
+  );
 }
 
 function emitProviderModels(

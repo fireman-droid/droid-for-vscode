@@ -977,6 +977,160 @@ describe('provider model writes and tests', () => {
     });
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
+
+  it('persists customModels save/import/discover keys into ProviderRegistry and reuses them on fetch without prompting', async () => {
+    const gateway = createGateway();
+    const discovery = {
+      discover: vi.fn<CustomModelDiscoveryGateway['discover']>(async () => [
+        { model: 'claude-sonnet-5', displayName: 'Claude Sonnet 5' },
+      ]),
+    };
+    const { host, messages } = await connectedHost({ gateway, discovery });
+    host.providerRegistry = createProviderRegistry();
+    const promptSpy = vi.fn(async () => 'should-not-be-called');
+    host.promptProviderApiKey = promptSpy;
+
+    // 1. Discovering with an explicit API key remembers it so a follow-up discover without apiKey reuses it.
+    handleCustomModelsDiscover(host, {
+      type: 'customModels.discover',
+      sessionId: 'session-1',
+      provider: 'generic-chat-completion-api',
+      baseUrl: 'http://localhost:11434/v1',
+      apiKey: 'sk-discover-remembered',
+    });
+    await vi.waitFor(() => {
+      expect(discoveryMessages(messages).at(-1)?.discovery.status).toBe('ready');
+    });
+    handleCustomModelsDiscover(host, {
+      type: 'customModels.discover',
+      sessionId: 'session-1',
+      provider: 'generic-chat-completion-api',
+      baseUrl: 'http://localhost:11434/v1',
+    });
+    await vi.waitFor(() => {
+      expect(discovery.discover).toHaveBeenCalledTimes(2);
+    });
+    expect(discovery.discover).toHaveBeenLastCalledWith(
+      {
+        provider: 'generic-chat-completion-api',
+        baseUrl: 'http://localhost:11434/v1',
+        apiKey: 'sk-discover-remembered',
+      },
+      expect.anything(),
+    );
+
+    // 2. Saving a custom model with an API key updates SecretStorage for that protocol + normalized endpoint.
+    host.metadata.settingsUpdate = {} as never;
+    handleCustomModelSave(host, saveMessage);
+    await vi.waitFor(() => {
+      expect(customModelsMessages(messages).at(-1)?.customModels.status).toBe('ready');
+    });
+    await expect(
+      host.providerRegistry.apiKeyForEndpoint(
+        'generic-chat-completion-api',
+        'http://localhost:11434/v1/',
+      ),
+    ).resolves.toBe('sk-plaintext-test-key-12345');
+
+    // 3. Partial import (1st upsert succeeds, 2nd fails) still reports partial error AND remembers the key for subsequent fetch/discover.
+    const provider = await host.providerRegistry.save({
+      displayName: 'Example OpenAI',
+      protocol: 'openai',
+      rootUrl: 'https://api.example.com/v1',
+    });
+    gateway.list.mockResolvedValueOnce([]);
+    gateway.upsert
+      .mockResolvedValueOnce({
+        success: true,
+        models: [probeRow({ model: 'model-first', baseUrl: 'https://api.example.com/v1' })],
+      })
+      .mockRejectedValueOnce(new Error('second model failed'));
+    handleCustomModelsImport(host, {
+      ...importMessage,
+      models: [{ model: 'model-first' }, { model: 'model-second' }],
+    });
+    await vi.waitFor(() => {
+      expect(customModelsMessages(messages).at(-1)?.customModels).toMatchObject({
+        status: 'error',
+        items: [{ model: 'model-first' }],
+        message: CUSTOM_MODELS_IMPORT_FAILED_MESSAGE,
+      });
+    });
+    dispatchCustomModels(host, {
+      type: 'providerModels.fetch',
+      sessionId: 'session-1',
+      providerId: provider.id,
+    });
+    await vi.waitFor(() => {
+      expect(discovery.discover).toHaveBeenCalledWith({
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'import-key-for-test',
+      });
+    });
+    expect(promptSpy).not.toHaveBeenCalled();
+  });
+
+  it('prevents concurrent password prompts on repeated providerModels.fetch and does not overwrite on cancelled saveProvider', async () => {
+    const discovery = {
+      discover: vi.fn<CustomModelDiscoveryGateway['discover']>(async () => [
+        { model: 'gpt-5', displayName: 'GPT-5' },
+      ]),
+    };
+    const { host, messages } = await connectedHost({ discovery });
+    host.providerRegistry = createProviderRegistry();
+    const provider = await host.providerRegistry.save({
+      displayName: 'Keyless Yet',
+      protocol: 'openai',
+      rootUrl: 'https://api.example.com/v1',
+    });
+    let resolvePrompt!: (value: string | undefined) => void;
+    const promptSpy = vi.fn(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+    );
+    host.promptProviderApiKey = promptSpy;
+
+    // Two rapid fetch clicks while the password box is open must only invoke promptProviderApiKey once.
+    dispatchCustomModels(host, {
+      type: 'providerModels.fetch',
+      sessionId: 'session-1',
+      providerId: provider.id,
+    });
+    dispatchCustomModels(host, {
+      type: 'providerModels.fetch',
+      sessionId: 'session-1',
+      providerId: provider.id,
+    });
+    await vi.waitFor(() => expect(promptSpy).toHaveBeenCalledTimes(1));
+    resolvePrompt('  sk-fetched-once  ');
+    await vi.waitFor(() => {
+      expect(discoveryMessages(messages).at(-1)?.discovery.status).toBe('ready');
+    });
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    await expect(
+      host.providerRegistry.apiKeyForEndpoint('openai', 'https://api.example.com/v1'),
+    ).resolves.toBe('sk-fetched-once');
+
+    // Cancelling setApiKey on saveProvider does not overwrite the connection or its stored key.
+    host.promptProviderApiKey = vi.fn(async () => undefined);
+    dispatchCustomModels(host, {
+      type: 'providerModels.saveProvider',
+      sessionId: 'session-1',
+      providerId: provider.id,
+      displayName: 'Renamed Should Not Save',
+      protocol: 'openai',
+      rootUrl: 'https://api.example.com/v1',
+      setApiKey: true,
+    });
+    await vi.waitFor(() => expect(host.customModelState.customModelsOp).toBe(false));
+    expect(host.providerRegistry.get(provider.id)?.displayName).toBe('Keyless Yet');
+    await expect(
+      host.providerRegistry.apiKeyForEndpoint('openai', 'https://api.example.com/v1'),
+    ).resolves.toBe('sk-fetched-once');
+  });
 });
 
 function latestProviders(

@@ -1,11 +1,14 @@
 import {
+  CUSTOM_MODEL_PROVIDERS,
   MAX_CUSTOM_MODEL_MASK_LENGTH,
   MAX_CUSTOM_MODEL_PROVIDER_LENGTH,
   MAX_CUSTOM_MODEL_URL_LENGTH,
+  isCustomModelBaseUrl,
   isSafeText as isSafeCustomModelText,
   type CustomModelDeleteMessage,
   type CustomModelDiscoveryState,
   type CustomModelListItem,
+  type CustomModelProvider,
   type CustomModelSaveMessage,
   type CustomModelsDiscoverMessage,
   type CustomModelsImportMessage,
@@ -131,9 +134,9 @@ export function handleCustomModelSave(
       edit: message.rawIndex !== undefined,
     },
   });
-  runCustomModelsOperation(ctl, message.sessionId, 'save', (resource) =>
-    resource
-      .upsert({
+  runCustomModelsOperation(ctl, message.sessionId, 'save', async (resource) => {
+    const result = requireMutationSuccess(
+      await resource.upsert({
         ...(message.rawIndex === undefined
           ? {}
           : {
@@ -149,9 +152,16 @@ export function handleCustomModelSave(
         ...(message.apiKey === undefined ? {} : { apiKey: message.apiKey }),
         maxOutputTokens: message.maxOutputTokens,
         noImageSupport: message.noImageSupport,
-      })
-      .then(requireMutationSuccess),
-  );
+      }),
+    );
+    await rememberCustomModelEndpointKey(
+      ctl,
+      message.provider,
+      message.baseUrl,
+      message.apiKey,
+    );
+    return result;
+  });
 }
 export function handleCustomModelDelete(
   ctl: CustomModelsHost,
@@ -202,46 +212,67 @@ export function handleCustomModelsDiscover(
   ctl.customModelState.customModelsDiscoveryAbort = abort;
   ctl.customModelState.customModelsOp = true;
   emitCustomModelDiscovery(ctl, message.sessionId, { status: 'loading' });
-  void ctl.modelDiscovery
-    .discover(
-      {
-        provider: message.provider,
-        baseUrl: message.baseUrl,
-        ...(message.apiKey === undefined ? {} : { apiKey: message.apiKey }),
-      },
-      abort.signal,
-    )
-    .then(
-      (items) => {
-        if (!finishCustomModelDiscovery(ctl, abort)) {
-          return;
-        }
-        if (ctl.isCurrentSessionOperation(runtime, generation, message.sessionId, cwd)) {
-          emitCustomModelDiscovery(ctl, message.sessionId, {
-            status: 'ready',
-            items,
-          });
-        }
-      },
-      (error: unknown) => {
-        if (
-          !finishCustomModelDiscovery(ctl, abort) ||
-          (error instanceof ModelDiscoveryError && error.kind === 'aborted')
-        ) {
-          return;
-        }
-        ctl.recordPanelFailure(
-          'custom-models-discovery-failed',
-          discoveryFailureClass(error),
+  const discovery = ctl.modelDiscovery;
+  const runDiscover = (apiKey: string | undefined) =>
+    discovery
+      .discover(
+        {
+          provider: message.provider,
+          baseUrl: message.baseUrl,
+          ...(apiKey === undefined ? {} : { apiKey }),
+        },
+        abort.signal,
+      )
+      .then(async (items) => {
+        await rememberCustomModelEndpointKey(
+          ctl,
+          message.provider,
+          message.baseUrl,
+          message.apiKey,
         );
-        if (ctl.isCurrentSessionOperation(runtime, generation, message.sessionId, cwd)) {
-          emitCustomModelDiscovery(ctl, message.sessionId, {
-            status: 'error',
-            message: discoveryFailureMessage(error),
+        return items;
+      });
+  const pendingDiscovery =
+    message.apiKey !== undefined || ctl.providerRegistry === undefined
+      ? runDiscover(message.apiKey)
+      : ctl.providerRegistry
+          .apiKeyForEndpoint(message.provider, message.baseUrl)
+          .then((storedKey) => {
+            abort.signal.throwIfAborted();
+            return runDiscover(storedKey);
           });
-        }
-      },
-    );
+  void pendingDiscovery.then(
+    (items) => {
+      if (!finishCustomModelDiscovery(ctl, abort)) {
+        return;
+      }
+      if (ctl.isCurrentSessionOperation(runtime, generation, message.sessionId, cwd)) {
+        emitCustomModelDiscovery(ctl, message.sessionId, {
+          status: 'ready',
+          items,
+        });
+      }
+    },
+    (error: unknown) => {
+      if (
+        !finishCustomModelDiscovery(ctl, abort) ||
+        abort.signal.aborted ||
+        (error instanceof ModelDiscoveryError && error.kind === 'aborted')
+      ) {
+        return;
+      }
+      ctl.recordPanelFailure(
+        'custom-models-discovery-failed',
+        discoveryFailureClass(error),
+      );
+      if (ctl.isCurrentSessionOperation(runtime, generation, message.sessionId, cwd)) {
+        emitCustomModelDiscovery(ctl, message.sessionId, {
+          status: 'error',
+          message: discoveryFailureMessage(error),
+        });
+      }
+    },
+  );
 }
 function finishCustomModelDiscovery(
   ctl: CustomModelsHost,
@@ -278,6 +309,7 @@ export function handleCustomModelsImport(
         .filter((item) => isSameCustomModelGroup(item, message))
         .map((item) => item.model),
     );
+    let rememberedKey = false;
     for (const item of message.models) {
       if (existing.has(item.model)) {
         continue;
@@ -297,9 +329,41 @@ export function handleCustomModelsImport(
       } catch (error) {
         throw new CustomModelImportFailure(models, isConflictError(error));
       }
+      if (!rememberedKey) {
+        rememberedKey = true;
+        await rememberCustomModelEndpointKey(
+          ctl,
+          message.provider,
+          message.baseUrl,
+          message.apiKey,
+        );
+      }
     }
     return { models };
   });
+}
+async function rememberCustomModelEndpointKey(
+  ctl: CustomModelsHost,
+  provider: string,
+  baseUrl: string | undefined,
+  apiKey: string | undefined,
+): Promise<void> {
+  if (
+    ctl.providerRegistry === undefined ||
+    apiKey === undefined ||
+    baseUrl === undefined ||
+    !isCustomModelBaseUrl(baseUrl) ||
+    !(CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(provider)
+  ) {
+    return;
+  }
+  const trimmed = apiKey.trim();
+  if (trimmed.length === 0) return;
+  await ctl.providerRegistry.rememberApiKey(
+    provider as CustomModelProvider,
+    baseUrl,
+    trimmed,
+  );
 }
 function beginCustomModelsRequest(
   ctl: CustomModelsHost,

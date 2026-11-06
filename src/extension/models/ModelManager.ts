@@ -59,6 +59,7 @@ export class ModelManagerError extends OperationOutcomeError {
 /** Global configuration ownership, independent of the chat panel's lifetime. */
 export class ModelManager {
   private busy = false;
+  private readonly discovering = new Set<string>();
   private readonly tests = new Map<string, ModelVerification>();
   constructor(private readonly deps: ModelManagerDependencies) {}
   get diagnostics(): RuntimeDiagnosticSink | undefined { return this.deps.diagnostics; }
@@ -82,9 +83,19 @@ export class ModelManager {
   }
 
   async execute(action: ModelsAction, signal: AbortSignal): Promise<ModelActionResult> {
-    if (this.busy)
+    const isDiscover = action.kind === 'discover';
+    if (
+      this.busy ||
+      (isDiscover && this.discovering.has(action.connectionId)) ||
+      (!isDiscover && action.kind !== 'refresh' && action.kind !== 'cancel' && this.discovering.size > 0)
+    )
       throw new ModelManagerError('Another model operation is still running.');
-    this.busy = true;
+    if (isDiscover) {
+      this.discovering.add(action.connectionId);
+    } else {
+      this.busy = true;
+    }
+    let discoverEndpoint: string | undefined;
     try {
       signal.throwIfAborted();
       if (action.kind === 'refresh' || action.kind === 'cancel')
@@ -110,6 +121,11 @@ export class ModelManager {
       }
       if (action.kind === 'discover') {
         const connection = this.connection(connections, action.connectionId);
+        const endpoint = connectionKey(connection.protocol, connection.baseUrl);
+        if (this.discovering.has(endpoint))
+          throw new ModelManagerError('Another model operation is still running.');
+        this.discovering.add(endpoint);
+        discoverEndpoint = endpoint;
         const key = await this.connectionKey(connection, true, signal);
         const discovered = await this.deps.discovery.discover(
           {
@@ -225,7 +241,12 @@ export class ModelManager {
       await this.deps.apply(loaded.runtimeId, signal);
       return { message: 'Droid confirmed this model in the current chat.' };
     } finally {
-      this.busy = false;
+      if (isDiscover) {
+        this.discovering.delete(action.connectionId);
+        if (discoverEndpoint !== undefined) this.discovering.delete(discoverEndpoint);
+      } else {
+        this.busy = false;
+      }
       if (['saveConnection', 'saveModel', 'importModels', 'renameModel', 'deleteModel'].includes(action.kind)) {
         this.deps.availability?.refresh();
       }
@@ -266,13 +287,15 @@ export class ModelManager {
   ): Promise<string | undefined> {
     const key = await this.deps.registry.apiKeyForEndpoint(connection.protocol, connection.baseUrl);
     if (key !== undefined || !required || !connection.hasKey) return key;
-    const typed = await this.deps.promptKey();
+    const value = await this.deps.registry.promptApiKey(
+      connection.protocol,
+      connection.baseUrl,
+      this.deps.promptKey,
+      { signal },
+    );
     signal.throwIfAborted();
-    if (typed === undefined || typed.trim() === '')
+    if (value === undefined)
       throw new ModelManagerError('API key entry cancelled. No model was changed.', { outcome: 'cancelled', failureKind: 'cancelled' });
-    const value = typed.trim();
-    await this.deps.registry.rememberApiKey(connection.protocol, connection.baseUrl, value);
-    signal.throwIfAborted();
     return value;
   }
 
@@ -284,9 +307,16 @@ export class ModelManager {
   ): Promise<ModelActionResult> {
     const old =
       draft.id === undefined ? undefined : this.connection(connections, draft.id);
-    const key = draft.setApiKey ? await this.deps.promptKey() : undefined;
+    const key = draft.setApiKey
+      ? await this.deps.registry.promptApiKey(
+          draft.protocol,
+          draft.baseUrl,
+          this.deps.promptKey,
+          { reuseStored: false, remember: false, signal },
+        )
+      : undefined;
     signal.throwIfAborted();
-    if (draft.setApiKey && (key === undefined || key.trim() === '')) {
+    if (draft.setApiKey && key === undefined) {
       throw new ModelManagerError('API key entry cancelled. Connection was not saved.', { outcome: 'cancelled', failureKind: 'cancelled' });
     }
     const endpointChanged = old !== undefined &&
