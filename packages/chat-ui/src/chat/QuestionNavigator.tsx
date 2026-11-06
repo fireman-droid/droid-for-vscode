@@ -16,25 +16,25 @@ export function QuestionNavigator({ items, activeIndex, onNavigate, ref }: {
   const current = Math.min(Math.max(activeIndex, 0), items.length - 1);
   const visible = visibleQuestionItems(items, current);
   const dense = items.length > 6;
-  return <nav ref={ref} aria-label={t("Question navigation")} className="absolute right-0 top-1/2 z-20 flex max-h-[min(52%,246px)] w-[18px] -translate-y-1/2 flex-col items-center text-muted-foreground"
-    style={{ height: Math.max(4, (visible.length - 1) * (dense ? 10 : 14) + 4) + 42 }}>
-    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label={t("Previous question")} disabled={current === 0}
+  return <nav ref={ref} aria-label={t("Question navigation")} className="group/navigator absolute right-0 top-1/2 z-20 flex max-h-[min(52%,250px)] w-5 -translate-y-1/2 flex-col items-center text-muted-foreground"
+    style={{ height: Math.max(4, (visible.length - 1) * (dense ? 10 : 14) + 4) + 46 }}>
+    <Button variant="plain" size="icon-sm" className="size-5 shrink-0 p-0 opacity-50 transition-[color,opacity] duration-150 enabled:group-hover/navigator:opacity-100 enabled:group-focus-within/navigator:opacity-100 motion-reduce:transition-none [&_svg]:size-2.5" aria-label={t("Previous question")} disabled={current === 0}
       onClick={() => onNavigate(items[current - 1]!.key)}><ChevronUp /></Button>
-    <div className={`relative my-[3px] flex min-h-0 w-[18px] flex-1 flex-col items-center justify-between ${dense ? 'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-current before:opacity-10' : ''}`}>
+    <div className="relative my-[3px] flex min-h-0 w-5 flex-1 flex-col items-center justify-between">
       {visible.map(({ item, index }) => (
         <Button key={item.key} variant="plain" size="none"
           aria-label={t("Jump to question {p0}: {p1}", { p0: index + 1, p1: item.preview })}
           aria-current={index === current ? 'true' : undefined}
           onClick={() => onNavigate(item.key)}
-          className="group relative grid h-2 w-[18px] shrink-0 place-items-center outline-none focus-visible:ring-1 focus-visible:ring-ring">
-          <span aria-hidden className={cn('size-[3px] rounded-full bg-current opacity-50 transition-[opacity,color] duration-150 motion-reduce:transition-none group-hover:text-foreground group-hover:opacity-100',
-            Math.abs(index - current) === 1 && 'opacity-75',
-            index === current && 'size-[7px] text-foreground opacity-100')} />
+          className="group relative grid h-2 w-5 shrink-0 place-items-center outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <span aria-hidden className={cn('h-0.5 w-1.5 rounded-full bg-current opacity-35 transition-[opacity,color] duration-150 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100',
+            Math.abs(index - current) === 1 && 'opacity-50',
+            index === current && 'h-[3px] w-2.5 opacity-90')} />
           <span aria-hidden className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] line-clamp-3 w-max max-w-[min(280px,calc(100vw-54px))] -translate-y-1/2 rounded-[9px] border border-[var(--panel-edge)] bg-popover px-2.5 py-[7px] text-left text-[11.5px] leading-[17px] text-foreground opacity-0 shadow-sm transition-opacity duration-150 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100">{item.preview}</span>
         </Button>
       ))}
     </div>
-    <Button variant="ghost" size="icon-sm" className="size-[18px] shrink-0 p-0 [&_svg]:size-2.5" aria-label={t("Next question")} disabled={current === items.length - 1}
+    <Button variant="plain" size="icon-sm" className="size-5 shrink-0 p-0 opacity-50 transition-[color,opacity] duration-150 enabled:group-hover/navigator:opacity-100 enabled:group-focus-within/navigator:opacity-100 motion-reduce:transition-none [&_svg]:size-2.5" aria-label={t("Next question")} disabled={current === items.length - 1}
       onClick={() => onNavigate(items[current + 1]!.key)}><ChevronDown /></Button>
   </nav>;
 }
