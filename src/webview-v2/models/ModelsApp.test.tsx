@@ -31,17 +31,23 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
   });
   it('saves an edited Model ID before verifying it and disables chat selection while busy', async () => {
     const preview = createModelsPreviewTransport();
+    const requests: Parameters<typeof preview.transport.postMessage>[0][] = [];
     const user = userEvent.setup();
-    render(<App transport={preview.transport} />);
+    render(<App transport={{ ...preview.transport, postMessage: request => { requests.push(request); preview.transport.postMessage(request); } }} />);
     await screen.findByRole('heading', { name: 'Personal gateway' });
-    await user.click(screen.getByRole('button', { name: 'Reasoner · Personal gateway 的更多操作' }));
-    await user.click(screen.getByRole('menuitem', { name: '编辑配置' }));
+    const row = screen.getByRole('heading', { name: 'Reasoner · Personal gateway' }).closest('article')!;
+    await user.click(within(row).getByRole('button', { name: '编辑配置' }));
     fireEvent.change(screen.getByRole('textbox', { name: /^模型 ID/ }), {
       target: { value: 'new-upstream-id' },
     });
-    await user.click(screen.getByRole('button', { name: '高级设置' }));
+    fireEvent.change(screen.getByRole('textbox', { name: /模型别名/ }), { target: { value: 'Renamed reasoner' } });
     fireEvent.click(screen.getByRole('button', { name: '保存并验证…' }));
-    await screen.findByText(/Simulated reply from new-upstream-id/);
+    await screen.findByText('Preview only: model verification was not executed.');
+    expect(requests.slice(-2).map(request => request.action)).toEqual([
+      expect.objectContaining({ kind: 'saveModel', draft: expect.objectContaining({ model: 'new-upstream-id', displayName: 'Renamed reasoner', maxOutputTokens: 8192 }) }),
+      expect.objectContaining({ kind: 'verifyModel', expectedModel: 'new-upstream-id', connectionId: 'gateway' }),
+    ]);
+    expect(screen.queryByText('本窗口验证通过')).toBeNull();
     act(() => preview.busy(true));
     await waitFor(() => {
       expect(
@@ -50,6 +56,27 @@ describe.each([['V2', ModelsAppV2]] as const)('%s Models editor save lifecycle',
           .every((button) => (button as HTMLButtonElement).disabled),
       ).toBe(true);
     });
+  });
+  it('keeps the combined model draft after a rejected save and discards it only on cancel', async () => {
+    const preview = createModelsPreviewTransport();
+    render(<App transport={preview.transport} />);
+    const heading = await screen.findByRole('heading', { name: 'Reasoner · Personal gateway' });
+    const edit = () => fireEvent.click(within(heading.closest('article')!).getByRole('button', { name: '编辑配置' }));
+    edit();
+    fireEvent.change(screen.getByRole('textbox', { name: /^模型 ID/ }), { target: { value: 'edited-id' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /模型别名/ }), { target: { value: 'Edited alias' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /最大输出 Token/ }), { target: { value: '4096' } });
+    preview.failSave();
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    await screen.findByRole('alert');
+    expect((screen.getByRole('textbox', { name: /^模型 ID/ }) as HTMLInputElement).value).toBe('edited-id');
+    expect((screen.getByRole('textbox', { name: /模型别名/ }) as HTMLInputElement).value).toBe('Edited alias');
+    expect((screen.getByRole('textbox', { name: /最大输出 Token/ }) as HTMLInputElement).value).toBe('4096');
+    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }));
+    edit();
+    expect((screen.getByRole('textbox', { name: /^模型 ID/ }) as HTMLInputElement).value).toBe('gateway-reasoner');
+    expect((screen.getByRole('textbox', { name: /模型别名/ }) as HTMLInputElement).value).toBe('Reasoner · Personal gateway');
+    expect((screen.getByRole('textbox', { name: /最大输出 Token/ }) as HTMLInputElement).value).toBe('8192');
   });
   it('imports only newly selected discovered models and applies the refreshed model identity', async () => {
     const preview = createModelsPreviewTransport();

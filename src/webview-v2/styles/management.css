@@ -82,19 +82,31 @@
   .management-search { display: flex; min-width: 120px; flex: 1; align-items: center; gap: 8px; }
   .management-search > svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-ink); }
   .management-search input { max-width: 300px; }
-  .management-channel { padding: 20px 0 16px; border-bottom: 1px solid var(--management-edge); }
-  .management-channel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .management-models { --management-edge: color-mix(in srgb, var(--ink) 10%, var(--surface)); container-type: inline-size; }
+  .management-models > .management-heading { margin-bottom: 20px; }
+  .management-channel { padding: 16px 0 8px; border-bottom: 1px solid var(--management-edge, var(--panel-edge)); }
+  .management-channel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
   .management-channel-heading > div:first-child { min-width: 0; }
   .management-channel h2 { font-size: 13px; font-weight: 500; }
   .management-channel-heading p { margin-top: 4px; color: var(--muted-ink); font-size: 11px; overflow-wrap: anywhere; }
+  .management-channel-heading .models-channel-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .management-channel-heading .models-channel-url { font-family: var(--font-mono); font-size: 10px; }
   .management-models .models-list { gap: 0; }
-  .management-models .models-model-row { gap: 10px; min-height: 58px; padding: 14px 0; border: 0; border-radius: 0; background: transparent; }
+  .management-models .models-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; min-height: 58px; padding: 10px 0; border: 0; border-radius: 0; background: transparent; }
   .management-models .models-model-row + .models-model-row::after { inset: 0 0 auto; background: var(--management-edge); }
   .management-models .models-model-symbol { display: none; }
   .management-models .models-model-name { font-size: 13px; font-weight: 400; }
   .management-models .models-model-id, .management-models .models-help { font-size: 11px; }
-  .management-models .models-row-actions { gap: 6px; }
+  .management-models .models-row-actions { flex-wrap: nowrap; gap: 2px; }
+  .management-models .models-row-actions [data-slot='button'] { height: 28px; }
+  .management-models .models-row-actions [data-slot='button'] > svg { width: 13px; height: 13px; }
+  .management-models .models-model-id { display: block; overflow-wrap: anywhere; }
   .management-models .models-state { font-size: 11px; }
+  @container (max-width: 380px) {
+    .management-models .models-model-row { grid-template-columns: minmax(0, 1fr); }
+    .management-models .models-row-actions { justify-self: end; }
+    .management-models .management-channel-heading { flex-wrap: wrap; gap: 6px; }
+  }
   .management-session-head, .management-session-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px 124px 32px; align-items: center; gap: 16px; border-bottom: 1px solid var(--management-edge); }
   .management-session-head { padding: 10px 0; color: var(--muted-ink); font-size: 12px; }
   .management-session-row { min-height: 60px; padding: 12px 0; }

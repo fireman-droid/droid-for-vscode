@@ -17,7 +17,7 @@ const protocolHints: Record<CustomModelProvider, string> = {
 };
 
 function FieldError({ id, message }: { readonly id: string; readonly message: string | undefined }) {
-  return message ? <p id={id} className="models-field-error" role="alert">{message}</p> : null;
+  return message ? <p data-ui-notice="" id={id} className="models-field-error" role="alert">{message}</p> : null;
 }
 
 function SavingIcon({ busy }: { readonly busy: boolean }) {
@@ -147,7 +147,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
   const [name, setName] = useState(model?.displayName ?? '');
   const [tokens, setTokens] = useState(model?.maxOutputTokens?.toString() ?? '');
   const [noImages, setNoImages] = useState(model?.noImageSupport ?? false);
-  const [advanced, setAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState(model?.maxOutputTokens != null || model?.noImageSupport === true);
   const [focusTokens, setFocusTokens] = useState(0);
   const [touched, setTouched] = useState({ id: false, name: false, tokens: false });
   const errors = modelErrors({ id, name, tokens }, connection.id, model, existingModels);
@@ -207,12 +207,15 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
               <p data-ui-notice="" id={`${formId}-tokens-hint`} className="models-field-hint">{t("仅在服务方要求时填写输出上限。")}</p>
             </div>
             <label className="models-check-label flex items-center gap-2 text-[13px]"><Checkbox disabled={busy} checked={noImages} onCheckedChange={(checked) => setNoImages(checked === true)} />{t("此模型不支持图片输入")}</label>
-            <Button variant="outline" type="submit" value="verify" size="sm" disabled={model?.enabled === false}><SavingIcon busy={busy} />{t("保存并验证…")}</Button>
-            <p data-ui-notice="" className="models-field-hint">{model?.enabled === false ? t("此模型已禁用，可保存修改；恢复后才能验证。") : t("验证会请求一次真实模型回复，由 Droid 确认后执行。")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
-      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : model ? t("保存修改") : t("添加模型")}</Button></div>
+      <p data-ui-notice="" className="models-field-hint">{model?.enabled === false ? t("此模型已禁用，可保存修改；恢复后才能验证。") : t("验证会请求一次真实模型回复，由 Droid 确认后执行。")}</p>
+      <div className="models-form-actions">
+        <Button variant="ghost" onClick={onCancel}>{t("取消")}</Button>
+        <Button variant="outline" type="submit" value="verify" disabled={model?.enabled === false}><SavingIcon busy={busy} />{t("保存并验证…")}</Button>
+        <Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : model ? t("保存修改") : t("添加模型")}</Button>
+      </div>
     </fieldset>
   </form>;
 }

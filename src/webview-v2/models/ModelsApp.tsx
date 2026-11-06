@@ -16,6 +16,7 @@ import { AliasForm, ConnectionForm, ModelForm } from './ModelForms';
 import { AddModels, type ModelsPageState } from './AddModels';
 import { ModelList } from './ModelList';
 import { ModelSourceSelect, ModelSourceProvider } from './ModelSourceControl';
+import { PROTOCOLS } from './protocols';
 
 export function ModelsApp({ transport }: { readonly transport: ModelsTransport }) {
   const postSource = useCallback((message: ModelSourceRequest) => transport.postModelSourceMessage?.(message), [transport]);
@@ -30,7 +31,7 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [alias, setAlias] = useState<{ kind: 'provider'; host: string; name: string } | { kind: 'model'; model: ManagedModel } | null>(null);
+  const [alias, setAlias] = useState<{ host: string; name: string } | null>(null);
   const panelOpen = adding || page.editing || alias !== null;
   const disabled = busy || panelOpen;
   useEffect(() => { applyTheme(readBootThemePreference(), manager.theme); }, [manager.theme]);
@@ -45,12 +46,12 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
     void page.discoverModels(source.id);
   };
   const editModel = (model: ManagedModel) => { page.setSelectedId(model.connectionId); manager.setNotice(null); page.setModelForm({ model }); };
-  const title = alias ? alias.kind === 'provider' ? '修改服务商别名' : '修改模型别名'
+  const title = alias ? '修改服务商别名'
     : page.connectionForm ? page.connectionForm.connection ? '渠道设置' : '创建渠道'
     : page.modelForm ? '编辑模型' : `${connection?.name ?? ''} · 添加模型`;
   return <Dialog open={panelOpen} onOpenChange={open => { if (!open && !busy) close(); }}>
     <section className="management-models" aria-label={t("模型管理")}>
-      <header className="management-heading"><div><h1>{t("模型")}</h1><p>{t("按渠道管理模型")}</p></div>
+      <header data-ui-notice="" className="management-heading"><div><h1>{t("模型")}</h1><p>{t("按渠道管理模型")}</p></div>
         <div className="management-actions">
           <Button variant="plain" size="icon-sm" aria-label={t("刷新模型配置")} disabled={disabled} onClick={() => void run({ kind: 'refresh' })}><RefreshCw /></Button>
           <Button variant="outline" size="sm" disabled={disabled || !snapshot} onClick={createChannel}><Plus />{t("创建渠道")}</Button>
@@ -69,17 +70,19 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
           const models = snapshot.models.filter(m => m.connectionId === c.id);
           const visible = models.filter(m => `${m.model} ${m.displayName}`.toLowerCase().includes(search.toLowerCase()));
           return <section className="management-channel" key={c.id}>
-            <header className="management-channel-heading"><div><h2>{c.name}</h2><p>{c.baseUrl}<span> · {c.protocol}</span></p></div>
+            <header className="management-channel-heading"><div><h2>{c.name}</h2>
+              <p data-ui-notice="" className="models-channel-meta"><span>{PROTOCOLS[c.protocol].name}</span><span>{c.hasKey ? t("密钥已保存") : t("未配置密钥")}</span></p>
+              <p className="models-channel-url">{c.baseUrl}</p></div>
               <div className="management-actions"><Button variant="plain" size="sm" disabled={disabled} onClick={() => addModels(c)} aria-label={t("向{p0}添加模型", { p0: c.name })}><Plus />{t("添加模型")}</Button>
-                <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={disabled} aria-label={t("{p0}的渠道设置", { p0: c.name })}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent className="management-menu" align="end">
-                  <DropdownMenuItem onSelect={() => { page.setSelectedId(c.id); manager.setNotice(null); page.setConnectionForm({ connection: c }); }}><Settings2 />{t("渠道设置")}</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias({ kind: 'provider', host: new URL(c.baseUrl).host, name: c.providerName || new URL(c.baseUrl).host }); }}><Pencil />{t("服务商别名")}</DropdownMenuItem>
+                <Button variant="plain" size="icon-sm" disabled={disabled} aria-label={t("{p0}的渠道设置", { p0: c.name })} title={t("渠道设置")}
+                  onClick={() => { page.setSelectedId(c.id); manager.setNotice(null); page.setConnectionForm({ connection: c }); }}><Settings2 /></Button>
+                <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={disabled} aria-label={t("{p0} 的更多操作", { p0: c.name })}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent className="management-menu" align="end">
+                  <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias({ host: new URL(c.baseUrl).host, name: c.providerName || new URL(c.baseUrl).host }); }}><Pencil />{t("服务商别名")}</DropdownMenuItem>
                   <DropdownMenuItem disabled={models.length > 0} onSelect={() => void run({ kind: 'deleteConnection', connectionId: c.id })}><Trash2 />{t("移除空渠道")}</DropdownMenuItem>
                 </DropdownMenuContent></DropdownMenu>
               </div>
             </header>
-            <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={action => { void run(action); }} onEdit={editModel}
-              onRename={model => { page.setSelectedId(model.connectionId); manager.setNotice(null); setAlias({ kind: 'model', model }); }} />
+            <ModelList models={visible} snapshot={snapshot} disabled={disabled} onAction={action => { void run(action); }} onEdit={editModel} />
             {visible.length === 0 && <p data-ui-notice="" className="management-caption">{models.length ? t("没有匹配的模型") : t("尚未添加模型")}</p>}
           </section>;
         })}
@@ -89,8 +92,8 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
     <DialogContent className="management-dialog models-panel" closeDisabled={busy} closeLabel={t('关闭')} onInteractOutside={event => event.preventDefault()}>
       <DialogTitle>{t(title)}</DialogTitle><DialogDescription className="management-caption">{page.connectionForm ? t("同一渠道的模型共用地址和密钥。") : alias ? t("只修改显示名称。") : connection?.baseUrl}</DialogDescription>
       <div className="management-dialog-body"><ModelsFeedback page={page} />
-        {alias ? <AliasForm name={alias.kind === 'provider' ? alias.name : alias.model.displayName} label={alias.kind === 'provider' ? t("服务商别名") : t("模型别名")} maxLength={alias.kind === 'provider' ? 80 : 160} busy={busy} onCancel={close} onSave={name => {
-          void run(alias.kind === 'provider' ? { kind: 'renameProvider', providerHost: alias.host, name } : { kind: 'renameModel', rawIndex: alias.model.rawIndex, expectedModel: alias.model.model, connectionId: alias.model.connectionId, name }).then(result => { if (result.ok) close(); });
+        {alias ? <AliasForm name={alias.name} label={t("服务商别名")} maxLength={80} busy={busy} onCancel={close} onSave={name => {
+          void run({ kind: 'renameProvider', providerHost: alias.host, name }).then(result => { if (result.ok) close(); });
         }} /> : page.connectionForm ? <ConnectionForm connection={page.connectionForm.connection} busy={busy} onCancel={close} onSave={draft => { void page.saveConnection(draft).then(saved => { if (saved) { setFilter('all'); close(); } }); }} />
           : page.modelForm && connection ? <ModelForm model={page.modelForm.model} connection={connection} busy={busy} existingModels={snapshot?.models} onCancel={close} onSave={(draft, verify) => { void page.saveModel(draft, verify); }} />
             : adding ? <AddModels page={page} step="models" onStepChange={() => {}} onNewConnection={createChannel} onDone={close} channelBound /> : null}
@@ -102,7 +105,7 @@ function ModelsFeedback({ page }: { readonly page: ModelsPageState }) {
   const { t } = useI18n();
   const { pending, notice, cancel } = page.manager;
   return <>
-    {notice && <p role={notice.ok ? 'status' : 'alert'} className={`management-caption ${notice.ok ? '' : 'text-destructive'}`}>{t(notice.message)}</p>}
-    {pending && <div className="management-feedback" role="status"><span>{pending === 'discover' ? t("正在获取模型列表…") : pending === 'saveConnection' ? t("正在保存渠道，请留意编辑器的密钥输入框…") : t("正在处理…")}</span><Button variant="plain" size="sm" onClick={cancel}>{t("取消")}</Button></div>}
+    {notice && <p data-ui-notice="" role={notice.ok ? 'status' : 'alert'} className={`management-caption ${notice.ok ? '' : 'text-destructive'}`}>{t(notice.message)}</p>}
+    {pending && <div data-ui-notice="" className="management-feedback" role="status"><span>{pending === 'discover' ? t("正在获取模型列表…") : pending === 'saveConnection' ? t("正在保存渠道，请留意编辑器的密钥输入框…") : t("正在处理…")}</span><Button variant="plain" size="sm" onClick={cancel}>{t("取消")}</Button></div>}
   </>;
 }
