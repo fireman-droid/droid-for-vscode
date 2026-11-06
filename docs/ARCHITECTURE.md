@@ -466,6 +466,9 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - Mission 的权限/AskUser 回调在创建 retained handle 前接好，初始化完成才转交 owner；
   失败时 detach 临时 handle，不夺走原聊天审批或关闭用户后台。目录使用公开分页与
   正式 Mission tag 匹配会话，元数据 ID 不能直接当恢复 sessionId。
+  `chat/mission/controller.ts` 从 start 到候选接管及 recovery flush 持有 `sessionOperationInProgress`，
+  并复核没有活动 turn 且 `turnGeneration` 未变。内部首条任务发送前同步释放本次准入，finally 幂等释放；
+  失败或迟到候选不重放被拒绝的普通发送，仍沿原清理路径释放临时 handle。
 - Mission snapshot 订阅独立于聊天 turn，随 retained session 切换；页面重载重放真实
   进度，模型目录更新只合并设置能力，不覆盖 Feature/Worker 内容。控制请求绑定版本，
   “接受请求”不能当作“动作已完成”。

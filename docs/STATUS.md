@@ -28,7 +28,7 @@
 | 聊天 | 新提问直接切换置顶，底部动态留白跑道承载首屏静止生长的回复，超出一屏后自动向下跟随，短回复结束时保持留白不回弹；最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。每条队列正文预览最多一行，含附件前缀，超长省略且操作区不收缩；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
 | 管理页 | 常规、模型、补全、会话、任务、自动化；共享设置行、搜索筛选、列表表格（统一列宽、60px 行高、主标题 + 下方弱化副文案层级与尾列靠右操作）、底部分页（始终显示范围计数、每页条数与翻页控件）、24 小时制主题化时间 Select 和滚动条，Select 弹层按左起／右起位置分别左对齐或右对齐且不少于触发器宽度，列表刷新保留已有内容 |
 | Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
-| Mission 侧栏 | 从聊天模式选择打开，创建／详情及模型菜单使用共享 ScrollArea、紧凑页头和 28px 控件；开关／功能行不整片悬停铺色，保留模型搜索、来源筛选、推理等级、验证配置及所有原操作；状态文案与任务／计划正文的复制边界分开 |
+| Mission 侧栏 | 从聊天模式选择打开，创建／详情及模型菜单使用共享 ScrollArea、紧凑页头和 28px 控件；开关／功能行不整片悬停铺色，保留模型搜索、来源筛选、推理等级、验证配置及所有原操作；状态文案与任务／计划正文的复制边界分开。创建及接管期间 Host 排他阻止普通发送，释放后才提交 Mission 首条任务；准备失败或候选过期释放排他，不自动重发被拒绝消息 |
 | 设置模型 | 搜索、来源分组、继承、模型与强度子菜单；下拉选项悬停与选中态统一使用中性灰背景与正文色勾选，菜单随单行内容扩展并受视口约束；等级来自 SDK；纯模型场景直接选择，主聊天尚未整体迁移 |
 | 多语言 | 简体中文、繁体中文、英语；默认跟随编辑器，消息与代码保持原文 |
 | 主题 | Light／Dark／Auto；真实浏览器刷新先恢复最近主题，深色导航使用可辨识的共享选中背景；深色模式下主聊天提供可选的透明层深色背景（`droidvisx.chat.starfield`，支持 `starfield` 繁星、`three-body` 三体与 `off` 关闭，兼容旧布尔值，不改变原有背景色，浅色模式与隐藏态自动停用）；正文、BTW、Diff 和输入框共用用户选定的半透明石墨灰文字选区，保留原有字色 |
@@ -66,6 +66,7 @@
   | 未提交准备回收 | `ChatController.preparation.test.ts` 3、`changes/snapshotCapture.test.ts` 6、`turnSnapshots.test.ts` 18、`ChatController.sessions.test.ts` 26 |
   | 恢复正文预算 | `SessionRecoveryStore.budget.test.ts` 2、`SessionRecoveryStore.test.ts` 22、`createPersistentSessionRecoveryStore.test.ts` 9、`operationEvidenceState.test.ts` 4、`runtime/tools/operationBody.test.ts` 9 |
   | 初始化失败重试 | `ChatController.initializationRetry.test.ts` 3、`ChatController.startupSelection.test.ts` 3、`ChatController.childStartup.test.ts` 2、`ChatController.retryRecovery.test.ts` 7、`ChatController.workspaceSwitch.test.ts` 16 |
+  | Mission 创建排他 | `ChatController.missionStart.test.ts` 3、`mission/controller.test.ts` 5、`mission/setupProjection.test.ts` 1、`ChatController.sendRejection.test.ts` 2 |
 
   `typecheck` 通过；`lint:budgets` 首次发现快照文件超限，复用局部清理函数后通过，并通过受影响的扩展类型检查及准备／快照回归。
   未改真实恢复文件或锁，未做真实 daemon／模型验收，未打包安装。
