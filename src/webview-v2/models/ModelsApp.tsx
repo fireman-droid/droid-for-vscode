@@ -17,7 +17,7 @@ import { AddModels, type ModelsPageState } from './AddModels';
 import { ModelList } from './ModelList';
 import { ModelSourceSelect, ModelSourceProvider } from './ModelSourceControl';
 import { PROTOCOLS } from './protocols';
-import { ScrollArea } from '../ui/scroll-area';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 
 export function ModelsApp({ transport }: { readonly transport: ModelsTransport }) {
