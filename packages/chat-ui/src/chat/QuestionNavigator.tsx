@@ -16,7 +16,7 @@ export function QuestionNavigator({ items, activeIndex, onNavigate, ref }: {
   const current = Math.min(Math.max(activeIndex, 0), items.length - 1);
   const visible = visibleQuestionItems(items, current);
   const dense = items.length > 6;
-  return <nav ref={ref} aria-label={t("Question navigation")} className="group/navigator absolute right-0 top-1/2 z-20 flex max-h-[min(52%,250px)] w-5 -translate-y-1/2 flex-col items-center text-muted-foreground"
+  return <nav ref={ref} aria-label={t("Question navigation")} className="group/navigator pointer-events-auto absolute right-0 top-1/2 z-20 flex max-h-[min(52%,250px)] w-5 -translate-y-1/2 flex-col items-center text-muted-foreground"
     style={{ height: Math.max(4, (visible.length - 1) * (dense ? 10 : 14) + 4) + 46 }}>
     <Button variant="plain" size="icon-sm" className="size-5 shrink-0 p-0 opacity-50 transition-[color,opacity] duration-150 enabled:group-hover/navigator:opacity-100 enabled:group-focus-within/navigator:opacity-100 motion-reduce:transition-none [&_svg]:size-2.5" aria-label={t("Previous question")} disabled={current === 0}
       onClick={() => onNavigate(items[current - 1]!.key)}><ChevronUp /></Button>

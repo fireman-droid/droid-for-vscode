@@ -32,6 +32,7 @@ export function useTranscriptScroll(
   const frame = useRef<number | null>(null);
   const lastFrame = useRef(0);
   const scheduleUpdate = useRef<() => void>(() => {});
+  const overlayInput = useRef<(event: WheelEvent | PointerEvent | KeyboardEvent) => void>(() => {});
   const cancelAnimation = useCallback(() => {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = null;
@@ -55,17 +56,25 @@ export function useTranscriptScroll(
   // cannot reach it. Keep the non-passive listener on those overlays only.
   const wheelOverlayRef = useCallback((overlay: HTMLElement | null) => {
     if (overlay === null) return;
+    const forwardInput = (event: WheelEvent | PointerEvent | KeyboardEvent) => overlayInput.current(event);
     const onWheel = (event: WheelEvent) => {
       const element = viewport.current;
       if (element === null || event.defaultPrevented || !event.cancelable || event.ctrlKey || event.shiftKey || event.deltaY === 0 ||
         isNestedScrollTarget(overlay, event.target, event.deltaY)) return;
+      forwardInput(event);
       event.preventDefault();
       const unit = event.deltaMode === 1 ? parseFloat(getComputedStyle(element).lineHeight) || 20
         : event.deltaMode === 2 ? element.clientHeight : 1;
       element.scrollBy({ top: event.deltaY * unit, behavior: 'instant' });
     };
     overlay.addEventListener('wheel', onWheel, { passive: false });
-    return () => overlay.removeEventListener('wheel', onWheel);
+    overlay.addEventListener('pointerdown', forwardInput);
+    overlay.addEventListener('keydown', forwardInput);
+    return () => {
+      overlay.removeEventListener('wheel', onWheel);
+      overlay.removeEventListener('pointerdown', forwardInput);
+      overlay.removeEventListener('keydown', forwardInput);
+    };
   }, [viewport]);
   const scrollToTarget = useCallback((readTarget: () => number | undefined) => {
     stopFollowing();
@@ -269,6 +278,14 @@ export function useTranscriptScroll(
       }
     };
     const onScrollEnd = () => { userScrolling.current = false; };
+    // A layout portal has no native path through selectionRoot. In-place
+    // overlays already reach these listeners, so never process them twice.
+    overlayInput.current = (event) => {
+      if (event.target instanceof Node && selectionRoot?.contains(event.target)) return;
+      if (event.type === 'wheel') onWheel(event as WheelEvent);
+      else if (event.type === 'pointerdown') onPointerDown(event as PointerEvent);
+      else onKeyDown(event as KeyboardEvent);
+    };
     const onSelectionChange = () => { if (selecting()) stopFollowing(); };
     let previousHeight = element.clientHeight;
     let resizeCount = 0;
@@ -323,6 +340,7 @@ export function useTranscriptScroll(
     reducedMotion.addEventListener('change', schedule);
     schedule();
     return () => {
+      overlayInput.current = () => {};
       scheduleUpdate.current = () => {};
       if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer);
       observer.disconnect();

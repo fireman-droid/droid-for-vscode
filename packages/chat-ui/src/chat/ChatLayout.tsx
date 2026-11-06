@@ -1,8 +1,16 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { createContext, useContext, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { StarfieldBackdrop } from './StarfieldBackdrop';
 import { ThreeBodyBackdrop } from './ThreeBodyBackdrop';
 
 export type ChatBackdropKind = boolean | 'starfield' | 'three-body' | 'off';
+
+const NavigationHost = createContext<HTMLElement | null>(null);
+
+export function ChatNavigationPortal({ children }: { readonly children: ReactNode }) {
+  const host = useContext(NavigationHost);
+  return host ? createPortal(children, host) : children;
+}
 
 export function ChatLayout({ header, footer, overlay, starfield = false, children, ...props }: Omit<HTMLAttributes<HTMLElement>, 'title'> & {
   readonly header: ReactNode;
@@ -10,13 +18,15 @@ export function ChatLayout({ header, footer, overlay, starfield = false, childre
   readonly overlay?: ReactNode;
   readonly starfield?: ChatBackdropKind;
 }) {
-  return <main {...props} className={`v2-chat-surface relative isolate grid h-full min-w-0 flex-1 grid-rows-[36px_minmax(0,1fr)_auto] ${props.className ?? ''}`}>
+  const [navigationHost, setNavigationHost] = useState<HTMLDivElement | null>(null);
+  return <NavigationHost.Provider value={navigationHost}><main {...props} className={`v2-chat-surface relative isolate grid h-full min-w-0 flex-1 grid-rows-[36px_minmax(0,1fr)_auto] ${props.className ?? ''}`}>
     {starfield === 'three-body' ? <ThreeBodyBackdrop /> : starfield === true || starfield === 'starfield' ? <StarfieldBackdrop /> : null}
     <header className="relative z-[1] flex min-w-0 select-none items-center justify-between border-b border-[var(--panel-edge)] px-3 py-1">{header}</header>
-    <div className="relative z-[1] grid min-h-0 min-w-0">
+    <div className="relative grid min-h-0 min-w-0">
       {children}
       {overlay}
     </div>
     <footer className="v2-chat-footer relative z-[1] space-y-2">{footer}</footer>
-  </main>;
+    <div ref={setNavigationHost} className="pointer-events-none absolute inset-0 z-10 overflow-hidden" />
+  </main></NavigationHost.Provider>;
 }

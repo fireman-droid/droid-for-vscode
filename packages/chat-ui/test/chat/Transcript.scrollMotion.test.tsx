@@ -128,19 +128,27 @@ it('places a prepared new question immediately when reduced motion is enabled', 
   expect(chat.result.current.sendBehavior.current).toBeNull();
 });
 
-it.each(['wheel', 'keyboard', 'touch'] as const)('cancels a send transition on %s without resuming after layout changes', gesture => {
+it.each([
+  ['wheel', false], ['keyboard', false], ['touch', false],
+  ['wheel', true], ['keyboard', true], ['touch', true],
+] as const)('cancels a send transition on %s (external overlay: %s) without resuming after layout changes', (gesture, external) => {
   const chat = transcript();
+  const target = external ? document.createElement('nav') : chat.viewport;
+  if (external) document.body.append(target);
+  const release = external ? chat.result.current.wheelOverlayRef(target) : undefined;
+  chat.viewport.scrollBy = ({ top }: ScrollToOptions) => { chat.viewport.scrollTop += Number(top); };
   act(() => { chat.result.current.prepareForSend(); chat.result.current.followNewQuestion(); });
   chat.frame();
-  if (gesture === 'wheel') fireEvent.wheel(chat.viewport, { deltaY: -120 });
-  if (gesture === 'keyboard') fireEvent.keyDown(chat.viewport, { key: 'PageUp' });
-  if (gesture === 'touch') fireEvent.pointerDown(chat.viewport, { pointerType: 'touch' });
+  if (gesture === 'wheel') fireEvent.wheel(target, { deltaY: -120 });
+  if (gesture === 'keyboard') fireEvent.keyDown(target, { key: 'PageUp' });
+  if (gesture === 'touch') fireEvent.pointerDown(target, { pointerType: 'touch' });
   const stopped = chat.viewport.scrollTop;
   chat.resize(450, 2400);
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(stopped);
   expect(chat.result.current.follow.current.following).toBe(false);
   expect(chat.result.current.sendBehavior.current).toBeNull();
+  release?.();
 });
 
 it('marks the transcript as scrolled away when wheeling up during an active pin runway', () => {

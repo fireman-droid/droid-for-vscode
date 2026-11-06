@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { initialAssistantWebviewState } from '../state/initialState';
 import type { AssistantWebviewState } from '../state/types';
 import { Transcript } from './Transcript';
+import { ChatLayout } from '@droidvisx/chat-ui/chat/ChatLayout';
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: {
@@ -29,7 +30,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it('clamps late questions to the real content boundary and pins questions as they enter the viewport', async () => {
+it.each([false, true])('preserves question navigation and wheel control with a layout host: %s', async (hosted) => {
   // JSDOM has no media-query API; the production scrolling hook observes this
   // browser preference even when the test controls viewport geometry itself.
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
@@ -56,10 +57,18 @@ it('clamps late questions to the real content boundary and pins questions as the
         { kind: 'assistant' as const, id: `answer-${index}`, turnId: `turn-${index}`, text: `Answer ${index + 1}` },
       ]),
     };
-    const view = render(<Transcript state={state} port={{ postMessage: vi.fn() }} blocked={false} sendSignal={0} onFork={undefined} />);
+    const transcript = <Transcript state={state} port={{ postMessage: vi.fn() }} blocked={false} sendSignal={0} onFork={undefined} />;
+    const page = (expanded: boolean) => hosted
+      ? <ChatLayout header={null} footer={<div>{expanded ? 'Expanded agents' : 'Collapsed agents'}</div>}>{transcript}</ChatLayout>
+      : transcript;
+    const view = render(page(false));
     const viewport = screen.getByLabelText('Chat transcript');
     await waitFor(() => expect(viewport.scrollTop).toBe(460));
     expect(screen.getByRole('button', { name: 'Jump to question 1: Question 1' }).getAttribute('aria-current')).toBe('true');
+    const firstQuestion = screen.getByRole('button', { name: 'Jump to question 1: Question 1' });
+    firstQuestion.focus();
+    view.rerender(page(true));
+    expect(document.activeElement).toBe(firstQuestion);
     for (const index of [1, 2, 0]) {
       fireEvent.click(screen.getByRole('button', { name: `Jump to question ${index + 1}: Question ${index + 1}` }));
       await waitFor(() => {
@@ -86,6 +95,12 @@ it('clamps late questions to the real content boundary and pins questions as the
     fireEvent.click(screen.getByRole('button', { name: 'Scroll to bottom' }));
     await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
     expect(viewport.scrollTop).toBe(760);
+    const scrollBy = vi.fn(({ top }: ScrollToOptions) => viewport.scrollTo({ top: viewport.scrollTop + Number(top) }));
+    viewport.scrollBy = scrollBy;
+    fireEvent.wheel(screen.getByRole('navigation', { name: 'Question navigation' }), { deltaY: -80 });
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
+    expect(scrollBy).toHaveBeenCalledTimes(1);
+    expect(viewport.scrollTop).toBe(680);
   } finally {
     if (scrollTo) Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollTo);
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
