@@ -20,7 +20,7 @@
   .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-file, .v2-composer-changes-stop) { transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
   .v2-composer-changes-file:hover:not(:disabled) { color: var(--ink); }
   .v2-composer-changes-toggle:hover, .v2-composer-changes-stop:hover { color: var(--ink); }
-  .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-file, .v2-composer-changes-stop, .v2-composer-changes-review):focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; border-radius: 4px; }
+  .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-file, .v2-composer-changes-stop, .v2-composer-changes-review):focus-visible { background: var(--control-surface-hover); color: var(--ink); outline: 1px solid var(--control-border-hover); outline-offset: -1px; border-radius: 4px; }
   .v2-composer-changes-file:disabled { opacity: .55; }
   @container composer-changes (max-width: 440px) { .v2-composer-changes-folder { display: none; } }
   @media (prefers-reduced-motion: reduce) { .v2-composer-changes :is(.v2-composer-changes-toggle, .v2-composer-changes-toggle svg, .v2-composer-changes-file, .v2-composer-changes-stop) { transition: none; } }

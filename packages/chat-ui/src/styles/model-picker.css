@@ -1,8 +1,9 @@
 @layer utilities {
-  .dvx-model-picker-trigger { min-width: 0; max-width: min(360px, 100%); justify-content: flex-start; gap: 6px; height: 30px; border-radius: 8px; font-size: 12px; }
-  .dvx-model-picker-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dvx-model-picker-trigger > small { color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
-  .dvx-model-picker-trigger > svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .dvx-model-picker-trigger { display: inline-flex; align-items: center; justify-content: space-between; min-width: 110px; max-width: min(360px, 100%); height: var(--settings-control-height, 28px); gap: 8px; padding-inline: 8px; border: 1px solid var(--management-edge, var(--field-edge)); border-radius: var(--settings-control-radius, var(--control-radius)); background: var(--field-surface); color: var(--ink); font-size: 12px; }
+  .dvx-model-picker-value { display: inline-flex; align-items: baseline; min-width: 0; gap: 5px; overflow: hidden; }
+  .dvx-model-picker-value > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dvx-model-picker-value > small { color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
+  .dvx-model-picker-trigger > .dvx-select-icon > svg { width: 12px; height: 12px; flex-shrink: 0; }
   .dvx-model-picker { width: max-content; min-width: max(280px, var(--radix-dropdown-menu-trigger-width, 0px)); max-width: min(360px, calc(100vw - 16px), var(--radix-dropdown-menu-content-available-width, 100vw)); display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 10px; color: var(--ink); }
   .dvx-picker-search { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--edge); }
   .dvx-picker-search > svg { width: 14px; height: 14px; color: var(--muted-ink); }

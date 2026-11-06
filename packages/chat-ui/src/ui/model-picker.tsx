@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Check, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { Button } from './button';
@@ -29,6 +29,7 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
   const [modelsOpen, setModelsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  const listViewportRef = useRef<HTMLDivElement>(null);
   const modelTriggerRef = useRef<HTMLDivElement>(null);
   const model = models.find(item => item.id === (modelId ?? inherit?.modelId));
   const inherited = modelId == null && inherit !== undefined;
@@ -43,6 +44,21 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
   const listHeight = Math.min(260, Math.max(44, filtered.length * 34 + groups.filter(Boolean).length * 29 + (showInheritance ? 34 : 0) + 10));
   const inheritanceValue = `${id}-inherit`;
   const defaultValue = `${id}-default`;
+  const listVisible = showEffort ? modelsOpen : open;
+  useLayoutEffect(() => {
+    if (!listVisible || query.trim()) return;
+    const frame = requestAnimationFrame(() => {
+      const viewport = listViewportRef.current;
+      const active = viewport?.querySelector<HTMLElement>('[role="menuitemradio"][data-state="checked"]');
+      if (!viewport || !active) return;
+      const top = active.offsetTop - viewport.offsetTop;
+      const bottom = top + active.offsetHeight;
+      if (top < viewport.scrollTop || bottom > viewport.scrollTop + viewport.clientHeight) {
+        viewport.scrollTop = Math.max(0, top - Math.floor((viewport.clientHeight - active.offsetHeight) / 2));
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [listVisible, modelId, inherited]);
   const changeModelsOpen = (value: boolean) => { setModelsOpen(value); if (!value) setQuery(''); };
   const changeOpen = (value: boolean) => { setOpen(value); if (!value) changeModelsOpen(false); };
   // Bridge the search field into the menu; Radix owns navigation between menu items and submenus.
@@ -64,7 +80,7 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
   const modelList = <>
     <div className="dvx-picker-search"><Search aria-hidden="true" /><Input ref={searchRef} type="search" aria-label={t('搜索模型')} placeholder={t('搜索模型')}
       value={query} onChange={event => setQuery(event.target.value)} onKeyDown={searchKeys} /></div>
-    <ScrollArea className="dvx-picker-models" nonce={nonce} style={{ height: listHeight }}>
+    <ScrollArea className="dvx-picker-models" viewportRef={listViewportRef} nonce={nonce} style={{ height: listHeight }}>
       {(filtered.length > 0 || showInheritance) && <DropdownMenuRadioGroup aria-label={label} value={inherited ? inheritanceValue : modelId ?? ''}
         onValueChange={value => {
           const nextId = value === inheritanceValue ? null : value;
@@ -89,8 +105,9 @@ export function ModelPicker({ label, models, modelId, reasoningEffort, placehold
     </ScrollArea>
   </>;
   return <DropdownMenu open={open} onOpenChange={changeOpen}>
-    <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="dvx-model-picker-trigger" aria-label={label} disabled={disabled}>
-      <span>{title}</span>{showEffort && effort && effort !== title && <small>· {effort}</small>}<ChevronDown aria-hidden="true" />
+    <DropdownMenuTrigger asChild><Button variant="plain" size="none" className="dvx-field dvx-model-picker-trigger" aria-label={label} disabled={disabled}>
+      <span className="dvx-model-picker-value"><span>{title}</span>{showEffort && effort && effort !== title && <small>· {effort}</small>}</span>
+      <span className="dvx-select-icon"><ChevronDown aria-hidden="true" className="size-3" /></span>
     </Button></DropdownMenuTrigger>
     {showEffort ? <DropdownMenuContent className="dvx-model-controls" align="end" aria-label={label}>
       {showEffort && <DropdownMenuSub>

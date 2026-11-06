@@ -32,7 +32,7 @@
   .v2-queue-actions svg { width: 14px; height: 14px; }
   .v2-queue-editing { align-self: center; padding-inline: 4px; font-size: 11px; }
   .v2-queue-paused { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 4px 32px; font-size: 11px; }
-  .v2-queue-toggle:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; border-radius: 4px; }
+  .v2-queue-toggle:focus-visible { background: var(--control-surface-hover); color: var(--ink); outline: 1px solid var(--control-border-hover); outline-offset: -1px; border-radius: 4px; }
   @container composer-queue (max-width: 380px) {
     .v2-queue-actions .v2-queue-send { width: 20px; padding: 0; }
     .v2-queue-send span { display: none; }

@@ -39,7 +39,7 @@ export function MessageTimestamp({
     return () => clearInterval(timer);
   }, [completedAt, available, now]);
   if (!available || date === null || completedAt === null) {
-    return <span className="dvx-message-time">{t("Time unavailable")}</span>;
+    return null;
   }
   const exact = formatExactMessageTime(completedAt, locale);
   return (

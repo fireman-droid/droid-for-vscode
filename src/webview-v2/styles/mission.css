@@ -99,8 +99,10 @@
   background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface));
 }
 .v2-mission-empty { border-color: var(--panel-edge); }
-.v2-mission-filters { background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
+.v2-mission-filters { isolation: isolate; --selection-indicator-radius: 6px; --selection-indicator-color: var(--control-surface-active); background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
+.v2-mission-filters > .dvx-selection-indicator { z-index: -1; }
 .v2-mission-filters [role='tab']:is(:hover, [data-state='active']):not(:disabled) { background: var(--control-surface-hover); }
+.v2-mission-filters[data-animated-indicator] [role='tab'][data-state='active']:not(:hover):not(:active):not(:disabled) { background: transparent; }
 .v2-mission-filters [role='tab']:active:not(:disabled) { background: var(--control-surface-active); }
 .v2-mission-filter-count { border-color: var(--panel-edge); }
 .v2-mission-filters [data-state='active'] .v2-mission-filter-count { color: var(--ink); }

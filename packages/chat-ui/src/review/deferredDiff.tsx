@@ -110,8 +110,9 @@ export function DeferredDiffChunk({ count, changes, defer, observe, children, pi
     return () => document.removeEventListener('selectionchange', release);
   }, [selected]);
   const visible = nearby || selected || pinned || !defer;
+  const chunkHeight = `calc(${count} * var(--diff-line-height, 22px))`;
   return <div ref={element} data-diff-changes={changes.length ? '' : undefined} className="review-diff-chunk"
-    style={{ height: `calc(${count} * var(--diff-line-height, 22px))` }}>
+    style={pinned && visible ? { minHeight: chunkHeight } : { height: chunkHeight }}>
     {visible ? children() : null}
   </div>;
 }

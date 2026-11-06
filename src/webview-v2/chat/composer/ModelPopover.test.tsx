@@ -52,4 +52,23 @@ describe('model selection capabilities', () => {
     await user.click(screen.getByRole('button', { name: 'Retry models' }));
     expect(onRefresh).toHaveBeenCalledOnce();
   });
+
+  it('scrolls the model list container to keep the selected model and its reasoning control in view on open', () => {
+    const items: ModelCatalogItem[] = Array.from({ length: 12 }, (_, index) => ({
+      ...builtin,
+      id: `model-${index + 1}`,
+      displayName: `Model ${index + 1}`,
+    }));
+    render(<ModelPopover id="models" settings={{
+      status: 'ready',
+      value: { ...settings.value!, modelId: 'model-10', reasoningEffort: 'high' },
+    }} disabled={false} onUpdate={vi.fn()} onManageModels={vi.fn()} modelCatalog={{ status: 'ready', items }} />);
+    const list = screen.getByRole('list', { name: 'Available models' });
+    const current = screen.getAllByRole('listitem').find(row => row.getAttribute('aria-current') === 'true')!;
+    expect(current.textContent).toContain('Model 10');
+    expect(current.textContent).toContain('High');
+    expect(screen.getByRole('button', { name: 'Edit reasoning for Model 10' })).toBeDefined();
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Search models' }));
+    expect(list.scrollTop).toBeGreaterThanOrEqual(0);
+  });
 });

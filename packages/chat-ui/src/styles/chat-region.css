@@ -46,12 +46,11 @@
   .v2-startup-workspace span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .v2-chat-startup h2 { margin: 0 0 8px; color: var(--ink); font-size: 20px; font-weight: 500; line-height: 28px; letter-spacing: -.02em; }
   .v2-startup-description { color: var(--muted-ink); font-size: 13px; line-height: 20px; }
-  .v2-startup-actions { display: grid; gap: 4px; margin-top: 20px; }
-  .v2-startup-action { display: flex; min-height: 32px; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 4px 0; color: var(--muted-ink); text-align: left; font-size: 13px; line-height: 20px; }
-  .v2-startup-action svg { width: 16px; height: 16px; flex-shrink: 0; }
-  .v2-startup-action:hover, .v2-startup-action:active { color: var(--ink); }
-  .v2-startup-action:hover span { text-decoration: underline; text-underline-offset: 4px; }
-  .v2-startup-action:focus-visible { outline: 1px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
+  .v2-startup-actions { display: grid; gap: 2px; margin-top: 20px; }
+  .v2-startup-action { display: flex; min-height: 30px; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin-inline: -8px; padding: 4px 8px; border-radius: 6px; color: var(--muted-ink); text-align: left; font-size: 13px; line-height: 20px; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+  .v2-startup-action svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .v2-startup-action:hover, .v2-startup-action:active { background: var(--control-surface-hover); color: var(--ink); }
+  .v2-startup-action:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
   .v2-chat-composer {
     position: relative;
     container-type: inline-size;
@@ -220,20 +219,16 @@
   }
   .v2-code-body { position: relative; min-width: 0; }
   .v2-chat-surface .v2-code-toolbar {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    z-index: 1;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: var(--chat-code-surface);
-    opacity: 0;
-    transition: opacity var(--motion-fast) var(--motion-ease);
+    display: flex;
+    min-height: 28px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 6px 2px 12px;
+    border-bottom: 1px solid var(--chat-edge);
+    background: color-mix(in srgb, var(--ink) 2.5%, var(--chat-code-surface));
+    user-select: none;
   }
-  .v2-chat-surface .v2-code-block:hover .v2-code-toolbar,
-  .v2-chat-surface .v2-code-block:focus-within .v2-code-toolbar { opacity: 1; }
-  .v2-chat-surface .v2-code-language { display: none; }
+  .v2-chat-surface .v2-code-language { display: block; font-size: 11px; color: var(--muted-ink); }
   .v2-chat-surface .v2-code-block pre {
     max-height: 480px;
     overflow: auto;
@@ -270,6 +265,38 @@
     background: var(--chat-code-surface);
     font-size: 12px;
     line-height: 18px;
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] {
+    margin: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] > .v2-command-head {
+    min-height: 24px;
+    padding: 1px 0;
+    border-bottom: 0;
+    border-radius: 0;
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] .v2-command-toggle {
+    color: var(--muted-ink);
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] .v2-command-toggle:hover {
+    color: var(--ink);
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] :is(.v2-command-title, .v2-command-chips, .v2-command-target) {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] .v2-command-body {
+    margin: 2px 0 4px 18px;
+    border: 1px solid var(--chat-edge);
+    border-radius: 8px;
+  }
+  .v2-chat-surface .v2-command-card[data-activity-inline='true'] .v2-command-well {
+    padding: 8px 10px;
+    border-radius: 7px;
   }
   .v2-chat-surface .operation-diff {
     margin: 4px 0;
