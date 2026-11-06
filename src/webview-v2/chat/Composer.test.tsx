@@ -95,10 +95,60 @@ it('correlates mention results and attaches the selected path without sending th
   expect(screen.queryByRole('option', { name: /open.ts/ })).toBeNull();
   await waitFor(() => expect(onFileSearch).toHaveBeenLastCalledWith(expect.any(String), 'notes'));
   const second = onFileSearch.mock.calls.at(-1)![0];
-  view.rerender(<Harness current={{ ...state, fileSearch: { requestId: second, status: 'ok', files: ['docs/notes.md', 'docs/notes-2.md'] } }} />);
+  view.rerender(<Harness current={{ ...state, fileSearch: { requestId: second, status: 'ok', files: ['docs/notes.md', 'docs/中文 notes-2.md'] } }} />);
   await user.keyboard('{ArrowDown}{Enter}');
-  expect(intents()).toEqual([{ type: 'attachment.addPath', sessionId: 'session-1', path: 'docs/notes-2.md' }]);
+  expect(intents()).toEqual([{ type: 'attachment.addPath', sessionId: 'session-1', path: 'docs/中文 notes-2.md' }]);
   expect(inlineText(input)).toBe('');
+  expect(screen.queryByRole('listbox')).toBeNull();
+});
+
+it('ends a mention at Chinese sentence punctuation and ignores a late result while composing ordinary prose', async () => {
+  const view = render(<Harness />);
+  const input = screen.getByRole('textbox', { name: 'Message Droid' });
+  inputText(input, '本质好像是v-bind和@input');
+  await waitFor(() => expect(onFileSearch).toHaveBeenLastCalledWith(expect.any(String), 'input'));
+  const requestId = onFileSearch.mock.calls.at(-1)![0];
+  view.rerender(<Harness current={{ ...state, fileSearch: { requestId, status: 'ok', files: [] } }} />);
+  expect(screen.getByRole('listbox')).toBeDefined();
+  const prose = '本质好像是v-bind和@input，通过input事件可以接收';
+  fireEvent.compositionStart(input);
+  inputText(input, prose);
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true, keyCode: 229 });
+  fireEvent.compositionEnd(input);
+  expect(inlineText(input)).toBe(prose);
+  expect(screen.queryByRole('listbox')).toBeNull();
+  view.rerender(<Harness current={{ ...state, fileSearch: { requestId, status: 'ok', files: ['input.ts'] } }} />);
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(intents()).toEqual([]);
+});
+
+it('keeps a valid Chinese path query on caret movement inside it, but closes on leaving, Escape or deleting the trigger', async () => {
+  const view = render(<Harness />);
+  const input = screen.getByRole('textbox', { name: 'Message Droid' });
+  // jsdom does not reflect the contenteditable attribute into this DOM property.
+  input.contentEditable = 'true';
+  const query = '看看@C:/资料/组件-v2.ts';
+  inputText(input, query);
+  await waitFor(() => expect(onFileSearch).toHaveBeenLastCalledWith(expect.any(String), 'C:/资料/组件-v2.ts'));
+  const requestId = onFileSearch.mock.calls.at(-1)![0];
+  view.rerender(<Harness current={{ ...state, fileSearch: { requestId, status: 'ok', files: ['资料/组件-v2.ts', '资料/组件-v3.ts'] } }} />);
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  setInlineSelection(input, query.length - 2, query.length - 2);
+  fireEvent.select(input);
+  expect(screen.getByRole('option', { name: /组件-v3/ }).getAttribute('aria-selected')).toBe('true');
+  expect(onFileSearch).toHaveBeenCalledTimes(1);
+  setInlineSelection(input, 1, 1);
+  fireEvent.select(input);
+  expect(screen.queryByRole('listbox')).toBeNull();
+  inputText(input, '@资料');
+  expect(screen.getByRole('listbox')).toBeDefined();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  setInlineSelection(input, 2, 2);
+  fireEvent.select(input);
+  expect(screen.queryByRole('listbox')).toBeNull();
+  inputText(input, '@资料/文件');
+  expect(screen.getByRole('listbox')).toBeDefined();
+  inputText(input, '资料/文件');
   expect(screen.queryByRole('listbox')).toBeNull();
 });
 

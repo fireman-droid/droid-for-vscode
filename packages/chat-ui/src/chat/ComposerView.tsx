@@ -15,6 +15,7 @@ export interface ComposerViewProps {
   readonly value: string;
   readonly codeDraft?: ReturnType<typeof useCodeReferenceDraft>;
   readonly onChange: (value: string, cursor: number) => void;
+  readonly onSelectionChange?: (value: string, start: number, end: number) => void;
   readonly onSend: () => void;
   readonly onStop?: () => void;
   readonly running?: boolean;
@@ -54,7 +55,7 @@ export interface ComposerLayout {
 }
 
 export function ComposerView({
-  value, codeDraft, onChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder, placeholderContent,
+  value, codeDraft, onChange, onSelectionChange, onSend, onStop, running, sendDisabled, sendLabel = 'Send', stopLabel = 'Stop', placeholder, placeholderContent,
   maxLength, focusSignal = 0, quote, onQuoteClear, quotes, onQuoteRemove, notice, inputReplacement, attachments,
   suggestions, suggestionsOpen = false, onSuggestionsOpenChange, suggestionsListId, activeSuggestionId,
   onKeyDown, onPaste, onDrop, onDragOver, renderInputRow, onLayout,
@@ -65,6 +66,13 @@ export function ComposerView({
   const removeQuote = onQuoteRemove ?? (quotes === undefined ? onQuoteClear : undefined);
   const input = useRef<HTMLTextAreaElement>(null);
   const richInput = useRef<InlineInputHandle>(null);
+  const composing = useRef(false);
+  const selectionChange = () => {
+    const editor = richInput.current ?? input.current;
+    if (editor && !composing.current) onSelectionChange?.(editor.value, editor.selectionStart, editor.selectionEnd);
+  };
+  const compositionStart = () => { composing.current = true; onSuggestionsOpenChange?.(false); };
+  const compositionEnd = () => { composing.current = false; };
   const widths = useRef({ row: 0, input: 0 });
   const rich = codeDraft !== undefined;
   const focusInput = () => (richInput.current ?? input.current)?.focus({ preventScroll: true });
@@ -119,12 +127,14 @@ export function ComposerView({
       aria-autocomplete={suggestionsListId ? 'list' : undefined} aria-controls={suggestionsOpen ? suggestionsListId : undefined}
       aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
       placeholder={inputPlaceholder} onChange={onChange} onKeyDown={keyDown} onPaste={onPaste} onContentLayout={resize}
+      onSelect={selectionChange} onCompositionStart={compositionStart} onCompositionEnd={compositionEnd}
       className="min-h-[20px] max-h-42 rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px]" />
     : <Textarea variant="plain" ref={input} data-composer-input="" data-empty={!value || undefined} aria-label={t("Message {p0}", { p0: assistantName })}
     aria-autocomplete={suggestionsListId ? 'list' : undefined}
     aria-controls={suggestionsOpen ? suggestionsListId : undefined} aria-activedescendant={suggestionsOpen ? activeSuggestionId : undefined}
     placeholder={inputPlaceholder} rows={1} maxLength={maxLength} value={value}
     onChange={(event) => onChange(event.target.value, event.target.selectionStart)}
+    onSelect={selectionChange} onCompositionStart={compositionStart} onCompositionEnd={compositionEnd}
     onKeyDown={keyDown}
     onPaste={onPaste} className="min-h-[20px] max-h-42 resize-none rounded-none border-0 bg-transparent p-0 text-[13px] leading-[20px] focus-visible:ring-0" />;
   const editor = inputReplacement != null ? <div className="v2-composer-replacement">{inputReplacement}</div>

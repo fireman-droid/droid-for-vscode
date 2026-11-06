@@ -52,7 +52,9 @@ export function findMentionToken(value: string, caret: number): MentionToken | n
     return null;
   }
   const query = before.slice(at + 1);
-  if (/[\s@]/.test(query) || query.length > MAX_FILE_SEARCH_QUERY_LENGTH) {
+  // Chinese sentence punctuation ends prose such as “@input，通过…”.
+  // Keep CJK filename characters and path separators valid.
+  if (/[\s@，。！？；：、]/.test(query) || query.length > MAX_FILE_SEARCH_QUERY_LENGTH) {
     return null;
   }
   return { start: at, end: caret, query };

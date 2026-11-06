@@ -83,6 +83,7 @@ export function Composer({ state, port, flow, blocked, quoteNotice, onNoticeChan
   return <ComposerView value={body} codeDraft={references} quotes={quote?.quotes}
     onQuoteRemove={quote ? (index) => { suggestions.dismiss(); flow.handleDraftChange(formatSelectionQuotes(quote.quotes.filter((_, position) => position !== index), quote.body)); } : undefined}
     onChange={suggestions.change}
+    onSelectionChange={suggestions.selectionChange}
     onSend={submit} onStop={() => void flow.callbacks.onCancel()} running={running} sendDisabled={flow.callbacks.isSendDisabled || ingress.preparing > 0}
     stopLabel={state.turn?.status === 'stopping' ? 'Retry Stop' : 'Stop'}
     sendLabel={flow.queueEditingId !== null ? 'Save queued message' : state.turn?.status === 'stopping' || flow.queuedCount > 0 ? 'Queue message' : 'Send'}
