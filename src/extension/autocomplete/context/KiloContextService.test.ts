@@ -184,6 +184,36 @@ describe('optional Kilo static context', () => {
     expect(prompt.prefix).toContain('numberAnswer');
     expect(prompt.prefix).not.toContain('textAnswer');
   });
+
+  it('retrieves closed zero-parameter function headers without signature help', async () => {
+    state.config.staticContext = true;
+    const text = 'function answer(): number {\n  return \n}\n';
+    const main = await document('main.ts', text);
+    const helpers = await document('helpers.ts',
+      'export function getAnswer(): number { return 42; }\n' +
+      'export function increment(value: number): number { return value + 1; }\n' +
+      'export function getText(): string { return "no"; }\n', 'typescript', false);
+    const prompt = await build(main, text.indexOf('return ') + 7);
+    expect(state.documents).not.toContain(helpers);
+    expect(prompt.prefix).toContain('function getAnswer(): number');
+    expect(prompt.prefix).toContain('function increment(value: number): number');
+    expect(prompt.prefix).not.toContain('function getText');
+  });
+
+  it.each(['(value): number', '(value?: number): number', '()'])(
+    'keeps signature fallback for unsupported or unannotated functions %s', async signature => {
+      state.config.staticContext = true;
+      const text = 'function answer(): number {\n  return \n}\n';
+      const main = await document('main.ts', text);
+      const helper = await document('helpers.ts', `export function needsSignature${signature} { return 42; }`, 'typescript', false);
+      const warning = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const prompt = await build(main, text.indexOf('return ') + 7);
+        expect(prompt.prefix).not.toContain('needsSignature');
+        expect(state.definitions.mock.calls.some(([name, uri]) =>
+          name === 'vscode.executeSignatureHelpProvider' && uri.toString() === helper.uri.toString())).toBe(true);
+      } finally { warning.mockRestore(); }
+    });
 });
 
 describe('recursive static types', () => {

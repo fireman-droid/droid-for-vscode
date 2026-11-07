@@ -76,7 +76,11 @@ export function extractFunctionTypeFromDecl(match: QueryMatch): string {
     }
   }
 
-  if (!paramsNode) {
+  const parameters = match.captures
+    .find((capture) => capture.name === "top.fn.decl")?.node.childForFieldName("parameters")
+  const isParameterless = parameters && !parameters.hasError
+    && parameters.namedChildren.every((node) => node.type === "comment")
+  if (!paramsNode && !isParameterless) {
     console.error(`extractFunctionTypeFromDecl: paramsNode ${paramsNode} not found`)
     throw new Error(`extractFunctionTypeFromDecl: paramsNode ${paramsNode} not found`)
   }
@@ -86,7 +90,7 @@ export function extractFunctionTypeFromDecl(match: QueryMatch): string {
     throw new Error(`extractFunctionTypeFromDecl: returnNode ${returnNode} not found`)
   }
 
-  return `(${paramsNode!.text}) => ${returnNode!.text}`
+  return `(${paramsNode?.text ?? ""}) => ${returnNode.text}`
 }
 
 export function unwrapToBaseType(node: SyntaxNode): SyntaxNode {
