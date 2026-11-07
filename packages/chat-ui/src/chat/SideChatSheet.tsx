@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n';
 import { useEffect, useRef, type PointerEvent } from 'react';
-import { ArrowUp, Clock3, MessageSquare, Quote, X } from 'lucide-react';
+import { ArrowUp, Clock3, MessageSquare, X } from 'lucide-react';
 import { AnswerStopButton } from './AnswerStopButton';
 import type { SideChatProps } from './sideChat';
 import { useUiEnvironment } from '../environment';
@@ -103,9 +103,6 @@ export function SideChatSheet({ state, draft, quote, quotes, notice, width, onDr
           <MessageSquare className="v2-btw-empty-mark" aria-hidden="true" />
           <p>{t("A question on the side.")}</p>
           <span>{t("Explore a detail without interrupting your main conversation.")}</span>
-          <div className="v2-btw-empty-tip"><Quote aria-hidden="true" />
-            <span>{t("Select text in the main chat to use it here as context.")}</span>
-          </div>
         </div> : null}
         {state.entries.map((entry) => {
           const parsed = parseSelectionQuotes(entry.question);

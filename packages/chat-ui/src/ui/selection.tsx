@@ -67,9 +67,12 @@ export function SelectItem({ children, className, ...props }: ComponentProps<typ
 }
 
 export const Tabs = TabsPrimitive.Root;
-export function TabsList({ className, children, animatedIndicator = false, ...props }: ComponentProps<typeof TabsPrimitive.List> & { readonly animatedIndicator?: boolean }) {
+export function TabsList({ className, children, animatedIndicator = false, indicatorVariant = 'underline', ...props }: ComponentProps<typeof TabsPrimitive.List> & {
+  readonly animatedIndicator?: boolean;
+  readonly indicatorVariant?: 'underline' | 'surface';
+}) {
   return <TabsPrimitive.List className={cn('dvx-tabs-list flex min-w-0 select-none gap-1 border-b border-border', className)} data-animated-indicator={animatedIndicator || undefined} {...props}>
-    {children}{animatedIndicator && <SelectionIndicator activeSelector='[role="tab"][aria-selected="true"]' />}
+    {children}{animatedIndicator && <SelectionIndicator activeSelector='[role="tab"][aria-selected="true"]' variant={indicatorVariant} />}
   </TabsPrimitive.List>;
 }
 export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsPrimitive.Trigger>) {

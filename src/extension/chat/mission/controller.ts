@@ -24,6 +24,7 @@ export function handleMissionStart(
     ctl.sessionState.connection.status !== 'connected' ||
     ctl.sessionState.runtime === null ||
     ctl.sessionState.sessionId === null ||
+    ctl.sessionState.sessionOperationInProgress ||
     catalog.status !== 'ready' ||
     ctl.turnState.turn !== null ||
     ctl.interactions.hasPending() ||
@@ -36,8 +37,16 @@ export function handleMissionStart(
   const ownerRuntime = ctl.sessionState.runtime;
   const ownerSessionId = ctl.sessionState.sessionId!;
   const ownerGeneration = ctl.sessionState.runtimeGeneration;
+  const ownerTurnGeneration = ctl.turnState.turnGeneration;
   const ownerCwd = workspace.cwd;
   ctl.missionState.missionStartInProgress = true;
+  ctl.sessionState.sessionOperationInProgress = true;
+  let ownsAdmission = true;
+  const releaseAdmission = () => {
+    if (!ownsAdmission) return;
+    ownsAdmission = false;
+    ctl.sessionState.sessionOperationInProgress = false;
+  };
   void ctl.missionGateway
     .start({
       workspaceId: ownerCwd,
@@ -48,6 +57,7 @@ export function handleMissionStart(
     .then(async (result) => {
       const ownerIsCurrent = () =>
         !ctl.sessionState.disposed &&
+        ctl.turnState.turn === null && ctl.turnState.turnGeneration === ownerTurnGeneration &&
         ctl.isCurrentSessionOperation(
           ownerRuntime,
           ownerGeneration,
@@ -146,6 +156,7 @@ export function handleMissionStart(
         action: 'start',
         status: 'accepted',
       });
+      releaseAdmission();
       ctl.effects.handleSend(
         result.sessionId,
         `mission:${message.requestId}`,
@@ -156,6 +167,7 @@ export function handleMissionStart(
       emitRejected(ctl, message.requestId, 'unavailable');
     })
     .finally(() => {
+      releaseAdmission();
       ctl.missionState.missionStartInProgress = false;
       if (!ctl.sessionState.disposed) ctl.emitSnapshot();
     });

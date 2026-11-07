@@ -43,8 +43,9 @@ const sample: SessionBtwState = {
   ],
 };
 
-export function BtwPreview({ port }: { readonly port: ChatPort }) {
+export function BtwPreview({ port, readOnly = false }: { readonly port: ChatPort; readonly readOnly?: boolean }) {
   const [state, setState] = useState(sample);
+  const [blocked, setBlocked] = useState(false);
   const previewPort = useMemo(() => ({ postMessage(message: BtwAskMessage | BtwPrepareMessage | BtwStopMessage) {
     if (message.type === 'btw.ask') setState((current) => ({
       ...current, status: 'ready', entries: [...current.entries, {
@@ -60,7 +61,7 @@ export function BtwPreview({ port }: { readonly port: ChatPort }) {
   const btw = useBtwPanel(previewPort, 'btw-preview', { state });
   useEffect(() => { btw.openWithQuote('保持主对话不变，单独解释这里的问题。'); }, [btw.openWithQuote]);
   return <div className="flex h-full min-w-0 flex-col">
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1 text-[11px] text-muted-foreground">
+    <div data-ui-notice="" className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1 text-[11px] text-muted-foreground">
       <span>BTW preview · 示例问答，不调用真实 Droid</span>
       <Button size="sm" variant="ghost" onClick={() => { setState(sample); btw.openPanel(); }}>Reset preview</Button>
     </div>
@@ -68,9 +69,9 @@ export function BtwPreview({ port }: { readonly port: ChatPort }) {
       <div className="min-w-0 flex-1"><ChatApp port={port} /></div>
       {btw.open ? <SideChatSheet state={state} draft={btw.draft} quotes={btw.quotes} width={btw.width}
         images={btw.images} selectedModel={btw.selectedModel} onModelChange={btw.setChosenModel}
-        sending={btw.sending} notice={btw.notice} onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote}
+        sending={btw.sending} notice={blocked ? 'Preview only: no question or stop request was sent.' : btw.notice} onDraftChange={btw.setDraft} onQuoteClear={btw.clearQuote}
         onQuoteRemove={btw.removeQuote} onWidthChange={btw.setWidth} onDismiss={btw.dismiss}
-        onStop={btw.stop} onAsk={btw.sendDraft} /> : null}
+        onStop={readOnly ? () => setBlocked(true) : btw.stop} onAsk={readOnly ? () => setBlocked(true) : btw.sendDraft} /> : null}
     </div>
   </div>;
 }

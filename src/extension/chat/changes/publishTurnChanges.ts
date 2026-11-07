@@ -2,6 +2,7 @@ import { type TurnStatus } from '../../../shared/protocol/turns';
 import { reconcileTurnChanges } from '../../recovery/hostTranscriptState';
 import { collectToolFilePaths } from '../turns/turnActivityState';
 import type { PublishTurnChangesPort } from './publishTurnChangesPort';
+import { projectRecoveryTurn } from '../recovery/recoveryTurnProjection';
 
 /**
  * Publishes a finished turn's canonical changed-file ledger only after
@@ -56,11 +57,7 @@ export function publishTurnChanges(
               }]
             : [],
         );
-        const currentTurn = ctl.turnState.turn;
-        const displayTurn = currentTurn === null ? null : {
-          turnId: currentTurn.turnId, status: currentTurn.status,
-          ...(currentTurn.error === undefined ? {} : { error: currentTurn.error }),
-        };
+        const displayTurn = projectRecoveryTurn(ctl.turnState.turn);
         if (
           ctl.sessionState.disposed ||
           ctl.sessionState.sessionId !== sessionId ||

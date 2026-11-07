@@ -86,7 +86,7 @@ for (const [entryPoint, filename] of [
       if (contribution.bytesInOutput === 0) continue;
       const normalized = input.replaceAll('\\', '/');
       if (normalized.includes('packages/chat-ui/src/')) usesChatUi = true;
-      if (/@assistant-ui|assistant-cloud|\/runtimes\/cloud\/|@factory\/droid-sdk|src\/(?:extension|runtime)\//u.test(normalized)) {
+      if (/@assistant-ui|assistant-cloud|\/runtimes\/cloud\/|@factory\/droid-sdk|src\/(?:extension|runtime)\/|src\/webview-v2\/dev\//u.test(normalized)) {
         throw new Error(`V2 contains a forbidden runtime dependency: ${input}`);
       }
       if (filename !== 'mermaid' && normalized.includes('node_modules/mermaid/')) {

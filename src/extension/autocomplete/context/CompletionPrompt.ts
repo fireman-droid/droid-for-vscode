@@ -12,18 +12,20 @@ type PromptInput = {
   comments?: LanguageComments;
 };
 
+type CompletionPrompt = { prefix: string; suffix: string; relatedFiles: number };
+
 /** Mercury keeps reference code as language comments inside the FIM prefix.
  * This avoids the upstream Mercury template dropping all cross-file definitions. */
-export function buildCompletionPrompt(input: PromptInput): { prefix: string; suffix: string } {
+export function buildCompletionPrompt(input: PromptInput): CompletionPrompt {
   const marker = /mercury/i.test(input.model) && input.offset < input.text.length ? '<|fim_prefix|>' : '';
   const prompt = buildContextPrompt({ ...input, maxCharacters: Math.max(0, input.maxCharacters - marker.length) });
-  return { prefix: marker + prompt.prefix, suffix: prompt.suffix };
+  return { ...prompt, prefix: marker + prompt.prefix };
 }
 
 /** Codestral's documented multi-file prefix; other models get ordinary reference text. */
-function buildContextPrompt(input: PromptInput): { prefix: string; suffix: string } {
+function buildContextPrompt(input: PromptInput): CompletionPrompt {
   const budget = Math.max(0, Math.trunc(input.maxCharacters));
-  const plain = () => buildCompletionContext(input.text, input.offset, budget);
+  const plain = () => ({ ...buildCompletionContext(input.text, input.offset, budget), relatedFiles: 0 });
   if (input.snippets.length === 0) return plain();
 
   const codestral = /codestral/i.test(input.model);
@@ -36,6 +38,7 @@ function buildContextPrompt(input: PromptInput): { prefix: string; suffix: strin
   const mainReserve = Math.min(input.text.length, Math.ceil(budget * 0.6));
   let remaining = budget - mainReserve - currentHeader.length;
   const references: string[] = [];
+  const includedFiles = new Set<string>();
 
   for (const snippet of input.snippets) {
     if (remaining <= 0) break;
@@ -58,13 +61,15 @@ function buildContextPrompt(input: PromptInput): { prefix: string; suffix: strin
     if (reference) {
       references.push(reference);
       remaining -= reference.length;
+      // Count rendered files, not snippets from the same file or clipboard text.
+      if (snippet.uri !== 'clipboard') includedFiles.add(snippet.uri);
     }
   }
 
   if (references.length === 0) return plain();
   const extra = references.join('') + currentHeader;
   const context = buildCompletionContext(input.text, input.offset, budget - extra.length);
-  return { prefix: extra + context.prefix, suffix: context.suffix };
+  return { prefix: extra + context.prefix, suffix: context.suffix, relatedFiles: includedFiles.size };
 }
 
 function fitReference(content: string, budget: number, render: (text: string) => string): string {

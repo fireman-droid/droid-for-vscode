@@ -54,6 +54,47 @@ pnpm install --frozen-lockfile
 功能联调默认使用下方的真实 Browser Dev Client；Studio 仅用于隔离的展示场景，
 不能用模拟结果替代真实 Host 验证。
 
+### 不连接后台的同源 UI 预览
+
+```sh
+pnpm run dev:preview
+```
+
+打开 <http://127.0.0.1:4178/>。独立入口默认展示可继续发送的固定对话；
+顶部预览工具栏可切换 Chat、Settings、Models、Mission、Viewer、Review 与 BTW，
+以及主题和聊天示例。菜单、折叠、设置页签、Diff 展示复用真实生产组件。
+Settings 的常规／补全页使用固定设置，会话列表是示例，任务与自动化列表为空；
+Review 只读固定记录的改动，不读取本机文件或 Git。
+
+通过生产 Composer 发送任意普通消息，会回放固定的 12 秒示例：
+等待、分段文字、工具活动、子代理活动、含长代码的续文及结束。回复内容与输入无关，
+不会调用模型、执行代码或读取文件。生产 Stop 中断回放并暂停队列；Queue 支持编辑、
+移除、提前发送和继续，正常结束后按顺序接续。Permission／AskUser 示例使用既有卡片，
+确认后继续本地回放，拒绝／取消则结束。Reset simulation、切页或关闭页面会取消旧调度；
+Reset 重新载入当前示例。`full-workflow` 保留为静态全流程截图场景，
+`empty` 提供无历史的发送入口。所有示例与回复均明确标识为离线模拟。
+底部 Task 的内嵌查看使用同一 `subagent.inspect`／`subagent.snapshot` 协议，
+预览返回明确标识的固定子对话，随模拟进度更新，不创建或读取真实子会话。
+
+此入口不导入 Browser Dev Client，不读取连接凭据，也不连接 Droid、VS Code 或模型服务。
+保存设置、模型验证、文件操作等仍明确提示未执行；模型验证不会显示虚构的通过结果。
+剪贴板仅在主动复制时使用浏览器 API。预览不代表真实后台功能已验收。
+
+`packages/chat-ui/src/` 和 `src/webview-v2/` 是预览与扩展共用的组件／样式源码，
+Vite 直接解析公共包源码，无需先构建公共包。修改**启动预览的同一源码目录**会更新浏览器；
+其他 worktree 不会自动同步，已安装插件仍需重新构建并安装才能反映修改。
+固定数据与本地适配仅在 `src/webview-v2/dev/`，独立入口位于其 `preview/` 子目录。
+`replyTimeline.ts` 只定义确定的示例事件，`replyPlayback.ts` 负责可取消调度和本地协议响应，
+内存快照复用生产 reducer；不另写一套聊天状态或业务界面。重置会失效化已排微任务，
+新的会话视图身份避免旧乐观发送覆盖重置快照。
+生产页面构建会拒绝 dev 入口依赖。
+
+需要静态产物时执行 `pnpm run build:preview`，输出到 `dist/ui-preview/`；
+用 `pnpm run serve:preview` 在同一 loopback URL 提供它，不要求 `file://`。
+这两个预览命令不会构建或安装 VSIX。端口固定 `4178`，占用时明确失败。
+
+### 原有 Scenario Studio
+
 ```sh
 pnpm run dev:webview
 ```
@@ -83,6 +124,12 @@ pnpm run dev:webview
 
 Chat、Models、Mission、Viewer、Review 共享公共 UI。
 公共包不能反向引用 Droid Bridge、Host 或 VS Code API；业务能力通过 props、回调和插槽接入。
+
+当前聊天 Bridge 为 v60（以 `BRIDGE_PROTOCOL_VERSION` 为唯一代码来源）。
+内嵌子代理查看发送 `subagent.inspect`，用父会话、回合和 Task 调用 ID 定位，`toolUseId: null`
+取消查看；Host 回传 `subagent.snapshot` 的 loading／ready／unavailable 状态及只读正文。
+子会话 ID 保留在 Host，读取复用现有 `SubagentTranscriptService`，不打开外部标签或发起新回合；
+显式 `subagent.open` 的原行为不变。新旧页面协议不一致时刷新到同一构建，不能绕过版本校验。
 
 ### 需要真实会话时
 
@@ -231,6 +278,9 @@ pnpm run lint:budgets
 ### 测试入口与文件归属
 
 普通单元与组件测试使用 Node 24、pnpm 10.2.0；下面命令均从仓库根目录执行。
+Vitest 的包根和子路径 alias 固定解析当前工作区的 `packages/chat-ui/src`，
+CSS 导出解析当前工作区的公共包构建产物；类型检查使用 `tsconfig.base.json` 的源码 paths。
+复用依赖 junction 时不依赖其中可能指向另一 worktree 的公共包链接，避免误测旧 `dist`。
 
 | 命令 | 范围 |
 | --- | --- |

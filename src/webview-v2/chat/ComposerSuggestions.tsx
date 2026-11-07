@@ -36,6 +36,14 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     setRequest(null);
     setIndex(0);
   };
+  const selectionChange = (value: string, start: number, end: number) => {
+    // Moving within the same query keeps results and selection; moving out closes it.
+    if (mention === null && slash === null) return;
+    if (start !== end) { dismiss(); return; }
+    const token = mention ?? slash!;
+    const trigger = mention?.start ?? 0;
+    if (start <= trigger || start > token.end || value.slice(trigger + 1, token.end) !== token.query) dismiss();
+  };
   useEffect(() => {
     if (mention === null || disabled) return;
     const timer = setTimeout(() => {
@@ -105,7 +113,7 @@ export function useComposerSuggestions({ state, draft, disabled, onChange, onFil
     return false;
   };
   const activeId = (slash !== null ? matches.entries.length : results.length) > 0 ? `${listId}-${activeIndex}` : undefined;
-  return { open, listId, activeId, slash, mention, matches, results, searchPending, activeIndex, setIndex, dismiss, change, onKeyDown, selectSlash, selectMention, request };
+  return { open, listId, activeId, slash, mention, matches, results, searchPending, activeIndex, setIndex, dismiss, change, selectionChange, onKeyDown, selectSlash, selectMention, request };
 }
 
 export function ComposerSuggestions({ suggestions, state }: {

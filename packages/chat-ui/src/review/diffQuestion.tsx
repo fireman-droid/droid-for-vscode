@@ -1,7 +1,6 @@
 import { useI18n } from '../i18n';
 import { createContext, useContext, useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/overlays';
-import { FloatingPanel } from '../ui/floating-panel';
 import type { InlineDiffLine } from './inlineDiffLines';
 import type { DiffRow } from './DiffView';
 
@@ -26,6 +25,8 @@ interface DiffQuestionContextValue {
   active: boolean;
   expanded?: boolean;
   anchor: DiffQuestionAnchor | null;
+  selectionAnchor?: DiffQuestionAnchor | null;
+  triggerContent?: ReactNode;
   select(anchor: DiffQuestionAnchor): void;
   close(): void;
   clearSelection(key: string): void;
@@ -33,18 +34,14 @@ interface DiffQuestionContextValue {
 export const DiffQuestionContext = createContext<DiffQuestionContextValue | null>(null);
 export const DiffQuestionContentContext = createContext<ReactNode>(null);
 
-function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestionAnchor; active: boolean; onDismiss(): void }) {
+function SelectionQuestionTrigger({ anchor, content: overrideContent, onDismiss }: { anchor: DiffQuestionAnchor; content?: ReactNode; onDismiss(): void }) {
   const { t } = useI18n();
-  const content = useContext(DiffQuestionContentContext);
-  const question = useContext(DiffQuestionContext);
+  const contextContent = useContext(DiffQuestionContentContext);
+  const content = overrideContent !== undefined ? overrideContent : contextContent;
   const reference = useMemo(() => ({ current: {
     getBoundingClientRect: () => anchor.range.getBoundingClientRect(),
     contextElement: anchor.range.startContainer.parentElement ?? undefined,
   } }), [anchor]);
-  if (active) return <FloatingPanel anchor={reference.current} title={t("Code question")} onClose={onDismiss}
-    preferredHeight={question?.expanded ? 300 : 132}
-    boundary={reference.current.contextElement?.closest('.review-workbench')} className="review-question-menu"
-    data-diff-question-control="">{content}</FloatingPanel>;
   return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
     <PopoverAnchor virtualRef={reference} />
     <PopoverContent className="review-question-menu rounded-[5px] p-0" data-diff-question-control=""
@@ -52,6 +49,11 @@ function SelectionQuestion({ anchor, active, onDismiss }: { anchor: DiffQuestion
       onOpenAutoFocus={event => event.preventDefault()}
       onCloseAutoFocus={event => event.preventDefault()}>{content}</PopoverContent>
   </Popover>;
+}
+
+function InlineDiffAnnotation() {
+  const content = useContext(DiffQuestionContentContext);
+  return <div className="review-question-row" data-diff-question-control="">{content}</div>;
 }
 
 /** Extract from source rows, never the interleaved before/after DOM text. */
@@ -115,15 +117,21 @@ export function readDiffSelection(root: HTMLElement, path: string, rows: readonl
 
 export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: string, source: string, key: string, rows: readonly DiffRow[] | null, lines: readonly InlineDiffLine[]) {
   const question = useContext(DiffQuestionContext);
+  const active = question?.active === true;
   const anchor = question?.anchor;
-  const current = anchor?.key === key && anchor.source === source ? anchor : null;
+  const selectionAnchor = question?.selectionAnchor;
+  const inlineCurrent = active && anchor?.key === key && anchor.source === source ? anchor : null;
+  const rawFloating = active ? selectionAnchor : anchor;
+  const floatingCurrent = rawFloating?.key === key && rawFloating.source === source ? rawFloating : null;
+  const highlight = floatingCurrent ?? inlineCurrent;
   const select = question?.select;
   const close = question?.close;
   const clearSelection = question?.clearSelection;
   const enabled = question?.enabled;
   useEffect(() => {
     if (anchor?.key === key && anchor.source !== source) close?.();
-  }, [anchor, key, source, close]);
+    if (selectionAnchor?.key === key && selectionAnchor.source !== source) clearSelection?.(key);
+  }, [anchor, selectionAnchor, key, source, close, clearSelection]);
   useEffect(() => {
     const diff = root.current;
     if (!diff || !enabled || !select) return;
@@ -148,7 +156,19 @@ export function useDiffQuestion(root: RefObject<HTMLDivElement | null>, path: st
       diff.ownerDocument.removeEventListener('selectionchange', clearCollapsed);
     };
   }, [root, enabled, select, clearSelection, key, source, path, rows, lines]);
-  return current ? { row: current.row, startRow: current.startRow, side: current.selection.side,
-    floating: <SelectionQuestion anchor={current} active={question?.active === true}
-      onDismiss={() => question?.active ? close?.() : clearSelection?.(key)} /> } : null;
+  return highlight ? {
+    row: (inlineCurrent ?? floatingCurrent)!.row,
+    inlineRow: inlineCurrent?.row ?? null,
+    startRow: highlight.startRow,
+    endRow: highlight.row,
+    side: highlight.selection.side,
+    inline: inlineCurrent ? <InlineDiffAnnotation /> : null,
+    floating: floatingCurrent ? (
+      <SelectionQuestionTrigger
+        anchor={floatingCurrent}
+        content={active ? question?.triggerContent : undefined}
+        onDismiss={() => clearSelection?.(key)}
+      />
+    ) : null,
+  } : null;
 }

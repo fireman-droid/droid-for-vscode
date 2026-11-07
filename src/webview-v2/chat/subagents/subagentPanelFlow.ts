@@ -4,6 +4,8 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
+  useState,
   useSyncExternalStore,
 } from 'react';
 
@@ -12,7 +14,15 @@ import {
   subscribeHostMessages,
   type DecodedHostMessage,
 } from '../../host/hostMessageSource';
+import type { SubagentSnapshotMessage } from '../../../shared/protocol/subagentInspectionProtocol';
 import { type SubagentActivityItem, type SubagentOpenResultMessage } from '../../../shared/protocol/subagentProtocol';
+
+export interface SubagentInspectionState {
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly toolUseId: string;
+  readonly snapshot: SubagentSnapshotMessage | null;
+}
 
 export interface SubagentRowExtras {
   readonly activities: readonly SubagentActivityItem[];
@@ -122,10 +132,33 @@ export function useSubagentPanelFlow(
   readonly activityStore: SubagentActivityStore;
   readonly onPanelToggle: (open: boolean) => void;
   readonly openSubagent: (turnId: string, toolUseId: string) => void;
+  readonly inspection: SubagentInspectionState | null;
+  readonly inspectSubagent: (turnId: string, toolUseId: string) => void;
+  readonly closeInspection: () => void;
 } {
   const activityStore = useMemo(createSubagentActivityStore, []);
+  const portRef = useRef(vscode);
+  portRef.current = vscode;
+  const [inspection, setInspection] = useState<SubagentInspectionState | null>(null);
+  const activeInspection = useRef<{
+    sessionId: string;
+    turnId: string;
+    toolUseId: string;
+    sequence: number;
+  } | null>(null);
   useEffect(() => {
     activityStore.reset();
+    if (activeInspection.current && activeInspection.current.sessionId !== sessionId) {
+      const previous = activeInspection.current;
+      activeInspection.current = null;
+      setInspection(null);
+      portRef.current.postMessage({
+        type: 'subagent.inspect',
+        sessionId: previous.sessionId,
+        turnId: previous.turnId,
+        toolUseId: null,
+      });
+    }
     if (sessionId === null) {
       return undefined;
     }
@@ -140,22 +173,54 @@ export function useSubagentPanelFlow(
           activities: activityStore.get(message.toolUseId)?.activities ?? [],
           openStatus: message.status,
         });
+      } else if (message.type === 'subagent.snapshot') {
+        const current = activeInspection.current;
+        if (
+          current !== null &&
+          message.sessionId === current.sessionId &&
+          message.turnId === current.turnId &&
+          message.toolUseId === current.toolUseId &&
+          message.sequence > current.sequence
+        ) {
+          current.sequence = message.sequence;
+          setInspection({
+            sessionId: current.sessionId,
+            turnId: current.turnId,
+            toolUseId: current.toolUseId,
+            snapshot: message,
+          });
+        }
+      } else if (message.type === 'host.snapshot' && message.sessionId !== sessionId) {
+        activeInspection.current = null;
+        setInspection(null);
       }
     };
     return subscribeHostMessages(handleMessage);
   }, [activityStore, sessionId]);
+  useEffect(() => () => {
+    const current = activeInspection.current;
+    if (current !== null) {
+      activeInspection.current = null;
+      portRef.current.postMessage({
+        type: 'subagent.inspect',
+        sessionId: current.sessionId,
+        turnId: current.turnId,
+        toolUseId: null,
+      });
+    }
+  }, []);
   const onPanelToggle = useCallback(
     (open: boolean): void => {
       if (sessionId !== null) {
-        vscode.postMessage({ type: 'subagent.panel', sessionId, open });
+        portRef.current.postMessage({ type: 'subagent.panel', sessionId, open });
       }
     },
-    [sessionId, vscode],
+    [sessionId],
   );
   const openSubagent = useCallback(
     (turnId: string, toolUseId: string): void => {
       if (sessionId !== null) {
-        vscode.postMessage({
+        portRef.current.postMessage({
           type: 'subagent.open',
           sessionId,
           turnId,
@@ -163,10 +228,53 @@ export function useSubagentPanelFlow(
         });
       }
     },
-    [sessionId, vscode],
+    [sessionId],
+  );
+  const closeInspection = useCallback((): void => {
+    const current = activeInspection.current;
+    if (current === null) return;
+    activeInspection.current = null;
+    setInspection(null);
+    portRef.current.postMessage({
+      type: 'subagent.inspect',
+      sessionId: current.sessionId,
+      turnId: current.turnId,
+      toolUseId: null,
+    });
+  }, []);
+  const inspectSubagent = useCallback(
+    (turnId: string, toolUseId: string): void => {
+      if (sessionId === null) return;
+      const current = activeInspection.current;
+      if (
+        current !== null &&
+        current.sessionId === sessionId &&
+        current.turnId === turnId &&
+        current.toolUseId === toolUseId
+      ) {
+        closeInspection();
+        return;
+      }
+      activeInspection.current = { sessionId, turnId, toolUseId, sequence: -1 };
+      setInspection({ sessionId, turnId, toolUseId, snapshot: null });
+      portRef.current.postMessage({
+        type: 'subagent.inspect',
+        sessionId,
+        turnId,
+        toolUseId,
+      });
+    },
+    [closeInspection, sessionId],
   );
   return useMemo(
-    () => ({ activityStore, onPanelToggle, openSubagent }),
-    [activityStore, onPanelToggle, openSubagent],
+    () => ({
+      activityStore,
+      onPanelToggle,
+      openSubagent,
+      inspection: inspection?.sessionId === sessionId ? inspection : null,
+      inspectSubagent,
+      closeInspection,
+    }),
+    [activityStore, closeInspection, inspectSubagent, inspection, onPanelToggle, openSubagent, sessionId],
   );
 }

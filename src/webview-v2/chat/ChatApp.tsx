@@ -33,7 +33,7 @@ import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import { appendSelectionQuote } from '@droidvisx/chat-ui/chat/selectionQuote';
 import { useBtwPanel } from './btw/useBtwPanel';
 import { SideChatSheet } from './SideChatSheet';
-import { WorkingSubagents } from './WorkingSubagents';
+import { InlineSubagentOverlay, WorkingSubagents } from './WorkingSubagents';
 import { getStatusMessage } from '../shell/statusMessage';
 import { selectVisibleNotice } from '../host/transientDiagnostic';
 import { TransientNotice } from './TransientNotice';
@@ -215,7 +215,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         {footerInteraction ? interaction : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
-        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
@@ -230,6 +230,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         </div>
       </>}
       overlay={<>
+      {subagents.inspection ? <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} /> : null}
       {transition.overlay !== null && state.transcript.length === 0 ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
         handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} /> : null}
       </>}>

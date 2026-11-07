@@ -2,14 +2,14 @@ import { MAX_TURN_TEXT_LENGTH } from '../../shared/protocol/bounds';
 import { type ChangedFileSummary } from '../../shared/protocol/transcript';
 import { type TurnStatus } from '../../shared/protocol/turns';
 import { MAX_QUEUED_MESSAGES } from '../../shared/protocol/queueProtocol';
-import { transcriptItemTextUnits } from '../../shared/transcript/transcriptLimits';
 import {
   MAX_RECOVERY_TEXT_UNITS,
   parseConversationRecoveryState,
+  recoveryTextUnits,
 } from './conversationRecoveryParser';
 import { conversationMetadata, recoveryTurnMetadata, withoutCachedHistory } from './conversationMetadata';
 import type { ConversationImageArtifactStore } from './conversationImageArtifacts';
-import { mergeToolOperations } from './operationEvidenceState';
+import { compactOldestOperationBody, mergeToolOperations } from './operationEvidenceState';
 import { workspaceOperationDiff } from '../../shared/protocol/operationDiff';
 import {
   CONVERSATION_RECOVERY_VERSION,
@@ -45,6 +45,10 @@ export interface SessionRecoveryPersistence {
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
+type RecoveryStorage = Omit<SessionRecoveryPersistence, 'get'> & {
+  get<T>(key: string): T | undefined | PromiseLike<T | undefined>;
+};
+
 export type SessionRecoveryCache = HostTranscriptState;
 
 export class SessionRecoveryStore {
@@ -62,7 +66,7 @@ export class SessionRecoveryStore {
   private disposed = false;
 
   constructor(
-    private readonly persistence: SessionRecoveryPersistence,
+    private readonly persistence: RecoveryStorage,
     private readonly storageKey = SESSION_RECOVERY_STORAGE_KEY,
     private readonly debounceMs = SESSION_RECOVERY_DEBOUNCE_MS,
     _imageArtifacts: ConversationImageArtifactStore | null = null,
@@ -72,9 +76,9 @@ export class SessionRecoveryStore {
     if (this.disposed) {
       return;
     }
-    const parsed = parseConversationRecoveryState(
-      withoutCachedHistory(this.persistence.get<unknown>(this.storageKey)),
-    );
+    const saved = await this.persistence.get<unknown>(this.storageKey);
+    if (this.disposed) return;
+    const parsed = parseConversationRecoveryState(withoutCachedHistory(saved));
     this.conversations.clear();
     this.sessionOwners.clear();
     this.selectedConversationId = parsed?.selectedConversationId ?? null;
@@ -549,40 +553,11 @@ export class SessionRecoveryStore {
     while (this.conversations.size > MAX_RECOVERY_CONVERSATIONS) {
       this.evictLeastRecentlyUsed();
     }
-    while (this.totalTextUnits() > MAX_RECOVERY_TEXT_UNITS) {
-      const leastRecent = this.sortedConversations()[0];
-      if (leastRecent === undefined) {
-        break;
-      }
-      const transcript = leastRecent.display.transcript.transcript;
-      if (transcript.length === 0) {
-        this.deleteConversation(leastRecent.conversationId);
-        continue;
-      }
-      const next = writeConversationDisplay(
-        leastRecent,
-        leastRecent.activeSessionId,
-        {
-          transcript: transcript.slice(1),
-          historyStatus: 'partial',
-          truncated: true,
-        },
-        leastRecent.lastAccess,
-      );
-      if (next === undefined) {
-        this.deleteConversation(leastRecent.conversationId);
-      } else {
-        this.storeConversation(next);
-      }
+    while (recoveryTextUnits([...this.conversations.values()]) > MAX_RECOVERY_TEXT_UNITS) {
+      const next = this.sortedConversations().map(compactOldestOperationBody).find(value => value !== undefined);
+      if (!next) throw new Error('Recovery evidence exceeded its budget without a reclaimable body.');
+      this.storeConversation(next);
     }
-  }
-
-  private totalTextUnits(): number {
-    let total = this.selectedConversationId?.length ?? 0;
-    for (const conversation of this.conversations.values()) {
-      total += conversationTextUnits(conversation);
-    }
-    return total;
   }
 
   private evictLeastRecentlyUsed(): void {
@@ -657,52 +632,6 @@ function sanitizeQueuedTexts(texts: readonly unknown[]): readonly string[] {
     safe.push(text);
   }
   return safe;
-}
-
-function conversationTextUnits(conversation: ConversationRecoveryRecord): number {
-  let total =
-    conversation.conversationId.length +
-    conversation.activeSessionId.length +
-    conversation.display.transcript.historyStatus.length;
-  for (const item of conversation.display.transcript.transcript) {
-    total += transcriptItemTextUnits(item);
-  }
-  for (const node of conversation.nodes) {
-    total +=
-      node.sessionId.length +
-      (node.parentConversationId?.length ?? 0) +
-      (node.parentSessionId?.length ?? 0) +
-      (node.anchorTurnId?.length ?? 0);
-  }
-  for (const turn of conversation.turns) {
-    total +=
-      turn.turnId.length +
-      turn.sessionId.length +
-      (turn.prompt?.length ?? 0) +
-      (turn.messageId?.length ?? 0);
-    for (const file of turn.files) {
-      total += file.path.length;
-    }
-    for (const operation of turn.toolOperations ?? []) {
-      total += operation.toolUseId.length + operation.toolName.length;
-      if (operation.operationDiff.status === 'ready') {
-        total +=
-          (operation.operationDiff.callId?.length ?? 0) +
-          (operation.operationDiff.sourceSessionId?.length ?? 0);
-        for (const file of operation.operationDiff.files) {
-          total +=
-            file.path.length +
-            (file.previousPath?.length ?? 0) +
-            file.patch.length +
-            (file.submittedContent?.length ?? 0) +
-            (file.message?.length ?? 0);
-        }
-      }
-    }
-  }
-  // Unsent prompts have their own bound: 10 prompts of at most 200,000
-  // characters per conversation. They must not evict recovery metadata.
-  return total;
 }
 
 function isRecoveryId(value: string): boolean {

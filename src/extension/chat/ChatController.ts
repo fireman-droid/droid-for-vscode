@@ -93,6 +93,7 @@ import { SessionDirectoryState } from './sessions/SessionDirectoryState';
 import { SessionLifecycleState } from './sessions/SessionLifecycleState';
 import { SessionWorkspaceContext } from './sessions/SessionWorkspaceContext';
 import { clearZombieSubagentWatch } from './subagents/subagentWatch';
+import { cancelSubagentInspection } from './subagents/subagentInspection';
 import { SubagentWatchState } from './subagents/SubagentWatchState';
 import { projectTranscript } from './turns/turnRuntimeEvents';
 import { TurnState } from './turns/TurnState';
@@ -346,6 +347,7 @@ export class ChatController {
     }
     checkpointRecoveryTranscript(this);
     this.connectionMaintenance.dispose();
+    cancelSubagentInspection(this.sessionState);
     this.interactions.cancelAll();
     this.btwSideChat?.reset();
     this.sharedServicesSubscription?.dispose();

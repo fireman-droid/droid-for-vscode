@@ -5,21 +5,20 @@ import { InlineQuestion, type InlineQuestionEntry } from '../../src/review/Inlin
 
 afterEach(cleanup);
 
-it('follows new content in the shared viewport until the reader scrolls up, then resumes after sending', () => {
+it('follows new content in the question thread until the reader scrolls up, then resumes after sending', () => {
   const onSend = vi.fn();
   const props = { draft: 'Follow up', onDraft: vi.fn(), busy: false, disabled: false, message: null,
     onSend, onStop: vi.fn(), onClose: vi.fn(), maxLength: 4000, focusRequested: false, onFocused: vi.fn() };
-  const entries: InlineQuestionEntry[] = [];
-  const view = render(<InlineQuestion {...props} entries={entries} />);
-  const viewport = view.container.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')!;
+  const first: InlineQuestionEntry = { id: '1', question: 'Explain this code', answer: '', state: 'streaming', message: null };
+  const view = render(<InlineQuestion {...props} entries={[first]} />);
+  const viewport = view.container.querySelector<HTMLElement>('.review-question-thread')!;
   let height = 400, top = 0;
   Object.defineProperties(viewport, {
     clientHeight: { configurable: true, get: () => 100 },
     scrollHeight: { configurable: true, get: () => height },
     scrollTop: { configurable: true, get: () => top, set: value => { top = Math.max(0, Math.min(value, height - 100)); } },
   });
-  const first: InlineQuestionEntry = { id: '1', question: 'Explain this code', answer: '', state: 'streaming', message: null };
-  view.rerender(<InlineQuestion {...props} entries={[first]} />);
+  view.rerender(<InlineQuestion {...props} entries={[{ ...first, answer: 'A streamed explanation' }]} />);
   expect(viewport.scrollTop).toBe(300);
   viewport.scrollTop = 100;
   fireEvent.scroll(viewport);

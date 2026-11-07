@@ -214,6 +214,9 @@ flowchart TD
 
 - `chat/sessions/` 管理启动、目录、切换和 Runtime 生命周期；`startupTarget.ts`
   处理已选目标不在最近目录中的情况，不因“最近 50 条没有”就断言会话不存在。
+  `runtimeLifecycle.ts` 在首次初始化失败时核对 Promise、Runtime 代次与工作区归属，清除本次占位并发布不可用状态；
+  后续 ready 可重新读取恢复状态。`dispatchChatMessage.ts` 只在尚无 Runtime 的初始化失败状态将 Retry 接回该入口，
+  已有 Runtime 的重试仍走原连接恢复路径，不重发 prompt。
 - `SessionWorkspaceContext` 分开保存编辑器窗口目录与所选聊天目录。管理页恢复只接受
   已加载目录中的 ID，并按记录目录重新校验；`getWorkspaceContext()` 随聊天绑定，
   供发送、重试、侧聊、历史和文件适配使用，`getEditorWorkspaceContext()` 用于管理页
@@ -223,11 +226,17 @@ flowchart TD
   前置失败保留旧绑定，目标加载失败保留目标绑定，重试不混用两个目录的会话 ID。
 - `chat/recovery/activationTranscript.ts` 装配历史与 Conversation 关联，
   `runtime/history/` 从 Droid 读取并投影；`recovery.ts` 处理已运行轮次的后续对账和检查点。
+  `chat/recovery/recoveryTurnProjection.ts` 统一投影本地 turn ID、backend turn ID、状态和错误，
+  由 `recovery.ts` 与 `changes/publishTurnChanges.ts` 共用，避免迟到的旧轮 Changes 回填丢掉当前轮后台身份。
 - Runtime 和权威历史都就绪后才能接管并开放发送；加载期间工作区或代次变化，
   旧候选必须释放，不能覆盖用户刚选择的新会话。关闭失败保留失败事实，允许重试。
 - `SessionRecoveryStore` 持久化的是扩展专属元数据：选择、节点关联、未发队列、
   轮次/Changes 索引、有界操作证据与恢复标记，不是另一份聊天全文或图片缓存。
   历史正文从 Droid 来；旧 display payload 不参与按位置拼接。
+  writer 与 `conversationRecoveryParser.ts` 共用 `recoveryTextUnits()`，正文预算仅统计历史文本和 inline 操作正文；
+  身份、节点、队列继续按字段与结构上限校验，不随正文预算删除整份 Conversation。
+  `operationEvidenceState.ts` 优先压缩最旧 inline 正文：可信工具结果复用 `operationBodyReference.ts`
+  生成绑定原 source session／call／file 的摘要引用，无来源则标记 `unavailable/evicted`，不保留虚假 ready 状态。
 - Compact/Handoff 可换 backend session 而保留同一 Conversation；Fork/Rewind
   建立新 Conversation。历史用 SDK 消息 ID 接回本地轮次/Diff 索引，不能靠相似正文认领。
 - 轮次 `sessionId` 是执行与文件快照来源；Fork/Rewind 中继承的轮次可以指向父
@@ -388,6 +397,9 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
   `hash-object --no-filters` 避免 clean filter／换行转换；旧记录保留原有部分覆盖语义。
   工具启动通知只预热已保存的基线，恢复中的会话也不能从当前磁盘补造 before。
   `workspaceTurnLease.ts` 按真实目录在窗口间排队，持有到 after 采集结束；等待可以取消。
+  `clearTurn()` 取消 preparation；`consumeTurn()` 的 finally 只在尚未调用 Runtime 发送时，
+  通过 `discardPreparation()` 排入快照存储队列，释放原 scope 的 retain 与 lease，不补造 after。
+  即使 dispatch reservation 已持久化，未进入 Runtime 的准备仍按此路径回收；释放失败明确发布诊断。
   Host 退出时保留已发送轮次的目录归属，恢复原会话并确认结束后收尾，不以 Host PID 消失判断后台停止。
   收尾采集失败会显示记录不完整；失去原采集窗口后不能重读当前文件冒充历史 after。
   快照说明文件变化，不证明作者。无原始基线不回退 HEAD，忽略且未捕获的文件不当空文件。
@@ -456,6 +468,9 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - Mission 的权限/AskUser 回调在创建 retained handle 前接好，初始化完成才转交 owner；
   失败时 detach 临时 handle，不夺走原聊天审批或关闭用户后台。目录使用公开分页与
   正式 Mission tag 匹配会话，元数据 ID 不能直接当恢复 sessionId。
+  `chat/mission/controller.ts` 从 start 到候选接管及 recovery flush 持有 `sessionOperationInProgress`，
+  并复核没有活动 turn 且 `turnGeneration` 未变。内部首条任务发送前同步释放本次准入，finally 幂等释放；
+  失败或迟到候选不重放被拒绝的普通发送，仍沿原清理路径释放临时 handle。
 - Mission snapshot 订阅独立于聊天 turn，随 retained session 切换；页面重载重放真实
   进度，模型目录更新只合并设置能力，不覆盖 Feature/Worker 内容。控制请求绑定版本，
   “接受请求”不能当作“动作已完成”。
@@ -634,8 +649,17 @@ RecommendMission 复用任务确认卡。默认设置仍只开放应用现有字
 未编辑的旧连接仍可读取旧 ID 槽，接口内新密钥已保存但元数据失败时明确反馈部分成功。
 
 daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
-该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
-查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+该 ID 原样传入 `addUserMessage.messageId`，断线恢复用公开 `getSessionTurnOutcome`
+按 sessionId／turnId 查询持久结果，不借 `loadSession` 唤醒会话或刷新元数据。
+`unavailable` 保持未知；超时、取消及旧 daemon 不支持查询时交由 Host 既有未确认边界处理，
+不回退加载。查询前后保留会话附着校验，Host 丢弃会话／回合切换后的迟到结果。
+待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+
+连接使用公开 `createWebSocketDaemonClient`，在注入 `DaemonSessionController` 前仅适配
+该客户端的 `loadSession`，统一设置 `loadAllMessages: false`，覆盖 controller 内部的子会话
+hydration 与恢复加载；不访问 controller 私有字段。保留 `defaultMessageLimit: 100` 和调用者
+显式 messageLimit，其余认证、连接、订阅与销毁仍使用同一个 SDK 客户端及 controller 生命周期。
+UI 历史另走游标分页，默认条数本身不替代关闭全量历史加载的策略。
 
 历史记录追加使用 SDK 公开低层 Process 客户端，在 Host 空闲操作锁内关闭、追加并恢复
 原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开

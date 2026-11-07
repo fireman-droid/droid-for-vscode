@@ -9,6 +9,7 @@ import { useTranscriptScroll } from './useTranscriptScroll';
 import { ProcessPresentationProvider } from './processPresentation';
 import { findActiveQuestionIndex, isScrollableTranscript, questionPreview } from '../navigation/questionNavigation';
 import { QuestionNavigator } from './QuestionNavigator';
+import { ChatNavigationPortal } from './ChatLayout';
 import { SelectionToolbar } from './SelectionToolbar';
 import { hasQuestionEntered, questionEntryOffset } from '../navigation/questionEntryBoundary';
 import { hasTranscriptSelection, selectedTurnIndexes, useTranscriptSelection } from './transcriptSelection';
@@ -196,6 +197,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const nextMinHeight = `${minColumnHeight}px`;
     if (column.style.minHeight !== nextMinHeight) column.style.minHeight = nextMinHeight;
     if (spacer.style.height !== '0px') spacer.style.height = '0px';
+    // Keep the same runway/target, but let the send transition reach it.
+    if (scrolling.sendBehavior.current === 'smooth') return nextHeight;
     if (pinnedAtTop.current) {
       // Runway height changes with every streamed line, so layout stability can
       // never decide whether the reader left the pin. Compare against the pin
@@ -413,7 +416,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         </div>
         <div data-pinned-top-mask="" aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background" style={{ height: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} />
       </>}
-      {showNavigator ? <QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /> : null}
+      {showNavigator ? <ChatNavigationPortal><QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /></ChatNavigationPortal> : null}
       {onQuote ? <SelectionToolbar viewport={viewport} selectionRoot={selectionRoot} onQuote={onQuote} onBtwQuote={onBtwQuote} /> : null}
       {scrolling.away || paging?.hasNewer ? (
         <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")} className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>

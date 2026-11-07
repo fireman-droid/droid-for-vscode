@@ -57,9 +57,22 @@ export function prepareCompletionWithOutcome(
   // The provider supplies the model to enable Kilo's model/language-aware pipeline.
   if (!model) return { text, outcome: 'suggestion-returned' };
   const eol = text.includes('\r\n') || prefix.includes('\r\n') ? '\r\n' : '\n';
+  // A deeper closing line can close an inner scope before the matching outer suffix.
+  if (!allowsFences && isInnerClosingLine(text, prefix, suffix)) {
+    return { text: text.replace(/\r?\n/g, eol), outcome: 'suggestion-returned' };
+  }
   const processed = postprocessAutocompleteSuggestionWithOutcome({ suggestion: text.replace(/\r\n/g, '\n'),
     prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model, onDecision });
   return { ...processed, text: processed.text.replace(/\n/g, eol) };
+}
+
+function isInnerClosingLine(text: string, prefix: string, suffix: string): boolean {
+  const currentLine = prefix.slice(prefix.lastIndexOf('\n') + 1);
+  const closing = /^([ \t]*)([}\])])[ \t]*(?:\r?\n)?$/.exec(text);
+  const outer = /^\r?\n([ \t]*)([}\])])/.exec(suffix);
+  if (!closing || !outer || closing[2] !== outer[2] || !/^[ \t]*$/.test(currentLine)) return false;
+  const indentation = currentLine + closing[1];
+  return indentation.startsWith(outer[1]) && indentation.length > outer[1].length;
 }
 
 export type CachedCompletion = {

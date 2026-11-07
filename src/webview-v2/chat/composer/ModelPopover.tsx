@@ -1,5 +1,5 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link2, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -54,6 +54,7 @@ export function ModelPopover({
   const [query, setQuery] = useState('');
   const [editingReasoning, setEditingReasoning] = useState(false);
   const [view, setView] = useState<'root' | 'spec'>('root');
+  const listRef = useRef<HTMLDivElement>(null);
   const { mode: sourceMode } = useModelSource();
   const confirmed = settings?.value;
   const isSpecView = settings !== undefined && view === 'spec';
@@ -93,6 +94,18 @@ export function ModelPopover({
     if (isSpecView) onUpdate({ field: 'specModeReasoningEffort', value: effort });
     else if (effort !== null) onUpdate({ field: 'reasoningEffort', value: effort });
   };
+
+  useLayoutEffect(() => {
+    if (editingReasoning || modelCatalog.status !== 'ready' || query.trim()) return;
+    const container = listRef.current;
+    const active = container?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!container || !active) return;
+    const top = active.offsetTop - container.offsetTop;
+    const bottom = top + active.offsetHeight;
+    if (top < container.scrollTop || bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = Math.max(0, top - Math.floor((container.clientHeight - active.offsetHeight) / 2));
+    }
+  }, [editingReasoning, modelCatalog.status, rowMatchId, sourceMode, view]);
 
   if (editingReasoning && selected !== undefined) {
     return (
@@ -172,6 +185,7 @@ export function ModelPopover({
               />
             </div>
             <div
+              ref={listRef}
               className="dvx-model-list"
               role="list"
               aria-label={isSpecView ? t("Spec drafting models") : t("Available models")}

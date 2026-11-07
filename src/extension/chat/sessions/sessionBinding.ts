@@ -6,6 +6,7 @@ import type { ConversationRecoveryState } from '../recovery/ConversationRecovery
 import type { TurnState } from '../turns/TurnState';
 import type { SessionDirectoryState } from './SessionDirectoryState';
 import type { SessionLifecycleState } from './SessionLifecycleState';
+import { cancelSubagentInspection } from '../subagents/subagentInspection';
 
 interface SessionIdentity {
   readonly sessionId: string | null;
@@ -22,6 +23,9 @@ interface SessionBindingPort {
 
 /** Identity always moves as a pair, including an unavailable resume target. */
 export function bindSessionIdentity(ctl: Pick<SessionBindingPort, 'sessionState'>, identity: SessionIdentity): void {
+  if (ctl.sessionState.sessionId !== identity.sessionId || ctl.sessionState.conversationId !== identity.conversationId) {
+    cancelSubagentInspection(ctl.sessionState);
+  }
   ctl.sessionState.sessionId = identity.sessionId;
   ctl.sessionState.conversationId = identity.conversationId;
 }

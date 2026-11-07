@@ -27,9 +27,10 @@ export interface ControllerPort
       | 'runtime'
       | 'runtimeGeneration'
       | 'activeRuntimeCwd'
+      | 'sessionOperationInProgress'
     >;
   readonly catalogState: Pick<SessionDirectoryState, 'sessions'>;
-  readonly turnState: Readonly<Pick<TurnState, 'turn'>>;
+  readonly turnState: Readonly<Pick<TurnState, 'turn' | 'turnGeneration'>>;
   readonly recoveryState: Pick<ConversationRecoveryState, 'transcript'>;
   readonly missionState: Pick<
     MissionSessionState,

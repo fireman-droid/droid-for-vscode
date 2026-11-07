@@ -8,7 +8,8 @@ import { Switch } from '../ui/controls';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { MissionSelect } from './MissionSelect';
 import { ModelSourceSelect } from '../models/ModelSourceSelect';
-import { ChevronDown, LoaderCircle, Network, Play, SlidersHorizontal, Target } from 'lucide-react';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
+import { ChevronDown, LoaderCircle, Play } from 'lucide-react';
 
 const effortLabel = (value: string) => value === 'xhigh' ? 'Extra high' : value.charAt(0).toUpperCase() + value.slice(1);
 
@@ -21,30 +22,29 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
   useEffect(() => { taskInput.current?.focus({ preventScroll: true }); }, []);
   const inheritedProfiles = flow.worker.mode === 'same-as-orchestrator' && flow.validator.mode === 'same-as-orchestrator';
   return <section aria-label={t("Mission brief")} className="v2-mission-setup @container">
-    <div className="v2-mission-setup-body">
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="overscroll-contain"><div className="v2-mission-setup-body">
       {notice}
       <section className="v2-mission-setup-section">
-        <SectionHeading icon={<Target />} title={t("Mission goal")} detail={t("What should be delivered? Include any constraints.")} />
+        <SectionHeading title={t("Mission goal")} detail={t("What should be delivered? Include any constraints.")} />
         <Textarea ref={taskInput} aria-label={t("Mission task")} rows={4} className="v2-mission-task" value={flow.task} maxLength={MAX_MISSION_TASK_LENGTH} disabled={flow.controlsDisabled}
           onChange={(event) => flow.setTask(event.target.value)} placeholder={t("For example: build the onboarding flow, with empty states and error recovery.")} />
         <p data-ui-notice="" className="v2-mission-task-meta"><span>{t("A clear outcome helps Droid plan the work.")}</span><span>{flow.task.length.toLocaleString()} / {MAX_MISSION_TASK_LENGTH.toLocaleString()}</span></p>
       </section>
       <section className="v2-mission-setup-section v2-mission-orchestrator">
-        <SectionHeading icon={<Network />} title={t("Orchestrator")} detail={t("Plans the work and coordinates Workers.")} />
+        <SectionHeading title={t("Orchestrator")} detail={t("Plans the work and coordinates Workers.")} />
         <PairFields name="Orchestrator" pair={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setOrchestrator} />
         <p data-ui-notice="" className="text-xs text-muted-foreground">{t("默认沿用当前聊天的模型和推理强度；可在这里分别调整，启动 Mission 时应用。")}</p>
       </section>
       <Collapsible className="v2-mission-execution" open={advanced} onOpenChange={setAdvanced} disabled={flow.controlsDisabled}>
         <CollapsibleTrigger asChild><Button variant="plain" className="v2-mission-settings-trigger flex items-center text-muted-foreground hover:text-foreground" aria-label={t("Advanced Mission settings")} disabled={flow.controlsDisabled}>
-          <SlidersHorizontal aria-hidden="true" className="v2-mission-section-icon" />
-          <span className="min-w-0 flex-1"><span className="block font-medium">{t("Execution settings")}</span><span className="block text-xs font-normal text-muted-foreground">{inheritedProfiles ? t("Worker & Validator inherit Orchestrator") : t("Custom Worker / Validator profiles")}</span><span className="block text-xs font-normal text-muted-foreground">{flow.enabledValidationCount} {flow.enabledValidationCount === 1 ? t("check") : t("checks")} {t("enabled")}</span></span>
+          <span data-ui-notice="" className="min-w-0 flex-1"><span className="block font-medium">{t("Execution settings")}</span><span className="mt-1 block text-xs font-normal text-muted-foreground">{inheritedProfiles ? t("Worker & Validator inherit Orchestrator") : t("Custom Worker / Validator profiles")} · {flow.enabledValidationCount} {flow.enabledValidationCount === 1 ? t("check") : t("checks")} {t("enabled")}</span></span>
           <ChevronDown aria-hidden="true" className="v2-mission-settings-chevron" />
         </Button></CollapsibleTrigger>
         <CollapsibleContent className="v2-mission-settings-content">
           <div className="v2-mission-settings-fields">
             <ProfileFields name="Worker" profile={flow.worker} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setWorker} />
             <ProfileFields name="Validator" profile={flow.validator} orchestrator={flow.orchestrator} capabilities={capabilities} disabled={flow.controlsDisabled} onChange={flow.setValidator} />
-            <fieldset className="v2-mission-checks min-w-0"><legend className="font-medium">{t("Validation checks")}</legend>
+            <fieldset className="v2-mission-checks min-w-0"><legend data-ui-notice="" className="font-medium">{t("Validation checks")}</legend>
               <p data-ui-notice="" className="mt-1 mb-3 text-xs text-muted-foreground">{t("Both checks use the shared Validator profile configured above.")}</p>
               <MissionToggle label={t("Run Scrutiny")} description={t("Review the completed feature for implementation risks.")} checked={flow.scrutinyEnabled} disabled={flow.controlsDisabled} onChange={flow.setScrutinyEnabled} />
               <MissionToggle label={t("Run User Testing")} description={t("Validate the finished flow through its user-facing surface.")} checked={flow.userTestingEnabled} disabled={flow.controlsDisabled} onChange={flow.setUserTestingEnabled} />
@@ -52,9 +52,9 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </div>
+    </div></ScrollArea>
     <footer className="v2-mission-setup-actions">
-      <p role="status" aria-live="polite" aria-label={t("Mission setup status")} className={`v2-mission-setup-feedback ${flow.visibleErrors.length > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{t(flow.status || startHint || '')}</p>
+      <p role="status" data-ui-notice="" aria-live="polite" aria-label={t("Mission setup status")} className={`v2-mission-setup-feedback ${flow.visibleErrors.length > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{t(flow.status || startHint || '')}</p>
       <div className="flex items-center justify-between gap-2">
         <Button variant="ghost" aria-label={t("Dismiss Mission setup")} disabled={flow.controlsDisabled} onClick={onDismiss}>{t("Cancel setup")}</Button>
         <Button disabled={flow.pending || startDisabled || flow.validation.errors.length > 0} onClick={flow.submit}>{flow.pending ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <Play />}{flow.pending ? t("Starting…") : t("Start Mission")}</Button>
@@ -63,9 +63,9 @@ export function MissionSetup(props: MissionSetupProps & { readonly startHint?: s
   </section>;
 }
 
-function SectionHeading({ icon, title, detail }: { readonly icon: ReactNode; readonly title: string; readonly detail: string }) {
-  return <header className="v2-mission-section-heading"><span aria-hidden="true" className="v2-mission-section-icon">{icon}</span>
-    <div className="min-w-0"><h2 className="font-medium">{title}</h2><p data-ui-notice="" className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
+function SectionHeading({ title, detail }: { readonly title: string; readonly detail: string }) {
+  return <header data-ui-notice="" className="min-w-0">
+    <h2 className="font-medium">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{detail}</p>
   </header>;
 }
 
@@ -83,7 +83,7 @@ function PairFields({ name, pair, capabilities, disabled, onChange }: {
   return <div className="mission-pair">
     <div className="grid min-w-0 gap-1.5 text-xs">
     <span data-ui-notice="" className="text-muted-foreground">{t('{p0} model', { p0: t(name) })}</span>
-    <ModelSourceSelect label={t("{p0} model", { p0: t(name) })} value={pair.modelId || undefined} models={modelOptions}
+    <ModelSourceSelect label={t("{p0} model", { p0: t(name) })} value={pair.modelId || undefined} models={modelOptions} align="start"
       disabled={disabled} onChange={(modelId) => {
         const selected = capabilities.catalog.find((item) => item.id === modelId);
         onChange({ modelId, reasoningEffort: selected?.supportedReasoningEfforts.includes(pair.reasoningEffort)
@@ -102,7 +102,7 @@ function ProfileFields({ name, profile, orchestrator, capabilities, disabled, on
   readonly disabled: boolean; readonly onChange: (value: MissionProfile) => void;
 }) {
   const { t } = useI18n();
-  return <fieldset className="v2-mission-profile min-w-0"><legend className="font-medium">{t(name)}</legend>
+  return <fieldset className="v2-mission-profile min-w-0"><legend data-ui-notice="" className="font-medium">{t(name)}</legend>
     <div className="v2-mission-profile-fields">
     <p data-ui-notice="" className="text-xs text-muted-foreground">{name === 'Worker' ? t("Executes one feature at a time under the Orchestrator.") : t("Provides the shared profile for all quality checks.")}</p>
     <MissionSelect label={t("{p0} inheritance", { p0: t(name) })} fieldLabel={t('Configuration')} value={profile.mode} disabled={disabled}
@@ -117,8 +117,8 @@ function MissionToggle({ label, description, checked, disabled, onChange }: {
   readonly label: string; readonly description: string; readonly checked: boolean;
   readonly disabled: boolean; readonly onChange: (value: boolean) => void;
 }) {
-  return <label className="v2-mission-toggle relative flex items-center gap-3 rounded-md px-2 py-3">
-    <span className={`min-w-0 flex-1 ${disabled ? 'opacity-50' : ''}`}><strong className="block font-medium">{label}</strong><small className="mt-1 block text-xs text-muted-foreground">{description}</small></span>
+  return <label className="v2-mission-toggle relative flex items-center gap-3 py-2">
+    <span data-ui-notice="" className={`min-w-0 flex-1 ${disabled ? 'opacity-50' : ''}`}><strong className="block font-medium">{label}</strong><small className="mt-1 block text-xs text-muted-foreground">{description}</small></span>
     <Switch aria-label={label} checked={checked} disabled={disabled} onCheckedChange={onChange} />
   </label>;
 }

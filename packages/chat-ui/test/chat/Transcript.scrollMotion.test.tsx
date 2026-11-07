@@ -23,12 +23,14 @@ function transcript(reducedMotion = false, runway = 0) {
   });
   viewport.scrollTo = ({ top }: ScrollToOptions) => { viewport.scrollTop = Number(top); };
   const viewportRef = { current: viewport }, columnRef = { current: column }, syncRunway = () => runway;
-  const { result, rerender } = renderHook(({ editing }) =>
-    useTranscriptScroll(viewportRef, columnRef, 'history', 0, undefined, undefined, editing, syncRunway),
-  { initialProps: { editing: false } });
+  const { result, rerender } = renderHook(({ editing, conversationId, sendSignal }) =>
+    useTranscriptScroll(viewportRef, columnRef, conversationId, sendSignal, undefined, undefined, editing, syncRunway),
+  { initialProps: { editing: false, conversationId: 'history', sendSignal: 0 } });
   act(() => { result.current.stopFollowing(); viewport.scrollTop = 100; fireEvent.scroll(viewport); });
   return {
-    viewport, result, frames, setEditing: (editing: boolean) => rerender({ editing }),
+    viewport, result, frames, setEditing: (editing: boolean) => rerender({ editing, conversationId: 'history', sendSignal: 0 }),
+    setSendSignal: (sendSignal: number) => rerender({ editing: false, conversationId: 'history', sendSignal }),
+    setConversation: () => rerender({ editing: false, conversationId: 'another', sendSignal: 0 }),
     frame: () => act(() => {
       const pending = [...frames.values()]; frames.clear(); time += 16;
       pending.forEach((callback) => callback(time));
@@ -78,6 +80,75 @@ it('honors reduced motion when returning to the latest reply', () => {
   act(() => chat.result.current.scrollToBottom());
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(1600);
+});
+
+it('eases one prepared send over 200ms without restarting for confirmation or snapping on resize', () => {
+  const chat = transcript();
+  act(() => chat.result.current.prepareForSend());
+  expect(chat.viewport.scrollTop).toBe(100);
+  act(() => chat.result.current.followNewQuestion());
+  expect(chat.viewport.scrollTop).toBe(100);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBeGreaterThan(100);
+  expect(chat.viewport.scrollTop).toBeLessThan(1600);
+  for (let index = 0; index < 4; index += 1) chat.frame();
+  const during = chat.viewport.scrollTop;
+  chat.resize(450, 2200);
+  expect(chat.viewport.scrollTop).toBe(during);
+  act(() => chat.result.current.followNewQuestion());
+  expect(chat.viewport.scrollTop).toBe(during);
+  for (let index = 0; index < 8; index += 1) chat.frame();
+  expect(chat.viewport.scrollTop).toBe(1750);
+  expect(chat.result.current.sendBehavior.current).toBeNull();
+  for (let index = 0; index < 5; index += 1) chat.frame();
+  chat.resize(450, 2400);
+  expect(chat.viewport.scrollTop).toBe(1750);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBeGreaterThan(1750);
+  expect(chat.viewport.scrollTop).toBeLessThan(1950);
+});
+
+it('does not replay sends for queue-only signals or conversation changes', () => {
+  const chat = transcript();
+  chat.setSendSignal(1);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBe(100);
+  act(() => chat.result.current.followNewQuestion());
+  expect(chat.viewport.scrollTop).toBe(1600);
+  act(() => chat.result.current.prepareForSend());
+  chat.setConversation();
+  expect(chat.result.current.sendBehavior.current).toBeNull();
+  expect(chat.viewport.scrollTop).toBe(1600);
+});
+
+it('places a prepared new question immediately when reduced motion is enabled', () => {
+  const chat = transcript(true);
+  act(() => { chat.result.current.prepareForSend(); chat.result.current.followNewQuestion(); });
+  expect(chat.viewport.scrollTop).toBe(1600);
+  expect(chat.result.current.sendBehavior.current).toBeNull();
+});
+
+it.each([
+  ['wheel', false], ['keyboard', false], ['touch', false],
+  ['wheel', true], ['keyboard', true], ['touch', true],
+] as const)('cancels a send transition on %s (external overlay: %s) without resuming after layout changes', (gesture, external) => {
+  const chat = transcript();
+  const target = external ? document.createElement('nav') : chat.viewport;
+  if (external) document.body.append(target);
+  const release = external ? chat.result.current.wheelOverlayRef(target) : undefined;
+  chat.viewport.scrollBy = ({ top }: ScrollToOptions) => { chat.viewport.scrollTop += Number(top); };
+  act(() => { chat.result.current.prepareForSend(); chat.result.current.followNewQuestion(); });
+  chat.frame();
+  if (gesture === 'wheel') fireEvent.wheel(target, { deltaY: -120 });
+  if (gesture === 'keyboard') fireEvent.keyDown(target, { key: 'PageUp' });
+  if (gesture === 'touch') fireEvent.pointerDown(target, { pointerType: 'touch' });
+  const stopped = chat.viewport.scrollTop;
+  chat.resize(450, 2400);
+  chat.frame();
+  expect(chat.viewport.scrollTop).toBe(stopped);
+  expect(chat.result.current.follow.current.following).toBe(false);
+  expect(chat.result.current.sendBehavior.current).toBeNull();
+  release?.();
 });
 
 it('marks the transcript as scrolled away when wheeling up during an active pin runway', () => {

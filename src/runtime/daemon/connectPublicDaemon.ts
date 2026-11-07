@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  createWebSocketDaemonClient,
   DaemonSessionController,
   LOCAL_MACHINE_ID,
   MachineType,
@@ -34,9 +35,21 @@ export async function connectPublicDaemon(
 ): Promise<DaemonApi> {
   const state = new MultiSessionStateManager();
   const missions = new MultiMissionStateManager();
+  const getAccessToken = options.getAccessToken ?? (async () => options.auth.apiKey);
+  const daemonClient = createWebSocketDaemonClient({
+    machineType: MachineType.Local,
+    getAccessToken,
+    requestTimeout: 120000,
+  });
+  // UI history is cursor-paged separately. The SDK controller requests all
+  // messages for SDK clients, including its internal child hydration loads.
+  // Adapt our public client before injection so every load keeps bounded history.
+  const loadSession = daemonClient.loadSession.bind(daemonClient);
+  daemonClient.loadSession = (params) => loadSession({ ...params, loadAllMessages: false });
   const controller = new DaemonSessionController({
     sessionStateManager: state,
     missionStateManager: missions,
+    daemonClient,
     config: {
       getMissionStore: (sessionId) => missions.getMissionStore(sessionId),
       getMissionStoreIfKnown: (sessionId) => missions.getMissionStoreIfKnown(sessionId),
@@ -45,7 +58,7 @@ export async function connectPublicDaemon(
       url: options.url,
       clientType: 'sdk',
       sdk: SDK_TAG.metadata,
-      getAccessToken: options.getAccessToken ?? (async () => options.auth.apiKey),
+      getAccessToken,
       onAuthenticationError: options.onAuthenticationError,
       connectionTimeoutMs: 5000,
       requestTimeout: 120000,
@@ -58,17 +71,6 @@ export async function connectPublicDaemon(
       defaultMessageLimit: 100,
     },
   });
-  // UI history is read separately through the daemon's cursor-paged endpoint.
-  // DaemonSessionController hardcodes loadAllMessages=true when clientType==='sdk',
-  // forcing droid exec to forward-stream 100MB+ JSONLs instead of using its
-  // reverse compaction-anchor reader. Override loadAllMessages=false at the RPC boundary.
-  const daemonClient = (controller as unknown as {
-    daemonClient?: { loadSession?: (params: Record<string, unknown>) => Promise<unknown> };
-  }).daemonClient;
-  const rawLoadSession = daemonClient?.loadSession?.bind(daemonClient);
-  if (daemonClient && rawLoadSession) {
-    daemonClient.loadSession = (params) => rawLoadSession({ ...params, loadAllMessages: false });
-  }
   try {
     await controller.attemptInitialConnection();
     return retainDaemonController(controller, options, missions);

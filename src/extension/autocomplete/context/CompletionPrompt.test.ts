@@ -16,7 +16,7 @@ describe('buildCompletionPrompt', () => {
   it('preserves plain FIM context without relevant snippets, including empty files', () => {
     for (const text of [input.text, '', 'x'.repeat(1000)]) {
       expect(buildCompletionPrompt({ ...input, text }))
-        .toEqual(buildCompletionContext(text, input.offset, input.maxCharacters));
+        .toEqual({ ...buildCompletionContext(text, input.offset, input.maxCharacters), relatedFiles: 0 });
     }
   });
 
@@ -49,6 +49,26 @@ describe('buildCompletionPrompt', () => {
     const main = result.prefix.split('+++++ src/main.ts\n')[1] + result.suffix;
     expect(main.length).toBeGreaterThan(180);
     expect(result.prefix.length + result.suffix.length).toBe(300);
+  });
+
+  it.each(['codestral-latest', 'mercury-edit-2'])('counts only retained files after %s exhausts the reference budget', model => {
+    const result = buildCompletionPrompt({
+      ...input, model, text: 'a'.repeat(2000), offset: 1500, maxCharacters: 200, comments: { line: '//' },
+      snippets: [snippet('b'.repeat(500), 'first.ts'), snippet('secondReference', 'second.ts')],
+    });
+    expect(result.prefix).toContain('first.ts');
+    expect(result.prefix).not.toContain('second.ts');
+    expect(result.prefix).not.toContain('secondReference');
+    expect(result.relatedFiles).toBe(1);
+    expect(result.prefix.length + result.suffix.length).toBeLessThanOrEqual(200);
+  });
+
+  it('counts each retained file once without counting clipboard references', () => {
+    const snippets = [snippet('firstType'), snippet('secondType'), snippet('otherType', 'other.ts'),
+      { ...snippet('clipboardText', 'Clipboard'), uri: 'clipboard' }];
+    const result = buildCompletionPrompt({ ...input, model: 'other', comments: { line: '//' }, snippets });
+    for (const { content } of snippets) expect(result.prefix).toContain(content);
+    expect(result.relatedFiles).toBe(2);
   });
 
   it.each(['//', '#', '--'])('uses provided %s line comments without language-specific rules', (line) => {
@@ -91,10 +111,10 @@ describe('buildCompletionPrompt', () => {
     expect(result.prefix).not.toMatch(/Users|home|name/);
   });
 
-  it('skips oversized headers instead of truncating markers or starving the main file', () => {
+  it.each(['codestral-latest', 'other-fim-model'])('counts no files when %s drops every oversized header', model => {
     expect(buildCompletionPrompt({
-      ...input, maxCharacters: 30, snippets: [snippet('reference', 'a'.repeat(100))],
-    })).toEqual(buildCompletionContext(input.text, input.offset, 30));
+      ...input, model, maxCharacters: 30, snippets: [snippet('reference', 'a'.repeat(100))],
+    })).toEqual({ ...buildCompletionContext(input.text, input.offset, 30), relatedFiles: 0 });
   });
 
   it('never splits surrogate pairs or CRLF at reference clipping edges', () => {

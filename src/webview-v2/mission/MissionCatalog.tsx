@@ -25,7 +25,7 @@ export function MissionCatalog({ state, filter, navigationError, onFilter, onRef
       </div>
     </header>
     <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-      <TabsList aria-label={t("Mission filters")} className="v2-mission-filters inline-flex flex-wrap gap-0.5 rounded-lg border-0 p-0.5">
+      <TabsList animatedIndicator indicatorVariant="surface" aria-label={t("Mission filters")} className="v2-mission-filters inline-flex flex-wrap gap-0.5 rounded-lg border-0 p-0.5">
         {MISSION_CONTROL_CATALOG_FILTERS.map((value) => <TabsTrigger key={value} value={value}
           className="flex items-center gap-1.5 rounded-md border-0 px-2.5 py-1.5">{t(formatFilter(value))}<span aria-hidden="true" className="v2-mission-filter-count rounded-full border border-border px-1.5 py-0.5 text-[11px] leading-none tabular-nums text-muted-foreground">{state.rows.filter((row) => matchesFilter(row, value)).length}</span></TabsTrigger>)}
       </TabsList>

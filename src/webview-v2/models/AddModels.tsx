@@ -87,7 +87,6 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
           {discovered === null ? <div data-ui-notice="" className="models-discover-empty">
             <p data-ui-notice="" className="models-help">{t("获取此渠道的模型列表，或手动填写 ID。")}</p>
             <Button disabled={busy} onClick={() => void page.discoverModels(connection.id)}><Download />{busy ? t("正在获取…") : t("获取模型列表")}</Button>
-            <Button variant="link" size="sm" disabled={busy} onClick={() => setMode('manual')}>{t("已有 Model ID？手动添加")}</Button>
           </div> : <ModelDiscovery key={connection.id} page={page} onDone={onDone} onManual={() => setMode('manual')} />}
         </TabsContent>
         <TabsContent value="manual" forceMount hidden={mode !== 'manual'}>

@@ -99,8 +99,10 @@
   background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface));
 }
 .v2-mission-empty { border-color: var(--panel-edge); }
-.v2-mission-filters { background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
+.v2-mission-filters { isolation: isolate; --selection-indicator-radius: 6px; --selection-indicator-color: var(--control-surface-active); background: color-mix(in srgb, var(--soft-surface) 35%, var(--surface)); }
+.v2-mission-filters > .dvx-selection-indicator { z-index: -1; }
 .v2-mission-filters [role='tab']:is(:hover, [data-state='active']):not(:disabled) { background: var(--control-surface-hover); }
+.v2-mission-filters[data-animated-indicator] [role='tab'][data-state='active']:not(:hover):not(:active):not(:disabled) { background: transparent; }
 .v2-mission-filters [role='tab']:active:not(:disabled) { background: var(--control-surface-active); }
 .v2-mission-filter-count { border-color: var(--panel-edge); }
 .v2-mission-filters [data-state='active'] .v2-mission-filter-count { color: var(--ink); }
@@ -111,16 +113,16 @@
 }
 .v2-mission-feature { border-color: var(--panel-edge); background: var(--surface); }
 .v2-mission-feature[data-current='true'] { border-color: color-mix(in srgb, var(--mission-tone-active) 35%, var(--panel-edge)); }
-.v2-mission-feature:has(.v2-mission-feature-trigger:hover),
-.v2-mission-feature:focus-within { background: color-mix(in srgb, var(--control-surface-hover) 45%, var(--surface)); }
 .v2-mission-feature-trigger { border-radius: inherit; cursor: pointer; }
+.v2-mission-feature-trigger:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+.v2-mission-feature-title { color: var(--ink); transition: color 160ms var(--motion-ease); }
+.v2-mission-feature-trigger:is(:hover, :focus-visible) .v2-mission-feature-title { color: var(--strong-ink); }
+.v2-mission-feature-trigger > svg { opacity: .55; transition: opacity 160ms var(--motion-ease), transform 160ms var(--motion-ease); }
+.v2-mission-feature-trigger:is(:hover, :focus-visible) > svg { opacity: 1; }
 .v2-mission-toggle { border-color: var(--panel-edge); cursor: pointer; }
 .v2-mission-toggle:has(:disabled) { cursor: default; }
-.v2-mission-feature, .v2-mission-feature-trigger {
-  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
-}
 @media (prefers-reduced-motion: reduce) {
-  .v2-mission-card, .v2-mission-feature, .v2-mission-feature-trigger { transition: none; }
+  .v2-mission-card, .v2-mission-feature-title, .v2-mission-feature-trigger > svg { transition: none; }
 }
 
 /* A fixed action area and one scroll owner keep setup usable in a narrow sidebar. */
@@ -135,37 +137,27 @@
   line-height: 1.5;
 }
 .v2-mission-setup-body {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  scroll-padding-block: 16px;
-  padding: 20px 16px;
+  padding: 12px;
 }
-.v2-mission-setup-body > * + * { margin-top: 20px; }
-.v2-mission-setup-section { display: grid; min-width: 0; gap: 12px; }
-.v2-mission-section-heading { display: flex; align-items: flex-start; gap: 10px; }
-.v2-mission-section-icon { display: inline-flex; flex-shrink: 0; color: var(--muted-ink); }
-.v2-mission-section-heading .v2-mission-section-icon { margin-top: 2px; }
-.v2-mission-section-icon, .v2-mission-section-icon svg { width: 16px; height: 16px; }
-.v2-mission-task { min-height: 112px; max-height: 208px; border-radius: 8px; padding: 12px; line-height: 1.6; }
+.v2-mission-setup-body > * + * { margin-top: 16px; }
+.v2-mission-setup-section { display: grid; min-width: 0; gap: 8px; }
+.v2-mission-task { min-height: 112px; max-height: 208px; padding: 8px; line-height: 1.6; }
 .v2-mission-task-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted-ink); font-size: 12px; }
 .v2-mission-task-meta > :last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.v2-mission-orchestrator { padding-top: 20px; border-top: 1px solid var(--panel-edge); }
-.v2-mission-setup .mission-pair { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.v2-mission-execution { overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 10px; background: color-mix(in srgb, var(--soft-surface) 18%, var(--surface)); }
-.v2-mission-settings-trigger { width: 100%; height: auto; justify-content: flex-start; gap: 10px; padding: 12px; border-radius: 0; text-align: left; white-space: normal; }
+.v2-mission-orchestrator { padding-top: 16px; border-top: 1px solid var(--panel-edge); }
+.v2-mission-setup .mission-pair { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.v2-mission-execution { overflow: hidden; border: 1px solid var(--panel-edge); border-radius: 8px; background: var(--surface); }
+.v2-mission-settings-trigger { width: 100%; height: auto; justify-content: flex-start; gap: 8px; padding: 10px; border-radius: inherit; text-align: left; white-space: normal; }
 .v2-mission-settings-chevron { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-ink); transition: transform var(--motion-normal) var(--motion-ease); }
 .v2-mission-settings-trigger[data-state='open'] .v2-mission-settings-chevron { transform: rotate(180deg); }
 .v2-mission-settings-content { overflow: hidden; }
 .v2-mission-settings-content[data-state='open'] { animation: mission-settings-open 180ms var(--motion-ease); }
 .v2-mission-settings-content[data-state='closed'] { animation: mission-settings-close 140ms var(--motion-ease); }
-.v2-mission-settings-fields { display: grid; gap: 20px; padding: 4px 12px 12px; }
+.v2-mission-settings-fields { display: grid; gap: 16px; padding: 0 10px 10px; }
 .v2-mission-profile, .v2-mission-checks { border-top: 1px solid var(--panel-edge); padding-top: 12px; }
 .v2-mission-profile legend, .v2-mission-checks legend { padding-right: 8px; }
 .v2-mission-profile-fields { display: grid; gap: 10px; }
-.v2-mission-setup-actions { flex-shrink: 0; padding: 12px 16px; border-top: 1px solid var(--panel-edge); background: var(--surface); }
+.v2-mission-setup-actions { flex-shrink: 0; padding: 10px 12px; border-top: 1px solid var(--panel-edge); background: var(--surface); }
 .v2-mission-setup-feedback { max-height: 6em; overflow-y: auto; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 .v2-mission-setup-feedback:not(:empty) { margin-bottom: 10px; }
 @container (min-width: 380px) {

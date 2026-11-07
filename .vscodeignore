@@ -30,6 +30,7 @@ pnpm-lock.yaml
 tsconfig*.json
 vitest.config.ts
 vite.webview*.config.ts
+vite.preview.config.ts
 *.log
 .env
 .env.*

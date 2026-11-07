@@ -18,7 +18,7 @@ export function CodeBlock({ text, language }: { readonly text: string; readonly 
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
   return <div className="v2-code-block my-3 min-w-0 overflow-hidden rounded border border-border">
     <div className="v2-code-body">
-    <header data-transcript-selection-exclude="" className="v2-code-toolbar flex select-none items-center justify-between border-b border-border bg-muted px-2 py-1">
+    <header data-ui-notice="" data-transcript-selection-exclude="" className="v2-code-toolbar flex select-none items-center justify-between border-b border-border bg-muted px-2 py-1">
       <span className="v2-code-language text-[11px] text-muted-foreground">{language ?? 'text'}</span>
       <div className="flex items-center gap-0.5">
       <CodeWrapToggle wrapped={wrapped} onChange={setWrapped} />

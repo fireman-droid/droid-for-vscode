@@ -74,6 +74,18 @@ describe('ConnectionForm validation and recovery', () => {
 });
 
 describe('ModelForm identity, advanced settings, and focus', () => {
+  it('saves a disabled model with its configured advanced values without allowing verification', () => {
+    const save = vi.fn();
+    const model = { ...existing, enabled: false, maxOutputTokens: 4096, noImageSupport: true };
+    render(<ModelForm model={model} connection={connection} busy={false} onSave={save} onCancel={vi.fn()} />);
+    expect((screen.getByRole('textbox', { name: /最大输出 Token/ }) as HTMLInputElement).value).toBe('4096');
+    expect(screen.getByRole('checkbox', { name: '此模型不支持图片输入' }).getAttribute('aria-checked')).toBe('true');
+    expect((screen.getByRole('button', { name: '保存并验证…' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox', { name: /模型别名/ }), { target: { value: 'Disabled alias' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'Disabled alias', maxOutputTokens: 4096, noImageSupport: true }), false);
+  });
+
   it('rejects an empty ID and duplicates on the current connection', () => {
     const save = vi.fn();
     render(<ModelForm model={null} connection={connection} existingModels={[existing]} busy={false} onSave={save} onCancel={vi.fn()} />);

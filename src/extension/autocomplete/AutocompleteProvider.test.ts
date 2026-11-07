@@ -912,6 +912,17 @@ describe('independent FIM and Next Edit', () => {
     expect(mocks.request.mock.calls[0][0]).toMatchObject({ protocol: 'fim', model: 'codestral-latest' });
     expect(mocks.nextRequest).not.toHaveBeenCalled();
   });
+  it('returns and reuses an inner closing delimiter without falling through to Next Edit', async () => {
+    mocks.request.mockResolvedValue('}');
+    const prefix = 'function run() {\n  if (ready) {\n    work();\n  ';
+    const file = document(prefix + '\n}');
+    const first = await (await requesting(file, prefix.length)).pending;
+    expect(first).toHaveLength(1); expect(first[0].insertText).toBe('}');
+    const cached = await (await requesting(file, prefix.length)).pending;
+    expect(cached).toHaveLength(1); expect(cached[0].insertText).toBe('}');
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(mocks.nextRequest).not.toHaveBeenCalled();
+  });
   it('falls through to the independent edit service for a valid empty FIM result', async () => {
     mocks.request.mockResolvedValue('');
     mocks.present.mockImplementation(() => { mocks.pendingEdit = true; return []; });

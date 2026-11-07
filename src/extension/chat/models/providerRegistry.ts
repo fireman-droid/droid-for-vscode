@@ -35,12 +35,28 @@ interface ProviderSecrets {
 
 export class ProviderConnectionSaveError extends Error {}
 
+export interface PromptApiKeyOptions {
+  readonly reuseStored?: boolean;
+  readonly remember?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+interface PendingEndpointPrompt {
+  readonly raw: Promise<string | undefined>;
+  activeWaiters: number;
+  settledRaw: boolean;
+  savingCount: number;
+  savedPromise?: Promise<string | undefined>;
+}
+
 /**
  * Host-owned connection metadata. Credentials are deliberately kept in
  * SecretStorage and are only read at the final daemon or HTTP hand-off.
  * The webview sees the safe connection projection made by customModels.ts.
  */
 export class ProviderRegistry {
+  private readonly pendingPrompts = new Map<string, PendingEndpointPrompt>();
+
   constructor(
     private readonly store: ProviderStore,
     private readonly secrets: ProviderSecrets,
@@ -164,14 +180,16 @@ export class ProviderRegistry {
   async apiKey(id: string): Promise<string | undefined> {
     const provider = this.get(id);
     if (provider === null) return undefined;
-    return (await this.secrets.get(secretKey(id))) ??
-      this.secrets.get(endpointSecretKey(provider.protocol, provider.rootUrl));
+    return validStoredKey(await this.secrets.get(secretKey(id))) ??
+      validStoredKey(await this.secrets.get(endpointSecretKey(provider.protocol, provider.rootUrl)));
   }
 
   async apiKeyForEndpoint(protocol: CustomModelProvider, rootUrl: string): Promise<string | undefined> {
     const normalized = normalizeProviderRoot(rootUrl);
     const provider = this.list().find((item) => item.protocol === protocol && item.rootUrl === normalized);
-    return provider ? this.apiKey(provider.id) : this.secrets.get(endpointSecretKey(protocol, normalized));
+    return provider
+      ? this.apiKey(provider.id)
+      : validStoredKey(await this.secrets.get(endpointSecretKey(protocol, normalized)));
   }
 
   async rememberApiKey(protocol: CustomModelProvider, rootUrl: string, value: string): Promise<void> {
@@ -180,6 +198,108 @@ export class ProviderRegistry {
     const provider = this.list().find((item) => item.protocol === protocol && item.rootUrl === normalized);
     if (provider !== undefined) await this.moveKeyToEndpoint(provider);
     await this.secrets.store(endpointSecretKey(protocol, normalized), value);
+  }
+
+  async promptApiKey(
+    protocol: CustomModelProvider,
+    rootUrl: string,
+    promptKey: () => PromiseLike<string | undefined>,
+    options?: PromptApiKeyOptions,
+  ): Promise<string | undefined> {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
+    if (
+      !(CUSTOM_MODEL_PROVIDERS as readonly string[]).includes(protocol) ||
+      !isCustomModelBaseUrl(rootUrl)
+    ) {
+      throw new Error('invalid-provider-connection');
+    }
+    const normalized = normalizeProviderRoot(rootUrl);
+    const reuseStored = options?.reuseStored ?? true;
+    const remember = options?.remember ?? true;
+    const slot = endpointSecretKey(protocol, normalized);
+    let pending = this.pendingPrompts.get(slot);
+    if (pending === undefined && reuseStored) {
+      const existing = await this.apiKeyForEndpoint(protocol, normalized);
+      signal?.throwIfAborted();
+      if (existing !== undefined) return existing;
+      pending = this.pendingPrompts.get(slot);
+    }
+    const cleanup = (entry: PendingEndpointPrompt): void => {
+      if (
+        entry.settledRaw &&
+        entry.activeWaiters <= 0 &&
+        entry.savingCount <= 0 &&
+        this.pendingPrompts.get(slot) === entry
+      ) {
+        this.pendingPrompts.delete(slot);
+      }
+    };
+    if (pending === undefined) {
+      const created: PendingEndpointPrompt = {
+        activeWaiters: 0,
+        settledRaw: false,
+        savingCount: 0,
+        raw: Promise.resolve().then(() => promptKey()),
+      };
+      this.pendingPrompts.set(slot, created);
+      void created.raw.then(
+        () => {
+          created.settledRaw = true;
+          cleanup(created);
+        },
+        () => {
+          created.settledRaw = true;
+          cleanup(created);
+        },
+      );
+      pending = created;
+    }
+    pending.activeWaiters += 1;
+    let released = false;
+    const release = (): void => {
+      if (!released) {
+        released = true;
+        pending.activeWaiters -= 1;
+        cleanup(pending);
+      }
+    };
+    try {
+      const typed = await racePromptWithAbort(pending.raw, signal, release);
+      signal?.throwIfAborted();
+      if (typed === undefined) {
+        return undefined;
+      }
+      const value = typed.trim();
+      if (value.length === 0) {
+        return undefined;
+      }
+      if (!isProviderKey(value)) {
+        throw new Error('invalid-provider-key');
+      }
+      if (remember) {
+        if (pending.savedPromise === undefined) {
+          pending.savingCount += 1;
+          pending.savedPromise = this.rememberApiKey(protocol, normalized, value).then(
+            () => {
+              pending.savingCount -= 1;
+              cleanup(pending);
+              return value;
+            },
+            (error: unknown) => {
+              pending.savingCount -= 1;
+              cleanup(pending);
+              throw error;
+            },
+          );
+        }
+        await racePromptWithAbort(pending.savedPromise, signal, release);
+      }
+      signal?.throwIfAborted();
+      return value;
+    } finally {
+      release();
+    }
   }
 
   async hasApiKey(id: string): Promise<boolean> {
@@ -207,6 +327,43 @@ function endpointSecretKey(protocol: CustomModelProvider, rootUrl: string): stri
 
 function isProviderKey(value: string): boolean {
   return isSafeText(value, MAX_CUSTOM_MODEL_KEY_LENGTH) && value.trim() === value;
+}
+
+function validStoredKey(value: string | undefined): string | undefined {
+  return value !== undefined && isProviderKey(value) ? value : undefined;
+}
+
+function racePromptWithAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort: () => void,
+): Promise<T> {
+  if (signal === undefined) return promise;
+  if (signal.aborted) {
+    onAbort();
+    signal.throwIfAborted();
+  }
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = (): void => {
+      onAbort();
+      try {
+        signal.throwIfAborted();
+      } catch (error) {
+        reject(error);
+      }
+    };
+    signal.addEventListener('abort', handleAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', handleAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', handleAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function parseStoredProvider(value: unknown): ProviderConnection | null {

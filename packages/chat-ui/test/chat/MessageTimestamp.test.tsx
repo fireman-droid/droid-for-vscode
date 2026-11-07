@@ -38,8 +38,9 @@ it('opens the exact time with keyboard focus and preserves it across a remount',
 });
 
 it.each([null, Number.NaN, 0])('does not manufacture a time for missing or invalid timestamp %s', (timestamp) => {
-  render(<MessageTimestamp completedAt={timestamp} />);
-  expect(screen.getByText('Time unavailable')).toBeTruthy();
+  const { container } = render(<MessageTimestamp completedAt={timestamp} />);
+  expect(container.firstChild).toBeNull();
+  expect(screen.queryByText('Time unavailable')).toBeNull();
   expect(screen.queryByText('just now')).toBeNull();
   expect(document.querySelector('time')).toBeNull();
 });

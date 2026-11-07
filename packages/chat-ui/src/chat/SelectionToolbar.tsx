@@ -44,11 +44,11 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
       const rect = selected.getRangeAt(0).getBoundingClientRect();
       const bounds = root.getBoundingClientRect();
       if (rect.bottom < bounds.top || rect.top > bounds.bottom) { setSelection(null); return; }
-      const width = toolbar.current?.offsetWidth ?? (onBtwQuote ? 250 : 160);
+      const width = toolbar.current?.offsetWidth ?? (onBtwQuote ? 204 : 132);
       const next = {
         text,
         left: Math.max(bounds.left + 8, Math.min(rect.left, bounds.right - width - 8)),
-        top: Math.max(bounds.top + 8, Math.min(rect.top - 34, bounds.bottom - 34)),
+        top: Math.max(bounds.top + 6, Math.min(rect.top - 30, bounds.bottom - 30)),
       };
       setSelection((previous) => previous?.text === next.text && previous.left === next.left && previous.top === next.top ? previous : next);
     };
@@ -90,15 +90,15 @@ export function SelectionToolbar({ viewport, selectionRoot = viewport, onQuote, 
     setSelection(null);
   };
   return createPortal(<div ref={toolbar} role="toolbar" aria-label={t("Selected text actions")} data-webview-overlay=""
-    className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none gap-1 rounded border border-[var(--panel-edge)] bg-popover p-1 shadow-sm"
+    className="fixed z-30 flex max-w-[calc(100vw-16px)] flex-wrap select-none items-center gap-0.5 rounded-md border border-[var(--panel-edge)] bg-popover p-0.5 shadow-sm"
     style={{ left: selection.left, top: selection.top }} onMouseDown={(event) => event.preventDefault()}>
-    <Button size="sm" variant="ghost" onClick={() => {
+    <Button size="none" variant="ghost" className="h-6 rounded-[4px] px-2 text-[11px] leading-none" onClick={() => {
       const current = readQuoteSelection(selectionRoot.current);
       if (!current || selectedContentText(current) !== selection.text) { setSelection(null); return; }
       void copyText(selection.text).then(() => setCopyState('copied'), () => setCopyState('error'));
     }}>{copyState === 'copied' ? t("Copied") : t("Copy")}</Button>
-    <Button size="sm" variant="ghost" onClick={() => choose(onQuote)}>{t("Add to Chat")}</Button>
-    {onBtwQuote ? <Button size="sm" variant="ghost" onClick={() => choose(onBtwQuote)}>{t("By the Way")}</Button> : null}
+    <Button size="none" variant="ghost" className="h-6 rounded-[4px] px-2 text-[11px] leading-none" onClick={() => choose(onQuote)}>{t("Add to Chat")}</Button>
+    {onBtwQuote ? <Button size="none" variant="ghost" className="h-6 rounded-[4px] px-2 text-[11px] leading-none" onClick={() => choose(onBtwQuote)}>{t("By the Way")}</Button> : null}
     {copyState === 'error' ? <span role="alert" className="w-full px-2 text-xs text-destructive">{t("Could not copy selected text.")}</span> : null}
   </div>, container ?? document.body);
 }

@@ -21,6 +21,7 @@ import { TURN_FAILURE_MESSAGE } from '../turns/turnSettlement';
 import { recoveredHistoryForCurrentTurn, restorePendingTools } from './recoveredHistoryForCurrentTurn';
 import { preservePendingRecoveredState, readRecoveredTurnOutcome } from './recoveredTurnOutcome';
 import { settleRecoveredSnapshot } from './settleRecoveredSnapshot';
+import { projectRecoveryTurn } from './recoveryTurnProjection';
 
 export /**
  * Poll cadence for a daemon-side turn recovered after a reload. The
@@ -404,8 +405,8 @@ export async function finishRecoveredTurn(
   if (recovering === null || recovering.turnId !== turnId) return;
   const outcome = await readRecoveredTurnOutcome(runtime, recovering);
   if (!ctl.effects.isCurrentTurn(runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
-  // Loading the exact outcome can restore a pending approval that the registry
-  // did not report. Keep that request answerable and resume polling afterwards.
+  // An approval may arrive while the outcome query is pending, after the registry
+  // reported idle. Keep that request answerable and resume polling afterwards.
   if (outcome.status !== 'confirmed' && recovering.status !== 'stopping' &&
       preservePendingRecoveredState(ctl, sessionId, 'idle') === 'waiting-for-user') {
     ctl.interactions.replayPending();
@@ -553,7 +554,7 @@ export function scheduleRecoveryCheckpoint(ctl: RecoveryPort): void {
         checkpoint.conversationId,
         checkpoint.sessionId,
         ctl.recoveryState.transcript,
-        displayTurn(ctl),
+        projectRecoveryTurn(ctl.turnState.turn),
       );
     }
   }, SESSION_RECOVERY_DEBOUNCE_MS);
@@ -570,7 +571,7 @@ export function checkpointRecoveryTranscript(ctl: RecoveryPort): void {
       ctl.sessionState.conversationId,
       ctl.sessionState.sessionId,
       ctl.recoveryState.transcript,
-      displayTurn(ctl),
+      projectRecoveryTurn(ctl.turnState.turn),
     );
   }
 }
@@ -674,24 +675,6 @@ export async function persistActivationRecoveryCheckpoint(
     return 'failed';
   }
   return isCurrent() ? 'saved' : 'stale';
-}
-
-function displayTurn(ctl: RecoveryPort): {
-  readonly turnId: string;
-  readonly backendTurnId?: string;
-  readonly status: TurnStatus;
-  readonly error?: string;
-} | null {
-  return ctl.turnState.turn === null
-    ? null
-    : {
-        turnId: ctl.turnState.turn.turnId,
-        ...(ctl.turnState.turn.backendTurnId === undefined ? {} : { backendTurnId: ctl.turnState.turn.backendTurnId }),
-        status: ctl.turnState.turn.status,
-        ...(ctl.turnState.turn.error === undefined
-          ? {}
-          : { error: ctl.turnState.turn.error }),
-      };
 }
 
 export /**

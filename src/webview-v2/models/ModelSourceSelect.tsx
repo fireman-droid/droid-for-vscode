@@ -7,6 +7,7 @@ import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/controls';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { ModelSourceEmpty, useModelSource } from './ModelSourceControl';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 
 interface ModelOption {
   readonly id: string;
@@ -42,7 +43,7 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
     <PopoverTrigger asChild>
       <Button variant="outline" size="sm" disabled={disabled} aria-label={label}
         title={selected?.displayName ?? value}
-        className={`h-8 w-full min-w-0 justify-between gap-2 bg-input-background px-2 font-normal ${className}`}>
+        className={`w-full min-w-0 justify-between gap-2 bg-input-background px-2 font-normal ${className}`}>
         <span className="truncate">{selected?.displayName ?? value ?? placeholder}</span>
         <ChevronDown aria-hidden="true" className="size-3 shrink-0" />
       </Button>
@@ -58,11 +59,11 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
           }} />
       </div>
       {visible.length === 0 ? sourceModels.length === 0 ? <ModelSourceEmpty />
-        : <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t('没有匹配的模型。')}</p> : (
-        <RadioGroup aria-label={t("{p0} options", { p0: label })} value={value ?? ''} className="min-h-0 overflow-y-auto"
+        : <p role="status" data-ui-notice="" className="px-3 py-2 text-xs text-muted-foreground">{t('没有匹配的模型。')}</p> : (
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="overscroll-contain"><RadioGroup aria-label={t("{p0} options", { p0: label })} value={value ?? ''}
           onValueChange={(next) => { if (next !== value) onChange(next); setOpen(false); }}>
           {visible.map((model) => <RadioGroupItem key={model.id} value={model.id} disabled={model.disabled} onClick={() => setOpen(false)}
-            className="dvx-menu-item flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs">
+            className="dvx-menu-item flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs enabled:hover:bg-[var(--menu-highlight-surface)]">
             <span className="min-w-0">
               <span className="block break-words">{model.displayName}</span>
               <span className="block break-words text-[11px] text-muted-foreground">
@@ -72,7 +73,7 @@ export function ModelSourceSelect({ label, value, models, disabled, onChange,
             </span>
             {model.id === value ? <Check aria-hidden="true" className="size-3 shrink-0" /> : null}
           </RadioGroupItem>)}
-        </RadioGroup>
+        </RadioGroup></ScrollArea>
       )}
     </PopoverContent>
   </Popover>;

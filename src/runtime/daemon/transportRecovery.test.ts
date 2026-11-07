@@ -5,6 +5,10 @@ import { AutonomyLevel, DroidInteractionMode, ReasoningEffort, ToolConfirmationO
 import { retainDaemonController } from './connectPublicDaemon';
 import { DaemonStreamRecoveryError } from './sessionStream';
 import { DAEMON_RECONNECT_INTERVAL_MS } from './transportRecovery';
+import type { DaemonTurnOutcome } from '../turnOutcome';
+
+type TurnOutcomeResult = Awaited<ReturnType<DaemonSessionController['getSessionTurnOutcome']>>;
+type UnavailableReason = Extract<TurnOutcomeResult, { status: 'unavailable' }>['reason'];
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -25,6 +29,7 @@ function fixture() {
     getSessionLoadOptions: vi.fn(() => ({ disableBuiltinSkills: true })) };
   const controller = Object.assign(new EventEmitter(), {
     loadSession: vi.fn(async (_options: object) => snapshot()),
+    getSessionTurnOutcome: vi.fn<DaemonSessionController['getSessionTurnOutcome']>(),
     initializeSession: vi.fn(async (_options: object) => ({ settings })),
     attemptInitialConnection: vi.fn<() => Promise<void>>(async () => { throw new Error('still offline'); }),
     getConnectionStatus: () => status,
@@ -64,20 +69,81 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe('daemon transport recovery', () => {
-  it('queries a persisted outcome with exact identity and retained load options without sending or interrupting', async () => {
+  it('queries a persisted outcome without loading, sending or interrupting a session', async () => {
     const f = fixture();
     const session = await f.api.sessions.resume('session');
-    f.controller.loadSession.mockResolvedValueOnce({ ...f.snapshot(), agentTurnOutcome: {
-      type: 'agent_turn_outcome', turnId: 'submitted', reason: 'cancelled', resultKind: 'text',
-    } } as ReturnType<typeof f.snapshot>);
+    f.controller.getSessionTurnOutcome.mockResolvedValueOnce({
+      status: 'available', sessionId: 'session', turnId: 'submitted', finalOutput: '',
+      outcome: {
+      type: 'agent_turn_outcome', turnId: 'submitted', reason: 'cancelled' as DaemonTurnOutcome['reason'], resultKind: 'text',
+    } });
     await expect(session.readTurnOutcome!('submitted')).resolves.toMatchObject({
       backendTurnId: 'submitted', completion: { outcome: 'interrupted' },
     });
-    expect(f.controller.loadSession).toHaveBeenLastCalledWith({
-      sessionId: 'session', disableBuiltinSkills: true, agentTurnOutcomeTurnId: 'submitted',
+    expect(f.controller.getSessionTurnOutcome).toHaveBeenCalledExactlyOnceWith({
+      sessionId: 'session', turnId: 'submitted', timeoutMs: 120000,
     });
+    expect(f.controller.loadSession).toHaveBeenCalledOnce();
     expect(f.controller.addUserMessage).not.toHaveBeenCalled();
     expect(f.controller.interruptSession).not.toHaveBeenCalled();
+    f.api.disconnect();
+  });
+
+  it.each(['session_not_found', 'turn_unverified', 'deadline_exceeded'] as const)(
+    'keeps %s unconfirmed without waking a session', async reason => {
+      const f = fixture();
+      const session = await f.api.sessions.resume('session');
+      f.controller.getSessionTurnOutcome.mockResolvedValueOnce({
+        status: 'unavailable', sessionId: 'session', turnId: 'submitted', reason: reason as UnavailableReason,
+      });
+      await expect(session.readTurnOutcome!('submitted')).resolves.toBeNull();
+      expect(f.controller.loadSession).toHaveBeenCalledOnce();
+      f.api.disconnect();
+    },
+  );
+
+  it('propagates query rejection without falling back to a session load', async () => {
+    const f = fixture();
+    const session = await f.api.sessions.resume('session');
+    const error = new Error('unsupported query');
+    f.controller.getSessionTurnOutcome.mockRejectedValueOnce(error);
+    await expect(session.readTurnOutcome!('submitted')).rejects.toBe(error);
+    expect(f.controller.loadSession).toHaveBeenCalledOnce();
+    f.api.disconnect();
+  });
+
+  it.each(['session', 'turn', 'outcome'] as const)('rejects mismatched %s identity', async mismatch => {
+    const f = fixture();
+    const session = await f.api.sessions.resume('session');
+    f.controller.getSessionTurnOutcome.mockResolvedValueOnce({
+      status: 'available', sessionId: mismatch === 'session' ? 'other' : 'session',
+      turnId: mismatch === 'turn' ? 'other' : 'submitted', finalOutput: '',
+      outcome: {
+        type: 'agent_turn_outcome', turnId: mismatch === 'outcome' ? 'other' : 'submitted',
+        reason: 'cancelled' as DaemonTurnOutcome['reason'], resultKind: 'text',
+      },
+    });
+    await expect(session.readTurnOutcome!('submitted')).rejects.toThrow('different');
+    expect(f.controller.loadSession).toHaveBeenCalledOnce();
+    f.api.disconnect();
+  });
+
+  it('discards a query result after its retained session detaches', async () => {
+    const f = fixture();
+    const session = await f.api.sessions.resume('session');
+    const pending = deferred<TurnOutcomeResult>();
+    f.controller.getSessionTurnOutcome.mockReturnValueOnce(pending.promise);
+    const result = session.readTurnOutcome!('submitted');
+    await vi.waitFor(() => expect(f.controller.getSessionTurnOutcome).toHaveBeenCalledOnce());
+    await session.detach();
+    pending.resolve({
+      status: 'available', sessionId: 'session', turnId: 'submitted', finalOutput: '',
+      outcome: {
+        type: 'agent_turn_outcome', turnId: 'submitted', reason: 'cancelled' as DaemonTurnOutcome['reason'], resultKind: 'text',
+      },
+    });
+    await expect(result).rejects.toThrow('detached');
+    expect(f.controller.loadSession).toHaveBeenCalledOnce();
     f.api.disconnect();
   });
 

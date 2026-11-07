@@ -118,6 +118,34 @@ describe('completion text', () => {
       .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
   });
 
+  it.each([
+    ['function run() {\n  if (ready) {\n    work();\n  ', '}', '\n}'],
+    ['function run() {\n  return outer(\n    inner(\n      1\n    ', ')', '\n  );\n}'],
+    ['const values = [\n  [\n    1\n  ', ']', '\n];'],
+  ])('preserves a required inner closing line before an outer delimiter (%#)', (prefix, suggestion, suffix) => {
+    for (const eol of ['\n', '\r\n']) {
+      const before = prefix.replace(/\n/g, eol), after = suffix.replace(/\n/g, eol);
+      expect(() => new Function(before + suggestion + after)).not.toThrow();
+      expect(() => new Function(before + after)).toThrow(SyntaxError);
+      for (const model of [undefined, 'codestral', 'mercury-edit-2']) {
+        expect(prepareCompletionWithOutcome(suggestion, before, after, 'typescript', model))
+          .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
+        expect(prepareCompletionWithOutcome(suggestion + '\n', before, after, 'typescript', model))
+          .toEqual({ text: suggestion + (model ? eol : '\n'), outcome: 'suggestion-returned' });
+        expect(prepareCompletionWithOutcome(suggestion, before, suggestion + after, 'typescript', model))
+          .toEqual({ text: '', outcome: 'already-present' });
+      }
+    }
+  });
+
+  it('still suppresses a closing line already present at the same indentation', () => {
+    const prefix = 'function run() {\n  ', suffix = '\n  }';
+    expect(() => new Function(prefix + suffix)).not.toThrow();
+    expect(() => new Function(prefix + '}' + suffix)).toThrow(SyntaxError);
+    expect(prepareCompletionWithOutcome('}', prefix, suffix, 'typescript', 'codestral'))
+      .toEqual({ text: '', outcome: 'already-present' });
+  });
+
   it('still filters a repeated executable suffix line', () => {
     expect(prepareCompletionWithOutcome('const total = sum(items);\nreturn total;',
       'function total(items) {\n', '\nreturn total;\n}', 'typescript', 'codestral'))

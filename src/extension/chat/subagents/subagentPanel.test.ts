@@ -4,12 +4,14 @@ import { type SessionTranscriptItem } from '../../../shared/protocol/transcript'
 import type { SubagentInvocationRecord } from '../../../runtime/subagents/subagentSummary';
 import {
   handleSubagentPanel,
+  handleSubagentInspect,
   pairInvocationMapping,
   pollTick,
   stopSubagentPanelPoll,
 } from './subagentPanel';
 import type { SubagentPanelPort } from './subagentPanelPort';
 import type { SubagentActivityItem } from '../../../shared/protocol/subagentProtocol';
+import { bindSessionIdentity } from '../sessions/sessionBinding';
 
 function taskItem(
   toolUseId: string,
@@ -67,9 +69,13 @@ function fakeController(transcript: SessionTranscriptItem[] = [taskItem('use-1')
     listener?.('turn-1', 'use-1', activities);
   });
   const unsubscribe = vi.fn();
+  const viewerListeners = new Map<string, () => void>();
+  const unsubscribeViewer = vi.fn();
+  const openViewer = vi.fn();
   const fake = {
     sessionState: {
       sessionId: 'session-1',
+      conversationId: 'conversation-1',
       disposed: false,
       activeRuntimeCwd: 'd:/work',
     },
@@ -77,6 +83,14 @@ function fakeController(transcript: SessionTranscriptItem[] = [taskItem('use-1')
     subagentState: {
       subagentTranscripts: {
         syncParent,
+        resolveSession: vi.fn((_session: string, _turn: string, toolUseId: string) => ({ sessionId: `child:${toolUseId}`, cwd: 'd:/work' })),
+        readViewer: vi.fn((child: string) => ({ items: [{ kind: 'assistant', id: `reply:${child}`, turnId: 'child-turn', text: `Reply from ${child}` }],
+          truncated: false, running: true, lifecycle: 'working' })),
+        subscribeViewer: vi.fn((child: string, callback: () => void) => {
+          viewerListeners.set(child, callback);
+          return () => { unsubscribeViewer(child); };
+        }),
+        open: openViewer,
         subscribeParent: vi.fn(
           (_sessionId: string, callback: NonNullable<typeof listener>) => {
             listener = callback;
@@ -97,6 +111,7 @@ function fakeController(transcript: SessionTranscriptItem[] = [taskItem('use-1')
     ctl: fake as unknown as SubagentPanelPort,
     syncParent,
     unsubscribe,
+    viewerListeners, unsubscribeViewer, openViewer,
   };
 }
 
@@ -123,6 +138,66 @@ describe('pairInvocationMapping', () => {
     );
     expect(mapping.get('use-1')).toBe('child-a');
     expect(mapping.get('use-2')).toBeNull();
+  });
+});
+
+describe('inline subagent inspection', () => {
+  const inspect = (toolUseId: string | null) => ({
+    type: 'subagent.inspect' as const, sessionId: 'session-1', turnId: 'turn-1', toolUseId,
+  });
+  it('reads and subscribes to the selected invocation without opening a viewer', async () => {
+    const h = fakeController();
+    handleSubagentInspect(h.ctl, inspect('use-1'));
+    await vi.waitFor(() => expect(h.fake.emit).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'subagent.snapshot', status: 'ready', toolUseId: 'use-1',
+      items: [expect.objectContaining({ text: 'Reply from child:use-1' })], running: true,
+    })));
+    expect(h.fake.subagentState.subagentTranscripts.readViewer).toHaveBeenCalledWith('child:use-1', {
+      parentSessionId: 'session-1', toolUseId: 'use-1',
+    });
+    h.fake.emit.mockClear();
+    h.viewerListeners.get('child:use-1')!();
+    expect(h.fake.emit).toHaveBeenCalledOnce();
+    expect(h.openViewer).not.toHaveBeenCalled();
+    handleSubagentInspect(h.ctl, inspect(null));
+    h.fake.emit.mockClear();
+    h.viewerListeners.get('child:use-1')!();
+    expect(h.fake.emit).not.toHaveBeenCalled();
+    expect(h.unsubscribeViewer).toHaveBeenCalledWith('child:use-1');
+  });
+
+  it('drops stale selection callbacks and releases the subscription on session binding', async () => {
+    const h = fakeController([taskItem('use-1'), taskItem('use-2')]);
+    handleSubagentInspect(h.ctl, inspect('use-1'));
+    await vi.waitFor(() => expect(h.viewerListeners.has('child:use-1')).toBe(true));
+    handleSubagentInspect(h.ctl, inspect('use-2'));
+    await vi.waitFor(() => expect(h.viewerListeners.has('child:use-2')).toBe(true));
+    h.fake.emit.mockClear();
+    h.viewerListeners.get('child:use-1')!();
+    expect(h.fake.emit).not.toHaveBeenCalled();
+    h.viewerListeners.get('child:use-2')!();
+    expect(h.fake.emit).toHaveBeenCalledWith(expect.objectContaining({ toolUseId: 'use-2', status: 'ready' }));
+    bindSessionIdentity(h.fake, { sessionId: 'other', conversationId: 'other' });
+    expect(h.unsubscribeViewer).toHaveBeenCalledWith('child:use-2');
+    h.fake.emit.mockClear();
+    h.viewerListeners.get('child:use-2')!();
+    expect(h.fake.emit).not.toHaveBeenCalled();
+  });
+
+  it('does not subscribe after closing during mapping and rejects an unrelated Task', async () => {
+    const h = fakeController();
+    let release!: () => void;
+    h.fake.sessionHistory.loadSubagentInvocations.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve([]); }));
+    handleSubagentInspect(h.ctl, inspect('use-1'));
+    handleSubagentInspect(h.ctl, inspect(null));
+    release();
+    await pollTick(h.ctl);
+    expect(h.fake.subagentState.subagentTranscripts.subscribeViewer).not.toHaveBeenCalled();
+    h.fake.emit.mockClear();
+    handleSubagentInspect(h.ctl, inspect('unrelated'));
+    expect(h.fake.emit).toHaveBeenCalledWith(expect.objectContaining({ status: 'unavailable', items: [] }));
+    expect(h.openViewer).not.toHaveBeenCalled();
+    stopSubagentPanelPoll(h.ctl);
   });
 });
 

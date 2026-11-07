@@ -62,7 +62,7 @@ import {
   handleSessionUnarchive,
   handleWorktreeCreateSession,
 } from './sessions/sessionDirectory';
-import { handleSubagentOpen, handleSubagentPanel } from './subagents/subagentPanel';
+import { handleSubagentInspect, handleSubagentOpen, handleSubagentPanel } from './subagents/subagentPanel';
 import {
   handleEditResend,
   handleEditStageBegin,
@@ -163,6 +163,12 @@ export function dispatchChatMessage(
       handleRewindInfo(controller, message.sessionId, message.messageId);
       return;
     case 'runtime.retry':
+      if (controller.sessionState.initialization === null && controller.sessionState.runtime === null &&
+        !controller.sessionState.sessionOperationInProgress && message.sessionId === controller.sessionState.sessionId &&
+        controller.sessionState.connection.status === 'unavailable') {
+        void handleReady(controller);
+        return;
+      }
       handleRetry(controller, message.sessionId);
       return;
     case 'permission.respond':
@@ -230,6 +236,9 @@ export function dispatchChatMessage(
       return;
     case 'subagent.panel':
       handleSubagentPanel(controller, message.sessionId, message.open);
+      return;
+    case 'subagent.inspect':
+      handleSubagentInspect(controller, message);
       return;
     case 'subagent.open':
       handleSubagentOpen(

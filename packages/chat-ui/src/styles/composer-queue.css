@@ -20,10 +20,10 @@
   .v2-queue-marker { width: 12px; height: 12px; flex: 0 0 auto; margin-top: 3px; color: var(--control-border-hover); stroke-width: 1.5; }
   .v2-queue-message { display: grid; flex: 1; min-width: 0; gap: 4px; }
   .v2-queue-preview {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
-    max-height: calc(3 * var(--composer-panel-line-height)); overflow: hidden; overflow-wrap: anywhere;
-    color: var(--ink); font-size: 12px; line-height: var(--composer-panel-line-height); white-space: pre-wrap;
+    display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    color: var(--ink); font-size: 12px; line-height: var(--composer-panel-line-height); white-space: nowrap;
   }
+  .v2-queue-preview > span { white-space: nowrap; }
   .v2-queue-attachment { margin-right: 4px; color: var(--muted-ink); font-size: 11px; }
   .v2-queue-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--motion-ease); }
   .v2-queue-item:is(:hover, :focus-within) .v2-queue-actions { opacity: 1; pointer-events: auto; }
@@ -32,7 +32,7 @@
   .v2-queue-actions svg { width: 14px; height: 14px; }
   .v2-queue-editing { align-self: center; padding-inline: 4px; font-size: 11px; }
   .v2-queue-paused { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 4px 32px; font-size: 11px; }
-  .v2-queue-toggle:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; border-radius: 4px; }
+  .v2-queue-toggle:focus-visible { background: var(--control-surface-hover); color: var(--ink); outline: 1px solid var(--control-border-hover); outline-offset: -1px; border-radius: 4px; }
   @container composer-queue (max-width: 380px) {
     .v2-queue-actions .v2-queue-send { width: 20px; padding: 0; }
     .v2-queue-send span { display: none; }
