@@ -141,14 +141,17 @@ export class KiloContextService implements vscode.Disposable {
           const candidate = Math.ceil((low + high) / 2), p = render(candidate);
           if (p.prefix.length + p.suffix.length <= budget) low = candidate; else high = candidate - 1;
         }
-        return { ...render(low), relatedFiles: usable.length };
+        const relatedFiles = new Set(usable.flatMap((snippet) =>
+          'filepath' in snippet && snippet.filepath ? [snippet.filepath] : [],
+        )).size;
+        return { ...render(low), relatedFiles };
       }
       const contextSnippets: ContextSnippet[] = snippets.map(s => 'filepath' in s
         ? { uri: s.filepath, filepath: this.ide.relative(s.filepath), content: s.content, source: 'definition' }
         : { uri: 'clipboard', filepath: 'Clipboard', content: s.content, source: 'definition' });
       const prompt = buildCompletionPrompt({ text: input.text, offset: input.offset, maxCharacters: settings.maxContextCharacters,
         filepath: input.filepath, model: settings.model, snippets: contextSnippets, comments: input.comments });
-      return { ...prompt, relatedFiles: contextSnippets.length };
+      return prompt;
     }));
   }
   dispose(): void {

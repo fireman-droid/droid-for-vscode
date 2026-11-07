@@ -141,11 +141,14 @@ describe('Kilo production context pipeline', () => {
     expect(prompt.prefix.endsWith('// insert here\n')).toBe(true);
     expect(prompt.prefix.length + prompt.suffix.length).toBeLessThanOrEqual(1000);
   });
-  it('only reads and includes clipboard context after explicit user opt-in', async () => {
+  it.each(['codestral-latest', 'mercury-edit-2'])('only includes opted-in clipboard context without counting a file for %s', async model => {
+    state.config.model = model;
     const doc = await document('main.ts', 'const answer = \n');
     expect((await build(doc, 15)).prefix).not.toContain('clipboardOnlyExample'); expect(state.clipboard).not.toHaveBeenCalled();
     state.config.includeClipboard = true;
-    expect((await build(doc, 15)).prefix).toContain('clipboardOnlyExample'); expect(state.clipboard).toHaveBeenCalledOnce();
+    const prompt = await build(doc, 15);
+    expect(prompt.prefix).toContain('clipboardOnlyExample'); expect(state.clipboard).toHaveBeenCalledOnce();
+    expect(prompt.relatedFiles).toBe(0);
   });
   it('cancels a pending language server lookup without waiting for that provider', async () => {
     const doc = await document('main.ts', "import { User } from './types';\nconst user: User = \n");
@@ -295,6 +298,23 @@ describe('merged Kilo and editor context', () => {
     expect(prompt.prefix.indexOf('fromDefinition')).toBeLessThan(prompt.prefix.indexOf('fromKiloOpened'));
     expect(prompt.prefix.match(/fromDefinition/g)).toHaveLength(1);
     expect(prompt.prefix.match(/fromKiloOpened/g)).toHaveLength(1);
+    expect(prompt.relatedFiles).toBe(3);
+  });
+
+  it.each(['codestral-latest', 'mercury-edit-2'])('counts retained snippets from the same file once for %s', async model => {
+    state.config.model = model;
+    const text = 'const answer = \n';
+    const main = await document('main.ts', text);
+    const contents = ['export const firstDefinition = 1;', 'export const secondDefinition = 2;'];
+    const target = await document('types.ts', contents.join('\n'), 'typescript', false);
+    state.editor = { document: main } as vscode.TextEditor;
+    service = new KiloContextService();
+    const prompt = await service.build({ document: main, text, offset: text.length, filepath: 'main.ts',
+      settings: readCompletionSettings(), signal: new AbortController().signal, comments: { line: '//' },
+      snippets: contents.map(content => ({ uri: target.uri.toString(), filepath: 'types.ts', content, source: 'definition' })),
+    });
+    for (const content of contents) expect(prompt.prefix).toContain(content);
+    expect(prompt.relatedFiles).toBe(1);
   });
 
   it('rechecks supplemental access and preserves the full prompt budget', async () => {
@@ -314,9 +334,12 @@ describe('merged Kilo and editor context', () => {
     const prompt = await service.build(input);
     expect(prompt.prefix).toContain('allowedDefinition');
     expect(prompt.prefix).not.toContain('forbiddenDefinition');
+    expect(prompt.prefix).not.toContain('kiloAvailableContext');
+    expect(prompt.relatedFiles).toBe(1);
     expect(prompt.prefix.length + prompt.suffix.length).toBeLessThanOrEqual(1000);
     const disabled = await service.build({ ...input, settings: { ...input.settings, relatedFiles: false } });
     expect(disabled.prefix).not.toContain('allowedDefinition');
+    expect(disabled.relatedFiles).toBe(0);
   });
 });
 
