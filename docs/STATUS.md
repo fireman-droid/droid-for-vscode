@@ -1,20 +1,20 @@
 # 当前状态
 
-核对日期：2026-11-06。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-11-07。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
-- 当前源码版本为 `0.8.20`，在 `0.8.19` 基础上加入繁星／三体／关闭三种深色聊天背景，并修复 AskUser 多选识别、勾选状态与单选填空互斥切换。
-- 正式版 `0.8.20` 以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.20) 与 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.20) 为准。SDK／分页、Automations、诊断／Review 滚动与双编辑器热更新分别经 PR #22–25 合入 main。遥测覆盖及 `codex/style-fix` UI 修复经 PR #26 合入，聊天间距归零与补全详细诊断经 PR #27 合入 main；对应完整试用包已成功安装到 Microsoft VS Code，未更新 Cursor。版本仍为 `0.8.20`，未覆盖正式发布产物。Composer 菜单对齐已修复并通过定向检查，本轮授权合并 main 并安装完整 Microsoft VS Code 试用包；构建、合并与安装结果以本次交付回执为准，不更新 Cursor、不正式发版。
+- 当前源码版本为 `0.8.21`，汇总 SDK 0.10.0／历史分页、本机 Automations、同源 UI／Review／Models、恢复持久化与五项生命周期修复，以及补全上下文／过滤和 Runtime 公开 API 修复。
+- `0.8.21` 的正式发布与下载以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21) 为准。发布流程从合入 main 的标签构建唯一 VSIX，校验源码身份与 SHA256 后用于渠道分发和 Microsoft VS Code／Cursor 安装；CI、公开发布及双编辑器安装完成情况以本次交付回执为准。下列单项验证中的“未打包安装”保留当次验证边界，不代表统一版本的最终安装状态。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
-- Microsoft Marketplace 管理页在 2026-10-18 仍返回 429／Azure DevOps VSID 并发限流，此前还存在 `The extension 'droidvisx' already exists in the Marketplace`、Owner 列表为空的问题；未改名或覆盖既有产物，微软自动发布保持关闭，未配置 `VSCE_PAT`。
+- Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
 
 ## 当前源码
 
-本轮同源 UI 整改已接入当前任务分支，未更新已安装插件：启动入口、BTW／Review 问答、
+当前源码的启动入口、BTW／Review 问答、
 选区工具栏、权限／Agent 焦点、过程命令、无时间占位、模型菜单定位、代码独立工具行与 Models
 编辑流程使用生产共享源码。底部 Task 支持内嵌只读子对话；Bridge v60 复用现有子会话读取与订阅，
 不创建新子代理，关闭／切会话／销毁取消旧查看；显式外部查看保留。
@@ -24,7 +24,7 @@
 | SDK 0.10.0 | 对象 transport、Script 批量权限与 RecommendMission 已适配；普通压缩保留原身份和租约，`/handoff` 显式创建后继，Spec 使用正式交接事件。文件浏览与自定义模型 revision 接口同步新版；默认设置保留已有开放字段。daemon 限载改为构造前适配公开客户端并注入 controller，保留 `loadAllMessages: false` 与默认 100 条，不再读取 controller 私有字段；IDE 兼容补丁保留 |
 | 本机 Automations | 已接通独立详情（`SettingsSection`／`SettingsRow` 概览卡片、运行与投递历史、原生四格指标与最近运行结果看板）、三步创建、每天／每周 24 小时制主题化 Select 与 UTC cron、固定会话或每次新建会话、会话查看／显式继续。创建暂停并跳过首次运行；配置写后回读，无法确认时阻止运行并请求暂停。已移除“立即运行”二次确认，保留执行校验与启用／删除确认；UI 修复已随 PR #26 完整试用包安装到 Microsoft VS Code。云端、事件触发与 Workstream 配置不在范围内；未改现有每日问候任务 |
 | AskUser 问答卡片 | Runtime 与 Webview 共用多选提示识别，支持题目／主题中的括号说明和单选／多选混合表述；单选预设选项与自定义填空互斥，再次点击已选项可取消，多选保留全部已选项并合并补充填空 |
-| 历史分页（已合并，未发布） | daemon 默认只读最近一页，向上滚动自动续页；三页阅读窗口与实时尾部分离，卸载页可重读，保留跨页工具结果与压缩前驱；查看器复用分页，子任务按调用消息 ID 隔离，导出显式遍历全部页。移除聊天 JSONL 优先读取、自动 Process 回退及专用历史 Worker；保留独立 Process 模式和操作证据的本地读取 |
+| 历史分页 | daemon 默认只读最近一页，向上滚动自动续页；三页阅读窗口与实时尾部分离，卸载页可重读，保留跨页工具结果与压缩前驱；查看器复用分页，子任务按调用消息 ID 隔离，导出显式遍历全部页。移除聊天 JSONL 优先读取、自动 Process 回退及专用历史 Worker；保留独立 Process 模式和操作证据的本地读取 |
 | 聊天 | 新提问直接切换置顶，底部动态留白跑道承载首屏静止生长的回复，超出一屏后自动向下跟随，短回复结束时保持留白不回弹；最新活动独立成行，更早活动归入“执行过程”；正文按时间顺序穿插，历史数量紧随标题。单条工具与 thinking 独立折叠，Edit 默认显示精简 Diff，可在原卡片展开全部，没有 thinking 中间分组；长 thinking 原文分块合并更新并限高滚动。正文与折叠箭头左边缘对齐，失败操作收起时仍可查看。每条队列正文预览最多一行，含附件前缀，超长省略且操作区不收缩；常规设置提供等待／引导，默认等待；daemon 引导不停止当前任务，消费确认后移入聊天，投递不明时暂停保留内容。其余流式、附件、权限／问答、引用和 BTW 保留 |
 | 管理页 | 常规、模型、补全、会话、任务、自动化；共享设置行、搜索筛选、列表表格（统一列宽、60px 行高、主标题 + 下方弱化副文案层级与尾列靠右操作）、底部分页（始终显示范围计数、每页条数与翻页控件）、24 小时制主题化时间 Select 和滚动条，Select 弹层按左起／右起位置分别左对齐或右对齐且不少于触发器宽度，列表刷新保留已有内容 |
 | Factory 账户与额度 | 设置页侧栏底部显示 CLI 登录的邮箱与姓名，折叠后只留首字母头像，读取走独立非阻塞通道不锁页面忙碌态；`/limits`（Usage Limits）提供 `Standard`／`Droid Core` 分段切换与 `5-hour`、`Weekly`、`Monthly` 三条独立进度条及重置时间。身份取自本地 access token 载荷，额度读取 `GET /api/billing/limits`（EU 账户与 `FACTORY_API_BASE_URL` 走各自主机），结果按窗口缓存 20 秒；token 只留在 Extension Host，未登录或读取失败给出对应提示 |
@@ -58,6 +58,8 @@
 - `daemon_health` 的 sidecar 启动／预热失败明确标记 `outcome=failed`，缺失原因使用 `unknown`，并保留已有 spawn／connect 阶段；不把失败默认标为 `ok`，不上传原始错误内容。
 
 ## 最近验证
+
+- `0.8.21` 整合树的 10 个定向 Vitest 文件报告 291 项通过，覆盖补全静态上下文、最终引用计数、闭合符过滤、请求接力，以及公开 daemon 客户端／终态查询和 Host 恢复。后台任务回执未提供退出码，保留完整 Vitest 结果；正式门禁仍以最新 PR CI 为准。未新增真实模型评测或浏览器验收，已有 Codestral 6 样本对照不作为全模型质量保证。
 
 - 会话生命周期与恢复的定向回归使用 mock 和临时目录，当前通过集合如下；集合分别列出，不累计复跑次数。
 
