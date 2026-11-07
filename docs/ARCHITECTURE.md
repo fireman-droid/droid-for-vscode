@@ -649,8 +649,17 @@ RecommendMission 复用任务确认卡。默认设置仍只开放应用现有字
 未编辑的旧连接仍可读取旧 ID 槽，接口内新密钥已保存但元数据失败时明确反馈部分成功。
 
 daemon 提交前由 Runtime 产生后端回合 ID，Host 刷新恢复 checkpoint 后才继续发送；
-该 ID 原样传入 `addUserMessage.messageId`，断线恢复用 `loadSession.agentTurnOutcomeTurnId`
-查询持久结果。待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+该 ID 原样传入 `addUserMessage.messageId`，断线恢复用公开 `getSessionTurnOutcome`
+按 sessionId／turnId 查询持久结果，不借 `loadSession` 唤醒会话或刷新元数据。
+`unavailable` 保持未知；超时、取消及旧 daemon 不支持查询时交由 Host 既有未确认边界处理，
+不回退加载。查询前后保留会话附着校验，Host 丢弃会话／回合切换后的迟到结果。
+待审批由交互协调器保留，不能从 registry idle 推断任务成功。
+
+连接使用公开 `createWebSocketDaemonClient`，在注入 `DaemonSessionController` 前仅适配
+该客户端的 `loadSession`，统一设置 `loadAllMessages: false`，覆盖 controller 内部的子会话
+hydration 与恢复加载；不访问 controller 私有字段。保留 `defaultMessageLimit: 100` 和调用者
+显式 messageLimit，其余认证、连接、订阅与销毁仍使用同一个 SDK 客户端及 controller 生命周期。
+UI 历史另走游标分页，默认条数本身不替代关闭全量历史加载的策略。
 
 历史记录追加使用 SDK 公开低层 Process 客户端，在 Host 空闲操作锁内关闭、追加并恢复
 原会话；`user_only` 在历史投影中独立显示，不成为可重发用户回合。daemon 没有公开

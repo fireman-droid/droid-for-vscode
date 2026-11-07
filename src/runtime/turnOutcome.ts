@@ -3,7 +3,9 @@ import { ProtocolError } from '@factory/droid-sdk/node';
 import type { RuntimeEvent } from './runtimeEvents';
 import { normalizeSdkEvent } from './events/normalizeSdkEvent';
 
-export type DaemonTurnOutcome = NonNullable<Awaited<ReturnType<DaemonSessionController['loadSession']>>['agentTurnOutcome']>;
+export type DaemonTurnOutcome = Extract<
+  Awaited<ReturnType<DaemonSessionController['getSessionTurnOutcome']>>, { status: 'available' }
+>['outcome'];
 export interface RuntimeTurnOutcome {
   readonly backendTurnId: string;
   readonly reason: DaemonTurnOutcome['reason'];

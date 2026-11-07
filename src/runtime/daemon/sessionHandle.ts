@@ -9,6 +9,7 @@ import {
   type MultiMissionStateManager,
   type ResumeDaemonSessionOptions,
 } from '@factory/droid-sdk';
+import { ProtocolError } from '@factory/droid-sdk/node';
 import type {
   DaemonHandlers,
   DaemonNotification,
@@ -55,13 +56,14 @@ export class RetainedDaemonSession implements DaemonSessionHandle {
     this.assertAttached();
     await this.waitUntilReady();
     this.assertAttached();
-    const result = await this.controller.loadSession({
-      ...this.controller.getSessionStateManager().getSessionLoadOptions(this.id),
-      sessionId: this.id, agentTurnOutcomeTurnId: backendTurnId,
+    const result = await this.controller.getSessionTurnOutcome({
+      sessionId: this.id, turnId: backendTurnId, timeoutMs: 120000,
     });
     this.assertAttached();
-    this.initialize(result.settings, result.cwd);
-    return projectDurableTurnOutcome(this.id, backendTurnId, result.agentTurnOutcome);
+    if (result.sessionId !== this.id || result.turnId !== backendTurnId)
+      throw new ProtocolError('The recovered result belongs to a different session or turn.');
+    return result.status === 'available'
+      ? projectDurableTurnOutcome(this.id, backendTurnId, result.outcome) : null;
   }
 
   initialize(settings: SessionSettings, cwd: string | undefined): void {

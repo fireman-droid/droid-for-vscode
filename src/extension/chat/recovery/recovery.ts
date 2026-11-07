@@ -405,8 +405,8 @@ export async function finishRecoveredTurn(
   if (recovering === null || recovering.turnId !== turnId) return;
   const outcome = await readRecoveredTurnOutcome(runtime, recovering);
   if (!ctl.effects.isCurrentTurn(runtime, runtimeGeneration, turnGeneration, sessionId, turnId)) return;
-  // Loading the exact outcome can restore a pending approval that the registry
-  // did not report. Keep that request answerable and resume polling afterwards.
+  // An approval may arrive while the outcome query is pending, after the registry
+  // reported idle. Keep that request answerable and resume polling afterwards.
   if (outcome.status !== 'confirmed' && recovering.status !== 'stopping' &&
       preservePendingRecoveredState(ctl, sessionId, 'idle') === 'waiting-for-user') {
     ctl.interactions.replayPending();
