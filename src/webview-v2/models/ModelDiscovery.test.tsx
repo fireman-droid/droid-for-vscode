@@ -58,13 +58,15 @@ function createHost(discovered: readonly DiscoveredCustomModel[], models: readon
 
 async function openAddModels(host: ReturnType<typeof createHost>) {
   render(<ModelsApp transport={host.transport} />);
-  await screen.findByRole('heading', { name: 'First endpoint' });
-  fireEvent.click(screen.getByRole('button', { name: '向First endpoint添加模型' }));
-  return screen.findByRole('dialog', { name: 'First endpoint · 添加模型' });
+  fireEvent.click(await screen.findByRole('button', { name: 'First endpoint的渠道设置' }));
+  const dialog = await screen.findByRole('dialog', { name: 'First endpoint' });
+  fireEvent.click(within(dialog).getByRole('button', { name: '向First endpoint添加模型' }));
+  return dialog;
 }
 
 async function discover(host: ReturnType<typeof createHost>, firstId: string) {
   const dialog = await openAddModels(host);
+  fireEvent.click(within(dialog).getByRole('button', { name: '获取模型列表' }));
   await within(dialog).findByRole('checkbox', { name: firstId, exact: true });
   return dialog;
 }
@@ -143,8 +145,9 @@ describe('model discovery interactions', () => {
     await user.click(view.getByRole('tab', { name: '手动填写 ID' }));
     expect((view.getByRole('textbox', { name: '模型 ID', exact: true }) as HTMLInputElement).value).toBe('draft-model');
     await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: '向Second endpoint添加模型' }));
-    const second = within(await screen.findByRole('dialog', { name: 'Second endpoint · 添加模型' }));
+    await user.click(screen.getByRole('button', { name: 'Second endpoint的渠道设置' }));
+    const second = within(await screen.findByRole('dialog', { name: 'Second endpoint' }));
+    await user.click(second.getByRole('button', { name: '向Second endpoint添加模型' }));
     await user.click(second.getByRole('tab', { name: '手动填写 ID' }));
     expect((second.getByRole('textbox', { name: '模型 ID', exact: true }) as HTMLInputElement).value).toBe('');
     expect(host.requests.some(request => request.action.kind === 'saveModel')).toBe(false);
