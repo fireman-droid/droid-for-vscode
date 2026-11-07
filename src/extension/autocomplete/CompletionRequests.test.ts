@@ -45,6 +45,38 @@ describe('completion request handoffs', () => {
     expect(start).toHaveBeenCalledOnce(); pool.clear();
   });
 
+  it('starts exactly one fresh request when forward typing diverges from the pending result', async () => {
+    vi.useFakeTimers();
+    const pool = new CompletionRequests(), output = deferred<string>();
+    const firstReader = new AbortController(), nextReader = new AbortController();
+    const original = vi.fn(() => output.promise), fresh = vi.fn(async () => '值";\r\n');
+    const prefix = 'const 文本 = "';
+    const first = pool.run('file', prefix, '', firstReader.signal, original).catch(error => error.name);
+    firstReader.abort(); expect(await first).toBe('AbortError');
+    const next = pool.run('file', prefix + '新', '', nextReader.signal, fresh);
+    expect(fresh).not.toHaveBeenCalled();
+    output.resolve('旧值";\r\n');
+    expect(await next).toBe('值";\r\n');
+    expect(original).toHaveBeenCalledOnce(); expect(fresh).toHaveBeenCalledOnce();
+    pool.clear();
+  });
+
+  it('keeps shared transport alive when only one of two readers is cancelled', async () => {
+    vi.useFakeTimers();
+    const pool = new CompletionRequests(), output = deferred<string>();
+    const firstReader = new AbortController(), nextReader = new AbortController();
+    let transport!: AbortSignal;
+    const start = vi.fn((signal: AbortSignal) => { transport = signal; return output.promise; });
+    const first = pool.run('file', 'const 值 = ', ';\r\n', firstReader.signal, start).catch(error => error.name);
+    const next = pool.run('file', 'const 值 = calc', ';\r\n', nextReader.signal, start);
+    firstReader.abort(); expect(await first).toBe('AbortError');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(transport.aborted).toBe(false);
+    output.resolve('calculate("😀")');
+    expect(await next).toBe('ulate("😀")');
+    expect(start).toHaveBeenCalledOnce(); pool.clear();
+  });
+
   it('expires a completed result within the same 100ms handoff window', async () => {
     vi.useFakeTimers();
     const pool = new CompletionRequests(), reader = new AbortController();
