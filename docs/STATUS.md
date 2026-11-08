@@ -6,8 +6,8 @@
 
 ## 版本与交付
 
-- 当前源码版本为 `0.8.21`，汇总 SDK 0.10.0／历史分页、本机 Automations、同源 UI／Review／Models、恢复持久化与五项生命周期修复，以及补全上下文／过滤和 Runtime 公开 API 修复。本轮聊天末尾间距与补全路由续修仅在本地源码，尚未打包、更新已安装扩展或发布。
-- `0.8.21` 的正式发布与下载以 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21) 为准。发布流程从合入 main 的标签构建唯一 VSIX，校验源码身份与 SHA256 后用于渠道分发和 Microsoft VS Code／Cursor 安装；CI、公开发布及双编辑器安装完成情况以本次交付回执为准。下列单项验证中的“未打包安装”保留当次验证边界，不代表统一版本的最终安装状态。
+- 当前源码版本为 `0.8.22`，是 `codex/chat-completion-followup` 的本地试用版本，包含随内容滚走的聊天末尾 8px 留白和 Next Edit 受阻时不拦 FIM 的路由修复，尚未正式发布。试用包的源码 SHA、VSIX SHA256 与 Microsoft VS Code／Cursor 安装结果以本轮交付回执为准；安装后须先保存文件，再执行 `Developer: Reload Window` 启用新包。
+- 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.22` 仅按本地试用流程从已提交源码构建同一个 VSIX 用于两端安装，不属于正式渠道发布。下列单项验证中的“未打包安装”保留实现阶段边界，最终试用包校验和安装状态以本轮交付回执为准。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
