@@ -374,7 +374,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
       <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
-        <div ref={content} className="v2-chat-rail min-h-full pt-5 pb-2">
+        <div ref={content} className="v2-chat-rail min-h-full pt-5 pb-4">
           <div ref={leading} className="flow-root">
             {leadingContent}
             {(historyNotice || paging) ? <div role="status" data-ui-notice="" className="v2-history-divider select-none">

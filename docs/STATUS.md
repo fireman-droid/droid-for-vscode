@@ -6,8 +6,8 @@
 
 ## 版本与交付
 
-- 当前源码版本为 `0.8.22`，是 `codex/chat-completion-followup` 的本地试用版本，包含随内容滚走的聊天末尾 8px 留白和 Next Edit 受阻时不拦 FIM 的路由修复，尚未正式发布。试用包的源码 SHA、VSIX SHA256 与 Microsoft VS Code／Cursor 安装结果以本轮交付回执为准；安装后须先保存文件，再执行 `Developer: Reload Window` 启用新包。
-- 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.22` 仅按本地试用流程从已提交源码构建同一个 VSIX 用于两端安装，不属于正式渠道发布。下列单项验证中的“未打包安装”保留实现阶段边界，最终试用包校验和安装状态以本轮交付回执为准。
+- 当前源码版本为 `0.8.23`，是 `codex/chat-completion-followup` 的本地试用版本，包含随内容滚走的聊天末尾 16px 留白和 Next Edit 受阻时不拦 FIM 的路由修复，尚未正式发布。试用包的源码 SHA、VSIX SHA256 与 Microsoft VS Code／Cursor 安装结果以本轮交付回执为准；安装后须先保存文件，再执行 `Developer: Reload Window` 启用新包。
+- 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.23` 仅按本地试用流程从已提交源码构建同一个 VSIX 用于两端安装，不属于正式渠道发布。下列单项验证中的“未打包安装”保留实现阶段边界，最终试用包校验和安装状态以本轮交付回执为准。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
@@ -137,7 +137,7 @@
 - Runtime 公开 API 收敛：Node 24 下 7 个定向测试文件／58 项、`typecheck` 与 `lint:budgets` 通过。首次类型检查发现新增测试缺少 load token 和 SDK 枚举类型，修正后仅重跑类型检查及受影响的 2 个测试文件／22 项，均通过。限载测试验证构造前注入、全量标志覆盖、显式条数保留及客户端 `this`／清理；未连接真实 daemon，未实测真实 child hydration／重连或旧 daemon。未打包安装、升级依赖或调用真实模型。
 
 - 补全恢复：双服务开启时，自动替换意图仅在 Next Edit 不处于阻断／重试冷却时优先走该服务，避免失效路由持续挡住独立启用的 FIM。同一次 Next Edit 失败不续发 FIM；显式 Invoke、FIM 关闭与旧 Mercury-only 配置保留原路由边界。`AutocompleteProvider.test.ts` 92 项通过，新增 4 项中永久 403 阻断与协议错误冷却两项已确认修复前失败，另两项保护单 Next Edit 配置；整合后的 `typecheck`、`lint:budgets` 通过。服务端 403 本身未修复，本次只解除它对可用 FIM 的阻挡；未调用真实模型或做编辑器验收，尚未打包安装。
-- 聊天间距：主聊天的 8px 留白位于 Transcript 可滚动内容列末尾，上翻时随末端滚走；footer 顶部恢复为 0、底部保留 12px。复用跑道对内容列底部 padding 的既有计高，不重复添加虚拟列表尾部占位；未改发送置顶、200ms 滚动、导航定位、消息间距与 BTW 布局。更正后的 `build:preview` 通过，未新增样式测试，未进行浏览器验收、打包或安装。
+- 聊天间距：主聊天的 16px 留白位于 Transcript 可滚动内容列末尾，上翻时随末端滚走；footer 顶部为 0、底部保留 12px。复用跑道对内容列底部 padding 的既有计高，不重复添加虚拟列表尾部占位；未改发送置顶、200ms 滚动、导航定位、消息间距与 BTW 布局。本轮采用 VSIX 打包校验路线，不追加预览编译、样式测试或浏览器验收；两端试用安装结果见交付回执。
 
 - 遥测与完整 UI 集成：核心 5 个文件／32 项、页面与业务操作 15 个文件／95 项均有通过结果。页面初跑两个失败来自缺失 connectionId 及泄漏的测试夹具，已修正并仅重跑受影响文件；队列聚合与分类表调整后仅重跑对应 2 文件／18 项。打包内类型检查首次发现测试夹具类型断言，修正后复用已通过的公共 UI 类型检查，续跑其余类型、预算与生产构建，再由同一 vsce 归档器生成完整包；171 个 VSIX 条目、依赖与入口校验通过。UI 修复分支已集成至 `c2156f6f`（9 个提交，含逐题 AskUser）。没有真实模型调用、自动化执行、线上测试遥测或本轮浏览器验收。
 
