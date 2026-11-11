@@ -130,6 +130,7 @@ describe('ChatController', () => {
       sessionId: null,
       connection: {
         status: 'unavailable',
+        reason: 'workspace-required',
         message: 'Open a workspace folder to use Droid.',
       },
     });
@@ -138,6 +139,7 @@ describe('ChatController', () => {
       sessionId: null,
       connection: {
         status: 'unavailable',
+        reason: 'workspace-untrusted',
         message: 'Trust this workspace to start the local Droid runtime.',
       },
     });

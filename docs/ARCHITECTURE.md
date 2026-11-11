@@ -217,6 +217,11 @@ flowchart TD
   `runtimeLifecycle.ts` 在首次初始化失败时核对 Promise、Runtime 代次与工作区归属，清除本次占位并发布不可用状态；
   后续 ready 可重新读取恢复状态。`dispatchChatMessage.ts` 只在尚无 Runtime 的初始化失败状态将 Retry 接回该入口，
   已有 Runtime 的重试仍走原连接恢复路径，不重发 prompt。
+- `workspaceLifecycle.ts` 保留无目录／未信任时不创建 Runtime 的门禁，并通过
+  `ConnectionState.reason` 区分 `workspace-required`／`workspace-untrusted`。
+  Webview 严格解码仅接受不可用状态下的这两个原因，启动、遮罩及页头共用工作区提示，
+  不把它们当作连接恢复失败。`workspace.openFolder` 仅接受类型字段，由 Webview owner
+  调用固定的原生打开文件夹命令，不传入路径、不开放任意命令或授予信任。
 - `SessionWorkspaceContext` 分开保存编辑器窗口目录与所选聊天目录。管理页恢复只接受
   已加载目录中的 ID，并按记录目录重新校验；`getWorkspaceContext()` 随聊天绑定，
   供发送、重试、侧聊、历史和文件适配使用，`getEditorWorkspaceContext()` 用于管理页

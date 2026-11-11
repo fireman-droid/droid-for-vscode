@@ -191,10 +191,12 @@ export function emitWorkspaceUnavailable(
     workspace.cwd === null
       ? {
           status: 'unavailable',
+          reason: 'workspace-required',
           message: 'Open a workspace folder to use Droid.',
         }
       : {
           status: 'unavailable',
+          reason: 'workspace-untrusted',
           message: 'Trust this workspace to start the local Droid runtime.',
         };
   ctl.emitSnapshot();

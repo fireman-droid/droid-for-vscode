@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { FolderOpen, RefreshCw } from 'lucide-react';
 import type { IdeState } from '../../shared/protocol/ideProtocol';
 import type { ConnectionState } from '../../shared/protocol/shell';
 import type { ChatPort } from '../host/chatIntent';
@@ -9,6 +9,7 @@ import { Button } from '../ui/button';
 import { Tooltip } from '../ui/overlays';
 import { DroidConnectionDot } from '../ui/droid-motion';
 import type { SessionRecoveryStatus } from './ConnectionFeedback';
+import { getWorkspaceSetup } from './WorkspaceSetup';
 
 export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port, recovery, working }: {
   readonly connection: ConnectionState;
@@ -21,9 +22,15 @@ export function ChatConnectionStatus({ connection, ide, sessionId, blocked, port
 }) {
   const { t } = useI18n();
   const reconnect = useIdeReconnect(port, sessionId);
+  const setup = getWorkspaceSetup(connection);
   useEffect(() => {
-    port.postMessage({ type: 'ide.refresh', sessionId });
-  }, [port, sessionId, blocked]);
+    if (!setup) port.postMessage({ type: 'ide.refresh', sessionId });
+  }, [port, sessionId, blocked, setup]);
+  if (setup) return <Tooltip content={t(setup.message)}><span role="status" data-ui-notice="" aria-atomic="true" tabIndex={0}
+    aria-label={`${t(setup.label)}. ${t(setup.message)}`}
+    className="ml-1.5 mr-auto inline-flex h-6 select-none items-center text-muted-foreground">
+    <FolderOpen aria-hidden="true" className="size-3" />
+  </span></Tooltip>;
   const ideBusy = ide.status === 'reconnecting' || reconnect.pending;
   const ideFailed = ide.status === 'disconnected' || ide.status === 'reconnect-required' || ide.status === 'error' ||
     ide.status === 'unavailable' && ide.canReconnect || reconnect.error !== null;

@@ -34,6 +34,7 @@ const vscodeMock = vi.hoisted(() => {
   };
   return {
     state,
+    commands: { executeCommand: vi.fn(async (_command: string) => undefined) },
     configUpdate,
     emitColorTheme,
     Uri: {
@@ -178,6 +179,20 @@ describe('DroidViewProvider', () => {
 
     expect(openMissionControl).toHaveBeenCalledOnce();
     expect(controller.handleMessage).not.toHaveBeenCalled();
+  });
+
+  it('opens the folder picker only for an exact workspace action without starting a runtime', async () => {
+    const controller = createController();
+    const provider = new DroidViewProvider(uri('extension'), controller.value);
+    const view = createView();
+    provider.resolveWebviewView(view.value, {} as vscodeTypes.WebviewViewResolveContext, {} as vscodeTypes.CancellationToken);
+    view.receive({ type: 'workspace.openFolder', path: 'C:\\untrusted-choice' });
+    expect(vscodeMock.commands.executeCommand).not.toHaveBeenCalled();
+    view.receive({ type: 'workspace.openFolder' });
+    await Promise.resolve();
+    expect(vscodeMock.commands.executeCommand).toHaveBeenCalledExactlyOnceWith('workbench.action.files.openFolder');
+    expect(controller.handleMessage).not.toHaveBeenCalled();
+    provider.dispose();
   });
 
   it('logs a dedicated event for a version-mismatched webview.ready', () => {

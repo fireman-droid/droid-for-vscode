@@ -139,6 +139,8 @@ const WEBVIEW_MESSAGE_PARSERS = {
   },
   'models.open': (value) =>
     hasExactKeys(value, ['type']) ? { type: 'models.open' } : undefined,
+  'workspace.openFolder': (value) =>
+    hasExactKeys(value, ['type']) ? { type: 'workspace.openFolder' } : undefined,
   'webview.ready': parseWebviewReady,
   'webview.state-applied': parseWebviewStateApplied,
   'webview.diagnostic': parseWebviewDiagnostic,

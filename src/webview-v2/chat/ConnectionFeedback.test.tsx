@@ -9,7 +9,8 @@ import { useHostMessageFlow } from '../host/useHostMessageFlow';
 import type { ChatPort } from '../host/chatIntent';
 import { initialAssistantWebviewState } from '../state/initialState';
 import type { AssistantWebviewState } from '../state/types';
-import { SessionRecovery } from './ConnectionFeedback';
+import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
+import { ChatStartup } from './ChatStartup';
 import { createChatStore, type ChatStore } from './store';
 
 beforeEach(() => {
@@ -55,7 +56,7 @@ function requests(port: ReturnType<typeof fixture>['port']) {
   return port.postMessage.mock.calls.map(([message]) => message).filter((message) => message.type !== 'webview.state-applied' && message.type !== 'ide.refresh');
 }
 
-function Harness({ store, port, recovery = false }: { store: ChatStore; port: ChatPort; recovery?: boolean }) {
+function Harness({ store, port, recovery = false, gate }: { store: ChatStore; port: ChatPort; recovery?: boolean; gate?: 'startup' | 'overlay' }) {
   const { state, dispatch } = useStore(store);
   const composer = useComposerFlow(port, state, dispatch, {
     blocked: !recovery, compact: () => {}, navigate: () => {}, openBtw: () => {}, askBtw: () => {},
@@ -73,10 +74,54 @@ function Harness({ store, port, recovery = false }: { store: ChatStore; port: Ch
     <output aria-label="Draft">{composer.draft}</output>
     <output aria-label="Attachments">{state.attachments.map((attachment) => attachment.name).join(', ')}</output>
     <SessionRecovery state={state} blocked={!recovery} onReconnect={sessions.handleRetry} port={port} phase={recovery ? 'idle' : 'restoring'} />
+    {gate === 'startup' ? <ChatStartup state={state} blocked={false} port={port} /> : null}
+    {gate === 'overlay' && state.connection.status !== 'connected'
+      ? <ConversationWait phase="restoring" hasSnapshot handshakeTimedOut={false} connection={state.connection} port={port} /> : null}
   </>;
 }
 
 describe('session connection recovery', () => {
+  it.each([
+    ['startup', 'workspace-required', 'Open a workspace folder to use Droid.'],
+    ['overlay', 'workspace-required', 'Open a workspace folder to use Droid.'],
+    ['startup', 'workspace-untrusted', 'Trust this workspace to start the local Droid runtime.'],
+    ['overlay', 'workspace-untrusted', 'Trust this workspace to start the local Droid runtime.'],
+  ] as const)('keeps %s workspace setup actionable for %s instead of retrying a nonexistent runtime', (gate, reason, message) => {
+    const { store, port } = fixture();
+    const ready = snapshot(store.getState().state, 12);
+    render(<Harness store={store} port={port} recovery gate={gate} />);
+    receive({ ...snapshot(store.getState().state, 11), sessionId: null, conversationId: null,
+      connection: { status: 'unavailable', reason, message }, transcript: [], historyStatus: 'unavailable',
+      sessions: { status: 'idle', items: [] } });
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(screen.queryByText('Unable to connect.')).toBeNull();
+    expect(screen.getByRole('status', { name: /Workspace (required|trust required)/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Reconnect/ })).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.queryByRole('button', { name: /^Reconnect/ })).toBeNull();
+    port.postMessage.mockClear();
+    if (reason === 'workspace-required') {
+      fireEvent.click(screen.getByRole('button', { name: 'Open folder' }));
+      expect(requests(port)).toEqual([{ type: 'workspace.openFolder' }]);
+    } else {
+      expect(screen.queryByRole('button', { name: 'Open folder' })).toBeNull();
+      expect(requests(port)).toEqual([]);
+    }
+    receive({ ...ready, workspaceRoot: 'C:\\test-workspace', connection: { status: 'connected' } });
+    expect(screen.getByRole('status', { name: /^Online/ })).toBeTruthy();
+    expect(screen.queryByText(message)).toBeNull();
+  });
+
+  it('keeps genuine runtime failures retryable even when no workspace path was projected', () => {
+    const { store, port } = fixture({ status: 'unavailable', message: 'Runtime unavailable' });
+    render(<Harness store={store} port={port} recovery gate="startup" />);
+    expect(screen.getByText('Unable to connect.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open folder' })).toBeNull();
+    port.postMessage.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    expect(requests(port)).toEqual([{ type: 'runtime.retry', sessionId: 'session-a' }]);
+  });
+
   it('refreshes once until a new snapshot arrives and preserves the draft and attachments', () => {
     const { store, port } = fixture();
     render(<Harness store={store} port={port} />);

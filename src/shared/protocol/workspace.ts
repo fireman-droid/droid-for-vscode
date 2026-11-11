@@ -1,5 +1,9 @@
 import { WORKSPACE_FILES_STATUSES } from './bounds';
 
+export interface WorkspaceOpenFolderMessage {
+  readonly type: 'workspace.openFolder';
+}
+
 /**
  * Asks the host to open a native diff (or the file itself when no
  * comparison base exists) for a workspace-relative file path that a

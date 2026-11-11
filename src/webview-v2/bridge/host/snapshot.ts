@@ -230,8 +230,10 @@ export function parseLatestConversationChanges(
 export function parseConnection(value: unknown): ConnectionState | undefined {
   if (
     !isStrictRecord(value) ||
-    !hasExactKeys(value, ['status'], ['message', 'modelRequestFailed']) ||
+    !hasExactKeys(value, ['status'], ['message', 'reason', 'modelRequestFailed']) ||
     !isConnectionStatus(value.status) ||
+    (value.reason !== undefined && (value.status !== 'unavailable' ||
+      value.reason !== 'workspace-required' && value.reason !== 'workspace-untrusted')) ||
     (value.modelRequestFailed !== undefined && value.modelRequestFailed !== true) ||
     (value.message !== undefined && !isBoundedString(value.message, MAX_STRING_LENGTH))
   ) {
@@ -240,6 +242,7 @@ export function parseConnection(value: unknown): ConnectionState | undefined {
 
   return { status: value.status,
     ...(value.message === undefined ? {} : { message: value.message }),
+    ...(value.reason === undefined ? {} : { reason: value.reason }),
     ...(value.modelRequestFailed === true ? { modelRequestFailed: true } : {}),
   };
 }

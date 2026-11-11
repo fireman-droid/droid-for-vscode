@@ -159,6 +159,7 @@ import type {
   FilePreviewMessage,
   TerminalOpenMirrorMessage,
   WorkspaceFilesMessage,
+  WorkspaceOpenFolderMessage,
   WorkspaceOpenPathMessage,
   WorkspaceSearchFilesMessage,
 } from './protocol/workspace';
@@ -226,7 +227,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v58 exposes the Automations management page (management protocol v2).
 // v59 adds automation session destinations, run links, and result dashboards (management v3).
 // v60 adds read-only inline subagent inspection without opening an external viewer.
-export const BRIDGE_PROTOCOL_VERSION = 60 as const;
+// v61 distinguishes workspace setup gates and adds the native folder-picker action.
+export const BRIDGE_PROTOCOL_VERSION = 61 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage
@@ -271,6 +273,7 @@ export type WebviewToHostMessage =
   | GitRequestBranchDiffContract
   | GitCommitRequestContract
   | TerminalOpenMirrorMessage
+  | WorkspaceOpenFolderMessage
   | WorkspaceOpenPathMessage
   | SkillsRefreshMessage
   | SkillToggleMessage

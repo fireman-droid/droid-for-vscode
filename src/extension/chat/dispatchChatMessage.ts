@@ -108,7 +108,8 @@ export function dispatchChatMessage(
       void reconnectControllerIde(controller, message.sessionId);
       return;
     case 'capabilities.manage':
-      return; // Routed to native management by the Webview owner.
+    case 'workspace.openFolder':
+      return; // Native actions are routed by the Webview owner.
     case 'webview.ready':
       controller.connectionMaintenance.start();
       void handleReady(controller).then(() => controller.connectionMaintenance.check());

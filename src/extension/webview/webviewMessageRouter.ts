@@ -110,6 +110,16 @@ export function routeWebviewMessage(
     void vscode.commands.executeCommand('droidvisx.openManagement', message.page);
     return;
   }
+  if (message.type === 'workspace.openFolder') {
+    void vscode.commands.executeCommand('workbench.action.files.openFolder').then(
+      () => undefined,
+      () => {
+        options.diagnostics?.record({ level: 'warn', name: 'host.workspace.open-folder-failed' });
+        void vscode.window.showErrorMessage('Droid could not open the folder picker. Use File > Open Folder.');
+      },
+    );
+    return;
+  }
   if (message.type === 'capabilities.manage') {
     void vscode.commands.executeCommand('droidvisx.manageCapabilities', message.section);
     return;

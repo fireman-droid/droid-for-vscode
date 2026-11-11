@@ -232,7 +232,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
       overlay={<>
       {subagents.inspection ? <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} /> : null}
       {transition.overlay !== null && state.transcript.length === 0 ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
-        handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} /> : null}
+        handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} port={port} /> : null}
       </>}>
 
         <ToolActionsContext.Provider value={toolActions}>

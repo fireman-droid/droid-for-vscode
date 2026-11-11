@@ -1,13 +1,13 @@
 # 当前状态
 
-核对日期：2026-11-08。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-11-11。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
-- 当前源码版本为 `0.8.23`，是 `codex/chat-completion-followup` 的本地试用版本，包含随内容滚走的聊天末尾 16px 留白和 Next Edit 受阻时不拦 FIM 的路由修复，尚未正式发布。试用包的源码 SHA、VSIX SHA256 与 Microsoft VS Code／Cursor 安装结果以本轮交付回执为准；安装后须先保存文件，再执行 `Developer: Reload Window` 启用新包。
-- 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.23` 仅按本地试用流程从已提交源码构建同一个 VSIX 用于两端安装，不属于正式渠道发布。下列单项验证中的“未打包安装”保留实现阶段边界，最终试用包校验和安装状态以本轮交付回执为准。
+- 当前源码版本仍为 `0.8.23`，分支为 `codex/chat-completion-followup`。已安装到 Microsoft VS Code／Cursor 的本地试用包包含随内容滚走的聊天末尾 16px 留白与 Next Edit 受阻时不拦 FIM 的修复；本次新增的工作区启动提示修复尚未打包安装，不能用旧包验收。
+- 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.23` 为本地试用，未向正式渠道发布。下列历史单项验证中的“未打包安装”保留各实现阶段边界，不表示本次工作区修复已安装。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
 - 本机实测 daemon 自报版本为 `1.2.0`；文档站为 https://fireman-droid.github.io/droid-for-vscode/ 。
@@ -16,11 +16,13 @@
 
 当前源码的启动入口、BTW／Review 问答、
 选区工具栏、权限／Agent 焦点、过程命令、无时间占位、模型菜单定位、代码独立工具行与 Models
-编辑流程使用生产共享源码。底部 Task 支持内嵌只读子对话；Bridge v60 复用现有子会话读取与订阅，
+编辑流程使用生产共享源码。底部 Task 支持内嵌只读子对话，复用现有子会话读取与订阅，
 不创建新子代理，关闭／切会话／销毁取消旧查看；显式外部查看保留。
+Bridge v61 增加结构化工作区门禁原因与无参数的原生打开文件夹操作。
 
 | 范围 | 当前实现与边界 |
 | --- | --- |
+| 工作区启动门禁 | 未打开文件夹与未信任工作区保留 Host 原门禁，不创建 Runtime；启动区域及切换遮罩显示准确原因，页头显示工作区状态而非离线／无效重连。缺少文件夹时提供原生“打开文件夹”，不接收路径或任意命令，不代替用户信任工作区；真实 Runtime 故障仍可重连 |
 | SDK 0.10.0 | 对象 transport、Script 批量权限与 RecommendMission 已适配；普通压缩保留原身份和租约，`/handoff` 显式创建后继，Spec 使用正式交接事件。文件浏览与自定义模型 revision 接口同步新版；默认设置保留已有开放字段。daemon 限载改为构造前适配公开客户端并注入 controller，保留 `loadAllMessages: false` 与默认 100 条，不再读取 controller 私有字段；IDE 兼容补丁保留 |
 | 本机 Automations | 已接通独立详情（`SettingsSection`／`SettingsRow` 概览卡片、运行与投递历史、原生四格指标与最近运行结果看板）、三步创建、每天／每周 24 小时制主题化 Select 与 UTC cron、固定会话或每次新建会话、会话查看／显式继续。创建暂停并跳过首次运行；配置写后回读，无法确认时阻止运行并请求暂停。已移除“立即运行”二次确认，保留执行校验与启用／删除确认；UI 修复已随 PR #26 完整试用包安装到 Microsoft VS Code。云端、事件触发与 Workstream 配置不在范围内；未改现有每日问候任务 |
 | AskUser 问答卡片 | Runtime 与 Webview 共用多选提示识别，支持题目／主题中的括号说明和单选／多选混合表述；单选预设选项与自定义填空互斥，再次点击已选项可取消，多选保留全部已选项并合并补充填空 |
@@ -58,6 +60,9 @@
 - `daemon_health` 的 sidecar 启动／预热失败明确标记 `outcome=failed`，缺失原因使用 `unknown`，并保留已有 spawn／connect 阶段；不把失败默认标为 `ok`，不上传原始错误内容。
 
 ## 最近验证
+
+- 工作区门禁：5 个受影响测试文件共 73 项通过，覆盖 Host 不创建 Runtime、两种原因的严格解码、启动／遮罩经真实协议收取快照后的交互、受限原生文件夹操作，以及原有 Runtime／IDE 重连。首轮 UI 回归失败暴露新 reason 未接入解码器及无会话快照夹具不符合历史状态契约，修正后仅重跑受影响文件通过；最终 `typecheck`、`lint:budgets` 各执行一次并通过。未做真实编辑器／模型验收，未打包安装。
+- 再次发送后长期无回复：现有日志显示已进入 LLM 调用且 Stop 可收尾，尚未确定无首 token 的根因；本次工作区修复不代表解决该等待。未增加自动重发、短超时或强制改为空闲。
 
 - `0.8.21` 整合树的 10 个定向 Vitest 文件报告 291 项通过，覆盖补全静态上下文、最终引用计数、闭合符过滤、请求接力，以及公开 daemon 客户端／终态查询和 Host 恢复。后台任务回执未提供退出码，保留完整 Vitest 结果。PR CI 的类型、预算、构建、VSIX 校验及补全评估已有成功结果；Models 发现与 InlineQuestion 的旧入口／滚动容器测试已按生产交互更新，原行为断言保留，2 文件 5 项重跑通过。正式门禁仍以最新提交 CI 为准。未新增真实模型评测或浏览器验收，已有 Codestral 6 样本对照不作为全模型质量保证。
 
