@@ -59,6 +59,8 @@ function replyTimestamp(groups: readonly AssistantGroupDescriptor[]): number | u
 function projectTranscript(transcript: readonly SessionTranscriptItem[], includePlanSnapshots: boolean, previous?: TranscriptProjection): TranscriptProjection {
   const descriptors: TranscriptDescriptor[] = [];
   const groups = new Map<string, AssistantGroupDescriptor>();
+  const groupIds = new Set<string>();
+  let promptId: string | null = null;
   const appendToGroup = (item: Exclude<SessionTranscriptItem, { kind: 'user' }>): void => {
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
@@ -73,7 +75,9 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
         group = prior;
         groups.set(key, group);
       } else {
-        group = { kind: 'assistant', id: `assistant-turn:${key}`, turnId: key, items: [] };
+        const id = `assistant-turn:${key}`;
+        group = { kind: 'assistant', id: groupIds.has(id) ? `${id}:after:${promptId}` : id, turnId: key, items: [] };
+        groupIds.add(id);
         groups.set(key, group);
         descriptors.push(group);
       }
@@ -94,6 +98,9 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
     // Workspace snapshots include manual edits; they belong to Review, not an AI reply.
     if (item.kind === 'changes') continue;
     if (item.kind === 'user') {
+      // Steering divides visible replies without replacing the active runtime turn.
+      groups.clear();
+      promptId = item.id;
       descriptors.push({ kind: 'user', item, images: images.get(item.id) ?? [] });
       continue;
     }

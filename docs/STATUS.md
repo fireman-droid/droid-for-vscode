@@ -6,7 +6,7 @@
 
 ## 版本与交付
 
-- 当前源码版本仍为 `0.8.23`，分支为 `codex/chat-completion-followup`。已安装到 Microsoft VS Code／Cursor 的本地试用包包含随内容滚走的聊天末尾 16px 留白与 Next Edit 受阻时不拦 FIM 的修复；本次新增的工作区启动提示修复尚未打包安装，不能用旧包验收。
+- 当前源码版本仍为 `0.8.23`，分支为 `codex/chat-completion-followup`。已安装到 Microsoft VS Code／Cursor 的本地试用包包含随内容滚走的聊天末尾 16px 留白与 Next Edit 受阻时不拦 FIM 的修复；新增的工作区启动提示与引导回复分组修复尚未打包安装，不能用旧包验收。
 - 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.23` 为本地试用，未向正式渠道发布。下列历史单项验证中的“未打包安装”保留各实现阶段边界，不表示本次工作区修复已安装。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
@@ -61,6 +61,7 @@ Bridge v61 增加结构化工作区门禁原因与无参数的原生打开文件
 
 ## 最近验证
 
+- 引导回复分组：Webview 按用户消息边界拆分回复，同一后台 turn 的后续正文、思考和新工具留在对应引导消息下方；主聊天与只读视图选择最后一个匹配回复段作为等待段。保留后台 turn 身份、原工具更新归属、引导消费确认、Stop 与滚动机制。新增连续两次引导回归在旧源码实际失败，修复后投影、导航、Host 引导及改动归属 4 文件共 30 项通过，`typecheck`、`lint:budgets` 各执行一次并通过；未做真实模型／编辑器验收，尚未打包安装。
 - 工作区门禁：5 个受影响测试文件共 73 项通过，覆盖 Host 不创建 Runtime、两种原因的严格解码、启动／遮罩经真实协议收取快照后的交互、受限原生文件夹操作，以及原有 Runtime／IDE 重连。首轮 UI 回归失败暴露新 reason 未接入解码器及无会话快照夹具不符合历史状态契约，修正后仅重跑受影响文件通过；最终 `typecheck`、`lint:budgets` 各执行一次并通过。未做真实编辑器／模型验收，未打包安装。
 - 再次发送后长期无回复：现有日志显示已进入 LLM 调用且 Stop 可收尾，尚未确定无首 token 的根因；本次工作区修复不代表解决该等待。未增加自动重发、短超时或强制改为空闲。
 

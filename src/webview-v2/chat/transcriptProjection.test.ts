@@ -9,6 +9,42 @@ const assistant = (turnId: string, text: string) => ({ kind: 'assistant' as cons
 const tool: ToolTranscriptItem = { kind: 'tool', id: 'trailing-tool', turnId: 'tool-only', toolUseId: 'call', toolName: 'Read',
   action: 'Read', status: 'completed', progressCount: 0, latestUpdateKind: null };
 
+it('keeps repeated steering replies after their own prompts while retaining the runtime turn identity', () => {
+  const select = createTranscriptSelector();
+  const before = { ...assistant('active-turn', 'Before guidance'), timestamp: 1_790_000_000_000 };
+  const oldTool = { ...tool, turnId: 'active-turn' };
+  const start = [user('original'), before, oldTool];
+  const original = select(start);
+  const after = { ...assistant('active-turn', 'After guidance'), id: 'guided-reply', timestamp: before.timestamp + 1_000 };
+  const thinking: SessionTranscriptItem = { kind: 'thinking', id: 'guided-thinking', turnId: 'active-turn',
+    text: 'Considering guidance', status: 'complete', truncated: false };
+  const guided = [...start, user('guidance'), thinking, after];
+  const first = select(guided);
+  const second = select([...guided, user('more-guidance'),
+    { ...after, id: 'second-guided-reply', text: 'After more guidance', timestamp: before.timestamp + 2_000 }]);
+  expect(second.descriptors.map(item => item.kind === 'user' ? item.item.text
+    : item.items.filter(row => row.kind === 'assistant').map(row => row.text).join(''))).toEqual([
+    'original', 'Before guidance', 'guidance', 'After guidance', 'more-guidance', 'After more guidance',
+  ]);
+  const replies = second.descriptors.filter(item => item.kind === 'assistant');
+  expect(replies.map(item => item.turnId)).toEqual(['active-turn', 'active-turn', 'active-turn']);
+  expect(new Set(replies.map(item => item.id)).size).toBe(3);
+  expect([...original.replyTails.values()]).toEqual(['Before guidance']);
+  expect([...first.replyTails.values()]).toEqual(['Before guidance', 'After guidance']);
+  expect([...second.replyTails.values()]).toEqual(['Before guidance', 'After guidance', 'After more guidance']);
+  expect([...second.replyTimestamps.values()]).toEqual([before.timestamp, before.timestamp + 1_000, before.timestamp + 2_000]);
+  const structure = createTranscriptStructureSelector()(second.descriptors);
+  expect(structure.turns.map(row => row.messageIds)).toEqual([
+    ['original', replies[0]!.id], ['guidance', replies[1]!.id], ['more-guidance', replies[2]!.id],
+  ]);
+  const restored = describeTranscript(JSON.parse(JSON.stringify(guided)));
+  expect(restored.descriptors).toEqual(first.descriptors);
+  // A late result for an earlier tool updates its own reply, not the guided reply.
+  const late = select([{ ...start[0]! }, before, { ...oldTool, durationMs: 500 }, ...guided.slice(start.length)]);
+  expect(late.descriptors[1]).toMatchObject({ items: [before, { ...oldTool, durationMs: 500 }] });
+  expect([...late.replyTails.values()]).toEqual(['Before guidance', 'After guidance']);
+});
+
 it('keeps reply copying and question navigation current through streaming, rewinds and restored tool-only tails', () => {
   const select = createTranscriptSelector();
   const structure = createTranscriptStructureSelector();

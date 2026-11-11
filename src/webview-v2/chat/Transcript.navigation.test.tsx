@@ -30,7 +30,9 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it.each([false, true])('preserves question navigation and wheel control with a layout host: %s', async (hosted) => {
+it.each([
+  { hosted: false, steered: false }, { hosted: true, steered: false }, { hosted: true, steered: true },
+])('preserves reply placement, navigation and wheel control with host=$hosted steering=$steered', async ({ hosted, steered }) => {
   // JSDOM has no media-query API; the production scrolling hook observes this
   // browser preference even when the test controls viewport geometry itself.
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
@@ -52,9 +54,10 @@ it.each([false, true])('preserves question navigation and wheel control with a l
   try {
     const state: AssistantWebviewState = {
       ...initialAssistantWebviewState, sessionId: 'session', conversationId: 'conversation', connection: { status: 'connected' },
+      turn: steered ? { turnId: 'shared-turn', status: 'streaming' } : null,
       transcript: [0, 1, 2].flatMap((index) => [
         { kind: 'user' as const, id: `question-${index}`, messageId: `message-${index}`, text: `Question ${index + 1}` },
-        { kind: 'assistant' as const, id: `answer-${index}`, turnId: `turn-${index}`, text: `Answer ${index + 1}` },
+        { kind: 'assistant' as const, id: `answer-${index}`, turnId: steered ? 'shared-turn' : `turn-${index}`, text: `Answer ${index + 1}` },
       ]),
     };
     const transcript = <Transcript state={state} port={{ postMessage: vi.fn() }} blocked={false} sendSignal={0} onFork={undefined} />;
@@ -62,6 +65,9 @@ it.each([false, true])('preserves question navigation and wheel control with a l
       ? <ChatLayout header={null} footer={<div>{expanded ? 'Expanded agents' : 'Collapsed agents'}</div>}>{transcript}</ChatLayout>
       : transcript;
     const view = render(page(false));
+    for (const index of [0, 1, 2]) {
+      expect(screen.getByText(`Answer ${index + 1}`).closest('[data-index]')?.getAttribute('data-index')).toBe(String(index));
+    }
     const viewport = screen.getByLabelText('Chat transcript');
     await waitFor(() => expect(viewport.scrollTop).toBe(460));
     expect(screen.getByRole('button', { name: 'Jump to question 1: Question 1' }).getAttribute('aria-current')).toBe('true');

@@ -31,7 +31,7 @@ export const ReadOnlyTranscript = memo(function ReadOnlyTranscript({ items, runn
   const { turns } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((descriptor) => [descriptor.kind === 'user' ? descriptor.item.id : descriptor.id, descriptor])), [descriptors]);
   const pendingReplyRow = useMemo(() => running
-    ? (turns.find((row) => row.messageIds.some((id) => {
+    ? ([...turns].reverse().find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
       return descriptor.kind === 'assistant' && matchesAssistantTurn(descriptor.items, descriptor.turnId, turnId);
     })) ?? turns.at(-1))?.id : undefined, [running, turnId, turns, byId]);
