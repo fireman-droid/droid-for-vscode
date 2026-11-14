@@ -1,5 +1,5 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ListFilter, Pencil, RefreshCw, Search, X } from 'lucide-react';
 import { MAX_MODEL_CATALOG_ITEMS, MAX_MODEL_DISPLAY_NAME_LENGTH } from '../../shared/protocol/bounds';
 import { isSafeText, type DiscoveredCustomModel } from '../../shared/protocol/customModelsProtocol';
@@ -22,6 +22,24 @@ export function ModelDiscovery({ page, onDone, onManual }: {
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [aliases, setAliases] = useState<Readonly<Record<string, string>>>({});
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
+  const aliasBeforeEdit = useRef<{ readonly model: string; readonly value: string | undefined } | null>(null);
+  const startAliasEdit = (model: string) => {
+    aliasBeforeEdit.current = { model, value: aliases[model] };
+    setEditingAlias(model);
+  };
+  const cancelAliasEdit = (model: string) => {
+    const previous = aliasBeforeEdit.current;
+    if (previous && previous.model === model) {
+      setAliases((current) => {
+        if (previous.value === undefined) {
+          const { [model]: _discarded, ...rest } = current;
+          return rest;
+        }
+        return { ...current, [model]: previous.value };
+      });
+    }
+    setEditingAlias((current) => (current === model ? null : current));
+  };
   const { connection, discovered, models, chosen, busy } = page;
   const items = discovered ?? [];
   const existing = new Set(models.map((model) => model.model));
@@ -97,16 +115,28 @@ export function ModelDiscovery({ page, onDone, onManual }: {
             </label>
             {exists ? <span data-ui-notice="" className="models-added"><Check aria-hidden />{t("已添加")}</span> :
               <Button variant="ghost" size="icon-sm" aria-label={t("修改 {p0} 的导入别名", { p0: item.model })} aria-expanded={aliasOpen}
-                title={t("设置显示别名")} disabled={busy} onClick={() => setEditingAlias(aliasOpen ? null : item.model)}><Pencil /></Button>}
+                title={t("设置显示别名")} disabled={busy}
+                onMouseDown={(event) => { if (aliasOpen) event.preventDefault(); }}
+                onClick={() => { if (aliasOpen) setEditingAlias(null); else startAliasEdit(item.model); }}><Pencil /></Button>}
           </div>
           {aliasOpen ? <div className="models-import-alias">
-            <label htmlFor={inputId}>{t("显示别名")} <span className="models-optional">{t("可选")}</span></label>
-            <Input id={inputId} className="h-8" autoFocus disabled={busy} value={displayName(item)} maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH}
-              placeholder={t("留空时使用 Model ID")} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
+            <Input id={inputId} className="models-import-alias-input h-[26px] max-w-[280px] rounded-[6px] px-2 text-xs" autoFocus disabled={busy} value={displayName(item)}
+              maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH} aria-label={t("显示别名")} placeholder={t("留空时使用 Model ID")}
+              aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
+              onBlur={() => setEditingAlias((current) => (current === item.model ? null : current))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') { event.preventDefault(); setEditingAlias(null); }
+                else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.nativeEvent.stopImmediatePropagation();
+                  cancelAliasEdit(item.model);
+                }
+              }}
               onChange={(event) => setAliases((current) => ({ ...current, [item.model]: event.target.value }))} />
           </div> : null}
           {error ? <p role="alert" className="models-import-error" id={`${inputId}-error`}>{error}
-            {!aliasOpen ? <Button variant="link" size="sm" disabled={busy} onClick={() => setEditingAlias(item.model)}>{t("设置别名")}</Button> : null}
+            {!aliasOpen ? <Button variant="link" size="sm" disabled={busy} onClick={() => startAliasEdit(item.model)}>{t("设置别名")}</Button> : null}
           </p> : null}
         </div>;
       })}

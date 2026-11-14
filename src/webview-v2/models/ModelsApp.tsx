@@ -90,7 +90,11 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
       </>}
     </section>
     <DialogContent className="management-dialog models-workspace-dialog" closeDisabled={busy} closeLabel={t('Close')}
-      onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onInteractOutside={event => event.preventDefault()}>
+      onEscapeKeyDown={event => {
+        if (busy || (event.target instanceof HTMLElement && event.target.classList.contains('models-import-alias-input'))) {
+          event.preventDefault();
+        }
+      }} onInteractOutside={event => event.preventDefault()}>
       <DialogTitle>{creating ? t("创建渠道") : connection?.name}</DialogTitle>
       <DialogDescription className="management-caption">{t("Save each section separately. Closing does not undo applied changes.")}</DialogDescription>
       <ScrollArea className="models-workspace-scroll" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>

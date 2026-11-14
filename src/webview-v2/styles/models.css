@@ -138,8 +138,8 @@
   .models-model-alias { display: block; margin-top: 2px; overflow-wrap: anywhere; font-size: 12px; line-height: 1.45; color: var(--muted-ink); }
   .models-added { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; padding: 0 2px; font-size: 12px; color: var(--muted-ink); }
   .models-added > svg { width: 12px; height: 12px; }
-  .models-import-alias { display: grid; gap: 6px; margin: 6px 0 4px 24px; font-size: 12px; }
-  .models-import-alias > input { width: 100%; }
+  .models-import-alias { margin: 2px 0 0 24px; }
+  .models-import-alias-input { width: 100%; max-width: 280px; height: 26px; padding-inline: 8px; border-radius: 6px; font-size: 12px; }
   .models-import-error { margin: 4px 0 2px 24px; color: var(--error-ink); font-size: 11px; line-height: 1.6; }
   .models-import-error > button { height: auto; padding-block: 2px; font-size: 11px; }
   .models-discovery-no-results { display: flex; min-height: 160px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px; text-align: center; }

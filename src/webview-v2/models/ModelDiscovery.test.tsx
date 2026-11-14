@@ -134,6 +134,27 @@ describe('model discovery interactions', () => {
     }));
   });
 
+  it('commits inline alias edits on Enter or blur and reverts on Escape without closing the dialog', async () => {
+    const host = createHost([{ model: 'alpha', displayName: 'Original name' }]);
+    const dialog = await discover(host, 'alpha');
+    const view = within(dialog);
+    const user = userEvent.setup();
+    await user.click(view.getByRole('button', { name: '修改 alpha 的导入别名' }));
+    const input = view.getByRole('textbox', { name: /显示别名/ });
+    await user.clear(input);
+    await user.type(input, 'Temporary name{Escape}');
+    expect(view.queryByRole('textbox', { name: /显示别名/ })).toBeNull();
+    expect(view.getByText('Original name')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    await user.click(view.getByRole('button', { name: '修改 alpha 的导入别名' }));
+    const nextInput = view.getByRole('textbox', { name: /显示别名/ });
+    await user.clear(nextInput);
+    await user.type(nextInput, 'Confirmed alias{Enter}');
+    expect(view.queryByRole('textbox', { name: /显示别名/ })).toBeNull();
+    expect(view.getByText('Confirmed alias')).toBeTruthy();
+  });
+
   it('preserves a manual draft across tabs and starts fresh for another channel', async () => {
     const host = createHost([]);
     const dialog = await openAddModels(host);
