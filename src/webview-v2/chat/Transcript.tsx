@@ -137,7 +137,7 @@ export function Transcript({
   const { turns } = useMemo(() => selectors.structure(descriptors), [descriptors, selectors]);
   const byId = useMemo(() => new Map(descriptors.map((item) => [item.kind === 'user' ? item.item.id : item.id, item])), [descriptors]);
   const pendingReplyRow = useMemo(() => running || state.turn?.status === 'stopping'
-    ? (turns.find((row) => row.messageIds.some((id) => {
+    ? ([...turns].reverse().find((row) => row.messageIds.some((id) => {
       const descriptor = byId.get(id)!;
       return descriptor.kind === 'assistant' && matchesAssistantTurn(descriptor.items, descriptor.turnId, state.turn?.turnId);
     })) ?? turns.at(-1))?.id : undefined, [running, state.turn?.status, state.turn?.turnId, turns, byId]);
@@ -153,7 +153,7 @@ export function Transcript({
     pauseAutoFollow={editor.draft?.phase === 'editing'}
     sendSignal={sendSignal} reportLayout={reportLayout} onQuote={onQuote} onBtwQuote={onBtwQuote}
     historyNotice={historyNotice ? t(historyNotice) : undefined}
-    leadingContent={items.length === 0 ? <ChatStartup state={state} blocked={blocked} onDraftSuggestion={onDraftSuggestion} /> : null}
+    leadingContent={items.length === 0 ? <ChatStartup state={state} blocked={blocked} port={port} onDraftSuggestion={onDraftSuggestion} /> : null}
     trailingContent={<>{state.mission?.role === 'orchestrator' ? <MissionWorkers key={state.sessionId} mission={state.missionSnapshot}
       result={state.missionControlResult} port={port} disabled={blocked || state.connection.status !== 'connected'} /> : null}
       {interaction}</>}

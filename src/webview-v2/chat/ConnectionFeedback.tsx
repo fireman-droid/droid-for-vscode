@@ -6,6 +6,7 @@ import { subscribeHostMessages } from '../host/hostMessageSource';
 import { announceReady } from '../bridge/vscode';
 import type { ChatPort } from '../host/chatIntent';
 import { ChatConnectionStatus } from './ChatConnectionStatus';
+import { getWorkspaceSetup, WorkspaceSetup } from './WorkspaceSetup';
 
 function useLongWait(waiting: boolean, delay: number) {
   const [elapsed, setElapsed] = useState(false);
@@ -92,15 +93,16 @@ export function SessionRecovery({ state, blocked, ideBlocked = blocked, onReconn
       }
     });
   }, [state.conversationId, state.sessionId]);
-  const failed = state.connection.status === 'unavailable';
+  const setup = getWorkspaceSetup(state.connection);
+  const failed = state.connection.status === 'unavailable' && !setup;
   const transitioning = phase !== 'idle' && phase !== 'leaving';
-  const waiting = pending || refresh.pending || state.connection.status === 'idle' || state.connection.status === 'connecting' || transitioning;
+  const waiting = !setup && (pending || refresh.pending || state.connection.status === 'idle' || state.connection.status === 'connecting' || transitioning);
   const longWait = useLongWait(waiting, 60_000);
-  const timedOut = handshakeTimedOut || longWait || refresh.outcome === 'timeout';
+  const timedOut = !setup && (handshakeTimedOut || longWait || refresh.outcome === 'timeout');
   const running = working || state.turn?.status === 'submitting' || state.turn?.status === 'streaming' || state.turn?.status === 'stopping';
   const canReconnect = failed && !blocked && !pending && !refresh.pending && !running && state.sessions.status !== 'loading';
   const recovery: SessionRecoveryStatus = {
-    active: failed || waiting || handshakeTimedOut,
+    active: failed || waiting || !setup && handshakeTimedOut,
     failed, timedOut, waiting, pending, refresh, canReconnect,
     reconnect: () => {
       if (!canReconnect || pendingAfter.current !== null) return;
@@ -113,13 +115,16 @@ export function SessionRecovery({ state, blocked, ideBlocked = blocked, onReconn
     blocked={ideBlocked} port={port} recovery={recovery} working={working} />;
 }
 
-export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connection }: {
+export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connection, port }: {
   readonly phase: string;
   readonly hasSnapshot: boolean;
   readonly handshakeTimedOut: boolean;
   readonly connection: AssistantWebviewState['connection'];
+  readonly port: ChatPort;
 }) {
   const { t } = useI18n();
+  const setup = getWorkspaceSetup(connection);
+  if (setup) return <WorkspaceSetup setup={setup} port={port} />;
   const failed = connection.status === 'unavailable';
   const label = failed ? 'Unable to connect.'
     : handshakeTimedOut ? 'Connection timed out.'

@@ -184,8 +184,11 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       return [];
     }
     const version = document.version;
+    // A blocked automatic edit route must not suppress independently enabled FIM.
     const preferEdit = edit && (configured.fimEnabled === false || configured.protocol === 'mercury-edit' ||
-      this.editIntent?.document === document && this.editIntent.version === version && !context.selectedCompletionInfo);
+      this.editIntent?.document === document && this.editIntent.version === version && !context.selectedCompletionInfo &&
+      (context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke ||
+        !this.routes.edit.backoff.blocked() && Date.now() >= this.routes.edit.retryAfter));
     const onlyEdit = configured.fimEnabled === false && configured.protocol !== 'mercury-edit';
     if ((onlyEdit || configured.protocol === 'mercury-edit' && document.uri.scheme !== 'vscode-notebook-cell') && !edit) {
       this.trace('skipped', { reason: 'next-edit-unconfigured', language: document.languageId, trigger: context.triggerKind });

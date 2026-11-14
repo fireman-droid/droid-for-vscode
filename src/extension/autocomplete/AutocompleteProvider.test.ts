@@ -988,6 +988,42 @@ describe('independent FIM and Next Edit', () => {
     const result = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
     expect(result[0].insertText).toBe('2;');
   });
+  it.each([403, undefined])('keeps FIM reachable during continued replacement after Next Edit fails with %s', async (status) => {
+    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
+    const error = new FimCompletionError(status ? 'http' : 'protocol', 'Next Edit unavailable', status);
+    mocks.nextRequest.mockRejectedValue(error);
+    const file = document(); activate(file.value, file.at());
+    const range = new vscode.Range(file.at(), position(0, file.at().character + 1));
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 1, text: '', range }] });
+    expect(await (await requesting(file)).pending).toEqual([]);
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+
+    file.state.text += '4'; Object.assign(file.value, { version: 2 });
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [
+      { rangeLength: 0, text: '4', range: new vscode.Range(range.start, range.start) },
+    ] });
+    mocks.request.mockResolvedValue('2;');
+    const result = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
+    expect(result[0]?.insertText).toBe('2;');
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+
+    expect(await (await requesting(file)).pending).toEqual([]);
+    expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(provider.lastMessage).toContain(error.message);
+  });
+  it.each([{ fimEnabled: false }, { protocol: 'mercury-edit' }])('does not enable FIM when the only configured route is blocked: %j', async (settings) => {
+    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
+    Object.assign(mocks.config, settings);
+    mocks.nextRequest.mockRejectedValue(new FimCompletionError('http', 'Next Edit forbidden', 403));
+    const file = document();
+    expect(await (await requesting(file)).pending).toEqual([]);
+    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.nextRequest).toHaveBeenCalledOnce();
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
   it('does not share keys between independently configured services', async () => {
     mocks.request.mockResolvedValue('');
     const { completionSecretKey, DEFAULT_ENDPOINT, MERCURY_EDIT_ENDPOINT } = await import('./settings');

@@ -2,19 +2,24 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { BookOpen, Folder, GitCompare, LoaderCircle, Unplug } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { Button } from '../ui/button';
+import type { ChatPort } from '../host/chatIntent';
+import { getWorkspaceSetup, WorkspaceSetup } from './WorkspaceSetup';
 
 const starters = [
   { label: 'Understand this project', icon: BookOpen, prompt: 'Explain this codebase: identify the main entry points and how the key modules fit together. Do not change files.' },
   { label: 'Review current changes', icon: GitCompare, prompt: 'Review the current workspace changes for bugs and regressions. Explain your findings without changing files.' },
 ];
 
-export function ChatStartup({ state, blocked, onDraftSuggestion }: {
+export function ChatStartup({ state, blocked, port, onDraftSuggestion }: {
   readonly state: Pick<AssistantWebviewState, 'connection' | 'sessionId' | 'workspaceRoot' | 'settings' | 'modelCatalog' | 'historyStatus'>;
   readonly blocked: boolean;
+  readonly port: ChatPort;
   readonly onDraftSuggestion?: (prompt: string) => void;
 }) {
   const { t } = useI18n();
   if (blocked) return null;
+  const setup = getWorkspaceSetup(state.connection);
+  if (setup) return <WorkspaceSetup setup={setup} port={port} />;
   if (state.connection.status === 'unavailable') return <div role="alert" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 px-6 text-center text-xs text-muted-foreground">
     <Unplug aria-hidden="true" className="size-3.5 shrink-0" /><span>{t("Unable to connect.")}</span>
   </div>;
