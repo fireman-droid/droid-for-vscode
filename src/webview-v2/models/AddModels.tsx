@@ -66,7 +66,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
       </div></> : <p data-ui-notice="" className="models-help">{t("先添加模型服务的接口地址，下一步再选择具体模型。")}</p>}
       <Button variant="outline" className="models-new-source" disabled={busy} onClick={onNewConnection}><Plus />{t("添加服务商接口")}<ArrowRight className="ml-auto" /></Button>
       <div className="models-form-actions"><Button variant="ghost" disabled={busy} onClick={onDone}>{t("取消")}</Button>
-        <Button disabled={busy || !connection} onClick={() => onStepChange('models')}>{t("下一步")} <ArrowRight /></Button>
+        <Button variant="outline" disabled={busy || !connection} onClick={() => onStepChange('models')}>{t("下一步")} <ArrowRight /></Button>
       </div>
     </section>}
     {connection ? <section className="models-add-stage" hidden={step !== 'models'} aria-label={t("选择要添加的模型")}>
@@ -86,7 +86,7 @@ export function AddModels({ page, step, onStepChange, onNewConnection, onDone, c
         <TabsContent value="discover" forceMount hidden={mode !== 'discover'}>
           {discovered === null ? <div data-ui-notice="" className="models-discover-empty">
             <p data-ui-notice="" className="models-help">{t("获取此渠道的模型列表，或手动填写 ID。")}</p>
-            <Button disabled={busy} onClick={() => void page.discoverModels(connection.id)}><Download />{busy ? t("正在获取…") : t("获取模型列表")}</Button>
+            <Button variant="outline" disabled={busy} onClick={() => void page.discoverModels(connection.id)}><Download />{busy ? t("正在获取…") : t("获取模型列表")}</Button>
           </div> : <ModelDiscovery key={connection.id} page={page} onDone={onDone} onManual={() => setMode('manual')} />}
         </TabsContent>
         <TabsContent value="manual" forceMount hidden={mode !== 'manual'}>
