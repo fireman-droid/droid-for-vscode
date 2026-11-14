@@ -1,12 +1,12 @@
 # 当前状态
 
-核对日期：2026-11-11。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
+核对日期：2026-11-14。本文区分当前源码、实际验证与安装状态，不再追加逐次施工日志。
 功能边界见 [CAPABILITIES](CAPABILITIES.md)，待办见 [PLAN](PLAN.md)，交互约定见 [DESIGN](DESIGN.md)。
 旧构建哈希、调查和性能数字从 Git 历史查阅，不能充当当前版本验收。
 
 ## 版本与交付
 
-- 当前源码版本仍为 `0.8.23`，分支为 `codex/chat-completion-followup`。已安装到 Microsoft VS Code／Cursor 的本地试用包包含随内容滚走的聊天末尾 16px 留白与 Next Edit 受阻时不拦 FIM 的修复；新增的工作区启动提示与引导回复分组修复尚未打包安装，不能用旧包验收。
+- 当前源码版本为 `0.8.23`，包含随内容滚走的聊天末尾 16px 留白、Next Edit 受阻时不拦 FIM、工作区启动提示与引导回复分组修复。Microsoft VS Code／Cursor 已安装的本地试用包仅包含前两项，不能用旧包验收后两项。本轮仅通过 PR 整合完成的修复并清理已合入分支，不安装编辑器或正式发版；最新检查与合并结果以 PR 记录为准。
 - 当前正式版仍为 `0.8.21`，发布与下载见 [GitHub Release](https://github.com/fireman-droid/droid-for-vscode/releases/tag/v0.8.21) 和 [Open VSX](https://open-vsx.org/extension/droidvisx/droidvisx/0.8.21)。`0.8.23` 为本地试用，未向正式渠道发布。下列历史单项验证中的“未打包安装”保留各实现阶段边界，不表示本次工作区修复已安装。
 - 恢复文件等 composer 回执、附件／引用提示及临时诊断继续保留在消息列表底部状态区域；「Droid 正在工作／回答」、停止中（`Stopping…`）、压缩与等待子代理等运行状态统一移入底部 Composer 输入框的「继续提问」占位位置，未输入草稿时旋转显示、输入时隐藏、结束后恢复占位文字。
 - Microsoft Marketplace 的 `MARKETPLACE_AUTO_PUBLISH` 保持 `false`；本次公开条目读取返回 404，不启用新渠道或修改发布凭据。VS Code 仍可安装与 Open VSX 相同的正式 VSIX。
