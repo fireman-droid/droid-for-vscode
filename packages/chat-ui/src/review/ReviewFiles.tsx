@@ -127,7 +127,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         <ToggleGroupItem className="h-7 w-6 p-1" value="tree" aria-label={t("Show file tree")} title={t("Tree view")}><FolderTree aria-hidden="true" /></ToggleGroupItem>
       </ToggleGroup>
     </div>
-    <div className="review-files-title"><strong>{unreviewed ? t("Unreviewed files") : t("Changed files")}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
+    <div data-ui-notice="" className="review-files-title"><strong>{unreviewed ? t("Unreviewed files") : t("Changed files")}</strong><span>{filtered.length === files.length ? files.length : `${filtered.length} / ${files.length}`}</span></div>
     <ScrollArea className="review-file-scroll" viewportClassName="review-file-list" viewportRef={list.viewport}
       aria-label={t("Changed files")} viewportProps={{ onKeyDown: list.onKeyDown, onFocusCapture: list.onFocusCapture, onBlurCapture: list.onBlurCapture }}>
       <div style={virtual ? { position: 'relative', height: list.virtualizer.getTotalSize() } : undefined}>
@@ -159,7 +159,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         })}</CollapsibleContent>
       </Collapsible>)}
       </div>
-      {!filtered.length ? <p className="review-empty">{files.length === 0 ? t("No changed files in this scope.") : t("No matching files.")}
+      {!filtered.length ? <p data-ui-notice="" className="review-empty">{files.length === 0 ? t("No changed files in this scope.") : t("No matching files.")}
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button> : null}
       </p> : null}
     </ScrollArea>

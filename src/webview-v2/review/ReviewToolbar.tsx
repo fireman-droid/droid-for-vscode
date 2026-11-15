@@ -65,7 +65,7 @@ export function ReviewToolbar({ flow, split, onSplit, showFiles, onFiles, onFind
         <DropdownMenuItem onSelect={onCollapse}>{allCollapsed ? t("Expand all files") : t("Collapse all files")}</DropdownMenuItem>
         <DropdownMenuItem disabled={!valid || scopePending} onSelect={flow.refresh}><RefreshCw />{t("Refresh changes")}</DropdownMenuItem>
         {!target?.operation && review?.scopeKind !== 'operations' && !review?.recordedOnly ? <>
-          <DropdownMenuSeparator /><p className="review-menu-label">{t("Context")}</p>
+          <DropdownMenuSeparator /><p data-ui-notice="" className="review-menu-label">{t("Context")}</p>
           <DropdownMenuRadioGroup value={String(flow.context)} onValueChange={value => flow.setContext(value === 'all' ? 'all' : Number(value) as 3 | 20 | 100)}>
             {[3, 20, 100, 'all'].map(value => <DropdownMenuRadioItem key={value} value={String(value)}>{value === 'all' ? t("Full file") : t("{p0} lines", { p0: value })}<DropdownMenuItemIndicator className="review-menu-check"><Check /></DropdownMenuItemIndicator></DropdownMenuRadioItem>)}
           </DropdownMenuRadioGroup>

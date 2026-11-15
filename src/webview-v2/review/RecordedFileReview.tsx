@@ -106,9 +106,9 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
       <ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Next recorded edit")} disabled={allEdits || index >= records.length - 1} onClick={() => selectEdit(index + 1)}><ChevronRight /></ReviewIconButton>
     </div> : null}
     {records.length > 0 ? <DropdownMenu>
-      <DropdownMenuTrigger asChild><ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Edit history")} title={t("Edit history")}><History /></ReviewIconButton></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Edit history")}><History /></ReviewIconButton></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="review-menu review-history-menu" data-motion="anchored" sideOffset={6}>
-        <p className="review-history-heading">{t("Edit history ·")} {records.length}</p>
+        <p data-ui-notice="" className="review-history-heading">{t("Edit history ·")} {records.length}</p>
         {records.map(({ entry, key }, recordIndex) => <DropdownMenuItem key={key} className="review-history-item" data-selected={activeView === 'edits' && !allEdits && index === recordIndex} onSelect={() => selectEdit(recordIndex)}>
           <span className="review-operation-number">{recordIndex + 1}</span>
           <span className="review-history-description"><strong>{t(operationName(entry))}</strong><small>{t(outcomeLabel(entry))} · {entry.submittedContent !== undefined ? t("Saved file") : entry.bodyRef || hasOperationTextChanges(entry.fullPatch ?? entry.patch) ? t("Saved patch") : t("No saved text")}</small></span><OperationStats entry={entry} />

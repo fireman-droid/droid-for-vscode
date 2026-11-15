@@ -159,7 +159,7 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
     onCopy={onCopy}
     style={{ '--diff-code-columns': Math.max(columns.before, columns.after) } as CSSProperties}
     role="region" aria-label={t("Diff for {p0}", { p0: path })} tabIndex={0}>
-    {syntax.error ? <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
+    {syntax.error ? <p data-ui-notice="" role="status" className="px-3 py-1 text-xs text-muted-foreground">{syntax.error}</p> : null}
     <div className="review-diff-content" key={`${path}:${split}`}>
       {blocks.map((block) => 'header' in block
         ? <div key={block.index} className="review-hunk" title={block.header}>{formatDiffHunkHeader(block.header)}</div>

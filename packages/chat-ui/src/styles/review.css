@@ -62,23 +62,27 @@
   .review-notice { flex-shrink: 0; min-width: 0; overflow-wrap: anywhere; margin: 8px 12px; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 1.6; color: var(--muted-ink); background: var(--review-chrome, var(--soft-surface)); }
   .review-error, .review-empty[role='alert'] { color: var(--error-ink); }
   .review-agent-status { padding: 6px 16px; font-size: 11px; color: var(--muted-ink); border-top: 1px solid var(--panel-edge); background: color-mix(in srgb, var(--soft-surface) 20%, var(--surface)); }
-  .review-dialog-title { color: var(--strong-ink); }
-  .review-dialog-description { color: var(--muted-ink); }
-  .review-commit { display: flex; flex-direction: column; gap: 12px; font-size: 12px; }
-  .review-commit header { display: flex; justify-content: space-between; align-items: center; }
-  .review-commit header span { color: var(--muted-ink); }
-  .review-commit-files { overflow: auto; max-height: 34vh; }
-  .review-commit-files label { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-radius: var(--control-radius); transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+  .review-dialog-title { color: var(--strong-ink); font-size: 14px; font-weight: 600; }
+  .review-dialog-description { margin-top: 4px; margin-bottom: 12px; color: var(--muted-ink); font-size: 12px; line-height: 1.5; }
+  .review-commit { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+  .review-commit-branch { display: flex; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; }
+  .review-commit-files { border: 1px solid var(--panel-edge); border-radius: var(--control-radius); }
+  .review-commit-files-viewport { max-height: 34vh; }
+  .review-commit-files-list { display: flex; flex-direction: column; gap: 2px; padding: 4px; }
+  .review-commit-files label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--control-radius); cursor: pointer; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
   .review-commit-files label[data-selected='true'] { background: var(--control-surface-active); }
-  .review-commit-files label[data-disabled='true'] { color: var(--muted-ink); }
-  .review-commit-files label > span { flex: 1; overflow-wrap: anywhere; }
-  .review-commit-files small { color: var(--muted-ink); font-size: 10px; }
+  .review-commit-files label[data-disabled='true'] { color: var(--muted-ink); cursor: default; }
+  .review-commit-files label > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .review-commit-files small { flex-shrink: 0; color: var(--muted-ink); font-size: 11px; }
   .review-commit-notice { color: var(--muted-ink); }
   .review-commit-notice.review-error { color: var(--error-ink); }
   .review-commit footer, .review-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-  .review-restore-files { max-height: 40vh; overflow: auto; font: 11px/2 var(--font-mono); overflow-wrap: anywhere; }
-  .review-restore-files li { border-radius: 4px; }
-  .review-restore-files li[data-conflict='true'] { color: var(--error-ink); background: color-mix(in srgb, var(--error-ink) 4%, transparent); }
+  .review-restore-files { border: 1px solid var(--panel-edge); border-radius: var(--control-radius); font: 11px/1.8 var(--font-mono); overflow-wrap: anywhere; }
+  .review-restore-files-viewport { max-height: 40vh; }
+  .review-restore-files ul { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 4px; list-style: none; }
+  .review-restore-files li { padding: 3px 8px; border-radius: var(--control-radius); }
+  .review-restore-files li[data-conflict='true'] { color: var(--error-ink); background: color-mix(in srgb, var(--error-ink) 6%, transparent); }
+  .review-dialog-actions { margin-top: 12px; }
   .review-launcher {
     display: grid;
     width: 100%;
