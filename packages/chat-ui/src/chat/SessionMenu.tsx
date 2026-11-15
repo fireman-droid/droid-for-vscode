@@ -8,6 +8,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
+import { ScrollArea } from '../ui/scroll-area';
 
 export function SessionMenu({ state, actions, disabled, open, openSignal, onOpenChange, maxSearchLength, maxTitleLength }: {
   readonly maxSearchLength?: number;
@@ -52,8 +53,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
   };
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild><Button variant="outline" size="icon" className="size-6 rounded-full bg-input-background text-muted-foreground hover:bg-input-background active:bg-input-background" aria-label={t("Sessions")}><History className="size-3.5" /></Button></PopoverTrigger>
-      <PopoverContent align="end" aria-label={t("Session history")} className="w-[260px] space-y-1.5 p-1.5 [&_button]:hover:bg-transparent [&_button]:active:bg-transparent">
+      <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" className="data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground" aria-label={t("Sessions")}><History className="size-3.5" /></Button></PopoverTrigger>
+      <PopoverContent align="end" aria-label={t("Session history")} className="w-[260px] space-y-1.5 p-1.5">
         <div className="flex items-center gap-1">
           <Input ref={searchInput} className="h-6 text-xs" type="search" aria-label={t("Search sessions")} placeholder={actions.handleSearchContent ? t("Search chats · Enter searches content") : t("Search chats")}
             maxLength={maxSearchLength} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => {
@@ -62,7 +63,9 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
         </div>
         {state.sessions.message ? <p role={state.sessions.status === 'error' ? 'alert' : 'status'} className="text-xs text-muted-foreground">{state.sessions.message}</p> : null}
         {pending || state.sessions.status === 'loading' ? <p role="status" className="text-xs text-muted-foreground">{pending ? t("Waiting for {p0}…", { p0: assistantName }) : t("Loading sessions…")}</p> : null}
-        <div className="max-h-60 space-y-1.5 overflow-y-auto">
+        <ScrollArea className="dvx-session-scroll" viewportClassName="dvx-session-viewport"
+          nonce={typeof document !== 'undefined' ? document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce : undefined}>
+          <div className="space-y-1.5">
             {groups.map((group) => <section key={group.key} aria-label={group.label ? t(group.label) : undefined}>
               <h3 className="px-1 py-0.5 text-[11px] text-muted-foreground">{group.label ? t(group.label) : null}</h3>
               {group.items.map((entry) => <SessionRow key={entry.id} entry={entry} maxTitleLength={maxTitleLength} disabled={controlsDisabled} actions={actions} runOnce={runOnce} onSelect={() => select(entry.id)} />)}
@@ -92,7 +95,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
               {state.archived.status === 'ready' && archivedEntries.length === 0 ? <p data-ui-notice="" className="p-2 text-xs text-muted-foreground">{t("No archived sessions.")}</p> : null}
             </CollapsibleContent>
           </section></Collapsible> : null}
-        </div>
+          </div>
+        </ScrollArea>
       </PopoverContent>
     </Popover>
   );
@@ -125,13 +129,13 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
         if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault();
       }} />
     </form> : <>
-      <Button variant="ghost" className={`h-6 min-w-0 flex-1 justify-start pl-1 pr-8 text-xs hover:bg-transparent aria-[current=true]:opacity-100 ${entry.active ? 'group-hover:pr-20 group-focus-within:pr-20' : 'group-hover:pr-14 group-focus-within:pr-14'}`} aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
+      <Button variant="ghost" className={`h-6 min-w-0 flex-1 justify-start pl-1 ${entry.isFavorite ? 'pr-7' : 'pr-1.5'} text-xs hover:bg-transparent active:bg-transparent aria-[current=true]:opacity-100`} aria-current={entry.active ? 'true' : undefined} title={entry.modifiedTime} disabled={disabled || entry.active} onClick={onSelect}>
         {entry.running ? <><LoaderCircle className="size-3 motion-safe:animate-spin" /><span className="sr-only">{t("Turn still running.")} </span></> : <CheckCircle className="size-3 shrink-0 text-muted-foreground" />}
         <span className="truncate">{entry.title}</span>
         {entry.worktree ? <span title={entry.worktree.path} className="truncate text-[11px] text-muted-foreground">{t("worktree")}{entry.worktree.branch ? ` · ${entry.worktree.branch}` : ''}</span> : null}
         {entry.badge ? <span className="text-[11px] text-muted-foreground">{entry.badge}</span> : null}
       </Button>
-      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 [&>button]:pointer-events-none [&>button]:opacity-0 group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
+      <div className="v2-session-row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-r pr-0.5 [&>button]:pointer-events-none [&>button]:size-5 [&>button]:opacity-0 group-hover:pointer-events-auto group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:pointer-events-auto group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
       {entry.active ? <>
         {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Rename {p0}", { p0: entry.title })} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
         {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Fork {p0}", { p0: entry.title })} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}

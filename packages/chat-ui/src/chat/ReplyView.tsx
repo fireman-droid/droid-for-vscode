@@ -30,8 +30,8 @@ export function ReplyView({ children, replyText, running = false, completedAt, r
             reset.current = setTimeout(() => setCopied(false), 1500);
           }, () => setCopyError(true));
         }}>{copied ? <Check /> : <Copy />}</Button>
-        {!readOnly && regenerate ? <ReplyAction label={t("Regenerate response")} busyLabel="Regenerating response" action={regenerate}><RotateCcw /></ReplyAction> : null}
-        {!readOnly && fork ? <ReplyAction label={t("Fork chat")} busyLabel="Forking chat" action={fork}><GitBranch /></ReplyAction> : null}
+        {!readOnly && regenerate ? <ReplyAction label={t("Regenerate response")} busyLabel={t("Regenerating response")} action={regenerate}><RotateCcw /></ReplyAction> : null}
+        {!readOnly && fork ? <ReplyAction label={t("Fork chat")} busyLabel={t("Forking chat")} action={fork}><GitBranch /></ReplyAction> : null}
         {copyError ? <span role="alert" className="text-destructive">{t("Could not copy reply.")}</span> : null}
         </> : null}
       </div>

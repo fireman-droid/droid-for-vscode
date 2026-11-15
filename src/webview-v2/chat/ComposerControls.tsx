@@ -85,7 +85,7 @@ export function ComposerControls({ state, port, blocked, page, navigationId, onP
       {!editorOwner && (kind === 'settings' || kind === 'context') ? <PopoverAnchor virtualRef={composer} /> : null}
       <PopoverTrigger asChild><Button variant="ghost" size="sm"
         aria-label={label} title={label} disabled={disabled || ((kind === 'mode' || kind === 'model') && confirmed === null)}
-        className={`h-6 min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent active:bg-transparent data-[state=open]:text-foreground ${className}`}>
+        className={`h-6 min-w-0 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground active:bg-transparent data-[state=open]:text-foreground ${className}`}>
         {children}
       </Button></PopoverTrigger>
       <PopoverContent side="top" align={kind === 'model' || kind === 'context' || (kind === 'mode' && editorOwner) ? 'end' : 'start'} sideOffset={8}

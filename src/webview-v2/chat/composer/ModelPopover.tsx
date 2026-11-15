@@ -4,6 +4,7 @@ import { Link2, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { RadioGroup, RadioGroupItem } from '../../ui/controls';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 
 import {
   type ConfirmedSessionSettings,
@@ -100,10 +101,15 @@ export function ModelPopover({
     const container = listRef.current;
     const active = container?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!container || !active) return;
-    const top = active.offsetTop - container.offsetTop;
-    const bottom = top + active.offsetHeight;
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const top = containerRect.height > 0 || activeRect.height > 0
+      ? activeRect.top - containerRect.top + container.scrollTop
+      : active.offsetTop - container.offsetTop;
+    const height = activeRect.height > 0 ? activeRect.height : active.offsetHeight;
+    const bottom = top + height;
     if (top < container.scrollTop || bottom > container.scrollTop + container.clientHeight) {
-      container.scrollTop = Math.max(0, top - Math.floor((container.clientHeight - active.offsetHeight) / 2));
+      container.scrollTop = Math.max(0, top - Math.floor((container.clientHeight - height) / 2));
     }
   }, [editingReasoning, modelCatalog.status, rowMatchId, sourceMode, view]);
 
@@ -184,76 +190,78 @@ export function ModelPopover({
                 onChange={(event) => setQuery(event.currentTarget.value)}
               />
             </div>
-            <div
-              ref={listRef}
-              className="dvx-model-list"
-              role="list"
-              aria-label={isSpecView ? t("Spec drafting models") : t("Available models")}
-            >
-              {filtered.map((model) => {
-                const isSelected = model.id === rowMatchId;
-                const modelLabel = model.displayName;
-                const modelDetails = `${modelLabel} (${model.id}) · ${model.isCustom ? 'BYOK' : t('官方')} · ${t(model.supportsImages ? 'Images' : 'Text only')}${model.supportsImageGeneration ? ` · ${t('Image generation')}` : ''}${model.disabledReason ? ` · ${model.disabledReason}` : ''}`;
-                return (
-                  <div
-                    key={model.id}
-                    className="dvx-model-row"
-                    role="listitem"
-                    aria-current={isSelected ? 'true' : undefined}
-                    title={modelDetails}
-                  >
-                    <Button variant="plain" size="none"
-                      type="button"
-                      className="dvx-model-choice"
-                      aria-label={`${model.displayName}, ${model.id}`}
-                      aria-description={modelDetails}
-                      disabled={disabled || model.disabled}
-                      onClick={() => {
-                        if (isSelected) {
-                          return;
-                        }
-                        onUpdate(
-                          isSpecView
-                            ? {
-                                field: 'specModeModelId',
-                                value: model.id,
-                              }
-                            : { field: 'modelId', value: model.id },
-                        );
-                      }}
+            <ScrollArea className="dvx-model-scroll" viewportClassName="dvx-model-viewport" viewportRef={listRef}
+              nonce={typeof document !== 'undefined' ? document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce : undefined}>
+              <div
+                className="dvx-model-list"
+                role="list"
+                aria-label={isSpecView ? t("Spec drafting models") : t("Available models")}
+              >
+                {filtered.map((model) => {
+                  const isSelected = model.id === rowMatchId;
+                  const modelLabel = model.displayName;
+                  const modelDetails = `${modelLabel} (${model.id}) · ${model.isCustom ? 'BYOK' : t('官方')} · ${t(model.supportsImages ? 'Images' : 'Text only')}${model.supportsImageGeneration ? ` · ${t('Image generation')}` : ''}${model.disabledReason ? ` · ${model.disabledReason}` : ''}`;
+                  return (
+                    <div
+                      key={model.id}
+                      className="dvx-model-row"
+                      role="listitem"
+                      aria-current={isSelected ? 'true' : undefined}
+                      title={modelDetails}
                     >
-                      <span className="dvx-model-name">{modelLabel}</span>
-                      {isSelected ? (
-                        <span className="dvx-model-effort-suffix">
-                          {isSpecView && scopedReasoning === undefined
-                            ? t("Default")
-                            : t(formatReasoningLabel(scopedReasoning))}
-                        </span>
-                      ) : null}
-                      {model.disabled ? <span className="dvx-model-source">{t("Unavailable")}</span>
-                        : model.isCustom && sourceMode === 'mixed' && !isSelected ? <span className="dvx-model-source">BYOK</span> : null}
-                    </Button>
-                    {isSelected ? (
-                      <>
-                        <Button variant="plain" size="none"
-                          type="button"
-                          className="dvx-model-edit"
-                          aria-label={t("Edit reasoning for {p0}", { p0: modelLabel })}
-                          disabled={
-                            disabled || model.disabled || model.supportedReasoningEfforts.length === 0
+                      <Button variant="plain" size="none"
+                        type="button"
+                        className="dvx-model-choice"
+                        aria-label={`${model.displayName}, ${model.id}`}
+                        aria-description={modelDetails}
+                        disabled={disabled || model.disabled}
+                        onClick={() => {
+                          if (isSelected) {
+                            return;
                           }
-                          onClick={() => setEditingReasoning(true)}
-                        >
-                          <PencilIcon />
-                        </Button>
-                        <CheckIcon className="dvx-model-check" />
-                      </>
-                    ) : null}
-                  </div>
-                );
-              })}
-              {filtered.length === 0 ? <ModelSourceEmpty /> : null}
-            </div>
+                          onUpdate(
+                            isSpecView
+                              ? {
+                                  field: 'specModeModelId',
+                                  value: model.id,
+                                }
+                              : { field: 'modelId', value: model.id },
+                          );
+                        }}
+                      >
+                        <span className="dvx-model-name">{modelLabel}</span>
+                        {isSelected ? (
+                          <span className="dvx-model-effort-suffix">
+                            {isSpecView && scopedReasoning === undefined
+                              ? t("Default")
+                              : t(formatReasoningLabel(scopedReasoning))}
+                          </span>
+                        ) : null}
+                        {model.disabled ? <span className="dvx-model-source">{t("Unavailable")}</span>
+                          : model.isCustom && sourceMode === 'mixed' && !isSelected ? <span className="dvx-model-source">BYOK</span> : null}
+                      </Button>
+                      {isSelected ? (
+                        <>
+                          <Button variant="plain" size="none"
+                            type="button"
+                            className="dvx-model-edit"
+                            aria-label={t("Edit reasoning for {p0}", { p0: modelLabel })}
+                            disabled={
+                              disabled || model.disabled || model.supportedReasoningEfforts.length === 0
+                            }
+                            onClick={() => setEditingReasoning(true)}
+                          >
+                            <PencilIcon />
+                          </Button>
+                          <CheckIcon className="dvx-model-check" />
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 ? <ModelSourceEmpty /> : null}
+              </div>
+            </ScrollArea>
           </div>
         </>
       ) : (
@@ -282,7 +290,7 @@ export function ModelPopover({
             </Button>
           ) : null}
         <Button variant="plain" size="icon-sm" aria-label={t('Use main model for Spec')}
-          className={usesSessionModel ? 'text-[var(--link-ink)]' : 'text-muted-foreground'}
+          className={`dvx-model-spec-link ${usesSessionModel ? 'text-[var(--link-ink)]' : 'text-muted-foreground'}`}
           title={t(usesSessionModel ? 'Spec follows main model' : 'Use main model for Spec')}
           disabled={disabled || !confirmed}
           onClick={() => {
