@@ -22,13 +22,14 @@ export type AutocompleteEvaluation = (input: unknown, signal: AbortSignal) => Pr
 export function createAutocompleteEvaluation(secrets: vscode.SecretStorage): AutocompleteEvaluation {
   return async (value, signal) => {
     const settings = readCompletionSettings();
+    if (settings.requiresConfiguration) throw new Error('Configure a FIM service before evaluating completions.');
     if (isRecord(value) && value.kind === 'settings') {
       return { model: settings.model, protocol: settings.protocol, maxTokens: settings.maxTokens,
         maxContextCharacters: settings.maxContextCharacters };
     }
     const input = parseInput(value);
     const validation = validateCompletionEndpoint(settings.endpoint, settings.protocol);
-    if (validation || settings.protocol === 'mercury-edit') throw new Error('Evaluation requires a valid FIM configuration.');
+    if (validation) throw new Error('Evaluation requires a valid FIM configuration.');
     const started = Date.now();
     const apiKey = await readCompletionKey(secrets, settings.endpoint);
     if (signal.aborted) throw signal.reason;

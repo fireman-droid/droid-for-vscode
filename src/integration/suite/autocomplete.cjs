@@ -77,6 +77,8 @@ async function run() {
     for (const [language, completion, expectedInsertion] of [['go', 'sort.Ints(values)\n', 'sort.Ints(values)'], ['java', 'Arrays.sort(values);\n', 'Arrays.sort(values);'], ['typescript', 'values.sort((a, b) => a - b);\n', 'values.sort((a, b) => a - b);']]) {
       scenarios.push({ name: language + ' automatic completion', language, location: 'blank', completion, expectedInsertion });
     }
+    scenarios.push({ name: 'Java response ending in a Markdown fence inserts only the code',
+      language: 'java', location: 'blank', eol: '\r\n', completion: 'Arrays.sort(values);\n```', expectedInsertion: 'Arrays.sort(values);' });
     scenarios.push({ name: 'Saved Python file with related context enabled', language: 'python', location: 'blank', saved: true, relatedFiles: true, eol: '\r\n', completion: 'values.sort()\n', expectedInsertion: 'values.sort()' });
     scenarios.push({ name: 'Typing a matching character reuses the visible completion', language: 'python', location: 'blank', completion: 'values.sort()\n', expectedInsertion: 'values.sort()', behavior: 'continue' });
     scenarios.push({ name: 'Continuing to type reuses an in-flight completion', language: 'python', location: 'blank',
@@ -169,7 +171,6 @@ async function run() {
     }
     if (!process.env.DROID_AUTOCOMPLETE_HANDOFF_ONLY) {
       results.push(...await require('./autocompleteNotebook.cjs').runNotebook());
-      results.push(...await require('./nextEdit.cjs').runNextEdit());
       results.push(...await require('./autocompleteContext.cjs').runContext());
     }
   } catch (error) {

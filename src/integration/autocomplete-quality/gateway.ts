@@ -7,8 +7,6 @@ import { createAutocompleteEvaluation } from '../../extension/dev/AutocompleteEv
 import { readCompletionKey, readCompletionSettings, validateCompletionEndpoint } from '../../extension/autocomplete/settings';
 import { FimCompletionError } from '../../runtime/autocomplete/FimClient';
 import { requestCompletionTransport } from '../../runtime/autocomplete/completionTransport';
-import { evaluateNextEdit, nextEditAvailable } from './nextEditEvaluation';
-import { relayNextEdit } from './nextEditRelay';
 import { observeFimStream } from './fimStreamTiming';
 
 // Loaded only as Droid's temporary development entry. Normal SecretStorage owns
@@ -52,12 +50,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const kind = input && typeof input === 'object' && 'kind' in input ? input.kind : undefined;
       let result: unknown;
       if (kind === 'raw-fim') result = await rawFim(context.secrets, input, signal);
-      else if (kind === 'raw-next-edit') result = await relayNextEdit(context.secrets, input, signal);
-      else if (kind === 'next-edit' || kind === 'next-edit-inspect') result = await evaluateNextEdit(context.secrets, input, signal);
-      else {
+      else if (kind === undefined || kind === 'settings') {
         result = await evaluation(input, signal);
-        if (kind === 'settings') result = { ...(result as object), rawTransport: true, nextEditAvailable: nextEditAvailable() };
-      }
+        if (kind === 'settings') result = { ...(result as object), rawTransport: true };
+      } else throw new Error('Unknown completion evaluation');
       if (!response.destroyed) {
         response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         response.end(JSON.stringify(result));
@@ -82,7 +78,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 async function rawFim(secrets: vscode.SecretStorage, value: unknown, signal: AbortSignal) {
   const settings = readCompletionSettings();
-  if (settings.protocol !== 'fim' || validateCompletionEndpoint(settings.endpoint, settings.protocol)) {
+  if (settings.requiresConfiguration || settings.protocol !== 'fim' || validateCompletionEndpoint(settings.endpoint, settings.protocol)) {
     throw new Error('Raw evaluation requires the configured native FIM service');
   }
   if (!value || typeof value !== 'object' || !('body' in value) || !value.body || typeof value.body !== 'object') {

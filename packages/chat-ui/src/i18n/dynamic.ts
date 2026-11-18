@@ -205,7 +205,6 @@ export const dynamicMessages: readonly MessageTranslations[] = [
   ["Compact automatically at the limit","达到上限时自动压缩","達到上限時自動壓縮"],
   ["New sessions compact context automatically when reaching the configured token limit.","新会话达到配置的 Token 上限后自动压缩上下文。","新會話達到設定的 Token 上限后自動壓縮上下文。"],
   ["FIM · code completion","FIM · 代码续写","FIM · 程式碼續寫"],
-  ["Next Edit · edit prediction","Next Edit · 编辑预测","Next Edit · 編輯預測"],
   ["Default model","默认模型","預設模型"],
   ["Default reasoning effort","默认推理强度","預設推理強度"],
   ["Default interaction mode","默认交互模式","預設交互模式"],

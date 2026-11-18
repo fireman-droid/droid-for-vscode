@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import { notebookUri, supportsNotebook } from './kilo/continuedev/core/autocomplete/notebook';
 import type { CompletionProtocol } from '../../runtime/autocomplete/requestCompletion';
+import { isRetiredEditEndpoint, RETIRED_EDIT_ENDPOINT_MESSAGE } from '../../runtime/autocomplete/completionTransport';
 
 export const COMPLETION_SECTION = 'droidvisx.autocomplete';
 export const DEFAULT_ENDPOINT = 'https://api.mistral.ai/v1/fim/completions';
 export const MERCURY_FIM_ENDPOINT = 'https://api.inceptionlabs.ai/v1/fim/completions';
-export const MERCURY_EDIT_ENDPOINT = 'https://api.inceptionlabs.ai/v1/edit/completions';
+const LEGACY_MERCURY_KEY_ENDPOINT = 'https://api.inceptionlabs.ai/v1/edit/completions';
+const DEFAULT_MODEL = 'codestral-latest';
 export const DEFAULT_EXCLUSIONS = [
   '**/.env', '**/.env.*', '**/*.{pem,key,p12,pfx}',
   '**/{.git,node_modules,dist,build,vendor}/**',
@@ -14,8 +16,7 @@ export const DEFAULT_EXCLUSIONS = [
 
 export interface CompletionSettings {
   enabled: boolean;
-  fimEnabled?: boolean;
-  nextEdit?: { enabled: boolean; endpoint: string; model: string };
+  requiresConfiguration: boolean;
   autoTrigger?: boolean;
   snoozeUntil?: number;
   protocol: CompletionProtocol;
@@ -38,22 +39,20 @@ export function readCompletionSettings(uri?: vscode.Uri): CompletionSettings {
   const userValue = (key: string, fallback: string) =>
     userConfig.inspect<string>(key)?.globalValue ?? fallback;
   const protocol = userValue('protocol', 'fim');
+  const endpoint = userValue('endpoint', DEFAULT_ENDPOINT).trim();
+  const retiredRoute = protocol === 'mercury-edit' || isSavedEditEndpoint(endpoint);
+  const requiresConfiguration = retiredRoute || userConfig.inspect<boolean>('fimEnabled')?.globalValue === false;
   return {
-    enabled: config.get<boolean>('enabled', false),
-    fimEnabled: userConfig.inspect<boolean>('fimEnabled')?.globalValue ?? protocol !== 'mercury-edit',
-    nextEdit: {
-      enabled: userConfig.inspect<boolean>('nextEdit.enabled')?.globalValue ?? protocol === 'mercury-edit',
-      endpoint: userValue('nextEdit.endpoint', protocol === 'mercury-edit' ? userValue('endpoint', MERCURY_EDIT_ENDPOINT) : MERCURY_EDIT_ENDPOINT).trim(),
-      model: userValue('nextEdit.model', protocol === 'mercury-edit' ? userValue('model', 'mercury-edit-2') : 'mercury-edit-2').trim(),
-    },
+    enabled: !requiresConfiguration && config.get<boolean>('enabled', false),
+    requiresConfiguration,
     autoTrigger: config.get<boolean>('autoTrigger', true),
     snoozeUntil: userConfig.inspect<number>('snoozeUntil')?.globalValue ?? 0,
-    protocol: protocol === 'ollama' || protocol === 'siliconflow-fim' || protocol === 'mercury-edit' ? protocol : 'fim',
+    protocol: !retiredRoute && (protocol === 'ollama' || protocol === 'siliconflow-fim') ? protocol : 'fim',
     relatedFiles: config.get<boolean>('relatedFiles', true),
     includeClipboard: userConfig.inspect<boolean>('includeClipboard')?.globalValue === true,
     staticContext: config.get<boolean>('staticContext', false),
-    endpoint: userValue('endpoint', DEFAULT_ENDPOINT).trim(),
-    model: userValue('model', 'codestral-latest').trim(),
+    endpoint: retiredRoute ? DEFAULT_ENDPOINT : endpoint,
+    model: retiredRoute ? DEFAULT_MODEL : userValue('model', DEFAULT_MODEL).trim(),
     adaptiveDebounce: config.get<boolean>('adaptiveDebounce', true),
     debounceMs: boundedNumber(config.get('debounceMs'), 350, 100, 2000),
     maxContextCharacters: boundedNumber(config.get('maxContextCharacters'), 12000, 1000, 32000),
@@ -62,9 +61,15 @@ export function readCompletionSettings(uri?: vscode.Uri): CompletionSettings {
   };
 }
 
-export function nextEditSettings(settings: CompletionSettings): CompletionSettings | undefined {
-  if (settings.nextEdit) return settings.nextEdit.enabled ? { ...settings, ...settings.nextEdit, enabled: settings.enabled, protocol: 'mercury-edit' } : undefined;
-  return settings.protocol === 'mercury-edit' ? settings : undefined;
+function isSavedEditEndpoint(endpoint: string): boolean {
+  try { return isRetiredEditEndpoint(new URL(endpoint)); } catch { return false; }
+}
+
+/** Clear the retired switch only after the user explicitly configures or enables FIM. */
+export async function clearLegacyFimSwitch(config: vscode.WorkspaceConfiguration): Promise<void> {
+  if (config.inspect<boolean>('fimEnabled')?.globalValue === false) {
+    await config.update('fimEnabled', undefined, vscode.ConfigurationTarget.Global);
+  }
 }
 
 function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -85,9 +90,8 @@ export function validateCompletionEndpoint(
       return 'Put the API key in SecretStorage, not in the endpoint URL.';
     }
     if (url.pathname === '/') return 'Enter the complete completion endpoint, including its path.';
-    if (protocol === 'mercury-edit') {
-      if (!/\/edit\/completions\/?$/i.test(url.pathname)) return 'Use a Next Edit /v1/edit/completions endpoint.';
-    } else if (protocol === 'siliconflow-fim') {
+    if (isRetiredEditEndpoint(url)) return RETIRED_EDIT_ENDPOINT_MESSAGE;
+    if (protocol === 'siliconflow-fim') {
       if (!/\/chat\/completions\/?$/i.test(url.pathname)) {
         return 'Use the SiliconFlow /v1/chat/completions endpoint for FIM.';
       }
@@ -105,25 +109,20 @@ export function completionSecretKey(endpoint: string): string {
     createHash('sha256').update(new URL(endpoint).toString()).digest('hex');
 }
 
-/** Both official Mercury APIs use the same provider key; arbitrary endpoints remain isolated. */
+/** Old releases stored the same official Inception provider key under two endpoint hashes. */
 export async function readCompletionKey(secrets: vscode.SecretStorage, endpoint: string): Promise<string | undefined> {
   const current = await secrets.get(completionSecretKey(endpoint));
   if (current) return current;
-  const alternate = mercuryAlternateEndpoint(endpoint);
-  return alternate ? secrets.get(completionSecretKey(alternate)) : undefined;
+  return isOfficialMercuryFim(endpoint) ? secrets.get(completionSecretKey(LEGACY_MERCURY_KEY_ENDPOINT)) : undefined;
 }
 
-export function mercuryAlternateEndpoint(endpoint: string): string | undefined {
-  let normalized: string;
-  try { normalized = new URL(endpoint).toString().replace(/\/$/, ''); } catch { return undefined; }
-  return normalized === MERCURY_FIM_ENDPOINT ? MERCURY_EDIT_ENDPOINT
-    : normalized === MERCURY_EDIT_ENDPOINT ? MERCURY_FIM_ENDPOINT : undefined;
+function isOfficialMercuryFim(endpoint: string): boolean {
+  return new URL(endpoint).toString().replace(/\/$/, '') === MERCURY_FIM_ENDPOINT;
 }
 
 export async function removeCompletionKey(secrets: vscode.SecretStorage, endpoint: string): Promise<void> {
   await secrets.delete(completionSecretKey(endpoint));
-  const alternate = mercuryAlternateEndpoint(endpoint);
-  if (alternate) await secrets.delete(completionSecretKey(alternate));
+  if (isOfficialMercuryFim(endpoint)) await secrets.delete(completionSecretKey(LEGACY_MERCURY_KEY_ENDPOINT));
 }
 
 export function completionNeedsKey(endpoint: string): boolean {
@@ -135,19 +134,18 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
   const config = vscode.workspace.getConfiguration(COMPLETION_SECTION);
   const current = readCompletionSettings();
   const preset = await vscode.window.showQuickPick([
-    { label: 'Current configuration', description: current.model, protocol: current.protocol, endpoint: current.endpoint, model: current.model },
-    { label: 'Mistral / Codestral', description: 'Native cloud FIM', protocol: 'fim' as const, endpoint: DEFAULT_ENDPOINT, model: 'codestral-latest' },
+    ...(!current.requiresConfiguration ? [{ label: 'Current configuration', description: current.model, protocol: current.protocol, endpoint: current.endpoint, model: current.model }] : []),
+    { label: 'Mistral / Codestral', description: 'Native cloud FIM', protocol: 'fim' as const, endpoint: DEFAULT_ENDPOINT, model: DEFAULT_MODEL },
     { label: 'DeepSeek', description: 'Beta FIM completions', protocol: 'fim' as const, endpoint: 'https://api.deepseek.com/beta/completions', model: 'deepseek-flash' },
     { label: 'SiliconFlow', description: 'Qwen Coder with SiliconFlow FIM', protocol: 'siliconflow-fim' as const, endpoint: 'https://api.siliconflow.cn/v1/chat/completions', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct' },
     { label: 'Ollama', description: 'Local FIM model', protocol: 'ollama' as const, endpoint: 'http://localhost:11434/api/generate', model: 'qwen2.5-coder:7b-base' },
-    { label: 'Inception / Mercury Code Completion', description: 'Continue code at the cursor (FIM); uses the same Inception key', protocol: 'fim' as const, endpoint: MERCURY_FIM_ENDPOINT, model: 'mercury-edit-2' },
-    { label: 'Inception / Mercury Next Edit', description: 'Predict edits and Tab to jump/apply; requires an Inception key', protocol: 'mercury-edit' as const, endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions', model: 'mercury-edit-2' },
+    { label: 'Inception / Mercury Code Completion', description: 'Native FIM; requires an Inception key', protocol: 'fim' as const, endpoint: MERCURY_FIM_ENDPOINT, model: 'mercury-edit-2' },
     { label: 'Custom FIM service', description: 'Native prompt + suffix API', protocol: 'fim' as const, endpoint: current.endpoint, model: current.model },
   ], { title: 'Droid autocomplete · Service', ignoreFocusOut: true });
   if (!preset) return false;
   const endpoint = await vscode.window.showInputBox({
     title: 'Droid autocomplete · Endpoint',
-    prompt: preset.protocol === 'mercury-edit' ? 'Complete Next Edit /v1/edit/completions URL.' : preset.protocol === 'ollama' ? 'Complete Ollama /api/generate URL.'
+    prompt: preset.protocol === 'ollama' ? 'Complete Ollama /api/generate URL.'
       : preset.protocol === 'siliconflow-fim' ? 'Complete SiliconFlow /v1/chat/completions URL. Uses its FIM prefix/suffix extension.'
         : 'Complete native FIM URL. Ordinary chat-completions APIs do not accept this protocol.',
     value: preset.endpoint,
@@ -159,13 +157,12 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
   const model = await vscode.window.showInputBox({
     title: 'Droid autocomplete · Model',
     prompt: preset.protocol === 'ollama' ? 'Enter the name of an installed model that supports FIM / suffix.'
-      : preset.protocol === 'mercury-edit' ? 'Enter a Next Edit model, such as mercury-edit-2. Ordinary FIM models are not edit predictors.' : 'Enter a FIM-capable model ID on this service.',
+      : 'Enter a FIM-capable model ID on this service.',
     value: preset.model,
     ignoreFocusOut: true,
     validateInput: (value) => value.trim() ? undefined : 'Enter a model ID.',
   });
   if (model === undefined) return false;
-  const keyId = completionSecretKey(target);
   const existingKey = await readCompletionKey(secrets, target);
   const required = completionNeedsKey(target);
   const key = await vscode.window.showInputBox({
@@ -179,31 +176,11 @@ export async function configureCompletion(secrets: vscode.SecretStorage): Promis
     validateInput: (value) => !required || value.trim() || existingKey ? undefined : 'Enter the provider API key.',
   });
   if (key === undefined) return false;
-  if (key.trim()) {
-    await secrets.store(keyId, key.trim());
-    const alternate = mercuryAlternateEndpoint(target);
-    if (alternate) await secrets.store(completionSecretKey(alternate), key.trim());
-  }
-  if (preset.protocol === 'mercury-edit') {
-    // A fresh edit-only setup must not also enable an unconfigured default FIM service.
-    if (config.inspect('endpoint')?.globalValue === undefined && config.inspect('model')?.globalValue === undefined) {
-      await config.update('fimEnabled', false, vscode.ConfigurationTarget.Global);
-    }
-    await config.update('nextEdit.endpoint', target, vscode.ConfigurationTarget.Global);
-    await config.update('nextEdit.model', model.trim(), vscode.ConfigurationTarget.Global);
-    await config.update('nextEdit.enabled', true, vscode.ConfigurationTarget.Global);
-  } else {
-    // Preserve the old edit-only service when its shared slot becomes a FIM slot.
-    if (current.protocol === 'mercury-edit' && current.nextEdit) {
-      for (const key of ['endpoint', 'model', 'enabled'] as const) {
-        await config.update('nextEdit.' + key, current.nextEdit[key], vscode.ConfigurationTarget.Global);
-      }
-    }
-    await config.update('endpoint', target, vscode.ConfigurationTarget.Global);
-    await config.update('model', model.trim(), vscode.ConfigurationTarget.Global);
-    await config.update('protocol', preset.protocol, vscode.ConfigurationTarget.Global);
-    if (current.fimEnabled === false) await config.update('fimEnabled', true, vscode.ConfigurationTarget.Global);
-  }
+  if (key.trim()) await secrets.store(completionSecretKey(target), key.trim());
+  await config.update('endpoint', target, vscode.ConfigurationTarget.Global);
+  await config.update('model', model.trim(), vscode.ConfigurationTarget.Global);
+  await config.update('protocol', preset.protocol, vscode.ConfigurationTarget.Global);
+  await clearLegacyFimSwitch(config);
   return true;
 }
 
@@ -241,7 +218,6 @@ export function completionDocumentBlockReason(
   if (!vscode.workspace.isTrusted) return 'Autocomplete is unavailable in an untrusted workspace.';
   if (!['file', 'untitled', 'vscode-notebook-cell'].includes(document.uri.scheme)) return 'This document type is not supported.';
   if (document.uri.scheme === 'vscode-notebook-cell' && !supportsNotebook(document)) return 'Only supported notebook code cells can receive suggestions.';
-  if (document.uri.scheme === 'vscode-notebook-cell' && settings.protocol === 'mercury-edit' && !mercuryAlternateEndpoint(settings.endpoint)) return 'Configure a FIM service for notebook completions.';
   if (!vscode.workspace.getConfiguration('editor', document.uri).get('inlineSuggest.enabled', true)) {
     return 'Enable Editor: Inline Suggest in editor settings.';
   }

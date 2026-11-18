@@ -111,14 +111,6 @@
       {
         "command": "droidvisx.autocomplete.trigger",
         "title": "%droidvisx.autocomplete.trigger.title%"
-      },
-      {
-        "command": "droidvisx.autocomplete.nextEdit.acceptOrJump",
-        "title": "%droidvisx.autocomplete.nextEdit.acceptOrJump.title%"
-      },
-      {
-        "command": "droidvisx.autocomplete.nextEdit.dismiss",
-        "title": "%droidvisx.autocomplete.nextEdit.dismiss.title%"
       }
     ],
     "viewsContainers": {
@@ -318,43 +310,17 @@
           "scope": "resource",
           "description": "%droidvisx.autocomplete.excludePatterns.description%"
         },
-        "droidvisx.autocomplete.fimEnabled": {
-          "type": "boolean",
-          "default": true,
-          "scope": "application",
-          "description": "%droidvisx.autocomplete.fimEnabled.description%"
-        },
-        "droidvisx.autocomplete.nextEdit.enabled": {
-          "type": "boolean",
-          "default": false,
-          "scope": "application",
-          "description": "%droidvisx.autocomplete.nextEdit.enabled.description%"
-        },
-        "droidvisx.autocomplete.nextEdit.endpoint": {
-          "type": "string",
-          "default": "https://api.inceptionlabs.ai/v1/edit/completions",
-          "scope": "application",
-          "description": "%droidvisx.autocomplete.nextEdit.endpoint.description%"
-        },
-        "droidvisx.autocomplete.nextEdit.model": {
-          "type": "string",
-          "default": "mercury-edit-2",
-          "scope": "application",
-          "description": "%droidvisx.autocomplete.nextEdit.model.description%"
-        },
         "droidvisx.autocomplete.protocol": {
           "type": "string",
           "enum": [
             "fim",
             "ollama",
-            "siliconflow-fim",
-            "mercury-edit"
+            "siliconflow-fim"
           ],
           "enumDescriptions": [
             "%droidvisx.autocomplete.protocol.enum.0%",
             "%droidvisx.autocomplete.protocol.enum.1%",
-            "%droidvisx.autocomplete.protocol.enum.2%",
-            "%droidvisx.autocomplete.protocol.enum.3%"
+            "%droidvisx.autocomplete.protocol.enum.2%"
           ],
           "default": "fim",
           "scope": "application",
@@ -397,19 +363,7 @@
           "description": "%droidvisx.autocomplete.snoozeUntil.description%"
         }
       }
-    },
-    "keybindings": [
-      {
-        "command": "droidvisx.autocomplete.nextEdit.acceptOrJump",
-        "key": "tab",
-        "when": "editorTextFocus && !editorReadonly && !editorHasSelection && !editorTabMovesFocus && !inSnippetMode && !suggestWidgetVisible && droidvisx.nextEdit.hasPendingSuggestion"
-      },
-      {
-        "command": "droidvisx.autocomplete.nextEdit.dismiss",
-        "key": "escape",
-        "when": "editorTextFocus && droidvisx.nextEdit.hasPendingSuggestion"
-      }
-    ]
+    }
   },
   "packageManager": "pnpm@10.2.0",
   "scripts": {

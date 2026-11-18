@@ -1,4 +1,4 @@
-import { postprocessAutocompleteSuggestionWithOutcome, type AutocompletePostprocessResult } from './kilo/classic-auto-complete/uselessSuggestionFilter';
+import { postprocessAutocompleteSuggestion } from './kilo/classic-auto-complete/uselessSuggestionFilter';
 
 /** A UTF-16 character budget matching VS Code document offsets. */
 export function buildCompletionContext(
@@ -28,74 +28,30 @@ function splitsPair(text: string, offset: number): boolean {
     || (before === 13 && after === 10);
 }
 
-export type CompletionPreparationResult = AutocompletePostprocessResult | {
-  text: undefined;
-  outcome: 'format-rejected';
+export type CompletionPreparationResult = {
+  text: string;
+  outcome: 'suggestion-returned' | 'empty' | 'already-present' | 'repetition-filtered';
 };
 
-/** Keep code unchanged; undefined rejects ambiguous model formatting instead of repairing it. */
 export function prepareCompletion(
-  text: string, prefix: string, suffix: string, languageId: string, model?: string,
-): string | undefined {
+  text: string, prefix: string, suffix: string, languageId: string, model = '',
+): string {
   return prepareCompletionWithOutcome(text, prefix, suffix, languageId, model).text;
 }
 
-/** Preserve the filter decision so diagnostics can separate empty output from rejected code. */
+/** Normalize document line endings around the pinned Kilo filters, without adding another filter. */
 export function prepareCompletionWithOutcome(
-  text: string, prefix: string, suffix: string, languageId: string, model?: string,
-  onDecision?: (reason: string) => void,
+  text: string, prefix: string, suffix: string, languageId: string, model = '',
 ): CompletionPreparationResult {
-  if (!text.trim()) { onDecision?.('empty-response'); return { text: '', outcome: 'empty' }; }
-  if (suffix.startsWith(text)) { onDecision?.('suffix-exact-match'); return { text: '', outcome: 'already-present' }; }
-  const allowsFences = ['markdown', 'mdx', 'plaintext'].includes(languageId);
-  // Without lexical state an isolated fence may be model markup or legitimate string/comment
-  // content. Suppress the whole code suggestion rather than guessing and deleting its lines.
-  if (!allowsFences && /^[ \t]*`{3,}/m.test(text)) {
-    onDecision?.('ambiguous-code-fence');
-    return { text: undefined, outcome: 'format-rejected' };
+  const fromCRLF = (input: string) => input.replace(/\r\n/g, '\n');
+  const suggestion = postprocessAutocompleteSuggestion({
+    suggestion: fromCRLF(text), prefix: fromCRLF(prefix), suffix: fromCRLF(suffix), languageId, model,
+  });
+  if (!suggestion) {
+    const trimmed = fromCRLF(text).trim();
+    return { text: '', outcome: !trimmed ? 'empty'
+      : fromCRLF(suffix).trimStart().startsWith(trimmed) ? 'already-present' : 'repetition-filtered' };
   }
-  // The provider supplies the model to enable Kilo's model/language-aware pipeline.
-  if (!model) return { text, outcome: 'suggestion-returned' };
-  const eol = text.includes('\r\n') || prefix.includes('\r\n') ? '\r\n' : '\n';
-  // A deeper closing line can close an inner scope before the matching outer suffix.
-  if (!allowsFences && isInnerClosingLine(text, prefix, suffix)) {
-    return { text: text.replace(/\r?\n/g, eol), outcome: 'suggestion-returned' };
-  }
-  const processed = postprocessAutocompleteSuggestionWithOutcome({ suggestion: text.replace(/\r\n/g, '\n'),
-    prefix: prefix.replace(/\r\n/g, '\n'), suffix: suffix.replace(/\r\n/g, '\n'), languageId, model, onDecision });
-  return { ...processed, text: processed.text.replace(/\n/g, eol) };
-}
-
-function isInnerClosingLine(text: string, prefix: string, suffix: string): boolean {
-  const currentLine = prefix.slice(prefix.lastIndexOf('\n') + 1);
-  const closing = /^([ \t]*)([}\])])[ \t]*(?:\r?\n)?$/.exec(text);
-  const outer = /^\r?\n([ \t]*)([}\])])/.exec(suffix);
-  if (!closing || !outer || closing[2] !== outer[2] || !/^[ \t]*$/.test(currentLine)) return false;
-  const indentation = currentLine + closing[1];
-  return indentation.startsWith(outer[1]) && indentation.length > outer[1].length;
-}
-
-export type CachedCompletion = {
-  uri: string;
-  prefix: string;
-  suffix: string;
-  text: string;
-  createdAt: number;
-};
-
-/** Reuse only a suggestion from this exact context, or the remainder after typing it. */
-export function reuseCompletion(
-  cache: CachedCompletion | undefined,
-  uri: string,
-  prefix: string,
-  suffix: string,
-  now: number,
-): string | undefined {
-  if (!cache || cache.uri !== uri || cache.suffix !== suffix
-    || now < cache.createdAt || now - cache.createdAt > 30_000
-    || !prefix.startsWith(cache.prefix)) return undefined;
-  const typed = prefix.slice(cache.prefix.length);
-  if (!cache.text.startsWith(typed)) return undefined;
-  const remainder = cache.text.slice(typed.length);
-  return remainder;
+  const useCRLF = prefix.includes('\r\n') || suffix.includes('\r\n') || text.includes('\r\n');
+  return { text: useCRLF ? suggestion.replace(/\n/g, '\r\n') : suggestion, outcome: 'suggestion-returned' };
 }

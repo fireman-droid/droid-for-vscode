@@ -19,6 +19,12 @@ type TransportRequest = {
   readonly signal: AbortSignal;
 };
 
+export function isRetiredEditEndpoint(url: URL): boolean {
+  return /\/edit\/completions(?:\/|$)/i.test(decodeURIComponent(url.pathname));
+}
+
+export const RETIRED_EDIT_ENDPOINT_MESSAGE = 'Use a FIM endpoint; edit prediction endpoints are not supported.';
+
 /** Owns cancellation, response limits and safe failures for each completion protocol. */
 export async function requestCompletionTransport(
   request: TransportRequest,
@@ -37,6 +43,7 @@ export async function requestCompletionTransport(
   }, REQUEST_TIMEOUT_MS);
 
   try {
+    if (isRetiredEditEndpoint(new URL(request.endpoint))) throw protocolError(RETIRED_EDIT_ENDPOINT_MESSAGE);
     const response = await fetch(request.endpoint, {
       method: 'POST',
       redirect: 'error',

@@ -191,7 +191,6 @@
   .management-mission-table time { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .management-mission-unknown { color: var(--muted-ink); }
   .management-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
-  .management-collapsible-rows .dvx-settings-row:first-child { border-top: 1px solid var(--settings-divider, var(--panel-edge)); }
   .management-advanced { margin-top: 16px; }
   .dvx-settings-row .management-advanced { margin-top: 0; }
   .management-advanced > svg { transition: transform var(--motion-normal) var(--motion-ease); }

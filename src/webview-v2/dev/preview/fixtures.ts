@@ -13,13 +13,11 @@ export function previewSettings(config: StudioConfig): ManagementSettings {
     version: typeof __DVX_VERSION__ === 'string' ? __DVX_VERSION__ : 'development',
     cwd: null, connection: 'disconnected', ide: 'unavailable', starfield: 'off',
     completion: {
-      enabled: false, fimEnabled: true, nextEdit: {
-        enabled: false, endpoint: 'https://example.invalid/edit/completions', model: 'preview-editor',
-      },
+      enabled: false,
       autoTrigger: true, relatedFiles: true, adaptiveDebounce: true, debounceMs: 300,
       protocol: 'fim', endpoint: 'https://example.invalid/completions', model: 'preview-completion',
     },
-    completionHasKey: false, nextEditHasKey: false, sessionManagementAvailable: true,
+    completionHasKey: false, sessionManagementAvailable: true,
     reviewQuestion: { modelId: null, inheritedModelId: 'factory/gpt-5.6', models: [
       { id: 'factory/gpt-5.6', label: 'GPT-5.6', reasoning: ['low', 'medium', 'high'] },
       { id: 'factory/claude-opus-4-6', label: 'Claude Opus 4.6', reasoning: ['low', 'medium', 'high'] },

@@ -127,7 +127,7 @@ export class ManagementBinding implements vscode.Disposable {
         await s.settings.saveQuestionModel(action.modelId, action.reasoningEffort);
         return this.updatedSettings();
       case 'completion.save':
-        await s.settings.save(action.preferences, action.setApiKey, action.setNextEditApiKey);
+        await s.settings.save(action.preferences, action.setApiKey);
         return this.updatedSettings();
       case 'chat.focus': await vscode.commands.executeCommand('droidvisx.focusView'); return {};
       case 'missions.new': s.newMission(); return {};

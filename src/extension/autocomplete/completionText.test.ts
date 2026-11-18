@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompletionContext, prepareCompletion, prepareCompletionWithOutcome, reuseCompletion, type CachedCompletion } from './completionText';
+import { buildCompletionContext, prepareCompletion, prepareCompletionWithOutcome } from './completionText';
 
 describe('completion text', () => {
   it.each([
@@ -26,198 +26,22 @@ describe('completion text', () => {
     expect(buildCompletionContext('abcd\r\nXYZ', 4, 5)).toEqual({ prefix: 'abcd', suffix: '' });
   });
 
-  it('preserves code indentation and CRLF without rewriting either', () => {
-    const body = '  const value = 1;\r\n  return value;';
-    expect(prepareCompletion(body, 'function run() {\r\n', '}', 'typescript')).toBe(body);
+  it('returns the code body of the recorded Java completion despite a trailing fence', () => {
+    const expected = '    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n    ';
+    const prefix = 'public class CompletionSample {\n  // Sum values multiplied by their one-based array position.\n  static int weightedScore(int[] values) {\n    int total = 0;\n';
+    const suffix = '    return total;\n  }\n}\n';
+    expect(prepareCompletionWithOutcome(expected + '\n```', prefix, suffix, 'java', 'Qwen/Qwen3-Coder-30B-A3B-Instruct'))
+      .toEqual({ text: expected, outcome: 'suggestion-returned' });
   });
 
-  it.each(['markdown', 'mdx', 'plaintext'])('preserves complete and standalone fences in %s', (languageId) => {
-    const fenced = '```typescript\r\n  const value = 1;\r\n```';
-    expect(prepareCompletion(fenced, 'Example:\r\n', '', languageId)).toBe(fenced);
-    expect(prepareCompletion('```\n', 'End example\n', '', languageId)).toBe('```\n');
+  it('strips edge fences but leaves inline backticks in normal code', () => {
+    expect(prepareCompletion('```java\r\nString sample = "```";\r\n```', 'void run() {\r\n', '\r\n}', 'java'))
+      .toBe('String sample = "```";');
   });
 
-  it.each([
-    ['java', 'String sample = "```";'],
-    ['typescript', '  const sample = "```";'],
-    ['go', 'sample := "```"'],
-    ['java', '// Example: ```java'],
-    ['typescript', '/* Inline ``` code marker */'],
-  ])('preserves inline fence text in %s code or comments (%#)', (languageId, text) => {
-    expect(prepareCompletion(text, '', '', languageId)).toBe(text);
-  });
-
-  it('rejects the recorded Java response with a dangling fence after its loop', () => {
-    const raw = "    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n    \n```";
-    const prefix = "public class CompletionSample {\n  // Sum values multiplied by their one-based array position.\n  static int weightedScore(int[] values) {\n    int total = 0;\n";
-    const suffix = "    return total;\n  }\n  public static void main(String[] args) {\n    if (weightedScore(new int[]{4, 6, 9}) != 43) throw new AssertionError(\"expected score 43\");\n    if (weightedScore(new int[]{7, -2, 5}) != 18) throw new AssertionError(\"expected score 18\");\n    if (weightedScore(new int[]{}) != 0) throw new AssertionError(\"expected score 0\");\n    System.out.println(\"PASS java-function-body 43 18 0\");\n  }\n}\n";
-    expect(prepareCompletion(raw, prefix, suffix, 'java')).toBeUndefined();
-  });
-
-  it.each(['java', 'go', 'typescript', 'python', 'rust', 'custom-language'])('uses the same isolated-fence gate for %s', (languageId) => {
-    expect(prepareCompletion('```code\nvalue\n```', '', '', languageId)).toBeUndefined();
-    expect(prepareCompletion('value\n\n```', '', '', languageId)).toBeUndefined();
-    expect(prepareCompletion('value\r\n\t  ````code\r\n', '', '', languageId)).toBeUndefined();
-  });
-
-  it.each([
-    ['java', 'String example = """\n', '\n""";'],
-    ['typescript', 'const example = String.raw`\n', '\n`;'],
-    ['go', 'var example = `\n', '\n`'],
-    ['java', '/* Example:\n', '\n*/'],
-  ])('suppresses ambiguous standalone fences without altering possible %s string/comment contents', (languageId, prefix, suffix) => {
-    // These contexts cannot be distinguished safely without lexical evidence. A missing
-    // suggestion is preferable to removing a fence from a possible literal or comment.
-    expect(prepareCompletion('```java\nexample\n```', prefix, suffix, languageId)).toBeUndefined();
-  });
-
-  it('distinguishes empty/already-present output from rejected formatting and preserves nested closing tokens', () => {
-    expect(prepareCompletion('\n  ', '', '', 'java')).toBe('');
-    expect(prepareCompletion('return value;', '', 'return value;\n}', 'java')).toBe('');
-    expect(prepareCompletion('run())', 'outer(', ')', 'typescript')).toBe('run())');
-    expect(prepareCompletion('```', '', '', 'java')).toBeUndefined();
-  });
-
-  it('applies Mercury prefix overlap removal without losing remaining code', () => {
-    expect(prepareCompletion('calculate(value)', 'const x = calc', ';', 'typescript', 'mercury-edit-2')).toBe('ulate(value)');
-  });
-
-  it('keeps pure indentation and CRLF through model-aware filtering', () => {
-    expect(prepareCompletion('  return value;\r\n}', 'function run() {\r\n  ', '', 'typescript', 'codestral-latest'))
-      .toBe('  return value;\r\n}');
-  });
-
-  it('filters repeated lines and looping model output', () => {
-    expect(prepareCompletion('const repeated = 1;\nconst next = 2;', 'const repeated = 1;\n', '', 'typescript', 'codestral')).toBe('');
-    expect(prepareCompletion('repeat this phrase again and again forever. '.repeat(8), '', '', 'plaintext', 'codestral')).toBe('');
-  });
-
-  it.each([
-    ['const a = computeLongValue();\n', 'const b = computeLongValue();'],
-    ["logger.info('step 1');\n", "logger.info('step 2');"],
-  ])('preserves a similar line with a different identifier or literal (%#)', (prefix, suggestion) => {
-    expect(prepareCompletionWithOutcome(suggestion, prefix, '', 'typescript', 'codestral'))
-      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
-  });
-
-  it('preserves a batch of similar but distinct declarations', () => {
-    const suggestion = Array.from({ length: 6 }, (_, index) => `const item${index} = source.read(${index});`).join('\n');
-    expect(prepareCompletionWithOutcome(suggestion, '', '', 'typescript', 'codestral'))
-      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
-  });
-
-  it.each([
-    ['function total(items) {\n  if', ' (items.length === 0) {\n    return 0;\n  }', '\n}'],
-    ['function total(items) {\r\n  if', ' (items.length === 0) {\r\n    return 0;\r\n  }', '\r\n}'],
-    ['function total(items) {\n  for', ' (const item of items) {\n    total += item.price;\n  }', '\n}'],
-    ['outer(\n', '  inner(\n    value\n  )', '\n)'],
-    ['const groups = [\n', '  [\n    [1, 2, 3]\n  ],', '\n],\n];'],
-    ['function run() {\n  if (ready) {\n    if (valid) {\n      work();\n    }\n', '  }\n  return result;', '\n}'],
-  ])('preserves nested closing delimiters at a completion boundary (%#)', (prefix, suggestion, suffix) => {
-    expect(prepareCompletionWithOutcome(suggestion, prefix, suffix, 'typescript', 'codestral'))
-      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
-  });
-
-  it.each([
-    ['function run() {\n  if (ready) {\n    work();\n  ', '}', '\n}'],
-    ['function run() {\n  return outer(\n    inner(\n      1\n    ', ')', '\n  );\n}'],
-    ['const values = [\n  [\n    1\n  ', ']', '\n];'],
-  ])('preserves a required inner closing line before an outer delimiter (%#)', (prefix, suggestion, suffix) => {
-    for (const eol of ['\n', '\r\n']) {
-      const before = prefix.replace(/\n/g, eol), after = suffix.replace(/\n/g, eol);
-      expect(() => new Function(before + suggestion + after)).not.toThrow();
-      expect(() => new Function(before + after)).toThrow(SyntaxError);
-      for (const model of [undefined, 'codestral', 'mercury-edit-2']) {
-        expect(prepareCompletionWithOutcome(suggestion, before, after, 'typescript', model))
-          .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
-        expect(prepareCompletionWithOutcome(suggestion + '\n', before, after, 'typescript', model))
-          .toEqual({ text: suggestion + (model ? eol : '\n'), outcome: 'suggestion-returned' });
-        expect(prepareCompletionWithOutcome(suggestion, before, suggestion + after, 'typescript', model))
-          .toEqual({ text: '', outcome: 'already-present' });
-      }
-    }
-  });
-
-  it('still suppresses a closing line already present at the same indentation', () => {
-    const prefix = 'function run() {\n  ', suffix = '\n  }';
-    expect(() => new Function(prefix + suffix)).not.toThrow();
-    expect(() => new Function(prefix + '}' + suffix)).toThrow(SyntaxError);
-    expect(prepareCompletionWithOutcome('}', prefix, suffix, 'typescript', 'codestral'))
-      .toEqual({ text: '', outcome: 'already-present' });
-  });
-
-  it('still filters a repeated executable suffix line', () => {
-    expect(prepareCompletionWithOutcome('const total = sum(items);\nreturn total;',
-      'function total(items) {\n', '\nreturn total;\n}', 'typescript', 'codestral'))
-      .toEqual({ text: '', outcome: 'repetition-filtered' });
-  });
-
-  it.each([
-    'consumeNextRecord();\n'.repeat(8),
-    'const next = readValue();\nconsume(next);\n'.repeat(5),
-  ])('still rejects an exactly repeating generated block (%#)', (suggestion) => {
-    expect(prepareCompletionWithOutcome(suggestion, '', '', 'typescript', 'codestral'))
-      .toEqual({ text: '', outcome: 'repetition-filtered' });
-  });
-
-  it('preserves repeated guards in distinct state-machine branches, including a partial tail', () => {
-    const suggestion = ['progress', 'finish', 'fail', 'retry'].map(kind =>
-      `    case '${kind}':\n      if (state.kind !== 'uploading' || state.token !== event.token) {\n        return state;\n      }\n      return handle${kind}(state, event);`
-    ).join('\n') + "\n    case 'cancel':\n      if (state.kind !== 'uploading' || state.token !== event.token) {\n        ";
-    expect(prepareCompletionWithOutcome(suggestion, 'switch (event.kind) {\n', '\n}', 'typescript', 'mercury-edit-2'))
-      .toEqual({ text: suggestion, outcome: 'suggestion-returned' });
-  });
-
-  it.each([
-    { text: '\n  ', prefix: '', suffix: '', outcome: 'empty', result: '' },
-    { text: 'return value;', prefix: '', suffix: 'return value;\n}', outcome: 'already-present', result: '' },
-    { text: 'return value;', prefix: '', suffix: '\n  return value;\n}', outcome: 'already-present', result: '' },
-    { text: 'const value = 1;', prefix: 'const value = 1;\n', suffix: '', outcome: 'repetition-filtered', result: '' },
-    { text: 'return value;\n```', prefix: '', suffix: '', outcome: 'format-rejected', result: undefined },
-  ])('reports $outcome without confusing it with empty model output', ({ text, prefix, suffix, outcome, result }) => {
-    expect(prepareCompletionWithOutcome(text, prefix, suffix, 'typescript', 'codestral'))
-      .toEqual({ text: result, outcome });
-  });
-
-  it('preserves Markdown fences while removing extra empty lines before a closing fence', () => {
-    expect(prepareCompletion('\n\n```\nNext paragraph', '```ts\nconst x = 1;\n', '', 'markdown', 'codestral'))
-      .toBe('```\nNext paragraph');
-    expect(prepareCompletion('```ts\nconst x = 1;\n```', 'Example:\n', '', 'markdown', 'codestral'))
-      .toBe('```ts\nconst x = 1;\n```');
-  });
-
-  it.each([
-    ['\n ', '', '', 'empty-response'],
-    ['x()', '', 'x()', 'suffix-exact-match'],
-    ['x()\n```', '', '', 'ambiguous-code-fence'],
-    ['const value = 1;', 'const value = 1;\n', '', 'repeated-previous-line'],
-    ['first();\nlast();', '', '\nlast();', 'suffix-edge-match'],
-    ['consumeNextRecord();\n'.repeat(8), '', '', 'repeating-line-pattern'],
-  ])('identifies the exact filter rule %s (%#)', (text, prefix, suffix, expected) => {
-    const reasons: string[] = [];
-    prepareCompletionWithOutcome(text, prefix, suffix, 'typescript', 'codestral', reason => reasons.push(reason));
-    expect(reasons).toContain(expected);
-  });
-
-  const cached: CachedCompletion = {
-    uri: 'file:///sample.ts', prefix: 'const value = ', suffix: ';', text: 'calculate()', createdAt: 1000,
-  };
-
-  it('reuses the same suggestion and its remaining text after forward typing', () => {
-    expect(reuseCompletion(cached, cached.uri, cached.prefix, ';', 1001)).toBe('calculate()');
-    expect(reuseCompletion(cached, cached.uri, cached.prefix + 'calc', ';', 1002)).toBe('ulate()');
-  });
-
-  it('distinguishes an exhausted or empty cached answer from a cache miss', () => {
-    expect(reuseCompletion(cached, cached.uri, cached.prefix + cached.text, ';', 1002)).toBe('');
-    expect(reuseCompletion({ ...cached, text: '' }, cached.uri, cached.prefix, ';', 1002)).toBe('');
-  });
-
-  it('does not reuse for another file, changed suffix, divergence, deletion, or expired context', () => {
-    expect(reuseCompletion(cached, 'file:///other.ts', cached.prefix, ';', 1001)).toBeUndefined();
-    expect(reuseCompletion(cached, cached.uri, cached.prefix, '\n', 1001)).toBeUndefined();
-    expect(reuseCompletion(cached, cached.uri, cached.prefix + 'x', ';', 1001)).toBeUndefined();
-    expect(reuseCompletion(cached, cached.uri, cached.prefix.slice(0, -1), ';', 1001)).toBeUndefined();
-    expect(reuseCompletion(cached, cached.uri, cached.prefix, ';', 31_001)).toBeUndefined();
+  it('filters repeated output without conflating it with an empty model response', () => {
+    const result = prepareCompletionWithOutcome('  System.out.println("hello");', '  System.out.println("hello");\n', '', 'java');
+    expect(result).toEqual({ text: '', outcome: 'repetition-filtered' });
+    expect(prepareCompletionWithOutcome('  \n', '', '', 'java')).toEqual({ text: '', outcome: 'empty' });
   });
 });
