@@ -39,6 +39,12 @@ function transcript(reducedMotion = false, runway = 0) {
       height = nextHeight; scrollHeight = nextScrollHeight;
       resizeCallbacks.forEach((callback) => callback());
     }),
+    resizeViewport: (nextHeight: number) => act(() => {
+      height = nextHeight;
+      viewport.scrollTop = Math.min(viewport.scrollTop, Math.max(0, scrollHeight - height));
+      fireEvent.scroll(viewport);
+      resizeCallbacks.forEach((callback) => callback());
+    }),
   };
 }
 
@@ -200,4 +206,27 @@ it.each(['wheel', 'keyboard', 'touch'] as const)('keeps the chat under user cont
   chat.resize(400, 2800);
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(2400);
+});
+
+it('keeps pushing content up consistently when footer panels collapse and re-expand at bottom', () => {
+  const chat = transcript(true);
+  act(() => chat.result.current.scrollToBottom('auto'));
+  expect(chat.viewport.scrollTop).toBe(1600);
+  // A downward wheel while already at the bottom must not leave userScrolling latched.
+  fireEvent.wheel(chat.viewport, { deltaY: 120 });
+  // Panel collapse grows the viewport and the browser clamps scrollTop downward before ResizeObserver runs.
+  chat.resizeViewport(480);
+  expect(chat.result.current.follow.current.following).toBe(true);
+  expect(chat.viewport.scrollTop).toBe(1520);
+  // Re-expanding the panel must immediately push the bottom content back up.
+  chat.resize(400);
+  expect(chat.viewport.scrollTop).toBe(1600);
+  // Even after a non-wheel tap at the bottom cleared follow, expanding a panel keeps bottom content visible.
+  act(() => chat.result.current.stopFollowing());
+  chat.resize(340);
+  expect(chat.viewport.scrollTop).toBe(1660);
+  // Editing a previous message must still keep the chat under user control without pushing on shrink.
+  chat.setEditing(true);
+  chat.resize(280);
+  expect(chat.viewport.scrollTop).toBe(1660);
 });
