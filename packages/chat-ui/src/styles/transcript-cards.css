@@ -86,26 +86,6 @@
     from { stroke-dashoffset: 24; }
     to { stroke-dashoffset: 0; }
   }
-  .dvx-agent-matrix {
-    display: inline-grid;
-    width: 13px;
-    height: 13px;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(4, 1fr);
-    gap: 1.5px;
-    color: var(--muted-ink);
-  }
-  .dvx-agent-matrix-cell {
-    border-radius: 0.75px;
-    background: currentColor;
-    opacity: .22;
-    animation: dvx-agent-matrix-pulse 1280ms ease-in-out infinite;
-    animation-delay: calc(var(--matrix-step) * 95ms - 1280ms);
-  }
-  @keyframes dvx-agent-matrix-pulse {
-    0%, 60%, 100% { opacity: .22; }
-    28% { opacity: .95; }
-  }
   .dvx-agent-task-body { display: block; min-width: 0; flex: 1; }
   .dvx-agent-task-heading { display: flex; min-width: 0; align-items: center; gap: 6px; line-height: 20px; }
   .dvx-agent-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--strong-ink); transition: color var(--motion-fast) var(--motion-ease); }
@@ -552,8 +532,7 @@
     .v2-chat-disclosure, .v2-chat-choice, .v2-session-row,
     .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron { transition: none; }
     .dvx-subagent-overlay { animation: none; }
-    .dvx-agent-matrix-cell, .dvx-agent-check path { animation: none; }
-    .dvx-agent-matrix-cell { opacity: .55; }
+    .dvx-agent-check path { animation: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
     .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,
     .v2-attachment-file, .v2-attachment-image { transition: none; }

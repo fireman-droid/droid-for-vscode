@@ -8,8 +8,7 @@
   .v2-composer-agents .dvx-agent-task-heading { line-height: 18px; }
   .v2-composer-agents .dvx-agent-task-title { font-size: 12px; }
   .v2-composer-agents .dvx-agent-task-icon { width: 12px; height: 18px; }
-  .v2-composer-agents .dvx-agent-task-icon > svg,
-  .v2-composer-agents .dvx-agent-matrix { width: 12px; height: 12px; }
+  .v2-composer-agents .dvx-agent-task-icon > svg { width: 12px; height: 12px; }
   .v2-composer-agents .dvx-agent-task-meta { margin-top: 0; line-height: 16px; }
   .v2-composer-changes-stop { color: var(--muted-ink); padding: 2px 5px; font-size: 11px; }
   .v2-composer-changes-review { flex-shrink: 0; min-height: var(--composer-panel-heading-height); padding-block: 0; }

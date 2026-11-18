@@ -1,21 +1,7 @@
 import { useI18n } from '../i18n';
-import type { CSSProperties } from 'react';
-import { Check, ChevronRight, CircleAlert, SquareTerminal } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, LoaderCircle, SquareTerminal } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SlidingText } from '../ui/sliding-text';
-
-const matrixWave = [
-  0, 1, 2, 3,
-  1, 2, 3, 4,
-  2, 3, 4, 5,
-  3, 4, 5, 6,
-];
-
-function SubagentMatrixLoader() {
-  return <span aria-hidden="true" className="dvx-agent-matrix">
-    {matrixWave.map((step, index) => <span key={index} className="dvx-agent-matrix-cell" style={{ '--matrix-step': step } as CSSProperties} />)}
-  </span>;
-}
 
 function formatRoleLabel(role: string): string {
   const trimmed = role.trim();
@@ -42,7 +28,7 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
   const { t } = useI18n();
   const busy = tone === 'running' || feedback?.opening === true;
   const roleLabel = formatRoleLabel(role);
-  const icon = busy ? <SubagentMatrixLoader />
+  const icon = busy ? <LoaderCircle aria-hidden="true" className="motion-safe:animate-spin" />
     : tone === 'completed' ? <Check aria-hidden="true" className="dvx-agent-check" />
       : tone === 'failed' ? <CircleAlert aria-hidden="true" />
         : <SquareTerminal aria-hidden="true" />;
