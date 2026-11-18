@@ -8,7 +8,7 @@ export type AutocompleteSuggestion = {
   suffix: string
 }
 
-export function suggestionConsideredDuplication(params: AutocompleteSuggestion): boolean {
+export function suggestionConsideredDuplication(params: AutocompleteSuggestion & { languageId?: string }): boolean {
   if (DuplicatesFromPrefixOrSuffix(params)) {
     return true
   }
@@ -16,7 +16,9 @@ export function suggestionConsideredDuplication(params: AutocompleteSuggestion):
   // Multiline completions can be "partially duplicated": e.g. the first suggested line
   // repeats the last complete line in the prefix, or the last suggested line repeats
   // the first line in the suffix. Those are still considered duplication.
-  if (DuplicatesFromEdgeLines(params)) {
+  const keepsJavaBlockCloser = params.languageId === "java" && /(?:^|\n)[ \t]*}[ \t]*$/.test(params.suggestion.trimEnd())
+    && closesNewJavaBlock(params.suggestion.trimEnd())
+  if (DuplicatesFromEdgeLines(params, keepsJavaBlockCloser)) {
     return true
   }
 
@@ -28,7 +30,7 @@ export function suggestionConsideredDuplication(params: AutocompleteSuggestion):
   // When the suggestion isn't a full line or set of lines, normalize by including
   // the rest of the line in the prefix/suffix and check with the completed line(s)
   const normalized = normalizeToCompleteLine(params)
-  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized))
+  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized, keepsJavaBlockCloser))
 }
 
 function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
@@ -39,7 +41,7 @@ function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
   )
 }
 
-function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): boolean {
+function DuplicatesFromEdgeLines(params: AutocompleteSuggestion, keepsJavaBlockCloser: boolean): boolean {
   const trimmedSuggestion = params.suggestion.trim()
   if (!trimmedSuggestion.includes("\n")) {
     return false
@@ -56,10 +58,28 @@ function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): boolean {
     return true
   }
 
-  if (lastSuggestionLine.length > 0 && suffixFirstLine.length > 0 && lastSuggestionLine === suffixFirstLine) {
+  if (lastSuggestionLine.length > 0 && lastSuggestionLine === suffixFirstLine &&
+    !(keepsJavaBlockCloser && lastSuggestionLine === "}")) {
     return true
   }
 
+  return false
+}
+
+/** A new inner block needs its own closing brace even if the existing outer block ends with the same line. */
+function closesNewJavaBlock(text: string): boolean {
+  // Ignore braces in Java comments, strings, character literals and text blocks.
+  // If a quoted literal starts mid-token or raw Unicode escapes make the scan ambiguous, keep the upstream filter.
+  if (/\\u+[0-9a-f]{4}/i.test(text)) return false
+  const tokens = /\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"""(?:\\[\s\S]|(?!""")[\s\S])*(?:"""|$)|"(?:\\[^\n]|[^"\\\n])*"|'(?:\\[^\n]|[^'\\\n])*'|[{}"']/g
+  let depth = 0
+  for (const token of text.matchAll(tokens)) {
+    if (token[0] === "{") depth++
+    else if (token[0] === "}") {
+      if (token.index === text.length - 1) return depth > 0
+      depth = Math.max(0, depth - 1)
+    } else if (token[0] === '"' || token[0] === "'") return false
+  }
   return false
 }
 
@@ -171,6 +191,7 @@ export function postprocessAutocompleteSuggestion(
       suggestion: languageFilteredSuggestion,
       prefix: params.prefix,
       suffix: params.suffix,
+      languageId: params.languageId,
     })
   ) {
     return undefined
