@@ -290,4 +290,12 @@ export const extraMessages: readonly MessageTranslations[] = [
   ["Droid is reconnecting the thread","Droid 正在重新连接会话","Droid 正在重新連接會話"],
   ["Session activity","会话活动","會話活動"],
   ["Loading","正在加载","正在載入"],
+  ["Starting up","正在启动","正在啟動"],
+  ["Click to see progress","点击查看进度","點擊查看進度"],
+  ["Expand subagent session","展开完整子代理会话","展開完整子代理會話"],
+  ["Subagent transcript","子代理对话记录","子代理對話記錄"],
+  ["Open in tab","在标签页中打开","在分頁中打開"],
+  ["Close subagent view","关闭子代理视图","關閉子代理檢視"],
+  ["Subagent transcript is unavailable.","子代理对话记录不可用。","子代理對話記錄不可用。"],
+  ["Reading the subagent conversation.","正在读取子代理对话内容。","正在讀取子代理對話內容。"],
 ];

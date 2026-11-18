@@ -3,11 +3,14 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { ToolActionsContext } from '../content/toolActions';
+import { InlineSubagentOverlay } from './WorkingSubagents';
 import { SubagentRow } from './SubagentRow';
 import { AgentNavigation } from './AgentNavigation';
 import { AGENT_CHAT_PROTOCOL_VERSION, type AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
+import { UiEnvironmentProvider } from '@droidvisx/chat-ui/environment';
+import { TooltipProvider } from '../ui/overlays';
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const task: ToolTranscriptItem = {
   kind: 'tool', id: 'delegation', turnId: 'turn-1', toolUseId: 'task-1', toolName: 'Task',
@@ -25,13 +28,13 @@ it('preserves the recorded start across virtual remounts and foreground-to-backg
     {item ? <SubagentRow item={item} /> : null}
   </ToolActionsContext.Provider>;
   const rendered = render(view(running));
-  expect(screen.getByText('Elapsed 2m 40s')).toBeTruthy();
+  expect(screen.getByText('2m 40s')).toBeTruthy();
   act(() => vi.advanceTimersByTime(2_000));
-  expect(screen.getByText('Elapsed 2m 42s')).toBeTruthy();
+  expect(screen.getByText('2m 42s')).toBeTruthy();
   rendered.rerender(view(null));
   act(() => vi.advanceTimersByTime(10_000));
   rendered.rerender(view({ ...running, status: 'completed' }));
-  expect(screen.getByText('Elapsed 2m 52s')).toBeTruthy();
+  expect(screen.getByText('2m 52s')).toBeTruthy();
   expect(screen.getByText('Running in background')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Inspect the active module/ }));
   expect(openSubagent).toHaveBeenCalledExactlyOnceWith('turn-1', 'task-1');
@@ -39,7 +42,7 @@ it('preserves the recorded start across virtual remounts and foreground-to-backg
   rendered.rerender(view({ ...running, status: 'completed', subagent: { ...running.subagent, status: 'completed', durationMs: 180_000 } }));
   const settled = screen.getByRole('button', { name: /Inspect the active module/ }).textContent;
   expect(settled).toContain('Completed');
-  expect(settled).toContain('Elapsed 3m');
+  expect(settled).toContain('3m');
   act(() => vi.advanceTimersByTime(60_000));
   expect(screen.getByRole('button', { name: /Inspect the active module/ }).textContent).toBe(settled);
 });
@@ -51,12 +54,59 @@ it('does not invent elapsed time or a pending lifecycle when history lacks those
   act(() => vi.advanceTimersByTime(10_000));
   expect(screen.getByText('Running')).toBeTruthy();
   expect(screen.queryByText(/Elapsed/)).toBeNull();
+  expect(screen.queryByText(/\d+s$/)).toBeNull();
   rendered.rerender(<SubagentRow item={{ ...task, status: 'completed', subagent: { type: 'scout', description: task.subagent!.description } }} />);
-  expect(screen.queryByText('Pending')).toBeNull();
+  expect(screen.queryByText('Starting up')).toBeNull();
   expect(screen.queryByText('Running')).toBeNull();
   expect(screen.getByText('Inspect the active module')).toBeTruthy();
   rendered.rerender(<SubagentRow item={{ ...task, subagent: { ...task.subagent!, startedAt: Date.now() - 70_000 } }} />);
-  expect(screen.getByText('Elapsed 1m 10s')).toBeTruthy();
+  expect(screen.getByText('1m 10s')).toBeTruthy();
+});
+
+it('shows Click to see progress on clickable running tasks without duration and renders a modal inspection dialog', () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+  const onOpen = vi.fn();
+  render(<ToolActionsContext.Provider value={{ openSubagent: onOpen }}>
+    <SubagentRow item={task} />
+  </ToolActionsContext.Provider>);
+  expect(screen.getByText('Click to see progress')).toBeTruthy();
+  expect(screen.getByText('Scout')).toBeTruthy();
+
+  const onClose = vi.fn();
+  const onOpenExternal = vi.fn();
+  render(<UiEnvironmentProvider value={{ assistantName: 'Droid', copyText: async () => undefined }}>
+    <TooltipProvider>
+      <InlineSubagentOverlay
+        inspection={{
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          toolUseId: 'task-1',
+          snapshot: {
+            type: 'subagent.snapshot',
+            sequence: 1,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+            toolUseId: 'task-1',
+            status: 'ready',
+            title: 'Inspect the active module',
+            items: [{ kind: 'user', id: 'u1', text: 'Inspect module behavior' }],
+            truncated: false,
+            running: true,
+            lifecycle: 'working',
+          },
+        }}
+        transcript={[task]}
+        onClose={onClose}
+        onOpenExternal={onOpenExternal}
+      />
+    </TooltipProvider>
+  </UiEnvironmentProvider>);
+  expect(screen.getByRole('dialog', { name: 'Inspect the active module' })).toBeTruthy();
+  expect(screen.getByText('Scout · Working')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Open in tab' }));
+  expect(onOpenExternal).toHaveBeenCalledExactlyOnceWith('turn-1', 'task-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Close subagent view' }));
+  expect(onClose).toHaveBeenCalledOnce();
 });
 
 it('uses the same stopped status for a tool card and its navigation entry', () => {

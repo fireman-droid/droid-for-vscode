@@ -1,7 +1,27 @@
 import { useI18n } from '../i18n';
-import { Check, Circle, CircleAlert, LoaderCircle, RotateCw } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { Check, ChevronRight, CircleAlert, SquareTerminal } from 'lucide-react';
 import { Button } from '../ui/button';
 import { SlidingText } from '../ui/sliding-text';
+
+const matrixWave = [
+  0, 1, 2, 3,
+  1, 2, 3, 4,
+  2, 3, 4, 5,
+  3, 4, 5, 6,
+];
+
+function SubagentMatrixLoader() {
+  return <span aria-hidden="true" className="dvx-agent-matrix">
+    {matrixWave.map((step, index) => <span key={index} className="dvx-agent-matrix-cell" style={{ '--matrix-step': step } as CSSProperties} />)}
+  </span>;
+}
+
+function formatRoleLabel(role: string): string {
+  const trimmed = role.trim();
+  if (!trimmed) return '';
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+}
 
 export interface AgentTaskProps {
   readonly title: string;
@@ -21,34 +41,42 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
   toolCount, activity, feedback, onOpen }: AgentTaskProps) {
   const { t } = useI18n();
   const busy = tone === 'running' || feedback?.opening === true;
-  const StatusIcon = busy ? LoaderCircle : tone === 'completed' ? Check
-    : tone === 'failed' ? CircleAlert : Circle;
+  const roleLabel = formatRoleLabel(role);
+  const icon = busy ? <SubagentMatrixLoader />
+    : tone === 'completed' ? <Check aria-hidden="true" className="dvx-agent-check" />
+      : tone === 'failed' ? <CircleAlert aria-hidden="true" />
+        : <SquareTerminal aria-hidden="true" />;
+  const statusText = feedback?.opening ? feedback.text : statusLabel;
   return <div className="dvx-agent-task" data-variant={variant} data-tone={tone}>
     <Button variant="plain" size="none" className="dvx-agent-task-open"
       disabled={!onOpen} onClick={onOpen} aria-busy={feedback?.opening || undefined}>
-      <span className="dvx-agent-task-icon" title={feedback?.opening ? feedback.text : statusLabel}>
-        <StatusIcon aria-hidden="true" className={busy ? 'motion-safe:animate-spin' : undefined} />
+      <span className="dvx-agent-task-icon" title={feedback?.opening ? feedback.text : t(statusLabel)}>
+        {icon}
       </span>
       <span className="dvx-agent-task-body">
         <span className="dvx-agent-task-heading">
           <span className="dvx-agent-task-title" title={title}>{title}</span>
-          <span className="dvx-agent-task-role" title={role}>{role}<span className="sr-only"> {t("subagent")}</span></span>
-          <span className="dvx-agent-task-status">{t(statusLabel)}</span>
+          {roleLabel ? <span data-ui-notice="" className="dvx-agent-task-role" title={roleLabel}>{roleLabel}<span className="sr-only"> {t("subagent")}</span></span> : null}
+          <span data-ui-notice="" className="dvx-agent-task-trailing">
+            {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">{elapsed}</span>
+              : tone === 'running' && onOpen ? <span className="dvx-agent-task-hint">{t("Click to see progress")}</span> : null}
+            {onOpen ? <ChevronRight aria-hidden="true" className="dvx-agent-task-chevron" /> : null}
+          </span>
         </span>
-        <span className="dvx-agent-task-meta">
+        <span data-ui-notice="" className="dvx-agent-task-meta">
+          <span className="dvx-agent-task-status">{t(statusText)}</span>
           {activity ? <SlidingText text={activity} className="dvx-agent-task-activity" /> : null}
-          {elapsed !== undefined ? <span className="dvx-agent-task-elapsed">{t("Elapsed")} {elapsed}</span> : null}
-          {toolCount !== undefined ? <span>{toolCount} {toolCount === 1 ? 'tool' : t("tools")}</span> : null}
+          {toolCount !== undefined ? <span className="dvx-agent-task-tools">{toolCount} {toolCount === 1 ? 'tool' : t("tools")}</span> : null}
         </span>
       </span>
     </Button>
     {feedback && !feedback.opening ? <div className="dvx-agent-task-feedback" data-failed={feedback.failed || undefined}>
-      <span role="status" className="dvx-agent-task-feedback-message">
+      <span data-ui-notice="" role="status" className="dvx-agent-task-feedback-message">
         <CircleAlert aria-hidden="true" />
-        <span>{feedback.text}</span>
+        <span>{t(feedback.text)}</span>
       </span>
       {onOpen ? <Button variant="ghost" size="sm" className="dvx-agent-task-retry"
-        onClick={onOpen} aria-label={t("Retry opening {p0}", { p0: title })}><RotateCw aria-hidden="true" />{t("Retry")}</Button> : null}
+        onClick={onOpen} aria-label={t("Retry opening {p0}", { p0: title })}><SquareTerminal aria-hidden="true" />{t("Retry")}</Button> : null}
     </div> : null}
   </div>;
 }

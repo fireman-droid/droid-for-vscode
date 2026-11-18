@@ -10,7 +10,7 @@ type AgentDisplayStatus = AgentChatStatus | SubagentStatus;
 type AgentPresentation = Pick<AgentTaskProps, 'title' | 'role' | 'statusLabel' | 'tone' | 'onOpen'>;
 
 const STATUS_LABELS: Readonly<Record<AgentDisplayStatus, string>> = {
-  pending: 'Pending', running: 'Running', paused: 'Paused', completed: 'Completed',
+  pending: 'Starting up', running: 'Running', paused: 'Paused', completed: 'Completed',
   failed: 'Failed', cancelled: 'Stopped', unknown: 'Status unavailable',
 };
 

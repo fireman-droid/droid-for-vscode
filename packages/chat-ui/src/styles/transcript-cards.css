@@ -66,33 +66,92 @@
     font: 11px/16px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .dvx-agent-task {
-    min-width: 0; margin-block: 2px; border-radius: 6px; background: transparent;
+    min-width: 0; margin-block: 1px; background: transparent;
   }
   .dvx-agent-task-open {
-    display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 8px; padding: 6px 8px;
-    border-radius: inherit; text-align: left; color: var(--ink); cursor: pointer;
+    display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 8px; padding: 5px 2px;
+    border-radius: var(--control-radius); text-align: left; color: var(--ink); cursor: pointer;
   }
-  .dvx-agent-task-open:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .dvx-agent-task-icon { display: grid; width: 14px; height: 20px; flex: none; place-items: center; color: var(--muted-ink); }
+  .dvx-agent-task-open:disabled { cursor: default; }
+  .dvx-agent-task-open:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .dvx-agent-task-icon { display: grid; width: 14px; height: 20px; flex: none; place-items: center; color: var(--muted-ink); transition: color var(--motion-fast) var(--motion-ease); }
   .dvx-agent-task-icon > svg { width: 13px; height: 13px; }
+  .dvx-agent-task[data-tone='completed'] .dvx-agent-task-icon { color: var(--vscode-testing-iconPassed, light-dark(#3b6f32, #70c798)); }
+  .dvx-agent-check path {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+    animation: dvx-agent-check-in 240ms cubic-bezier(.22, 1, .36, 1) backwards;
+  }
+  @keyframes dvx-agent-check-in {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
+  .dvx-agent-matrix {
+    display: inline-grid;
+    width: 13px;
+    height: 13px;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 1.5px;
+    color: var(--muted-ink);
+  }
+  .dvx-agent-matrix-cell {
+    border-radius: 0.75px;
+    background: currentColor;
+    opacity: .22;
+    animation: dvx-agent-matrix-pulse 1280ms ease-in-out infinite;
+    animation-delay: calc(var(--matrix-step) * 95ms - 1280ms);
+  }
+  @keyframes dvx-agent-matrix-pulse {
+    0%, 60%, 100% { opacity: .22; }
+    28% { opacity: .95; }
+  }
   .dvx-agent-task-body { display: block; min-width: 0; flex: 1; }
-  .dvx-agent-task-heading { display: flex; min-width: 0; align-items: baseline; gap: 6px; line-height: 20px; }
-  .dvx-agent-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--strong-ink); }
+  .dvx-agent-task-heading { display: flex; min-width: 0; align-items: center; gap: 6px; line-height: 20px; }
+  .dvx-agent-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--strong-ink); transition: color var(--motion-fast) var(--motion-ease); }
   .dvx-agent-task-role { max-width: 30%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-ink); font-size: 12px; }
-  .dvx-agent-task-status { flex: none; margin-left: auto; color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
+  .dvx-agent-task-trailing { display: inline-flex; flex: none; align-items: center; gap: 4px; margin-left: auto; color: var(--muted-ink); font-size: 11px; white-space: nowrap; transition: color var(--motion-fast) var(--motion-ease); }
+  .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
+  .dvx-agent-task-chevron { width: 12px; height: 12px; flex: none; opacity: .55; transition: opacity var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
+  @media (hover: hover) {
+    .dvx-agent-task-open:hover:not(:disabled) .dvx-agent-task-trailing { color: var(--ink); }
+    .dvx-agent-task-open:hover:not(:disabled) .dvx-agent-task-chevron { opacity: .9; transform: translateX(2px); }
+  }
   .dvx-agent-task[data-tone='failed'] :is(.dvx-agent-task-status, .dvx-agent-task-icon) { color: var(--error-ink); }
-  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 2px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 1px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .dvx-agent-task-meta:empty { display: none; }
   .dvx-agent-task-meta > span { flex: none; white-space: nowrap; }
   .dvx-agent-task-meta .dvx-agent-task-activity { flex: 1; }
-  .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
-  .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 30px; }
+  .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 24px; }
   .dvx-agent-task-feedback-message { display: flex; min-width: 0; flex: 1 1 140px; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
   .dvx-agent-task-feedback-message > svg { width: 13px; height: 13px; flex: none; }
   .dvx-agent-task-feedback[data-failed='true'] .dvx-agent-task-feedback-message { color: var(--error-ink); }
   .dvx-agent-task-retry { margin-left: auto; }
   .dvx-agent-task[data-variant='row'] { margin: 0; }
   .dvx-agent-task[data-variant='row'] .dvx-agent-task-open { padding-block: 4px; }
+  .dvx-subagent-dialog-overlay {
+    background: light-dark(rgb(0 0 0 / 28%), rgb(0 0 0 / 50%));
+    backdrop-filter: blur(8px);
+  }
+  .dvx-subagent-dialog {
+    border-color: var(--panel-edge);
+    background: var(--surface);
+  }
+  .dvx-subagent-dialog-head {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px 6px 16px;
+    border-bottom: 1px solid var(--panel-edge);
+  }
+  .dvx-subagent-dialog-heading { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
+  .dvx-subagent-dialog-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--strong-ink); }
+  .dvx-subagent-dialog-meta { flex: none; font-size: 12px; line-height: 18px; color: var(--muted-ink); white-space: nowrap; }
+  .dvx-subagent-dialog-meta[data-failed='true'] { color: var(--error-ink); }
+  .dvx-subagent-dialog-actions { display: inline-flex; flex: none; align-items: center; gap: 2px; }
+  .dvx-subagent-dialog .v2-chat-rail { width: 100%; max-width: none; padding-inline: 20px; }
   .v2-chat-choice,
   .v2-session-row {
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
@@ -466,7 +525,10 @@
   .v2-attachment-thumb > button:focus-visible,
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-chat-disclosure, .v2-chat-choice, .v2-session-row { transition: none; }
+    .v2-chat-disclosure, .v2-chat-choice, .v2-session-row,
+    .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron { transition: none; }
+    .dvx-agent-matrix-cell, .dvx-agent-check path { animation: none; }
+    .dvx-agent-matrix-cell { opacity: .55; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
     .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,
     .v2-attachment-file, .v2-attachment-image { transition: none; }

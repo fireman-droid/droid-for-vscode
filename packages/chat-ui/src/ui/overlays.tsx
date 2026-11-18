@@ -96,15 +96,22 @@ export function DialogDescription(props: ComponentProps<typeof DialogPrimitive.D
 export function DialogContent({
   children,
   className,
+  overlayClassName,
+  hideCloseButton = false,
   closeDisabled = false,
   closeLabel = 'Close',
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content> & { readonly closeDisabled?: boolean; readonly closeLabel?: string }) {
+}: ComponentProps<typeof DialogPrimitive.Content> & {
+  readonly overlayClassName?: string;
+  readonly hideCloseButton?: boolean;
+  readonly closeDisabled?: boolean;
+  readonly closeLabel?: string;
+}) {
   const { t } = useI18n();
   const container = usePortalContainer();
   return (
     <DialogPrimitive.Portal container={container}>
-      <DialogPrimitive.Overlay data-webview-overlay="" data-slot="dialog-overlay" className="v2-dialog-overlay fixed inset-0 z-40 bg-black/20" />
+      <DialogPrimitive.Overlay data-webview-overlay="" data-slot="dialog-overlay" className={cn('v2-dialog-overlay fixed inset-0 z-40 bg-black/20', overlayClassName)} />
       <DialogPrimitive.Content
         data-webview-overlay=""
         data-slot="dialog-content"
@@ -112,11 +119,11 @@ export function DialogContent({
         {...props}
       >
         {children}
-        <DialogClose asChild>
+        {hideCloseButton ? null : <DialogClose asChild>
           <Button variant="ghost" size="icon" aria-label={t(closeLabel)} disabled={closeDisabled} className="absolute right-2 top-2">
             <X />
           </Button>
-        </DialogClose>
+        </DialogClose>}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );
