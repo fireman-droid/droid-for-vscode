@@ -178,7 +178,7 @@
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
   .dvx-session-scroll { min-height: 0; }
-  .dvx-session-viewport { height: auto; max-height: 260px; padding-right: 6px; }
+  .dvx-session-viewport { height: auto; max-height: 220px; padding-right: 2px; }
   .v2-session-row { --session-row-surface: transparent; }
   .v2-session-row:is(:hover, :focus-within) {
     --session-row-surface: var(--control-surface-hover);
