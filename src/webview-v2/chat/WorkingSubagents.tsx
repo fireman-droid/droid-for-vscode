@@ -1,5 +1,5 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { useMemo } from 'react';
+import { useEffect, useId, useMemo } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
@@ -10,7 +10,6 @@ import type { AgentChatNavigationMessage } from '../../shared/protocol/agentChat
 import type { ChatPort } from '../host/chatIntent';
 import { AgentNavigation, AgentSection } from './AgentNavigation';
 import { Button } from '../ui/button';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../ui/overlays';
 import { DroidLoading } from '../ui/droid-motion';
 import { ReadOnlyTranscript } from '../viewer/ReadOnlyTranscript';
 
@@ -56,6 +55,17 @@ export function InlineSubagentOverlay({ inspection, transcript, onClose, onOpenE
   readonly onOpenExternal?: (turnId: string, toolUseId: string) => void;
 }) {
   const { t } = useI18n();
+  const titleId = useId();
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing) {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
   const taskItem = transcript.find(
     (item): item is ToolTranscriptItem => item.kind === 'tool' && item.toolUseId === inspection.toolUseId,
   );
@@ -72,42 +82,44 @@ export function InlineSubagentOverlay({ inspection, transcript, onClose, onOpenE
     : lifecycle ? t(lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1)) : t("Ready");
   const headerMeta = [roleLabel, statusText].filter(Boolean).join(' · ');
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent
-        overlayClassName="dvx-subagent-dialog-overlay"
-        className="dvx-subagent-dialog v2-chat-surface inset-auto left-1/2 top-1/2 grid h-[min(580px,calc(100vh-56px))] max-h-[calc(100vh-32px)] w-[min(740px,calc(100vw-24px))] max-w-none -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0"
-        hideCloseButton
-        onEscapeKeyDown={(event) => {
-          if (event.isComposing) event.preventDefault();
+    <div
+      className="dvx-subagent-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="v2-chat-rail dvx-subagent-sheet-rail"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
         }}
       >
-        <header className="dvx-subagent-dialog-head">
-          <div className="dvx-subagent-dialog-heading">
-            <DialogTitle title={title} className="dvx-subagent-dialog-title">{title}</DialogTitle>
-            <DialogDescription className="sr-only">{t("Subagent transcript")}</DialogDescription>
-            {headerMeta ? <span role="status" data-ui-notice="" className="dvx-subagent-dialog-meta" data-failed={lifecycle === 'failed' || undefined}>{headerMeta}</span> : null}
-          </div>
-          <div className="dvx-subagent-dialog-actions">
-            {onOpenExternal ? <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Open in tab")} title={t("Expand subagent session")} onClick={() => onOpenExternal(inspection.turnId, inspection.toolUseId)}><Maximize2 className="size-3.5" /></Button> : null}
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Close subagent view")} title={t("Close")}><X className="size-3.5" /></Button>
-            </DialogClose>
-          </div>
-        </header>
-        <div className="dvx-subagent-dialog-body">
-          {snapshot === null || snapshot.status === 'loading' ? (
-            <div className="v2-chat-rail overflow-auto py-6">
-              <DroidLoading label={t("Loading session…")} detail={t("Reading the subagent conversation.")} />
+        <section role="dialog" aria-labelledby={titleId} className="dvx-subagent-sheet v2-chat-surface">
+          <header className="dvx-subagent-dialog-head">
+            <div className="dvx-subagent-dialog-heading">
+              <h2 id={titleId} title={title} className="dvx-subagent-dialog-title">{title}</h2>
+              {headerMeta ? <span role="status" data-ui-notice="" className="dvx-subagent-dialog-meta" data-failed={lifecycle === 'failed' || undefined}>{headerMeta}</span> : null}
             </div>
-          ) : snapshot.status === 'unavailable' ? (
-            <div className="v2-chat-rail grid min-h-[180px] place-items-center overflow-auto py-6 text-center text-xs text-muted-foreground">
-              <p data-ui-notice="">{snapshot.reason ?? t("Subagent transcript is unavailable.")}</p>
+            <div className="dvx-subagent-dialog-actions">
+              {onOpenExternal ? <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Open in tab")} title={t("Expand subagent session")} onClick={() => onOpenExternal(inspection.turnId, inspection.toolUseId)}><Maximize2 className="size-3.5" /></Button> : null}
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Close subagent view")} title={t("Close")} onClick={onClose}><X className="size-3.5" /></Button>
             </div>
-          ) : (
-            <ReadOnlyTranscript key={`${inspection.turnId}:${inspection.toolUseId}`} items={snapshot.items} running={snapshot.running} truncated={snapshot.truncated} />
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </header>
+          <div className="dvx-subagent-dialog-body">
+            {snapshot === null || snapshot.status === 'loading' ? (
+              <div className="v2-chat-rail overflow-auto py-6">
+                <DroidLoading label={t("Loading session…")} detail={t("Reading the subagent conversation.")} />
+              </div>
+            ) : snapshot.status === 'unavailable' ? (
+              <div className="v2-chat-rail grid min-h-[180px] place-items-center overflow-auto py-6 text-center text-xs text-muted-foreground">
+                <p data-ui-notice="">{snapshot.reason ?? t("Subagent transcript is unavailable.")}</p>
+              </div>
+            ) : (
+              <ReadOnlyTranscript key={`${inspection.turnId}:${inspection.toolUseId}`} items={snapshot.items} running={snapshot.running} truncated={snapshot.truncated} />
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
   );
 }
