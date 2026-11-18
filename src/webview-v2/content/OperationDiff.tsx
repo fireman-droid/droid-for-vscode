@@ -8,7 +8,6 @@ import { RecordedSource } from '../review/RecordedSource';
 import { isConfirmedOperationFile, isWorkspaceOperationFile, operationDiffWithChanges, type OperationDiffFile } from '../../shared/protocol/operationDiff';
 import { operationFileStats } from '../chat/operationSummary';
 import { operationLabel } from './operationPresentation';
-import { formatDuration } from '../chat/thread/readers';
 export const OPERATION_UNAVAILABLE = {
   'not-recorded': 'This operation’s Diff was not recorded.',
   'unattributed': 'An exact before/after change could not be attributed to this operation.',
@@ -54,7 +53,7 @@ export function OperationDiff({ item, messageId, hideConfirmed = false, onIntera
   return <div aria-label={t("File operations")} className="my-1 w-full min-w-0">
     {files.map((file) => isConfirmedOperationFile(result, file)
       ? <FileChangeView key={`${file.scope ?? 'workspace'}:${file.path}`} file={operationFileStats(file)} onInteract={onInteract} alwaysExpanded
-        metadata={item.durationMs === undefined ? undefined : formatDuration(item.durationMs)} label={file.submittedContent !== undefined ? t("Written") : file.kind === 'added' ? t("Created") : file.kind === 'deleted' ? t("Deleted") : file.kind === 'renamed' ? t("Renamed") : t("Edited")}
+        label={file.submittedContent !== undefined ? t("Written") : file.kind === 'added' ? t("Created") : file.kind === 'deleted' ? t("Deleted") : file.kind === 'renamed' ? t("Renamed") : t("Edited")}
         onSelect={isWorkspaceOperationFile(file) && context?.sessionId ? () => { context.port.postMessage({
           type: 'review.panel.open', sessionId: context.sessionId!, scopeKind: 'operations', turnId: item.turnId, toolUseId: item.toolUseId, path: file.path,
         }); } : undefined}>

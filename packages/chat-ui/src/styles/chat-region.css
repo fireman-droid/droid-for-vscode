@@ -304,8 +304,40 @@
   }
   .v2-chat-surface .operation-diff {
     margin: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .v2-chat-surface .operation-diff .dvx-change-file-header { padding: 1px 0; gap: 6px; }
+  .v2-chat-surface .operation-diff .dvx-change-row-static { min-height: 24px; padding: 1px 0; gap: 6px; color: var(--muted-ink); font-size: 13px; }
+  .v2-chat-surface .operation-diff .dvx-change-label { color: var(--muted-ink); font-size: 13px; }
+  .dvx-change-pill {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 7px;
+    border: 1px solid var(--chat-edge);
+    border-radius: 6px;
+    background: var(--well-surface);
+    color: var(--strong-ink);
+    font-size: 12px;
+    line-height: 18px;
+    text-decoration: none;
+  }
+  button.dvx-change-pill { cursor: pointer; transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease); }
+  button.dvx-change-pill:hover:not(:disabled) { border-color: var(--control-border-hover); background: var(--control-surface-hover); }
+  .dvx-change-pill-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dvx-change-pill-sep { width: 1px; height: 11px; flex: none; background: var(--chat-edge); }
+  .dvx-operation-body {
+    margin-top: 4px;
+    overflow: hidden;
     border: 1px solid var(--chat-edge);
     border-radius: 8px;
+  }
+  @media (hover: hover) {
+    .operation-diff:not(:hover, :focus-within) .dvx-change-action { opacity: 0; }
   }
   .v2-chat-surface .operation-diff-file > header { min-height: 30px; padding: 4px 8px; font-size: 13px; }
   .operation-diff-stats { display: flex; gap: 6px; font-variant-numeric: tabular-nums; }

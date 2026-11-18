@@ -8,6 +8,7 @@ import { ProcessGroupContext, useProcessDisclosure } from './processPresentation
 export function ActivityItem({
   id,
   messageId,
+  icon,
   title,
   target,
   status,
@@ -34,6 +35,7 @@ export function ActivityItem({
   const selectable = children !== undefined;
   const selected = disclosure.expanded;
   const detailsId = useId();
+  const hasLeadingIcon = icon !== undefined && icon !== null;
   const labels = <>
     <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
     {target ? <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={target}>{target}</span> : <span className="min-w-0 flex-1" />}
@@ -44,18 +46,24 @@ export function ActivityItem({
     <span data-ui-notice="" className="block truncate text-[11px] leading-[18px] text-muted-foreground" title={description}>{description}</span>
   </span> : <span className="flex min-w-0 items-center gap-1.5">{labels}</span>;
   const chevron = <ChevronRight className={cn('size-3 transition-transform motion-reduce:transition-none', selected && 'rotate-90')} />;
-  if (!selectable) return <div data-ui-notice={textSelectable ? undefined : ''} className={cn('v2-activity-row v2-activity-row-plain min-h-6 min-w-0 py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
+  const leading = hasLeadingIcon
+    ? (selectable
+      ? <span aria-hidden="true" className="v2-activity-leading-swap" data-open={selected || undefined}>{icon}<ChevronRight className={cn('v2-activity-swap-chev size-3 transition-transform motion-reduce:transition-none', selected && 'rotate-90')} /></span>
+      : <span aria-hidden="true" className="v2-activity-leading-icon">{icon}</span>)
+    : (selectable ? chevron : null);
+  if (!selectable) return <div data-ui-notice={textSelectable ? undefined : ''} className={cn('v2-activity-entry v2-activity-row min-h-6 min-w-0 py-0.5 text-muted-foreground', !hasLeadingIcon && 'v2-activity-row-plain', !textSelectable && 'select-none')}>
+    {leading}
     {content}
-    {actions ? <div className="flex shrink-0 items-center">{actions}</div> : null}
+    {actions ? <div className="v2-activity-actions flex shrink-0 items-center">{actions}</div> : null}
   </div>;
-  return <Collapsible open={selected} className="min-w-0">
+  return <Collapsible open={selected} className="v2-activity-entry min-w-0">
     <div className="flex min-w-0 items-center gap-1">
       <CollapsibleTrigger asChild><Button textSelectable={textSelectable} ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={detailsId} onClick={disclosure.toggle}
         className={cn('v2-chat-disclosure v2-activity-row min-h-6 min-w-0 flex-1 rounded-md py-0.5 text-left text-muted-foreground hover:text-foreground', !textSelectable && 'select-none')}>
-        {chevron}
+        {leading}
         {content}
       </Button></CollapsibleTrigger>
-      {actions ? <div className="flex shrink-0 items-center pr-1">{actions}</div> : null}
+      {actions ? <div className="v2-activity-actions flex shrink-0 items-center pr-1">{actions}</div> : null}
     </div>
     <AnimatedCollapsibleContent id={detailsId} ref={disclosure.contentRef} open={selected} visible={disclosure.visible}>
       {disclosure.mounted ? <div className={cn(inline ? 'v2-activity-inline-detail' : 'v2-activity-detail', 'min-w-0 pb-1')}>{children}</div> : null}

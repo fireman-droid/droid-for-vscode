@@ -8,10 +8,12 @@ import { resolveToolAction } from '../../shared/transcript/toolActivity';
 import { classifyExploreTool } from './transcript/activityGrouping';
 import { ProcessGroupContext, ProcessLatestContext, useProcessDisclosure } from './transcript/processPresentation';
 import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
-import { formatDuration, formatToolLifecycle } from './thread/readers';
+import { formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
-import { OperationDiff } from '../content/OperationDiff';
+import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
+import { OPERATION_UNAVAILABLE, OperationDiff } from '../content/OperationDiff';
+import { operationDiffWithChanges } from '../../shared/protocol/operationDiff';
 import { useToolActions } from '../content/toolActions';
 import { Button } from '../ui/button';
 import { CommandCard } from './CommandCard';
@@ -70,8 +72,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const hasDetails = command !== undefined || previewBody || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
-  const status = [t(state), item.durationMs === undefined ? '' : formatDuration(item.durationMs), compactResult,
-    resultNotice ? t(resultNotice.label) : ''].filter(Boolean).join(' · ');
+  const status = [t(state), compactResult].filter(Boolean).join(' · ');
   const title = `${t(action)}${target ? ` · ${target}` : ''}`;
   const activityActions = <>
     {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")}
@@ -109,6 +110,24 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   }
   if (isFoldableFileOperation(item)) {
     return <OperationDiff item={item} messageId={messageId} onInteract={onInteract} />;
+  }
+  const fileEdit = !item.subagent && item.detailKind !== 'command' &&
+    ['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase());
+  const diffResult = fileEdit && item.operationDiff ? operationDiffWithChanges(item.operationDiff) : undefined;
+  if (fileEdit && item.status === 'completed' && !errorMessage && (!diffResult || diffResult.status === 'unavailable')) {
+    if (diffResult?.status === 'unavailable' && diffResult.reason === 'unchanged') return null;
+    const reasonDetail = t(OPERATION_UNAVAILABLE[diffResult?.status === 'unavailable' ? diffResult.reason : 'not-recorded']);
+    const editPath = item.filePath ?? item.target ?? currentFile;
+    const editLabel = ['create', 'write'].includes(item.toolName.toLowerCase()) ? t("Written") : t("Edited");
+    const extraFiles = item.additionalFileCount && item.additionalFileCount > 0 ? `+${item.additionalFileCount}` : undefined;
+    return editPath ? (
+      <FileChangeView alwaysExpanded file={{ path: editPath, kind: 'modified', additions: null, deletions: null }}
+        label={editLabel} pillBadge={extraFiles} pillTitle={`${editPath} · ${reasonDetail}`}
+        onOpenPath={actions.openPath ? () => actions.openPath!({ path: editPath }) : undefined}
+        openPathLabel={t("Open current file")} onInteract={onInteract} />
+    ) : (
+      <p data-ui-notice="" className="operation-diff-unavailable" title={reasonDetail}>{editLabel}</p>
+    );
   }
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);

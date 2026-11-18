@@ -1,9 +1,26 @@
 @layer components {
-  /* Only disclosure controls reserve a column; prose and details share the same left edge. */
-  .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
+  /* Uniform leading rail keeps plain and collapsible exploration rows aligned. */
+  .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 6px; align-items: center; }
   .v2-activity-row-plain { grid-template-columns: minmax(0, 1fr) auto; }
+  .v2-activity-leading-icon,
+  .v2-activity-leading-swap { position: relative; display: grid; width: 14px; height: 14px; place-items: center; color: var(--muted-ink); }
+  .v2-activity-leading-icon > svg,
+  .v2-activity-leading-swap > svg:first-child { width: 12px; height: 12px; }
+  .v2-activity-leading-swap > .v2-activity-swap-chev { position: absolute; opacity: 0; }
+  .v2-activity-row:is(:hover, :focus-visible) .v2-activity-leading-swap > svg:first-child,
+  .v2-activity-leading-swap[data-open='true'] > svg:first-child { opacity: 0; }
+  .v2-activity-row:is(:hover, :focus-visible) .v2-activity-leading-swap > .v2-activity-swap-chev,
+  .v2-activity-leading-swap[data-open='true'] > .v2-activity-swap-chev { opacity: 1; }
+  .v2-activity-actions { transition: opacity var(--motion-fast) var(--motion-ease); }
+  @media (hover: hover) {
+    .v2-activity-entry:not(:hover, :focus-within) .v2-activity-actions { opacity: 0; }
+  }
+  .v2-thinking-row .v2-thinking-trigger > svg:first-child { opacity: 0; width: 10px; margin-right: -4px; transition: opacity var(--motion-fast) var(--motion-ease); }
+  .v2-thinking-row:is(:hover, :focus-within) .v2-thinking-trigger > svg:first-child,
+  .v2-thinking-row[data-state='open'] .v2-thinking-trigger > svg:first-child { opacity: .8; width: 12px; margin-right: 0; }
+  .v2-thinking-detail { border-left: 1px solid var(--chat-edge); padding-left: 10px; }
   .v2-activity-detail { padding-inline-start: 0; }
-  .v2-activity-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-top: 2px; padding-left: 8px; }
+  .v2-activity-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; padding-top: 2px; padding-left: 6px; }
   .v2-activity-items > * { min-width: 0; }
   .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
   .v2-explored-summary {
@@ -295,7 +312,12 @@
     border-radius: 5px;
     background: transparent;
     color: var(--muted-ink);
-    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), opacity var(--motion-fast) var(--motion-ease);
+  }
+  @media (hover: hover) {
+    .v2-command-card:not(:hover, :focus-within, [data-state='open']) .v2-command-menu-trigger:not([aria-expanded='true']) {
+      opacity: 0;
+    }
   }
   .v2-command-menu-trigger svg { width: 14px; height: 14px; }
   .v2-command-menu-trigger:hover,

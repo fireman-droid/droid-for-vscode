@@ -55,7 +55,8 @@ it('separates unavailable snippets from failure and opens current files without 
   const openPath = vi.fn();
   const read: ToolTranscriptItem = { kind: 'tool', id: 'read-row', turnId: 'turn-1', toolUseId: 'read-1', toolName: 'Read', action: 'Read file', status: 'completed', progressCount: 0, latestUpdateKind: null, target: 'src/app.ts' };
   const view = render(<View item={read} actions={{ openPath }} />);
-  expect(screen.getByText('Not saved')).toBeTruthy();
+  expect(screen.queryByText('Not saved')).toBeNull();
+  expect(screen.getByTitle(/does not contain a result snippet/i)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read-1' }, text: 'const retained = true;', truncated: true } }} actions={{ openPath }} />);
   fireEvent.click(screen.getByRole('button', { name: /^Read/ }));
@@ -71,8 +72,7 @@ it.each([false, true])('omits missing targets and unavailable preview noise with
     resultPreview: { availability: 'unavailable', reason: 'restricted' } };
   const view = render(<View item={read} grouped={grouped} />);
   expect(view.container.textContent).toContain('Read');
-  expect(view.container.textContent).not.toMatch(/Target not recorded|Not saved/);
-  expect(screen.getByText('No preview')).toBeTruthy();
+  expect(view.container.textContent).not.toMatch(/Target not recorded|Not saved|No preview/);
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   expect(screen.getByTitle(/restricted/)).toBeTruthy();
 });
@@ -81,7 +81,7 @@ it('keeps evicted results and simple read receipts compact without empty disclos
   const read: ToolTranscriptItem = { ...base, toolName: 'Read', action: 'Read file', status: 'completed', detailKind: undefined,
     detail: undefined, outputTail: undefined, target: 'src/app.ts', resultPreview: { availability: 'unavailable', reason: 'evicted' } };
   const view = render(<View item={read} grouped />);
-  expect(screen.getByText('Not retained')).toBeTruthy();
+  expect(screen.queryByText('Not retained')).toBeNull();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   expect(view.container.textContent).not.toContain('conversation limit');
   expect(screen.getByTitle(/conversation limit/)).toBeTruthy();
@@ -166,7 +166,8 @@ it('does not substitute a turn Diff for missing operation evidence without offer
   expect(screen.queryByRole('button', { name: 'Canvas' })).toBeNull();
   expect(preview).not.toHaveBeenCalled();
   expect(postMessage).not.toHaveBeenCalled();
-  expect(screen.getByText('This operation’s Diff was not recorded.')).toBeDefined();
+  expect(screen.queryByText('This operation’s Diff was not recorded.')).toBeNull();
+  expect(screen.getByTitle(/This operation’s Diff was not recorded\./)).toBeDefined();
   expect(screen.queryByRole('button', { name: /Review/ })).toBeNull();
   expect(postMessage).not.toHaveBeenCalled();
 });
