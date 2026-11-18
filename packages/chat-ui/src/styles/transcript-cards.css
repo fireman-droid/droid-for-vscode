@@ -139,8 +139,6 @@
     min-height: 0;
     padding-top: 12px;
     padding-bottom: 6px;
-    background: color-mix(in srgb, var(--surface) 18%, transparent);
-    backdrop-filter: blur(8px);
     animation: v2-fade-in var(--motion-fast) var(--motion-ease);
   }
   .dvx-subagent-sheet-rail {
