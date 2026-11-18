@@ -161,10 +161,10 @@
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
   .dvx-session-scroll { min-height: 0; }
-  .dvx-session-viewport { height: auto; max-height: 240px; padding-right: 8px; }
+  .dvx-session-viewport { height: auto; max-height: 260px; padding-right: 6px; }
   .v2-session-row { --session-row-surface: transparent; }
   .v2-session-row:is(:hover, :focus-within) {
-    --session-row-surface: color-mix(in srgb, var(--ink) 6%, var(--overlay-surface));
+    --session-row-surface: var(--control-surface-hover);
     background: var(--session-row-surface);
   }
   .v2-session-row-actions { padding-left: 10px; }
@@ -182,7 +182,7 @@
   .v2-chat-choice:has([data-state='checked']) { background: var(--control-surface-active); }
   .v2-session-row[data-current='true'],
   .v2-session-row[data-current='true']:is(:hover, :focus-within) {
-    --session-row-surface: color-mix(in srgb, var(--ink) 9%, var(--overlay-surface));
+    --session-row-surface: var(--control-surface-active);
     background: var(--session-row-surface);
   }
   .v2-chat-choice:has(button:enabled) { cursor: pointer; }

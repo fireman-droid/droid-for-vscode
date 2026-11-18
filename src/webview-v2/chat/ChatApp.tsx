@@ -219,7 +219,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
                   size="none"
                   title={activeSessionTitle}
                   aria-label={`${activeSessionTitle} · ${t("Sessions")}`}
-                  className="group inline-flex h-6 min-w-0 max-w-full items-center gap-1 rounded-[var(--control-radius)] px-1.5 text-[13px] hover:bg-[var(--control-surface-hover)] hover:text-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground"
+                  className="group inline-flex h-6 min-w-0 max-w-full items-center gap-1 rounded-[var(--control-radius)] px-1.5 text-[13px] transition-colors hover:bg-[var(--control-surface-hover)] hover:text-foreground data-[state=open]:bg-[var(--control-surface-hover)] data-[state=open]:text-foreground motion-reduce:transition-none"
                 >
                   <span className={`min-w-0 truncate ${activeSession ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
                     {activeSessionTitle}
