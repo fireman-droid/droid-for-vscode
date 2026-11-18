@@ -2,7 +2,7 @@ import { useI18n } from '../i18n';
 import { useUiEnvironment } from '../environment';
 import { groupSessions } from './sessionGroups';
 import type { SessionMenuState, SessionActions, SessionSummary } from './sessions';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Archive, CheckCircle, ChevronRight, GitBranch, History, LoaderCircle, Pencil, Star } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,9 +10,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { ScrollArea } from '../ui/scroll-area';
 
-export function SessionMenu({ state, actions, disabled, open, openSignal, onOpenChange, maxSearchLength, maxTitleLength }: {
+export function SessionMenu({ state, actions, disabled, open, openSignal, onOpenChange, maxSearchLength, maxTitleLength, trigger, align = 'end' }: {
   readonly maxSearchLength?: number;
   readonly maxTitleLength?: number;
+  readonly trigger?: ReactNode;
+  readonly align?: ComponentProps<typeof PopoverContent>['align'];
   readonly state: SessionMenuState;
   readonly actions: SessionActions;
   readonly disabled: boolean;
@@ -53,8 +55,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
   };
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" className="data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground" aria-label={t("Sessions")}><History className="size-3.5" /></Button></PopoverTrigger>
-      <PopoverContent align="end" aria-label={t("Session history")} className="w-[260px] space-y-1.5 p-1.5">
+      <PopoverTrigger asChild>{trigger ?? <Button variant="ghost" size="icon-sm" className="data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground" aria-label={t("Sessions")}><History className="size-3.5" /></Button>}</PopoverTrigger>
+      <PopoverContent align={align} aria-label={t("Session history")} className="w-[260px] space-y-1.5 p-1.5">
         <div className="flex items-center gap-1">
           <Input ref={searchInput} className="h-6 text-xs" type="search" aria-label={t("Search sessions")} placeholder={actions.handleSearchContent ? t("Search chats · Enter searches content") : t("Search chats")}
             maxLength={maxSearchLength} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => {

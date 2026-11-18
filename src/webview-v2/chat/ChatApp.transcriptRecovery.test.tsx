@@ -229,4 +229,21 @@ describe('ChatApp transcript delivery recovery', () => {
     });
     expect(port.postMessage.mock.calls.some(([message]) => message.type === 'agent.chat.open')).toBe(false);
   });
+
+  it('opens the session menu from the active session title in the header', async () => {
+    const user = userEvent.setup();
+    const port = mountChat();
+    receive(snapshot({
+      turn: { turnId, status: 'completed' },
+      sessions: { status: 'ready', items: [
+        { id: sessionId, title: 'Current session', messageCount: 1, modifiedTime: '2026-09-21T00:00:00.000Z', active: true, isFavorite: false },
+        { id: 'older-session', title: 'Older chat', messageCount: 2, modifiedTime: '2026-09-20T00:00:00.000Z', active: false, isFavorite: false },
+      ] },
+    }));
+    const trigger = await screen.findByRole('button', { name: 'Current session · Sessions' });
+    await user.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Session history' });
+    await user.click(within(dialog).getByRole('button', { name: 'Older chat' }));
+    expect(port.postMessage).toHaveBeenCalledWith({ type: 'session.select', sessionId: 'older-session' });
+  });
 });

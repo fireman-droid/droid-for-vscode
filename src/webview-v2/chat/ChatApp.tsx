@@ -5,7 +5,7 @@ import type { TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import { Plus, Settings2 } from 'lucide-react';
+import { ChevronDown, Plus, Settings2 } from 'lucide-react';
 import { createTurnId, type ChatPort } from '../host/chatIntent';
 import type { ThemePreference } from '../../shared/protocol/shell';
 import { useComposerFlow } from './composer/useComposerFlow';
@@ -191,6 +191,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const renderEditorSettings = useCallback((owner: string) => <ComposerControls editorOwner={owner} state={state} port={port} blocked={operationsBlocked}
     theme={theme.context} onMissionOpen={capabilities.openMission ? openMission : undefined} missionActive={capabilities.openMission && host.missionWorkspaceRoute === 'detail'} />,
   [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute, capabilities.openMission]);
+  const activeSession = state.sessions.items.find((item) => item.id === state.sessionId)
+    ?? (state.sessionId === null ? undefined : state.sessions.items.find((item) => item.active));
+  const activeSessionTitle = activeSession?.title.trim() || t("New chat");
   return (
     <ModelSourceProvider postMessage={postModelSource}>
     <ContentProvider value={content}>
@@ -198,18 +201,47 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       starfield={theme.resolved === 'dark' ? theme.starfield : 'off'}
       header={<>
-        <div className="flex min-w-0 items-center">{!childChat ? <AppInfo /> : null}</div>
-        <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
-            phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
-            blocked={transition.blocking && transition.overlay !== null}
-            ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
-              state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
-        {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
-            {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
-            <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
-        </div> : null}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          {!childChat ? <AppInfo /> : null}
+          {!childChat && capabilities.navigateSessions ? <>
+            <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground/45">/</span>
+            <SessionMenu
+              state={state}
+              actions={sessions}
+              disabled={sessionActionsDisabled}
+              open={navigation.page === 'sessions'}
+              openSignal={navigation.id}
+              onOpenChange={(open) => setNavigation(open ? 'sessions' : null)}
+              align="start"
+              trigger={
+                <Button
+                  variant="plain"
+                  size="none"
+                  title={activeSessionTitle}
+                  aria-label={`${activeSessionTitle} · ${t("Sessions")}`}
+                  className="group inline-flex h-6 min-w-0 max-w-full items-center gap-1 rounded-[var(--control-radius)] px-1.5 text-[13px] hover:bg-[var(--control-surface-hover)] hover:text-foreground data-[state=open]:bg-[var(--control-surface-active)] data-[state=open]:text-foreground"
+                >
+                  <span className={`min-w-0 truncate ${activeSession ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+                    {activeSessionTitle}
+                  </span>
+                  <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+                </Button>
+              }
+            />
+          </> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
+              phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
+              blocked={transition.blocking && transition.overlay !== null}
+              ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
+                state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
+          {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
+              {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
+              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
+              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
+          </div> : null}
+        </div>
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
