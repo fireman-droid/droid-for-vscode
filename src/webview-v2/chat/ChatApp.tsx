@@ -73,7 +73,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const theme = useWebviewTheme(persistTheme);
   const workspace = useWorkspaceActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status, dispatch });
   const subagents = useSubagentPanelFlow(port, state.sessionId);
-  const workingSubagents = useWorkingSubagents(state, subagents);
+  useWorkingSubagents(state, subagents);
   const images = useLocalImageSource(port, state.sessionId, state.connection.status, state.localImages);
   const content = useMemo(() => ({
     workspaceRoot: state.workspaceRoot,
@@ -86,14 +86,14 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     port, sessionId: state.sessionId, connected: state.connection.status === 'connected',
   }), [port, state.sessionId, state.connection.status]);
   const toolActions = useMemo(() => state.sessionId !== null ? {
-    openSubagent: subagents.openSubagent,
+    openSubagent: subagents.inspectSubagent,
     ...(state.connection.status === 'connected' ? {
     openPath: workspace.handleOpenPath,
     openFileDiff: workspace.handleOpenFileDiff,
     openReviewTurn: (turnId: string) => port.postMessage({ type: 'review.panel.open', sessionId: state.sessionId!, scopeKind: 'turn', turnId }),
     openTerminalMirror: workspace.handleOpenTerminalMirror,
     } : {}),
-  } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.openSubagent]);
+  } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.inspectSubagent]);
   const transition = useConversationTransition({
     sequence: state.sequence,
     getSequence,
@@ -215,7 +215,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         {footerInteraction ? interaction : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
-        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
         <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">

@@ -3,18 +3,15 @@ import { useEffect, useId, useMemo } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
-import { SubagentActivityStoreContext, type SubagentInspectionState, type useSubagentPanelFlow } from './subagents/subagentPanelFlow';
-import { ToolActionsContext } from '../content/toolActions';
-import { SubagentRow } from './SubagentRow';
+import type { SubagentInspectionState, useSubagentPanelFlow } from './subagents/subagentPanelFlow';
 import type { AgentChatNavigationMessage } from '../../shared/protocol/agentChatProtocol';
 import type { ChatPort } from '../host/chatIntent';
-import { AgentNavigation, AgentSection } from './AgentNavigation';
+import { AgentNavigation } from './AgentNavigation';
 import { Button } from '../ui/button';
 import { DroidLoading } from '../ui/droid-motion';
 import { ReadOnlyTranscript } from '../viewer/ReadOnlyTranscript';
 
-export function WorkingSubagents({ working, transcript, flow, navigation, port }: {
-  readonly working: readonly ToolTranscriptItem[];
+export function WorkingSubagents({ transcript, flow, navigation, port }: {
   readonly transcript?: readonly SessionTranscriptItem[];
   readonly flow: ReturnType<typeof useSubagentPanelFlow>;
   readonly navigation?: AgentChatNavigationMessage | null;
@@ -22,25 +19,17 @@ export function WorkingSubagents({ working, transcript, flow, navigation, port }
 }) {
   const tasks = useMemo(() => {
     const map = new Map<string, { readonly turnId: string; readonly toolUseId: string }>();
-    for (const item of transcript ?? working) {
+    if (!navigation || !port) return map;
+    for (const item of transcript ?? []) {
       if (item.kind === 'tool' && item.subagent !== undefined) {
         map.set(item.toolUseId, { turnId: item.turnId, toolUseId: item.toolUseId });
       }
     }
     return map;
-  }, [transcript, working]);
-  if (navigation && port) {
-    return <AgentNavigation navigation={navigation} port={port} tasks={tasks}
-      inspectedToolUseId={flow.inspection?.toolUseId ?? null} onInspectTask={flow.inspectSubagent} />;
-  }
-  if (working.length === 0) return null;
-  return <AgentSection count={working.length} running={working.length}>
-      <SubagentActivityStoreContext.Provider value={flow.activityStore}>
-        <ToolActionsContext.Provider value={{ openSubagent: flow.inspectSubagent }}>
-          {working.map((item) => <li key={item.toolUseId}><SubagentRow item={item} variant="row" /></li>)}
-        </ToolActionsContext.Provider>
-      </SubagentActivityStoreContext.Provider>
-  </AgentSection>;
+  }, [navigation, port, transcript]);
+  if (!navigation || !port) return null;
+  return <AgentNavigation navigation={navigation} port={port} tasks={tasks}
+    inspectedToolUseId={flow.inspection?.toolUseId ?? null} onInspectTask={flow.inspectSubagent} />;
 }
 
 function formatRole(role: string | undefined): string {

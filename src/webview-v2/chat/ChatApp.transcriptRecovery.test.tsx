@@ -206,4 +206,27 @@ describe('ChatApp transcript delivery recovery', () => {
       answers: [{ index: 0, answer: 'Current file' }],
     }]);
   });
+
+  it('omits the composer Agent drawer for task subagents and inspects inline on click', async () => {
+    const port = mountChat();
+    const taskRow: ToolTranscriptItem = {
+      kind: 'tool', id: 'task-row', turnId, toolUseId: 'subagent-1', toolName: 'Task',
+      action: 'Delegated focused work', status: 'running', progressCount: 0, latestUpdateKind: null,
+      subagent: { type: 'explore', description: 'Inventory current chat surfaces', status: 'running' },
+    };
+    receive(snapshot({ transcript: [question, taskRow] }));
+    const openTask = await screen.findByRole('button', { name: /Inventory current chat surfaces/ });
+    expect(screen.queryByRole('region', { name: 'Agents' })).toBeNull();
+    expect(screen.queryByText('1 Agent')).toBeNull();
+    expect(port.postMessage).toHaveBeenCalledWith({
+      type: 'subagent.panel', sessionId, open: true,
+    });
+    port.postMessage.mockClear();
+    fireEvent.click(openTask);
+    await screen.findByRole('dialog');
+    expect(port.postMessage).toHaveBeenCalledWith({
+      type: 'subagent.inspect', sessionId, turnId, toolUseId: 'subagent-1',
+    });
+    expect(port.postMessage.mock.calls.some(([message]) => message.type === 'agent.chat.open')).toBe(false);
+  });
 });
