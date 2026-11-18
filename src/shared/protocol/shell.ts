@@ -66,10 +66,17 @@ export interface UiThemeMessage {
   readonly starfield?: ChatBackdropSetting;
 }
 
+export const CONNECTION_REASONS = [
+  'workspace-required', 'workspace-untrusted',
+  'cli-not-found', 'invalid-cwd', 'daemon-not-logged-in', 'daemon-credentials-unreadable',
+  'daemon-refresh-failed', 'daemon-unavailable', 'sdk-protocol-incompatible', 'session-in-use',
+  'initialization-failed', 'history-unavailable', 'catalog-unavailable',
+] as const;
+
 export interface ConnectionState {
   readonly status: ConnectionStatus;
   readonly message?: string;
-  readonly reason?: 'workspace-required' | 'workspace-untrusted';
+  readonly reason?: (typeof CONNECTION_REASONS)[number];
   /** Last observed model request failed to connect; independent of the local runtime. */
   readonly modelRequestFailed?: true;
 }

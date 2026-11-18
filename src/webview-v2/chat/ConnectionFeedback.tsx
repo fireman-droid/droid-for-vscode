@@ -1,12 +1,13 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useRef, useState } from 'react';
-import { LoaderCircle, Unplug } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { subscribeHostMessages } from '../host/hostMessageSource';
 import { announceReady } from '../bridge/vscode';
 import type { ChatPort } from '../host/chatIntent';
 import { ChatConnectionStatus } from './ChatConnectionStatus';
 import { getWorkspaceSetup, WorkspaceSetup } from './WorkspaceSetup';
+import { ConnectionIssue } from './ConnectionIssue';
 
 function useLongWait(waiting: boolean, delay: number) {
   const [elapsed, setElapsed] = useState(false);
@@ -126,14 +127,15 @@ export function ConversationWait({ phase, hasSnapshot, handshakeTimedOut, connec
   const setup = getWorkspaceSetup(connection);
   if (setup) return <WorkspaceSetup setup={setup} port={port} />;
   const failed = connection.status === 'unavailable';
-  const label = failed ? 'Unable to connect.'
-    : handshakeTimedOut ? 'Connection timed out.'
+  if (failed) return <div className="absolute inset-0 z-20 grid place-content-center bg-background p-6 text-center">
+    <ConnectionIssue connection={connection} />
+  </div>;
+  const label = handshakeTimedOut ? 'Connection timed out.'
     : phase === 'switching' ? 'Switching conversation…'
     : !hasSnapshot ? 'Restoring session…' : 'Connecting to Droid…';
-  return <div className="pointer-events-none absolute inset-0 z-20 grid place-content-center bg-background p-6">
-    <p role={failed ? 'alert' : 'status'} className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-      {failed ? <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
-        : <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />}
+  return <div data-ui-notice="" className="pointer-events-none absolute inset-0 z-20 grid select-none place-content-center bg-background p-6">
+    <p role="status" className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+      <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
       <span>{t(label)}</span>
     </p>
   </div>;

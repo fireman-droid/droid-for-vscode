@@ -58,7 +58,7 @@ export async function startup(ctl: RuntimeLifecyclePort): Promise<void> {
     }
     ctl.catalogState.sessions = catalog;
     if (catalog.status === 'error') {
-      ctl.sessionState.connection = { status: 'unavailable', message: CATALOG_ERROR_MESSAGE };
+      ctl.sessionState.connection = { status: 'unavailable', reason: 'catalog-unavailable', message: CATALOG_ERROR_MESSAGE };
       ctl.emitSnapshot();
       return;
     }
@@ -293,7 +293,6 @@ export async function replaceRuntime(
     initializing,
   ]);
   if (
-    transcript === null ||
     !isCurrentRuntimeGeneration(ctl, generation) ||
     !isTargetWorkspaceCurrent(ctl, target.cwd)
   ) {
@@ -317,6 +316,7 @@ export async function replaceRuntime(
   if (activation.status === 'failed') {
     ctl.sessionState.connection = {
       status: 'unavailable',
+      ...(activation.reason ? { reason: activation.reason } : {}),
       message: activation.message,
     };
     ctl.emitSessionDiagnostic(
@@ -324,6 +324,11 @@ export async function replaceRuntime(
       ctl.sessionState.connection.message!,
     );
     ctl.emitSnapshot();
+    return;
+  }
+
+  if (transcript === null) {
+    await closeRuntime(ctl, activation.runtime).catch(() => undefined);
     return;
   }
 
@@ -366,7 +371,6 @@ export async function activateInitialRuntime(
     initializing,
   ]);
   if (
-    transcript === null ||
     !isCurrentRuntimeGeneration(ctl, generation) ||
     !isTargetWorkspaceCurrent(ctl, target.cwd)
   ) {
@@ -379,18 +383,18 @@ export async function activateInitialRuntime(
     return;
   }
   if (activation.status === 'failed') {
-    if (!ctl.childSession && target.kind === 'resume' && activation.reason === 'session-in-use') {
+    if (transcript !== null && !ctl.childSession && target.kind === 'resume' && activation.reason === 'session-in-use') {
       await activateInitialRuntime(ctl, { kind: 'new', cwd: target.cwd }, null);
       return;
     }
-    if (failedResumeId) {
+    if (failedResumeId && transcript !== null) {
       ctl.effects.commitSessionBinding({
         conversationId: ctl.recoveryStore.resolveConversationId(failedResumeId) ?? failedResumeId,
         sessionId: failedResumeId,
         transcript,
         turn: ctl.turnState.turn,
       });
-    } else {
+    } else if (!failedResumeId) {
       ctl.effects.showSessionHistory({ conversationId: null, sessionId: null },
         createHostTranscriptState('unavailable'));
       ctl.missionState.mission = null;
@@ -398,9 +402,14 @@ export async function activateInitialRuntime(
     }
     ctl.sessionState.connection = {
       status: 'unavailable',
+      ...(activation.reason ? { reason: activation.reason } : {}),
       message: activation.message,
     };
     ctl.emitSnapshot();
+    return;
+  }
+  if (transcript === null) {
+    await closeRuntime(ctl, activation.runtime).catch(() => undefined);
     return;
   }
   if (!isTargetWorkspaceCurrent(ctl, target.cwd)) {

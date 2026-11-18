@@ -50,6 +50,7 @@ export async function prepareHistory(
       }
       ctl.sessionState.connection = {
         status: 'unavailable',
+        reason: 'history-unavailable',
         message: 'Droid session history could not be loaded. Retry to open this session.',
       };
       ctl.emitSessionDiagnostic('session-history-failed', ctl.sessionState.connection.message!);
@@ -84,6 +85,7 @@ export async function createInitializedRuntime(
   } catch {
     return {
       status: 'failed',
+      reason: 'initialization-failed',
       message: 'The local Droid runtime could not be created.',
     };
   }
@@ -123,6 +125,7 @@ export async function createInitializedRuntime(
       isTargetWorkspaceCurrent(ctl, target.cwd)
       ? {
           status: 'failed',
+          reason: 'initialization-failed',
           message: 'The local Droid runtime could not be initialized.',
         }
       : null;
