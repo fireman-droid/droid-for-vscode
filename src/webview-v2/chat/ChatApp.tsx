@@ -247,8 +247,12 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         {footerInteraction ? interaction : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
-        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
-        <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
+        {subagents.inspection ? (
+          <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} />
+        ) : <>
+          {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+          <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
+        </>}
         </div>
         {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
           <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
@@ -262,7 +266,6 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         </div>
       </>}
       overlay={<>
-      {subagents.inspection ? <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} /> : null}
       {transition.overlay !== null && state.transcript.length === 0 ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
         handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} port={port} /> : null}
       </>}>

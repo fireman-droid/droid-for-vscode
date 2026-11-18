@@ -126,53 +126,34 @@
   .dvx-agent-task-retry { margin-left: auto; }
   .dvx-agent-task[data-variant='row'] { margin: 0; }
   .dvx-agent-task[data-variant='row'] .dvx-agent-task-open { padding-block: 4px; }
-  .dvx-subagent-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    min-height: 0;
-    padding-top: 12px;
-    padding-bottom: 6px;
-    animation: v2-fade-in var(--motion-fast) var(--motion-ease);
-  }
-  .dvx-subagent-sheet-rail {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    min-height: 0;
-    flex: 1;
-  }
   .dvx-subagent-sheet {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     width: 100%;
-    height: min(560px, 100%);
-    max-height: 100%;
     min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
+    flex: 0 1 auto;
     overflow: hidden;
-    border: 1px solid var(--panel-edge);
-    border-radius: var(--control-radius);
-    background: var(--surface);
+    animation: v2-fade-in var(--motion-fast) var(--motion-ease);
   }
   .dvx-subagent-dialog-head {
     display: flex;
-    min-height: 36px;
+    flex: none;
+    min-height: 32px;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 4px 8px 4px 12px;
-    border-bottom: 1px solid var(--panel-edge);
+    padding: 3px 6px 3px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   }
   .dvx-subagent-dialog-heading { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
-  .dvx-subagent-dialog-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--strong-ink); }
-  .dvx-subagent-dialog-meta { flex: none; font-size: 12px; line-height: 18px; color: var(--muted-ink); white-space: nowrap; }
+  .dvx-subagent-dialog-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; line-height: 18px; color: var(--strong-ink); }
+  .dvx-subagent-dialog-meta { flex: none; font-size: 11.5px; line-height: 16px; color: var(--muted-ink); white-space: nowrap; }
   .dvx-subagent-dialog-meta[data-failed='true'] { color: var(--error-ink); }
   .dvx-subagent-dialog-actions { display: inline-flex; flex: none; align-items: center; gap: 2px; }
-  .dvx-subagent-dialog-body { display: grid; min-height: 0; min-width: 0; }
-  .dvx-subagent-sheet .v2-chat-rail { width: 100%; max-width: none; padding: 12px 16px 16px; }
+  .dvx-subagent-dialog-body { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; min-width: 0; overflow: hidden; }
+  .dvx-subagent-dialog-body > div,
+  .dvx-subagent-dialog-body > div > div[aria-label] { min-height: 0; flex: 0 1 auto; }
+  .dvx-subagent-sheet .v2-chat-rail { width: 100%; max-width: none; padding: 10px 12px 12px; }
   .v2-chat-choice,
   .v2-session-row {
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
@@ -553,7 +534,7 @@
   @media (prefers-reduced-motion: reduce) {
     .v2-chat-disclosure, .v2-chat-choice, .v2-session-row,
     .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron { transition: none; }
-    .dvx-subagent-overlay { animation: none; }
+    .dvx-subagent-sheet { animation: none; }
     .dvx-agent-check path { animation: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
     .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,

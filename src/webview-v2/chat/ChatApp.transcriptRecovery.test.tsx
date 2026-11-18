@@ -207,27 +207,38 @@ describe('ChatApp transcript delivery recovery', () => {
     }]);
   });
 
-  it('omits the composer Agent drawer for task subagents and inspects inline on click', async () => {
+  it('omits the composer Agent drawer for task subagents and docks inline inspection in the queued panel slot until closed', async () => {
     const port = mountChat();
     const taskRow: ToolTranscriptItem = {
       kind: 'tool', id: 'task-row', turnId, toolUseId: 'subagent-1', toolName: 'Task',
       action: 'Delegated focused work', status: 'running', progressCount: 0, latestUpdateKind: null,
       subagent: { type: 'explore', description: 'Inventory current chat surfaces', status: 'running' },
     };
-    receive(snapshot({ transcript: [question, taskRow] }));
+    receive(snapshot({
+      transcript: [question, taskRow],
+      queue: {
+        items: [{ queueId: 'queued-1', text: 'Follow up after inspection', attachments: [] }],
+        paused: null,
+      },
+    }));
     const openTask = await screen.findByRole('button', { name: /Inventory current chat surfaces/ });
     expect(screen.queryByRole('region', { name: 'Agents' })).toBeNull();
     expect(screen.queryByText('1 Agent')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toBeTruthy();
     expect(port.postMessage).toHaveBeenCalledWith({
       type: 'subagent.panel', sessionId, open: true,
     });
     port.postMessage.mockClear();
     fireEvent.click(openTask);
     await screen.findByRole('dialog');
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).toBeNull();
     expect(port.postMessage).toHaveBeenCalledWith({
       type: 'subagent.inspect', sessionId, turnId, toolUseId: 'subagent-1',
     });
     expect(port.postMessage.mock.calls.some(([message]) => message.type === 'agent.chat.open')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Close subagent view' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toBeTruthy();
   });
 
   it('opens the session menu from the active session title in the header', async () => {

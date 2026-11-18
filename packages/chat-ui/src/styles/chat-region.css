@@ -32,6 +32,9 @@
     min-height: 0; max-height: min(240px, 30vh); overflow-y: auto; overscroll-behavior-y: contain;
     margin-inline: 18px; border: 1px solid var(--chat-edge); border-bottom: 0; border-radius: 8px 8px 0 0;
   }
+  .v2-composer-panels:has(> .dvx-subagent-sheet) {
+    display: flex; flex-direction: column; max-height: min(360px, 45vh); overflow: hidden;
+  }
   .v2-composer-panels:empty { display: none; }
   .v2-composer-panels > :is(.v2-composer-queue, .v2-composer-changes) + :is(.v2-composer-queue, .v2-composer-changes) { border-top: 1px solid color-mix(in srgb, var(--ink) 6%, transparent); }
   .v2-composer-panels :is(.v2-queue-list, .v2-composer-changes-list) { max-height: none; overflow-y: visible; }
