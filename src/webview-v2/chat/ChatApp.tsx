@@ -203,9 +203,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
       header={<>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {!childChat ? <AppInfo /> : null}
-          {!childChat && capabilities.navigateSessions ? <>
-            <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground/45">/</span>
-            <SessionMenu
+          {!childChat && capabilities.navigateSessions ? <SessionMenu
               state={state}
               actions={sessions}
               disabled={sessionActionsDisabled}
@@ -227,8 +225,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
                   <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
                 </Button>
               }
-            />
-          </> : null}
+            /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
