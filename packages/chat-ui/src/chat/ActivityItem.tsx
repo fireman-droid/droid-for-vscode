@@ -11,6 +11,8 @@ export function ActivityItem({
   icon,
   title,
   target,
+  targetDetail,
+  targetTitle,
   status,
   description,
   actions,
@@ -23,6 +25,8 @@ export function ActivityItem({
   readonly icon?: ReactNode;
   readonly title: string;
   readonly target?: string;
+  readonly targetDetail?: string;
+  readonly targetTitle?: string;
   readonly status?: string;
   readonly description?: string;
   readonly actions?: ReactNode;
@@ -38,7 +42,12 @@ export function ActivityItem({
   const hasLeadingIcon = icon !== undefined && icon !== null;
   const labels = <>
     <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
-    {target ? <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={target}>{target}</span> : <span className="min-w-0 flex-1" />}
+    {target ? (
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
+        <span className="min-w-0 truncate text-[13px] text-foreground" title={targetTitle ?? target}>{target}</span>
+        {targetDetail ? <span data-ui-notice="" className="shrink-0 truncate text-[11.5px] tabular-nums text-muted-foreground" title={targetTitle ?? targetDetail}>{targetDetail}</span> : null}
+      </span>
+    ) : <span className="min-w-0 flex-1" />}
     {status ? <span data-ui-notice="" title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
   </>;
   const content = description ? <span className="min-w-0 flex-1">

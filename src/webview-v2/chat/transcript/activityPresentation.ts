@@ -1,9 +1,11 @@
 import { translate, type Translate } from '@droidvisx/chat-ui/i18n';
 import {
   activeActivityIndex,
+  classifyExploreTool,
   summarizeActivityGroup,
   type GroupCandidatePart,
 } from './activityGrouping';
+import { compactExploreTarget } from './compactTarget';
 import { readToolActivity } from '../thread/readers';
 import { resolveToolAction } from '../../../shared/transcript/toolActivity';
 
@@ -38,6 +40,17 @@ export function currentProcessWaiting(
   return permissions + questions === 0
     ? null
     : { turnId: turn.turnId, permissions, questions };
+}
+
+function formatShimmerTarget(
+  active: GroupCandidatePart | undefined,
+  activeTool: ReturnType<typeof readToolActivity> | null,
+): { readonly label: string | null; readonly title: string | null } {
+  const raw = activeTool?.filePath ?? activeTool?.target ?? null;
+  if (!raw) return { label: null, title: null };
+  const compacted = compactExploreTarget(raw, classifyExploreTool(active?.toolName ?? ''));
+  const label = [compacted.label, compacted.detail].filter(Boolean).join(' · ');
+  return { label, title: raw };
 }
 
 export function presentActivity({
@@ -105,6 +118,7 @@ export function presentActivity({
     const otherRunning = summary.runningToolCount - (latestStatus === 'running' || latestStatus === 'stopping' ? 1 : 0);
     if (otherRunning > 0) facts.push(t('{count} other running', { count: otherRunning }));
   }
+  const shimmerTarget = formatShimmerTarget(active, activeTool);
   return {
     running,
     waiting: wait !== null,
@@ -112,7 +126,11 @@ export function presentActivity({
     summary: summaryLabel,
     target:
       running && wait === null && summary.runningCount > 0
-        ? (activeTool?.target ?? null)
+        ? shimmerTarget.label
+        : null,
+    targetTitle:
+      running && wait === null && summary.runningCount > 0
+        ? shimmerTarget.title
         : null,
     latestAction:
       running && wait === null && active !== undefined
@@ -122,7 +140,11 @@ export function presentActivity({
         : undefined,
     latestTarget:
       running && wait === null && active !== undefined
-        ? (activeTool?.target ?? null)
+        ? shimmerTarget.label
+        : null,
+    latestTargetTitle:
+      running && wait === null && active !== undefined
+        ? shimmerTarget.title
         : null,
     facts,
     detailFacts,

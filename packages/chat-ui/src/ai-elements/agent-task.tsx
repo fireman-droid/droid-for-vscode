@@ -18,13 +18,14 @@ export interface AgentTaskProps {
   readonly elapsed?: string;
   readonly toolCount?: number;
   readonly activity?: string;
+  readonly activityTitle?: string;
   readonly feedback?: { readonly text: string; readonly opening: boolean; readonly failed: boolean };
   readonly onOpen?: () => void;
 }
 
 /** Presentation only: session resolution and lifecycle stay with the caller. */
 export function AgentTask({ title, role, statusLabel, tone, variant = 'card', elapsed,
-  toolCount, activity, feedback, onOpen }: AgentTaskProps) {
+  toolCount, activity, activityTitle, feedback, onOpen }: AgentTaskProps) {
   const { t } = useI18n();
   const busy = tone === 'running' || feedback?.opening === true;
   const roleLabel = formatRoleLabel(role);
@@ -51,7 +52,7 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         </span>
         <span data-ui-notice="" className="dvx-agent-task-meta">
           <span className="dvx-agent-task-status">{t(statusText)}</span>
-          {activity ? <><span aria-hidden="true" className="dvx-agent-task-sep">·</span><SlidingText text={activity} className="dvx-agent-task-activity" /></> : null}
+          {activity ? <><span aria-hidden="true" className="dvx-agent-task-sep">·</span><SlidingText text={activity} title={activityTitle} className="dvx-agent-task-activity" /></> : null}
           {toolCount !== undefined ? <span className="dvx-agent-task-tools">{toolCount} {toolCount === 1 ? t("tool") : t("tools")}</span> : null}
         </span>
       </span>

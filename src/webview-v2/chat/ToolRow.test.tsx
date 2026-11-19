@@ -87,6 +87,8 @@ it('keeps evicted results and simple read receipts compact without empty disclos
   expect(screen.getByTitle(/conversation limit/)).toBeTruthy();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read' },
     text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes', truncated: false } }} grouped />);
+  expect(screen.getByText('app.ts')).toBeTruthy();
+  expect(screen.getByText('#L1–37')).toBeTruthy();
   expect(screen.queryByText('Read lines 1–37 (1.3 KiB)')).toBeNull();
   expect(screen.getByTitle(/Read lines 1–37 \(1\.3 KiB\)/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
@@ -198,7 +200,8 @@ it('uses the host-owned subagent row identity and live feed, without exposing ch
   act(() => window.dispatchEvent(new MessageEvent('message', { data: {
     type: 'subagent.activity', sequence: 1, sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1', activities: [{ action: 'Read', target: 'src/app.ts' }],
   } })));
-  expect(screen.getByText('Read · src/app.ts')).toBeDefined();
+  expect(screen.getByText('Read · app.ts')).toBeDefined();
+  expect(screen.getByTitle('Read · src/app.ts')).toBeDefined();
   expect(screen.getByText('Running in background')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /Inspect the selected module/ }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'subagent.open', sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1' });

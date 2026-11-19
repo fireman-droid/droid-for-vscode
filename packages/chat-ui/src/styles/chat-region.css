@@ -414,7 +414,11 @@
   .dvx-change-chevron, .dvx-change-file-icon { width: 12px; height: 12px; flex: 0 0 auto; }
   .dvx-change-file-icon { width: 14px; height: 14px; }
   .dvx-change-file-icon[data-file-tone='code'] { color: light-dark(#287ab2, #79b7e0); }
+  .dvx-change-file-icon[data-file-tone='react'] { color: light-dark(#1d7cb8, #6cc4f0); }
+  .dvx-change-file-icon[data-file-tone='script'] { color: light-dark(#a67608, #e0bd59); }
   .dvx-change-file-icon[data-file-tone='style'] { color: light-dark(#885ca1, #b18bc1); }
+  .dvx-change-file-icon[data-file-tone='data'] { color: light-dark(#2a8474, #6fc5b5); }
+  .dvx-change-file-icon[data-file-tone='markup'] { color: light-dark(#b5542c, #e39570); }
   .dvx-change-file-icon[data-file-tone='text'] { color: var(--muted-ink); }
   .dvx-change-row[data-state='open'] > .dvx-change-chevron { rotate: 90deg; }
   .dvx-change-more[data-state='open'] > .dvx-change-chevron { rotate: 180deg; }

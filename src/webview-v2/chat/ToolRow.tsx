@@ -11,6 +11,7 @@ import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRo
 import { formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
+import { ChangeFileIcon } from '@droidvisx/chat-ui/chat/ChangeFileIcon';
 import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
 import { OPERATION_UNAVAILABLE, OperationDiff } from '../content/OperationDiff';
 import { operationDiffWithChanges } from '../../shared/protocol/operationDiff';
@@ -22,11 +23,13 @@ import { executionLabel } from '../content/operationPresentation';
 import { ActivityItem } from './ActivityItem';
 import { ActivityResult } from './ActivityResult';
 import { parsePlanSteps } from './transcript/planAnchor';
+import { compactExploreTarget, GroupPathDisambiguationContext } from './transcript/compactTarget';
 import { PlanSteps } from './PlanLine';
 import { isFoldableFileOperation } from './operationSummary';
 import { isScriptTool, readReceipt, scriptBackgroundReceipt } from '../../shared/transcript/scriptOutput';
 
-function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
+function activityIcon(category: ReturnType<typeof classifyExploreTool>, filePath?: string) {
+  if ((category === 'file' || category === 'diagnostics') && filePath) return <ChangeFileIcon path={filePath} />;
   if (category === 'file') return <FileText />;
   if (category === 'folder') return <Folder />;
   if (category === 'search') return <FileSearch />;
@@ -73,7 +76,13 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
   const status = [t(state), compactResult].filter(Boolean).join(' · ');
-  const title = `${t(action)}${target ? ` · ${target}` : ''}`;
+  const disambiguation = useContext(GroupPathDisambiguationContext);
+  const compacted = target ? compactExploreTarget(target, category, disambiguation) : undefined;
+  const lineRange = receipt ? (receipt.start === receipt.end ? `#L${receipt.start}` : `#L${receipt.start}–${receipt.end}`) : undefined;
+  const targetDetail = [compacted?.detail, lineRange].filter(Boolean).join(' · ') || undefined;
+  const displayTarget = compacted ? [compacted.label, targetDetail].filter(Boolean).join(' ') : undefined;
+  const title = `${t(action)}${displayTarget ? ` · ${displayTarget}` : ''}`;
+  const hoverDetails = [item.toolName, compacted && compacted.label !== target ? target : undefined, receiptNote, unavailable ? t(unavailable.detail) : undefined].filter(Boolean);
   const activityActions = <>
     {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")}
       onClick={() => actions.openPath!({ path: currentFile })}><ExternalLink className="size-3" /></Button> : null}
@@ -137,15 +146,16 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, receiptNote, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
-    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={t(action)} target={target}
+  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[...hoverDetails, background?.log].filter(Boolean).join(' · ')}>
+    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category, currentFile ?? (category === 'file' ? target : undefined))}
+      title={t(action)} target={compacted?.label} targetDetail={targetDetail} targetTitle={target}
       status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
     {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
-  return <div className="space-y-1" title={[item.toolName, receiptNote, unavailable ? t(unavailable.detail) : undefined].filter(Boolean).join(' · ')}>
+  return <div className="space-y-1" title={hoverDetails.join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} buttonRef={disclosure.buttonRef} contentRef={disclosure.contentRef} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
       <div data-ui-notice="" className="flex min-w-0 select-none items-center gap-1">
