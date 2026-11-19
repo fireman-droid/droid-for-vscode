@@ -65,9 +65,9 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     : commandOutput;
   const receipt = available && !available.truncated && resultPresentation?.target === 'file' ? readReceipt(available.text) : undefined;
   const background = available && !available.truncated && isScriptTool(item.toolName) ? scriptBackgroundReceipt(available.text) : undefined;
-  const compactResult = receipt ? t('Read lines {start}–{end} ({size})', receipt)
-    : background ? t('Started in background · PID {pid}', background) : undefined;
-  const previewBody = available !== null && compactResult === undefined;
+  const receiptNote = receipt ? t('Read lines {start}–{end} ({size})', receipt) : undefined;
+  const compactResult = background ? t('Started in background · PID {pid}', background) : undefined;
+  const previewBody = available !== null && receipt === undefined && compactResult === undefined;
   const resultNotice = !output && !errorMessage ? unavailable : null;
   const hasDetails = command !== undefined || previewBody || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
@@ -137,7 +137,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
+  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, receiptNote, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
     <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
       status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
@@ -145,7 +145,7 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
     {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
   </div>;
-  return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
+  return <div className="space-y-1" title={[item.toolName, receiptNote, unavailable ? t(unavailable.detail) : undefined].filter(Boolean).join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} buttonRef={disclosure.buttonRef} contentRef={disclosure.contentRef} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
       <div data-ui-notice="" className="flex min-w-0 select-none items-center gap-1">

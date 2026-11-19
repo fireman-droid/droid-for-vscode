@@ -87,7 +87,8 @@ it('keeps evicted results and simple read receipts compact without empty disclos
   expect(screen.getByTitle(/conversation limit/)).toBeTruthy();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read' },
     text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes', truncated: false } }} grouped />);
-  expect(screen.getByText('Read lines 1–37 (1.3 KiB)')).toBeTruthy();
+  expect(screen.queryByText('Read lines 1–37 (1.3 KiB)')).toBeNull();
+  expect(screen.getByTitle(/Read lines 1–37 \(1\.3 KiB\)/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
 });
 

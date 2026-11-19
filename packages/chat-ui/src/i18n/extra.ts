@@ -173,6 +173,7 @@ export const extraMessages: readonly MessageTranslations[] = [
   ["Workspace comparison","工作区比较","工作區比較"],
   ["Live workspace · before turn → current","实时工作区 · 本轮开始前 → 当前","實時工作區 · 本輪開始前 → 當前"],
   ["Completed turn · before → after","已完成轮次 · 修改前 → 修改后","已完成輪次 · 修改前 → 修改后"],
+  ["Created","已创建","已建立"],
   ["Written","已写入","已寫入"],
   ["Deleted","已删除","已刪除"],
   ["Renamed","已重命名","已重命名"],
