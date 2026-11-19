@@ -78,7 +78,7 @@ export function InlineSubagentOverlay({ inspection, transcript, onClose, onOpenE
           {headerMeta ? <span role="status" data-ui-notice="" className="dvx-subagent-dialog-meta" data-failed={lifecycle === 'failed' || undefined}>{headerMeta}</span> : null}
         </div>
         <div className="dvx-subagent-dialog-actions">
-          {onOpenExternal ? <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Open in tab")} title={t("Expand subagent session")} onClick={() => onOpenExternal(inspection.turnId, inspection.toolUseId)}><Maximize2 className="size-3.5" /></Button> : null}
+          {onOpenExternal ? <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Open in tab")} title={t("Expand subagent session")} onClick={() => { onOpenExternal(inspection.turnId, inspection.toolUseId); onClose(); }}><Maximize2 className="size-3.5" /></Button> : null}
           <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("Close subagent view")} title={t("Close")} onClick={onClose}><X className="size-3.5" /></Button>
         </div>
       </header>

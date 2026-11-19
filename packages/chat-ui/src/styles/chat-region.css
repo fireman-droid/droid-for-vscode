@@ -22,6 +22,9 @@
   }
   .v2-chat-footer { padding-block: 0 12px; }
   .v2-composer-dock { min-width: 0; }
+  .v2-chat-footer > * { pointer-events: auto; }
+  .v2-chat-footer > .v2-composer-dock { pointer-events: none; }
+  .v2-composer-dock > * { pointer-events: auto; }
   :is(.v2-composer-queue, .v2-composer-changes) {
     --composer-panel-heading-height: 22px;
     --composer-panel-row-height: 24px;
@@ -31,6 +34,30 @@
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent max(0px, calc(var(--pinned-mask-stop, 0px) - 2px)), #000 calc(var(--pinned-mask-stop, 0px) + 12px));
     mask-image: linear-gradient(to bottom, transparent 0, transparent max(0px, calc(var(--pinned-mask-stop, 0px) - 2px)), #000 calc(var(--pinned-mask-stop, 0px) + 12px));
   }
+  [data-footer-clip='true'] [data-transcript-scrollbar] {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 max(0px, calc(100% - var(--chat-footer-clip, 0px) - 8px)), transparent calc(100% - var(--chat-footer-clip, 0px)), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0, #000 max(0px, calc(100% - var(--chat-footer-clip, 0px) - 8px)), transparent calc(100% - var(--chat-footer-clip, 0px)), transparent 100%);
+  }
+  [data-footer-clip='true'] [data-transcript-scrollbar][data-pinned-mask='true'] {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent max(0px, calc(var(--pinned-mask-stop, 0px) - 2px)),
+      #000 calc(var(--pinned-mask-stop, 0px) + 12px),
+      #000 max(calc(var(--pinned-mask-stop, 0px) + 12px), calc(100% - var(--chat-footer-clip, 0px) - 8px)),
+      transparent calc(100% - var(--chat-footer-clip, 0px)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent max(0px, calc(var(--pinned-mask-stop, 0px) - 2px)),
+      #000 calc(var(--pinned-mask-stop, 0px) + 12px),
+      #000 max(calc(var(--pinned-mask-stop, 0px) + 12px), calc(100% - var(--chat-footer-clip, 0px) - 8px)),
+      transparent calc(100% - var(--chat-footer-clip, 0px)),
+      transparent 100%
+    );
+  }
   /* All three panels share one height budget; the editor stays outside their scroll area. */
   .v2-composer-panels {
     min-height: 0; max-height: min(240px, 30vh); overflow-y: auto; overscroll-behavior-y: contain;
@@ -38,7 +65,8 @@
     background: light-dark(color-mix(in srgb, var(--ink) 2%, var(--surface)), color-mix(in srgb, var(--ink) 3%, var(--surface)));
   }
   .v2-composer-panels:has(> .dvx-subagent-sheet) {
-    display: flex; flex-direction: column; max-height: min(360px, 45vh); overflow: hidden;
+    display: flex; flex-direction: column; max-height: min(560px, 68vh); overflow: hidden;
+    box-shadow: light-dark(0 -6px 20px -4px rgb(0 0 0 / 8%), 0 -8px 24px -4px rgb(0 0 0 / 32%));
   }
   .v2-composer-panels:empty { display: none; }
   .v2-composer-panels > :is(.v2-composer-queue, .v2-composer-changes) + :is(.v2-composer-queue, .v2-composer-changes),
@@ -51,7 +79,7 @@
     position: sticky; bottom: 0; z-index: 1; flex: none;
     min-height: 24px; padding: 2px 6px 2px 11px; font-size: 11.5px; background: inherit;
   }
-  .v2-chat-rail:has(.v2-chat-startup) { display: flex; flex-direction: column; justify-content: center; padding-block: 32px; }
+  .v2-chat-rail:has(.v2-chat-startup) { display: flex; flex-direction: column; justify-content: center; padding-top: 32px; padding-bottom: calc(32px + var(--chat-content-inset, 0px)); }
   .v2-chat-startup { width: 100%; max-width: 440px; margin-inline: auto; padding: 16px 8px; }
   .v2-startup-workspace { display: flex; min-width: 0; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--muted-ink); font-size: 12px; }
   .v2-startup-workspace svg { width: 14px; height: 14px; flex-shrink: 0; }

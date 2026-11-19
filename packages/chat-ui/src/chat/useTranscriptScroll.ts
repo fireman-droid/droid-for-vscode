@@ -7,6 +7,7 @@ import {
 } from '../navigation/followScroll';
 import { hasTranscriptSelection, readTranscriptSelection } from './transcriptSelection';
 import { isNestedScrollTarget } from '../navigation/nestedScroll';
+import type { ChatFooterInsetStore } from './ChatLayout';
 
 export function useTranscriptScroll(
   viewport: RefObject<HTMLDivElement | null>,
@@ -17,6 +18,7 @@ export function useTranscriptScroll(
   onReachedBottom?: () => void,
   pauseAutoFollow = false,
   syncRunway?: () => number,
+  footerInset?: ChatFooterInsetStore | null,
 ) {
   const follow = useRef(createFollowState());
   const pauseAutoFollowRef = useRef(pauseAutoFollow);
@@ -136,6 +138,25 @@ export function useTranscriptScroll(
   }, [scrollToBottom]);
 
   useLayoutEffect(() => { scrollToBottom('auto'); }, [conversationId, scrollToBottom]);
+  useLayoutEffect(() => {
+    if (!footerInset) return;
+    let previousInset = footerInset.getHeight();
+    return footerInset.subscribe(() => {
+      const element = viewport.current;
+      const nextInset = footerInset.getHeight();
+      const delta = nextInset - previousInset;
+      previousInset = nextInset;
+      if (element === null || element.clientHeight === 0 || delta === 0) return;
+      syncRunway?.();
+      const selecting = hasTranscriptSelection(element.parentElement);
+      const wasAtBottom = element.scrollHeight - Math.max(0, delta) - element.scrollTop - element.clientHeight <= FOLLOW_REJOIN_PX;
+      if ((follow.current.following || (!pauseAutoFollowRef.current && delta > 0 && wasAtBottom)) &&
+        navigation.current === null && !bottomNavigation.current && sendMotion.current === null && !selecting) {
+        writeTop(Math.max(0, element.scrollHeight - element.clientHeight));
+      }
+      scheduleUpdate.current();
+    });
+  }, [footerInset, viewport, writeTop, syncRunway]);
   useLayoutEffect(() => { if (pauseAutoFollow) stopFollowing(); }, [pauseAutoFollow, stopFollowing]);
   useEffect(() => {
     const element = viewport.current;

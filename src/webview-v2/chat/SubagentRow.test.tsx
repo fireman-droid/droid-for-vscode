@@ -105,10 +105,11 @@ it('shows Click to see progress on clickable running tasks without duration and 
   expect(screen.getByText('Scout · Working')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Open in tab' }));
   expect(onOpenExternal).toHaveBeenCalledExactlyOnceWith('turn-1', 'task-1');
-  fireEvent.keyDown(window, { key: 'Escape' });
   expect(onClose).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Close subagent view' }));
+  fireEvent.keyDown(window, { key: 'Escape' });
   expect(onClose).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Close subagent view' }));
+  expect(onClose).toHaveBeenCalledTimes(3);
 });
 
 it('uses the same stopped status for a tool card and its navigation entry', () => {
