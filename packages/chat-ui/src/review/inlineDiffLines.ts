@@ -1,3 +1,5 @@
+import { translate, type TranslationParams } from '../i18n/translate';
+
 export interface InlineDiffLine {
   readonly kind: 'hunk' | 'context' | 'add' | 'remove' | 'note';
   readonly text: string;
@@ -5,17 +7,21 @@ export interface InlineDiffLine {
   readonly after: number | null;
 }
 
+type DiffTranslate = (message: string, params?: TranslationParams) => string;
+const defaultTranslate: DiffTranslate = (message, params) => translate('en', message, params);
+
 /** Human-readable locations for a hunk; counts include unchanged context. */
-export function formatDiffHunkHeader(text: string): string {
+export function formatDiffHunkHeader(text: string, t: DiffTranslate = defaultTranslate): string {
   const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/.exec(text);
-  if (!match) return text;
+  if (!match) return t(text);
   const range = (startText: string, countText: string | undefined) => {
     const start = Number(startText);
     const count = countText === undefined ? 1 : Number(countText);
-    return count === 0 ? '无对应行' : count === 1 ? `${start} 行` : `${start}–${start + count - 1} 行`;
+    return count === 0 ? t('no lines') : count === 1 ? t('line {line}', { line: start }) : t('lines {start}–{end}', { start, end: start + count - 1 });
   };
   const context = match[5]!.trim();
-  return `修改前 ${range(match[1]!, match[2])} → 修改后 ${range(match[3]!, match[4])}${context ? ` · ${context}` : ''}`;
+  const summary = t('Before {before} → After {after}', { before: range(match[1]!, match[2]), after: range(match[3]!, match[4]) });
+  return context ? `${summary} · ${context}` : summary;
 }
 
 /** Parses Git's unified hunk body, preserving code that itself starts with + or -. */

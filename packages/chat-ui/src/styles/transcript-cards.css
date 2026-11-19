@@ -115,10 +115,12 @@
     .dvx-agent-task-open:hover:not(:disabled) .dvx-agent-task-chevron { opacity: .9; transform: translateX(2px); }
   }
   .dvx-agent-task[data-tone='failed'] :is(.dvx-agent-task-status, .dvx-agent-task-icon) { color: var(--error-ink); }
-  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 1px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 5px; margin-top: 1px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .dvx-agent-task-meta:empty { display: none; }
   .dvx-agent-task-meta > span { flex: none; white-space: nowrap; }
+  .dvx-agent-task-meta .dvx-agent-task-sep { opacity: .65; }
   .dvx-agent-task-meta .dvx-agent-task-activity { flex: 1; }
+  .dvx-agent-task-meta .dvx-agent-task-tools { margin-left: auto; padding-left: 6px; font-variant-numeric: tabular-nums; }
   .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 24px; }
   .dvx-agent-task-feedback-message { display: flex; min-width: 0; flex: 1 1 140px; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
   .dvx-agent-task-feedback-message > svg { width: 13px; height: 13px; flex: none; }

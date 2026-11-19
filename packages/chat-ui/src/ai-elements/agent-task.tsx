@@ -51,8 +51,8 @@ export function AgentTask({ title, role, statusLabel, tone, variant = 'card', el
         </span>
         <span data-ui-notice="" className="dvx-agent-task-meta">
           <span className="dvx-agent-task-status">{t(statusText)}</span>
-          {activity ? <SlidingText text={activity} className="dvx-agent-task-activity" /> : null}
-          {toolCount !== undefined ? <span className="dvx-agent-task-tools">{toolCount} {toolCount === 1 ? 'tool' : t("tools")}</span> : null}
+          {activity ? <><span aria-hidden="true" className="dvx-agent-task-sep">·</span><SlidingText text={activity} className="dvx-agent-task-activity" /></> : null}
+          {toolCount !== undefined ? <span className="dvx-agent-task-tools">{toolCount} {toolCount === 1 ? t("tool") : t("tools")}</span> : null}
         </span>
       </span>
     </Button>

@@ -18,7 +18,10 @@ export function PlanLine({ anchor, running, override, onToggle }: {
   const expanded = override ?? false;
   const live = running && !anchor.allCompleted;
   const current = anchor.steps.find((step) => step.status === 'in_progress')?.text ?? anchor.steps.find((step) => step.status === 'pending')?.text ?? anchor.title;
-  const title = anchor.allCompleted ? `Completed ${anchor.totalCount} ${anchor.totalCount === 1 ? 'step' : 'steps'}` : current;
+  const completedTitle = anchor.totalCount === 1
+    ? t("Completed 1 step")
+    : t("Completed {count} steps", { count: anchor.totalCount });
+  const title = anchor.allCompleted ? completedTitle : expanded ? t("Task plan") : current;
   const progress = `${anchor.completedCount} of ${anchor.totalCount} steps completed`;
   return <Collapsible open={expanded} onOpenChange={(open) => onToggle(anchor.id, open)} asChild>
     <section aria-label={t("Task plan, {p0}", { p0: progress })} data-transcript-quote-exclude="" className="dvx-plan" data-live={live} data-complete={anchor.allCompleted}>

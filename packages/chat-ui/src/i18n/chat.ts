@@ -246,6 +246,8 @@ export const chatMessages: readonly MessageTranslations[] = [
   ["Saved. Start a new session to use this prompt.","已保存，新建会话即可使用此提示词。","已保存，新建會話即可使用此提示詞。"],
   ["Background process · Keeps running until you stop it manually","后台进程 · 将持续运行，直到手动停止","后臺處理程序 · 將持續運行，直到手動停止"],
   ["Task plan","任务计划","任務計劃"],
+  ["Completed 1 step","已完成 1 步","已完成 1 步"],
+  ["Completed {count} steps","已完成 {count} 步","已完成 {count} 步"],
   ["Saved note · Not sent to the model","已保存备注 · 未发送给模型","已保存備注 · 未發送給模型"],
   ["View full history","查看完整历史","查看完整歷史"],
   ["Questions cancelled","问题已取消","問題已取消"],

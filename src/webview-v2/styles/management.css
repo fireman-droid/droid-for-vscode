@@ -20,7 +20,7 @@
   .management-account-muted { display: block; color: var(--muted-ink); font-size: 11px; line-height: 1.4; }
   .management-account-collapsed { justify-content: center; margin-inline: 4px; padding: 4px 0; }
   .management-page[data-sidebar-collapsed='true'] .management-account-muted { display: none; }
-  .management-version { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 16px 8px 0; overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--muted-ink); transition: opacity 140ms ease, visibility 140ms; }
+  .management-version { display: flex; align-items: center; justify-content: flex-start; gap: 6px; margin: 12px 4px 0; padding: 0 4px; overflow: hidden; white-space: nowrap; font-size: 11px; color: var(--muted-ink); transition: opacity 140ms ease, visibility 140ms; }
   .management-page[data-sidebar-collapsed='true'] .management-nav-label { max-width: 0; opacity: 0; transform: translateX(-4px); }
   .management-page[data-sidebar-collapsed='true'] .management-version { opacity: 0; visibility: hidden; }
   .management-page[data-sidebar-collapsed='true'] .management-nav { gap: 0; }
