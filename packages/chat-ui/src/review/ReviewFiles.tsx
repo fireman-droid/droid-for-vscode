@@ -24,10 +24,10 @@ export function filterReviewFiles<T extends ReviewFile>(files: readonly T[], fil
   const query = filters.query.toLowerCase();
   return files.filter(file => file.path.toLowerCase().includes(query) && (!filters.unreviewed || file.status !== 'reviewed'));
 }
-export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect, filters, onFiltersChange, side = 'left' }: {
+export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect, filters, onFiltersChange, side = 'left', open = true }: {
   files: readonly ReviewFile[]; selected: string | null; onSelect(path: string): void;
   filters?: ReviewFileFilters; onFiltersChange?(filters: ReviewFileFilters): void;
-  side?: 'left' | 'right';
+  side?: 'left' | 'right'; open?: boolean;
 }) {
   const { t } = useI18n();
   const [localFilters, setLocalFilters] = useState<ReviewFileFilters>({ query: '', unreviewed: false });
@@ -112,13 +112,14 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
     ref: virtual ? list.virtualizer.measureElement : undefined,
     style: { display: 'flow-root', ...(virtual ? { position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` } : {}) } as CSSProperties,
   });
-  return <aside ref={panel} className="review-files" data-side={side} aria-label={t("Changed files")} style={{ width: visibleWidth }}>
+  return <aside ref={panel} className="review-files" data-side={side} data-open={open ? 'true' : 'false'} aria-hidden={!open || undefined} inert={!open || undefined} aria-label={t("Changed files")} style={{ '--review-files-width': `${visibleWidth}px` } as CSSProperties}>
+    <div className="review-files-inner">
     <div className="review-files-tools">
       <div className="review-file-search"><Search aria-hidden="true" />
         <Input className="h-7 pl-7 text-xs" type="search" aria-label={t("Filter files")} placeholder={t("Filter files")} value={filter} onChange={(event) => setFilter(event.target.value)} />
       </div>
       <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("File filters")} data-active={unreviewed}><SlidersHorizontal /></Button></PopoverTrigger>
-        <PopoverContent className="review-file-options" data-motion="anchored" align="start" sideOffset={6}>
+        <PopoverContent className="review-file-options p-1" data-motion="anchored" align="end" sideOffset={4}>
           <label className="review-unreviewed"><Checkbox checked={unreviewed} onCheckedChange={(checked) => setUnreviewed(checked === true)} />{t("Unreviewed only")}</label>
         </PopoverContent>
       </Popover>
@@ -163,6 +164,7 @@ export const ReviewFiles = memo(function ReviewFiles({ files, selected, onSelect
         {files.length > 0 ? <Button variant="link" size="sm" onClick={() => updateFilters({ query: '', unreviewed: false })}>{t("Clear filters")}</Button> : null}
       </p> : null}
     </ScrollArea>
+    </div>
     <ResizeHandle edge={side === 'right' ? 'left' : 'right'} value={visibleWidth} min={minWidth} max={maxWidth} defaultValue={224} label={t("Resize file sidebar")} onValueChange={setWidth} />
   </aside>;
 });

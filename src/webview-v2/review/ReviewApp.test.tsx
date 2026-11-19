@@ -174,3 +174,20 @@ it('moves keyboard focus to file search after the options menu closes', async ()
     await user.clear(screen.getByRole('searchbox', { name: 'Filter files' }));
   }
 });
+
+it('keeps the changed files sidebar mounted across open and collapse toggles while updating visibility', async () => {
+  const user = userEvent.setup();
+  render(<ReviewApp port={{ postMessage: vi.fn() }} />);
+  send(target);
+  send({ type: 'review.state', sequence: 1, state: scope });
+  expect(screen.queryByRole('complementary', { name: 'Changed files' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Show files' }));
+  const sidebar = screen.getByRole('complementary', { name: 'Changed files' });
+  expect(sidebar.getAttribute('data-open')).toBe('true');
+  await user.click(screen.getByRole('button', { name: 'Collapse files' }));
+  expect(screen.queryByRole('complementary', { name: 'Changed files' })).toBeNull();
+  expect(sidebar.getAttribute('data-open')).toBe('false');
+  await user.click(screen.getByRole('button', { name: 'Show files' }));
+  expect(screen.getByRole('complementary', { name: 'Changed files' })).toBe(sidebar);
+  expect(sidebar.getAttribute('data-open')).toBe('true');
+});

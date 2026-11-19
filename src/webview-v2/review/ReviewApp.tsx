@@ -119,7 +119,7 @@ export function ReviewApp({ port }: { port: ReviewPort }) {
                 })} onNavigate={navigate} onMarkAndNext={navigation.markAndNext} hasPrevious={index > 0} hasNext={index < filtered.length - 1} />} />}
           </ScrollArea>
         </section>
-        {showFiles ? <ReviewFiles side="right" files={files} selected={selectedPath} onSelect={selectFile} filters={filters} onFiltersChange={setFilters} /> : null}
+        <ReviewFiles open={showFiles} side="right" files={files} selected={selectedPath} onSelect={selectFile} filters={filters} onFiltersChange={setFilters} />
       </div>
       <footer data-ui-notice="" className="review-statusbar">
         <span>{operation ? t("Recorded operation") : review?.lifecycle === 'writing' ? t("Live changes")

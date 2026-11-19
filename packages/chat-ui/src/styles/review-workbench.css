@@ -20,7 +20,15 @@
   .review-range-counts b { color: var(--diff-remove-ink); font-weight: 400; }
   .review-progress { color: var(--muted-ink); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .review-body { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-  .review-files { position: relative; display: flex; flex-direction: column; flex-shrink: 0; min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--panel-edge); background: var(--review-sidebar); }
+  .review-files {
+    position: relative; display: flex; flex-direction: column; flex-shrink: 0;
+    width: var(--review-files-width, 224px); min-width: 0; min-height: 0; overflow: hidden;
+    border-right: 1px solid var(--panel-edge); background: var(--review-sidebar);
+    transition: width 220ms var(--motion-ease), opacity 160ms var(--motion-ease), border-color 160ms var(--motion-ease);
+  }
+  .review-files[data-open='false'] { width: 0; opacity: 0; border-inline-width: 0; pointer-events: none; }
+  .review-files:has(> .dvx-resize-handle[data-dragging='true']) { transition: none; }
+  .review-files-inner { display: flex; flex-direction: column; flex: 1; width: var(--review-files-width, 224px); min-height: 0; }
   .review-files-tools { display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 4px 8px; }
   .review-files-tools > button { flex-shrink: 0; width: 24px; height: 28px; }
   .review-files-tools > button[data-active='true'] { color: var(--link-ink); background: var(--control-surface-active); }
@@ -34,8 +42,8 @@
   .review-file-search { position: relative; flex: 1; min-width: 0; }
   .review-file-search > svg { position: absolute; top: 50%; left: 8px; width: 12px; height: 12px; transform: translateY(-50%); color: var(--muted-ink); pointer-events: none; }
   .review-file-search input { width: 100%; height: 28px; min-height: 28px; padding-left: 28px; background: var(--review-canvas); }
-  .review-file-options { width: 200px; }
-  .review-unreviewed { display: flex; align-items: center; gap: 8px; padding: 8px; color: var(--muted-ink); font-size: 12px; }
+  .review-file-options { width: max-content; min-width: 128px; border-radius: 6px; }
+  .review-unreviewed { display: flex; align-items: center; gap: 6px; padding: 4px 8px; color: var(--muted-ink); font-size: 12px; line-height: 18px; white-space: nowrap; cursor: pointer; user-select: none; }
   .review-unreviewed:has([data-state='checked']) { color: var(--ink); }
   .review-file-scroll, .review-code-area { flex: 1; min-height: 0; }
   .review-file-list { padding-bottom: 12px; }
@@ -80,12 +88,26 @@
   .review-undo-menu svg { width: 14px; height: 14px; }
   .review-topbar button[aria-busy='true'] svg { animation: review-refresh 900ms linear infinite; }
   @keyframes review-refresh { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .review-topbar button[aria-busy='true'] svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .review-topbar button[aria-busy='true'] svg { animation: none; }
+    .review-files { transition: none; }
+  }
   @media (max-width: 700px) {
     .review-topbar { flex-wrap: wrap; gap: 4px; }
     .review-scope-trigger { width: 132px; }
     .review-range-counts { display: none; }
-    .review-files { position: absolute; inset: 0 auto 0 0; z-index: 3; box-shadow: 8px 0 20px #0002; }
+    .review-files {
+      position: absolute; inset: 0 auto 0 0; z-index: 3;
+      width: var(--review-files-width, 224px); box-shadow: 8px 0 20px #0002;
+      transform: translateX(0); opacity: 1; visibility: visible;
+      transition: transform 220ms var(--motion-ease), opacity 160ms var(--motion-ease), visibility 0s;
+    }
+    .review-files[data-open='false'] {
+      width: var(--review-files-width, 224px);
+      border-right: 1px solid var(--panel-edge);
+      transform: translateX(-100%); opacity: 0; visibility: hidden; pointer-events: none;
+      transition: transform 220ms var(--motion-ease), opacity 160ms var(--motion-ease), visibility 0s 220ms;
+    }
   }
   @container (max-width: 640px) {
     .review-current-path { flex-basis: calc(100% - 30px); margin-right: 0; }

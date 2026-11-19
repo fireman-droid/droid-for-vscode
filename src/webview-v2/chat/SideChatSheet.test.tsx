@@ -107,6 +107,30 @@ it('blocks side questions for unavailable models and images for text-only models
   expect(onAsk).not.toHaveBeenCalled();
 });
 
+it('expands read-only message quotes inline without opening a detached popover', async () => {
+  const user = userEvent.setup();
+  const state: SessionBtwState = {
+    ...EMPTY_SESSION_BTW_STATE,
+    status: 'ready',
+    entries: [{
+      id: 'side-quote',
+      question: '> Session ownership remains in the Extension Host.\n\nWhat does this mean?',
+      answer: 'Ownership stays in the host process.',
+      state: 'complete',
+      message: null,
+    }],
+  };
+  render(<SideChatSheet state={state} draft="" quote={null} width={320} images={images} onModelChange={vi.fn()}
+    onDraftChange={vi.fn()} onQuoteClear={vi.fn()} onAsk={vi.fn()} onStop={vi.fn()} onDismiss={vi.fn()} onWidthChange={vi.fn()} />);
+  const questionRegion = screen.getByRole('region', { name: 'Your question' });
+  await user.click(screen.getByRole('button', { name: /^View quoted context:/ }));
+  const fullQuote = screen.getByLabelText('Full quoted text');
+  expect(fullQuote.textContent).toBe('Session ownership remains in the Extension Host.');
+  expect(questionRegion.contains(fullQuote)).toBe(true);
+  await user.click(screen.getByRole('button', { name: /^View quoted context:/ }));
+  expect(screen.queryByLabelText('Full quoted text')).toBeNull();
+});
+
 
 import { TooltipProvider } from '@droidvisx/chat-ui/ui/overlays';
 import type { ReactNode } from 'react';
