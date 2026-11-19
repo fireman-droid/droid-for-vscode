@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
-import { ChevronUp, Ellipsis } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { DiffView } from '../review/DiffView';
 import { inlineDiffLines } from '../review/inlineDiffLines';
@@ -37,7 +37,7 @@ export function FileDiffPreview({ patch, path, messageId = '', disclosureKey, on
     <CollapsibleTrigger asChild>
       <Button ref={disclosure.buttonRef} variant="plain" size="none" className="dvx-change-more dvx-diff-preview-toggle"
         aria-label={t(disclosure.expanded ? 'Collapse changes to {path}' : 'Show all changes to {path}', { path })}>
-        {disclosure.expanded ? <ChevronUp aria-hidden="true" /> : <Ellipsis aria-hidden="true" />}
+        {disclosure.expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
         <span>{t(disclosure.expanded ? 'Collapse changes' : 'Show all changes')}</span>
       </Button>
     </CollapsibleTrigger>

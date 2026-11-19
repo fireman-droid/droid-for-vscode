@@ -235,7 +235,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
                 state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
           {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
               {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
-              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
+              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} title={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
               <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
           </div> : null}
         </div>

@@ -143,7 +143,7 @@ export function ComposerView({
       {showPlaceholderContent ? <div data-ui-notice="" className="v2-composer-placeholder">{placeholderContent}</div> : null}
     </div>;
   const action = running && onStop ? <Button size="icon-sm" variant="plain" className="v2-composer-send" aria-label={t(stopLabel)} title={t(stopLabel)} onClick={onStop}><Square className="size-3 fill-current" /></Button>
-    : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={t(sendLabel)} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
+    : <Button size="icon-sm" variant="plain" className="v2-composer-send" type="submit" aria-label={t(sendLabel)} title={t(sendLabel)} disabled={sendDisabled}><ArrowUp className="size-3.5" /></Button>;
   return <Popover open={suggestionsOpen} onOpenChange={onSuggestionsOpenChange}>
     <PopoverAnchor asChild>
       <form ref={surface} data-composer-surface="" className="v2-chat-composer" onDrop={onDrop} onDragEnter={onDragOver} onDragOver={onDragOver}
@@ -153,7 +153,7 @@ export function ComposerView({
           {attachments}
         </> : null}
         {renderInputRow ? renderInputRow(editor, action) : <div className="v2-composer-input-row">{editor}{action}</div>}
-        {notice ? <p role="status" className="px-3 text-xs text-muted-foreground">{t(notice)}</p> : null}
+        {notice ? <p data-ui-notice="" role="status" className="select-none px-3 text-xs text-muted-foreground">{t(notice)}</p> : null}
       </form>
     </PopoverAnchor>
     {suggestionsOpen ? suggestions : null}

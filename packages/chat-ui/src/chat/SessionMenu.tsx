@@ -64,8 +64,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
             if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); searchContent(); }
           }} />
         </div>
-        {state.sessions.message ? <p role={state.sessions.status === 'error' ? 'alert' : 'status'} className="border-b border-[var(--panel-edge)] px-2.5 py-1 text-[11px] text-muted-foreground">{state.sessions.message}</p> : null}
-        {pending || state.sessions.status === 'loading' ? <p role="status" className="border-b border-[var(--panel-edge)] px-2.5 py-1 text-[11px] text-muted-foreground">{pending ? t("Waiting for {p0}…", { p0: assistantName }) : t("Loading sessions…")}</p> : null}
+        {state.sessions.message ? <p data-ui-notice="" role={state.sessions.status === 'error' ? 'alert' : 'status'} className="select-none border-b border-[var(--panel-edge)] px-2.5 py-1 text-[11px] text-muted-foreground">{state.sessions.message}</p> : null}
+        {pending || state.sessions.status === 'loading' ? <p data-ui-notice="" role="status" className="select-none border-b border-[var(--panel-edge)] px-2.5 py-1 text-[11px] text-muted-foreground">{pending ? t("Waiting for {p0}…", { p0: assistantName }) : t("Loading sessions…")}</p> : null}
         <ScrollArea className="dvx-session-scroll" viewportClassName="dvx-session-viewport"
           nonce={typeof document !== 'undefined' ? document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce : undefined}>
           <div className="space-y-0.5 p-1">
@@ -89,8 +89,8 @@ export function SessionMenu({ state, actions, disabled, open, openSignal, onOpen
           }} asChild><section aria-label={t("Archived sessions")} className="mt-0.5 border-t border-[var(--panel-edge)] pt-1">
             <CollapsibleTrigger asChild><Button variant="ghost" size="sm" className="h-6 w-full justify-start gap-1 px-1.5 text-[11.5px] font-normal text-muted-foreground"><ChevronRight className={`size-3 transition-transform motion-reduce:transition-none ${archived ? 'rotate-90' : ''}`} />{t("Archived")}{state.archived.status === 'ready' && archivedEntries.length ? ` (${archivedEntries.length})` : ''}</Button></CollapsibleTrigger>
             <CollapsibleContent>
-              {state.archived.status === 'error' ? <p role="alert" className="px-1.5 py-1 text-[11px] text-destructive">{state.archived.message}</p> : null}
-              {state.archived.status === 'loading' || state.archived.status === 'idle' ? <p role="status" className="px-1.5 py-1 text-[11px] text-muted-foreground">{t("Loading archived sessions…")}</p> : null}
+              {state.archived.status === 'error' ? <p data-ui-notice="" role="alert" className="select-none px-1.5 py-1 text-[11px] text-destructive">{state.archived.message}</p> : null}
+              {state.archived.status === 'loading' || state.archived.status === 'idle' ? <p data-ui-notice="" role="status" className="select-none px-1.5 py-1 text-[11px] text-muted-foreground">{t("Loading archived sessions…")}</p> : null}
               {archivedEntries.map((entry) => <div key={entry.id} className="group flex min-h-6 items-center gap-1.5 px-1.5 text-[11.5px]">
                 <span className="min-w-0 flex-1 truncate" title={entry.archivedTime}>{entry.title}</span>
                 {actions.handleUnarchiveSession ? <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10.5px]" aria-label={t("Restore {p0}", { p0: entry.title })} disabled={controlsDisabled || state.archived.status === 'loading'} onClick={() => runOnce(() => actions.handleUnarchiveSession?.(entry.id))}>{t("Restore")}</Button> : null}
@@ -140,10 +140,10 @@ function SessionRow({ entry, maxTitleLength, disabled, actions, runOnce, onSelec
       </Button>
       <div className="v2-session-row-actions pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-r-[5px] pr-0.5 [&>button]:pointer-events-none [&>button]:size-5 [&>button]:text-muted-foreground [&>button]:opacity-0 group-hover:pointer-events-auto group-hover:[&>button]:pointer-events-auto group-hover:[&>button]:opacity-100 group-focus-within:pointer-events-auto group-focus-within:[&>button]:pointer-events-auto group-focus-within:[&>button]:opacity-100 [&>button[aria-pressed=true]]:pointer-events-auto [&>button[aria-pressed=true]]:opacity-100">
       {entry.active ? <>
-        {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Rename {p0}", { p0: entry.title })} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
-        {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Fork {p0}", { p0: entry.title })} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}
-      </> : actions.handleArchiveSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Archive {p0}", { p0: entry.title })} disabled={disabled} onClick={() => runOnce(() => actions.handleArchiveSession?.(entry.id))}><Archive /></Button> : null}
-      {actions.handleToggleFavorite ? <Button variant="ghost" size="icon-sm" aria-label={t("Favorite {p0}", { p0: entry.title })} aria-pressed={entry.isFavorite} disabled={disabled} onClick={() => runOnce(() => actions.handleToggleFavorite?.(entry.id, !entry.isFavorite))}><Star className={entry.isFavorite ? 'fill-current' : undefined} /></Button> : null}
+        {actions.handleRenameSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Rename {p0}", { p0: entry.title })} title={t("Rename")} disabled={disabled} onClick={() => { setTitle(entry.title); setRenaming(true); }}><Pencil /></Button> : null}
+        {actions.handleForkSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Fork {p0}", { p0: entry.title })} title={t("Fork chat")} disabled={disabled} onClick={() => runOnce(() => actions.handleForkSession?.(entry.id))}><GitBranch /></Button> : null}
+      </> : actions.handleArchiveSession ? <Button variant="ghost" size="icon-sm" aria-label={t("Archive {p0}", { p0: entry.title })} title={t("Archive")} disabled={disabled} onClick={() => runOnce(() => actions.handleArchiveSession?.(entry.id))}><Archive /></Button> : null}
+      {actions.handleToggleFavorite ? <Button variant="ghost" size="icon-sm" aria-label={t("Favorite {p0}", { p0: entry.title })} title={entry.isFavorite ? t("Unfavorite") : t("Favorite")} aria-pressed={entry.isFavorite} disabled={disabled} onClick={() => runOnce(() => actions.handleToggleFavorite?.(entry.id, !entry.isFavorite))}><Star className={entry.isFavorite ? 'fill-current' : undefined} /></Button> : null}
       </div>
     </>}
   </div>;

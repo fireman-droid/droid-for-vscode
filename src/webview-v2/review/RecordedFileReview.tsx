@@ -126,13 +126,22 @@ export function RecordedFileReview({ entries, content, fullContext = false, path
       <ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Next change")} onClick={() => onHunk?.(1)}><ArrowDown /></ReviewIconButton>
     </> : null}
   </>;
+  const singleAppliedExcerpt = !content
+    && records.length === 1
+    && !allEdits
+    && selected !== undefined
+    && selected.entry.source === 'tool-result'
+    && selected.entry.outcome === 'applied'
+    && selected.entry.submittedContent === undefined
+    && hasOperationTextChanges(selected.entry.fullPatch ?? selected.entry.patch)
+    && !showDiffControls;
   return <div className="review-recorded" ref={root}>
-    <div data-ui-notice="" className="review-recorded-summary"><Info aria-hidden /><div className="review-recorded-description">
+    {singleAppliedExcerpt ? null : <div data-ui-notice="" className="review-recorded-summary"><Info aria-hidden /><div className="review-recorded-description">
       <p>{activeView === 'file' && content ? content.appliedEdits ? t('Saved file · {count} later edits included. May differ from your current workspace.', { count: content.appliedEdits }) : t('Saved file. May differ from your current workspace.')
         : allEdits ? t("Saved change excerpts in execution order.")
           : selected ? t('Edit {number} · {operation} · {outcome}. {detail}', { number: index + 1, operation: t(operationName(selected.entry)), outcome: t(outcomeLabel(selected.entry)), detail: t(fullContext && selected.entry.fullPatch !== undefined ? 'Full file comparison from saved versions.' : selected.entry.submittedContent !== undefined ? 'Submitted file version; the previous version is unavailable.' : 'Saved change excerpt.') }) : t("No saved operations.")}</p>
       {activeView === 'file' && content && content.remainingOperations > 0 ? <p className="review-recorded-warning">{t("Partial version ·")} {content.remainingOperations} {t("later operations are not included. Check Edits or History.")}</p> : null}
-    </div><div className="review-recorded-actions">{toolbar}</div></div>
+    </div><div className="review-recorded-actions">{toolbar}</div></div>}
     {activeView === 'file' && content ? <RecordedSource content={content.content} path={path} />
       : allEdits ? <div className="review-recorded-patches">{records.map(({ entry, key }, index) => <SavedEdit key={key} entry={entry} index={index} path={path} split={split} fullContext={false} showHeader />)}</div>
       : selected ? <SavedEdit entry={selected.entry} index={index} path={path} split={split} fullContext={fullContext} loading={loading} />

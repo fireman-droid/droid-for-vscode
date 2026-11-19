@@ -82,8 +82,8 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
       </Button>
     </AnimatedCollapsibleContent> : null}
     </Collapsible> : null}
-    {presentation.waiting ? <p role="status" className="py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
-    {presentation.notice ? <p role="status" className={`py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
+    {presentation.waiting ? <p data-ui-notice="" role="status" className="select-none py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
+    {presentation.notice ? <p data-ui-notice="" role="status" className={`select-none py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
     {latest ? <ProcessGroupContext.Provider value={false}>
       <ProcessLatestContext.Provider value={true}>{latest}</ProcessLatestContext.Provider>
     </ProcessGroupContext.Provider> : null}

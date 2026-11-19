@@ -132,13 +132,13 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
     return <ActivityItem id={item.id} messageId={messageId} icon={<ListChecks />} title={t("Task plan")}
-      status={`${steps.filter((step) => step.status === 'completed').length} / ${steps.length}${state ? ` · ${state}` : ''}`}>
+      status={`${steps.filter((step) => step.status === 'completed').length} / ${steps.length}${state ? ` · ${t(state)}` : ''}`}>
       <PlanSteps steps={steps} />
       {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
   if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, receiptNote, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
-    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
+    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={t(action)} target={target}
       status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
       {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
     </ActivityItem>
