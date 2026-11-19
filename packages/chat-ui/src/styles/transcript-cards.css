@@ -11,6 +11,21 @@
   .v2-activity-leading-swap[data-open='true'] > svg:first-child { opacity: 0; }
   .v2-activity-row:is(:hover, :focus-visible) .v2-activity-leading-swap > .v2-activity-swap-chev,
   .v2-activity-leading-swap[data-open='true'] > .v2-activity-swap-chev { opacity: 1; }
+  .v2-activity-row-split { display: flex; align-items: center; gap: 6px; }
+  .v2-activity-toggle:is(:hover, :focus-visible) .v2-activity-leading-swap > svg:first-child { opacity: 0; }
+  .v2-activity-toggle:is(:hover, :focus-visible) .v2-activity-leading-swap > .v2-activity-swap-chev { opacity: 1; }
+  .v2-activity-target-link {
+    display: inline-flex; min-width: 0; max-width: 100%; align-items: baseline; gap: 6px;
+    border-radius: 4px; text-align: left; cursor: pointer;
+    transition: color var(--motion-fast) var(--motion-ease);
+  }
+  .v2-activity-target-link:is(:hover, :focus-visible) .v2-activity-target-name {
+    color: var(--strong-ink);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+    text-underline-offset: 2px;
+  }
+  .v2-activity-target-link:focus-visible { outline: 1px solid var(--focus); outline-offset: 1px; }
   .v2-activity-actions { transition: opacity var(--motion-fast) var(--motion-ease); }
   @media (hover: hover) {
     .v2-activity-entry:not(:hover, :focus-within) .v2-activity-actions { opacity: 0; }
@@ -517,7 +532,8 @@
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
     .v2-chat-disclosure, .v2-chat-choice, .v2-session-row,
-    .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron { transition: none; }
+    .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron,
+    .v2-activity-target-link { transition: none; }
     .dvx-subagent-sheet { animation: none; }
     .dvx-agent-check path { animation: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,

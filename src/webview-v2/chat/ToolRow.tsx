@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useContext } from 'react';
-import { ExternalLink, FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles, Wrench } from 'lucide-react';
+import { FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles, Wrench } from 'lucide-react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
 import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
@@ -83,10 +83,6 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   const displayTarget = compacted ? [compacted.label, targetDetail].filter(Boolean).join(' ') : undefined;
   const title = `${t(action)}${displayTarget ? ` · ${displayTarget}` : ''}`;
   const hoverDetails = [item.toolName, compacted && compacted.label !== target ? target : undefined, receiptNote, unavailable ? t(unavailable.detail) : undefined].filter(Boolean);
-  const activityActions = <>
-    {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")}
-      onClick={() => actions.openPath!({ path: currentFile })}><ExternalLink className="size-3" /></Button> : null}
-  </>;
   const fileActions = <>
     {currentFile && actions.openPath ? <Button variant="link" size="sm" className="h-auto select-none px-1 text-[11px]" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")} onClick={() => actions.openPath!({ path: currentFile })}>{currentFile.split(/[\\/]/).at(-1)}</Button> : null}
   </>;
@@ -146,15 +142,21 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
       {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[...hoverDetails, background?.log].filter(Boolean).join(' · ')}>
-    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category, currentFile ?? (category === 'file' ? target : undefined))}
-      title={t(action)} target={compacted?.label} targetDetail={targetDetail} targetTitle={target}
-      status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
-      {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
-    </ActivityItem>
-    {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
-    {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
-  </div>;
+  if ((grouped && exploration) || (inline && command === undefined)) {
+    const startLine = receipt ? Number(receipt.start) : undefined;
+    const openLine = startLine !== undefined && Number.isSafeInteger(startLine) && startLine >= 1 ? startLine : undefined;
+    return <div className="space-y-1" title={[...hoverDetails, background?.log].filter(Boolean).join(' · ')}>
+      <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category, currentFile ?? (category === 'file' ? target : undefined))}
+        title={t(action)} target={compacted?.label} targetDetail={targetDetail} targetTitle={target}
+        onTargetClick={currentFile && actions.openPath ? () => actions.openPath!({ path: currentFile, ...(openLine === undefined ? {} : { line: openLine }) }) : undefined}
+        targetActionLabel={currentFile ? t("Open {p0}", { p0: currentFile }) : undefined}
+        status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined}>
+        {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
+      </ActivityItem>
+      {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+      {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
+    </div>;
+  }
   return <div className="space-y-1" title={hoverDetails.join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} buttonRef={disclosure.buttonRef} contentRef={disclosure.contentRef} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>

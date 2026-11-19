@@ -13,6 +13,8 @@ export function ActivityItem({
   target,
   targetDetail,
   targetTitle,
+  onTargetClick,
+  targetActionLabel,
   status,
   description,
   actions,
@@ -27,6 +29,8 @@ export function ActivityItem({
   readonly target?: string;
   readonly targetDetail?: string;
   readonly targetTitle?: string;
+  readonly onTargetClick?: () => void;
+  readonly targetActionLabel?: string;
   readonly status?: string;
   readonly description?: string;
   readonly actions?: ReactNode;
@@ -40,13 +44,31 @@ export function ActivityItem({
   const selected = disclosure.expanded;
   const detailsId = useId();
   const hasLeadingIcon = icon !== undefined && icon !== null;
-  const labels = <>
-    <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
-    {target ? (
-      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
+  const clickableTarget = Boolean(target && onTargetClick);
+  const targetNode = target ? (
+    clickableTarget ? (
+      <Button
+        variant="plain"
+        size="none"
+        onClick={onTargetClick}
+        aria-label={targetActionLabel ?? target}
+        title={targetActionLabel ?? targetTitle ?? target}
+        className="v2-activity-target-link overflow-hidden"
+      >
+        <span className="v2-activity-target-name min-w-0 truncate text-[13px] text-foreground">{target}</span>
+        {targetDetail ? <span data-ui-notice="" className="shrink-0 truncate text-[11.5px] tabular-nums text-muted-foreground">{targetDetail}</span> : null}
+      </Button>
+    ) : (
+      <>
         <span className="min-w-0 truncate text-[13px] text-foreground" title={targetTitle ?? target}>{target}</span>
         {targetDetail ? <span data-ui-notice="" className="shrink-0 truncate text-[11.5px] tabular-nums text-muted-foreground" title={targetTitle ?? targetDetail}>{targetDetail}</span> : null}
-      </span>
+      </>
+    )
+  ) : null;
+  const labels = <>
+    <span data-ui-notice="" className="max-w-[55%] shrink-0 truncate text-[13px]" title={title}>{title}</span>
+    {targetNode ? (
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">{targetNode}</span>
     ) : <span className="min-w-0 flex-1" />}
     {status ? <span data-ui-notice="" title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
   </>;
@@ -65,6 +87,30 @@ export function ActivityItem({
     {content}
     {actions ? <div className="v2-activity-actions flex shrink-0 items-center">{actions}</div> : null}
   </div>;
+  if (clickableTarget) {
+    return <Collapsible open={selected} className="v2-activity-entry min-w-0">
+      <div className="flex min-w-0 items-center gap-1">
+        <div className={cn('min-h-6 min-w-0 flex-1 rounded-md py-0.5 text-muted-foreground', !textSelectable && 'select-none')}>
+          <div className="v2-activity-row-split min-w-0">
+            <CollapsibleTrigger asChild>
+              <Button textSelectable={textSelectable} ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={detailsId} onClick={disclosure.toggle}
+                className="v2-chat-disclosure v2-activity-toggle inline-flex min-h-6 min-w-0 max-w-[55%] shrink-0 items-center gap-1.5 text-left text-muted-foreground hover:text-foreground">
+                {leading}
+                <span data-ui-notice="" className="truncate text-[13px]" title={title}>{title}</span>
+              </Button>
+            </CollapsibleTrigger>
+            <span className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">{targetNode}</span>
+            {status ? <span data-ui-notice="" title={status} className={cn('max-w-[50%] shrink-0 truncate text-[11px]', failed ? 'text-destructive' : 'text-muted-foreground')}>{status}</span> : null}
+          </div>
+          {description ? <span data-ui-notice="" className={cn('block truncate text-[11px] leading-[18px] text-muted-foreground', hasLeadingIcon && 'pl-5')} title={description}>{description}</span> : null}
+        </div>
+        {actions ? <div className="v2-activity-actions flex shrink-0 items-center pr-1">{actions}</div> : null}
+      </div>
+      <AnimatedCollapsibleContent id={detailsId} ref={disclosure.contentRef} open={selected} visible={disclosure.visible}>
+        {disclosure.mounted ? <div className={cn(inline ? 'v2-activity-inline-detail' : 'v2-activity-detail', 'min-w-0 pb-1')}>{children}</div> : null}
+      </AnimatedCollapsibleContent>
+    </Collapsible>;
+  }
   return <Collapsible open={selected} className="v2-activity-entry min-w-0">
     <div className="flex min-w-0 items-center gap-1">
       <CollapsibleTrigger asChild><Button textSelectable={textSelectable} ref={disclosure.buttonRef} variant="plain" size="none" aria-controls={detailsId} onClick={disclosure.toggle}

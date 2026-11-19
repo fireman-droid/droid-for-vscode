@@ -219,3 +219,62 @@ it('does not display historical workspace snapshots as assistant changes', () =>
   expect(openFileDiff).not.toHaveBeenCalled();
   expect(openReviewTurn).not.toHaveBeenCalled();
 });
+
+it('opens grouped file targets directly by clicking the filename without an extra external-link button', async () => {
+  const user = userEvent.setup();
+  const openPath = vi.fn();
+  const receiptRead: ToolTranscriptItem = {
+    kind: 'tool',
+    id: 'grouped-read-receipt',
+    turnId: 'turn-1',
+    toolUseId: 'read-receipt-1',
+    toolName: 'Read',
+    action: 'Read file',
+    status: 'completed',
+    progressCount: 0,
+    latestUpdateKind: null,
+    target: 'src/app.ts',
+    resultPreview: {
+      availability: 'available',
+      source: { tool: 'Read', path: 'src/app.ts', callId: 'read-receipt-1' },
+      text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes',
+      truncated: false,
+    },
+  };
+  const view = render(<View item={receiptRead} actions={{ openPath }} grouped />);
+  expect(screen.queryByRole('button', { name: 'Open current file' })).toBeNull();
+  const targetButton = screen.getByRole('button', { name: 'Open src/app.ts' });
+  expect(targetButton.textContent).toContain('app.ts');
+  expect(targetButton.textContent).toContain('#L1–37');
+  await user.click(targetButton);
+  expect(openPath).toHaveBeenCalledExactlyOnceWith({ path: 'src/app.ts', line: 1 });
+
+  openPath.mockClear();
+  const previewRead: ToolTranscriptItem = {
+    kind: 'tool',
+    id: 'grouped-read-preview',
+    turnId: 'turn-1',
+    toolUseId: 'read-preview-1',
+    toolName: 'Read',
+    action: 'Read file',
+    status: 'completed',
+    progressCount: 0,
+    latestUpdateKind: null,
+    target: 'src/app.ts',
+    resultPreview: {
+      availability: 'available',
+      source: { tool: 'Read', path: 'src/app.ts', callId: 'read-preview-1' },
+      text: 'const retained = true;',
+      truncated: true,
+    },
+  };
+  view.rerender(<View item={previewRead} actions={{ openPath }} grouped />);
+  expect(screen.queryByRole('button', { name: 'Open current file' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Open src/app.ts' }));
+  expect(openPath).toHaveBeenCalledExactlyOnceWith({ path: 'src/app.ts' });
+  expect(screen.queryByText('truncated')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: /^Read/ }));
+  expect(screen.getByText('truncated')).toBeDefined();
+  expect(openPath).toHaveBeenCalledTimes(1);
+});
