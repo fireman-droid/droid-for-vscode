@@ -178,13 +178,12 @@ it('offers command copy and the live terminal mirror without inventing a backgro
   const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
   const terminal = vi.fn();
   const view = render(<View item={{ ...base, backgroundHint: { fireAndForget: true } }} actions={{ openTerminalMirror: terminal }} />);
-  await user.click(screen.getByRole('button', { name: 'Command actions' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Copy command' }));
+  await user.click(screen.getByRole('button', { name: 'Copy command' }));
   expect(copy).toHaveBeenCalledExactlyOnceWith(base.detail);
-  await user.click(screen.getByRole('menuitem', { name: 'View in terminal' }));
+  await user.click(screen.getByRole('button', { name: 'View in terminal' }));
   expect(terminal).toHaveBeenCalledOnce();
   view.rerender(<View item={{ ...base, status: 'completed', backgroundHint: { fireAndForget: true } }} actions={{ openTerminalMirror: terminal }} />);
-  expect(screen.queryByRole('menuitem', { name: 'View in terminal' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'View in terminal' })).toBeNull();
   expect(screen.queryByRole('button', { name: /stop/i })).toBeNull();
   expect(screen.getByText(/Keeps running until you stop it manually/)).toBeDefined();
 });

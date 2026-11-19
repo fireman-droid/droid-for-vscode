@@ -283,7 +283,14 @@
     white-space: nowrap;
   }
   .v2-command-state[data-failed='true'] { color: var(--error-ink); }
-  .v2-command-menu-trigger {
+  .v2-command-actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    transition: opacity var(--motion-fast) var(--motion-ease);
+  }
+  .v2-command-action {
     display: inline-flex;
     width: 20px;
     height: 20px;
@@ -295,41 +302,16 @@
     border-radius: 5px;
     background: transparent;
     color: var(--muted-ink);
-    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), opacity var(--motion-fast) var(--motion-ease);
+    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
   @media (hover: hover) {
-    .v2-command-card:not(:hover, :focus-within, [data-state='open']) .v2-command-menu-trigger:not([aria-expanded='true']) {
+    .v2-command-card:not(:hover, :focus-within, [data-state='open']) .v2-command-actions {
       opacity: 0;
     }
   }
-  .v2-command-menu-trigger svg { width: 14px; height: 14px; }
-  .v2-command-menu-trigger:hover,
-  .v2-command-menu-trigger[aria-expanded='true'] { color: var(--ink); background: var(--control-surface-hover); }
-  .v2-command-menu-trigger:active { background: var(--control-surface-active); }
-  .v2-command-menu {
-    width: max-content;
-    min-width: 130px;
-    padding: 3px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
-  }
-  .v2-command-menu-item {
-    display: flex;
-    width: 100%;
-    height: 26px;
-    justify-content: flex-start;
-    gap: 6px;
-    padding: 0 7px;
-    border: 0;
-    border-radius: 3px;
-    background: transparent;
-    font-size: 11.5px;
-    font-weight: 400;
-  }
-  .v2-command-menu-item svg { width: 13px; height: 13px; }
-  .v2-command-menu-item:hover { background: var(--control-surface-hover); }
-  .v2-command-menu-item:active { background: var(--control-surface-active); }
-  .v2-command-menu-item:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .v2-command-action svg { width: 13px; height: 13px; }
+  .v2-command-action:hover { color: var(--ink); background: var(--control-surface-hover); }
+  .v2-command-action:active { background: var(--control-surface-active); }
   .v2-command-body {
     display: grid;
     grid-template-rows: 0fr;
@@ -529,7 +511,7 @@
   .v2-attachment-remove:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-command-toggle:focus-visible,
   .v2-user-copy:focus-visible,
-  .v2-command-menu-trigger:focus-visible,
+  .v2-command-action:focus-visible,
   .v2-user-edit-attach:focus-visible,
   .v2-attachment-thumb > button:focus-visible,
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
@@ -539,7 +521,7 @@
     .dvx-subagent-sheet { animation: none; }
     .dvx-agent-check path { animation: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
-    .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,
+    .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-actions, .v2-command-action,
     .v2-attachment-file, .v2-attachment-image { transition: none; }
   }
 }

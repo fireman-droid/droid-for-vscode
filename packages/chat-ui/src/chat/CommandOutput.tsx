@@ -1,8 +1,7 @@
 import { useI18n } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Ellipsis } from 'lucide-react';
+import { Check, Copy, SquareTerminal } from 'lucide-react';
 import { tokenizeCommand } from './commandFormatting';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
 import { useToolActions } from '../content/toolActions';
 import { useUiEnvironment } from '../environment';
@@ -11,25 +10,24 @@ export function CommandActions({ command, running }: { readonly command: string;
   const { t } = useI18n();
   const actions = useToolActions();
   const { copyText } = useUiEnvironment();
-  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     if (!copied) return;
-    const timer = setTimeout(() => { setOpen(false); setCopied(false); }, 900);
+    const timer = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(timer);
   }, [copied]);
-  return <DropdownMenu modal={false} open={open} onOpenChange={(value) => { setOpen(value); setCopied(false); setFailed(false); }}>
-    <DropdownMenuTrigger asChild><Button variant="plain" size="none" className="v2-command-menu-trigger" aria-label={t("Command actions")}><Ellipsis /></Button></DropdownMenuTrigger>
-    <DropdownMenuContent align="end" sideOffset={3} className="v2-command-menu p-[3px]">
-      <DropdownMenuItem className="v2-command-menu-item" onSelect={(event) => {
-        event.preventDefault();
-        void copyText(command).then(() => { setCopied(true); setFailed(false); }, () => setFailed(true));
-      }}>{copied ? <Check /> : <Copy />}{copied ? t("Command copied") : t("Copy command")}</DropdownMenuItem>
-      {running && actions.openTerminalMirror ? <DropdownMenuItem className="v2-command-menu-item" onSelect={() => actions.openTerminalMirror!()}>{t("View in terminal")}</DropdownMenuItem> : null}
-      {failed ? <p role="alert" className="text-xs text-destructive">{t("Could not copy command.")}</p> : null}
-    </DropdownMenuContent>
-  </DropdownMenu>;
+  const copyLabel = copied ? t("Command copied") : t("Copy command");
+  return <span className="v2-command-actions">
+    {failed ? <span role="alert" className="text-[11px] text-destructive">{t("Could not copy command.")}</span> : null}
+    {running && actions.openTerminalMirror ? <Button variant="plain" size="none" className="v2-command-action"
+      aria-label={t("View in terminal")} title={t("View in terminal")}
+      onClick={() => actions.openTerminalMirror!()}><SquareTerminal aria-hidden="true" /></Button> : null}
+    <Button variant="plain" size="none" className="v2-command-action" aria-label={copyLabel} title={copyLabel}
+      onClick={() => { void copyText(command).then(() => { setCopied(true); setFailed(false); }, () => setFailed(true)); }}>
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </Button>
+  </span>;
 }
 
 export function CommandOutput({ command, output, running, visible = true }: {
