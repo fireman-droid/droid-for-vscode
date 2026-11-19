@@ -250,10 +250,10 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
           {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
           <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
         </>}
-        </div>
-        {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
-          <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
+        {composer.queueEditingId === null ? null : <div data-ui-notice="" className="v2-composer-queue-edit flex items-center justify-between text-muted-foreground">
+          <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
         </div>}
+        </div>
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           onNoticeChange={reportComposerNotice}
           capabilities={capabilities}
