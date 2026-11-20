@@ -26,6 +26,7 @@ const LATENCY_SAMPLE_SIZE = 10;
 
 interface Invocation {
   id: number;
+  phase: 'policy' | 'request';
   document: vscode.TextDocument;
   position: vscode.Position;
   version: number;
@@ -147,7 +148,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
     this.cancel('superseded');
     clearTimeout(this.abandoned);
     const pending: Invocation = {
-      id, document, position, version: document.version, documentScope: autocompleteScope(document),
+      id, phase: 'policy', document, position, version: document.version, documentScope: autocompleteScope(document),
       revision: this.context.revisionFor(document.uri), controller: new AbortController(),
     };
     this.active = pending;
@@ -158,7 +159,6 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       if (this.active === pending) this.cancel('editor-token');
     });
     const signal = pending.controller.signal;
-    let phase = 'policy';
     try {
       if (token.isCancellationRequested || !this.isCurrent(pending)) return [];
       // File policy applies even to cached completions and pending-request joins.
@@ -197,7 +197,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       if (contents.length > 1024 * 1024) return skip('document-size');
       const inputText = contents.slice(0, notebookOffset + start) + (selected?.text ?? '') + contents.slice(notebookOffset + end);
       pending.query = { scope, prefix, suffix };
-      phase = 'request';
+      pending.phase = 'request';
       const debounceMs = settings.adaptiveDebounce === false ? settings.debounceMs : this.debounceDelayMs;
       await untilCancelled(this.requests.run(scope, prefix, suffix, debounceMs, explicit,
         requestSignal => this.fetchAndCache(pending, settings, inputText, notebookOffset + prefix.length, requestSignal)), signal);
@@ -208,7 +208,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       return this.completionItems(result?.text ?? '', pending, selected, false);
     } catch (error) {
       if (!this.isCurrent(pending)) return [];
-      this.trace('failed', { id, phase, protocol: settings.protocol,
+      this.trace('failed', { id, phase: pending.phase, protocol: settings.protocol,
         code: error instanceof FimCompletionError ? error.code : 'internal',
         status: error instanceof FimCompletionError ? error.status ?? 0 : 0 });
       if (error instanceof FimCompletionError) {
@@ -219,7 +219,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       } else {
         this.report('Autocomplete could not prepare a suggestion. Check Droid logs.');
       }
-      if (phase === 'request' && this.backoff.failure(error) === 'transient') this.retryAfter = Date.now() + 30_000;
+      if (pending.phase === 'request' && this.backoff.failure(error) === 'transient') this.retryAfter = Date.now() + 30_000;
       return [];
     } finally {
       subscription.dispose();
@@ -241,15 +241,13 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       return;
     }
     const contextStarted = performance.now();
-    const [snippets, comments] = settings.relatedFiles ? await Promise.all([
-      this.context.collect(document, pending.position, { maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
-        excludePatterns: settings.excludePatterns, signal }),
-      readLanguageComments(document.languageId, signal),
-    ]) : [[], undefined] as const;
-    if (!this.hasReader(query, signal)) return;
     const policyUri = notebookUri(document.uri) ?? document.uri;
     const prompt = await this.getKiloContext().build({
-      document, text, offset, settings, signal, snippets, comments,
+      document, text, offset, settings, signal,
+      snippets: settings.relatedFiles ? this.context.collect(document, pending.position, {
+        maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal,
+      }) : [],
+      comments: settings.relatedFiles ? readLanguageComments(document.languageId, signal) : undefined,
       filepath: policyUri.scheme === 'file' ? vscode.workspace.asRelativePath(policyUri, false) : 'untitled',
     });
     if (!this.hasReader(query, signal)) return;
@@ -332,7 +330,7 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
 
   private cancel(reason: string): void {
     if (!this.active) return;
-    this.trace('cancelled', { id: this.active.id, reason });
+    this.trace('cancelled', { id: this.active.id, phase: this.active.phase, reason });
     this.active.controller.abort();
     this.active = undefined;
     clearTimeout(this.abandoned);

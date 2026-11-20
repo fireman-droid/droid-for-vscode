@@ -241,6 +241,27 @@ describe('Mercury reference context', () => {
 
 
 describe('merged Kilo and editor context', () => {
+  it('resolves Java imports while editor definitions are pending and keeps both in the prompt', async () => {
+    state.config.model = 'Qwen/Qwen3-Coder-30B-A3B-Instruct';
+    const text = 'import shop.Item;\nclass Cart { Item current() { return ';
+    const main = await document('Cart.java', text, 'java');
+    const item = await document('shop/Item.java', 'class Item { int unitPrice; }', 'java', false);
+    const owner = await document('shop/Owner.java', 'class Owner { int customerId; }', 'java', false);
+    state.editor = { document: main } as vscode.TextEditor;
+    service = new KiloContextService();
+    let finishEditor!: (snippets: ContextSnippet[]) => void;
+    const editor = new Promise<ContextSnippet[]>(resolve => { finishEditor = resolve; });
+    state.definitions.mockImplementation(async () => {
+      finishEditor([{ uri: owner.uri.toString(), filepath: 'shop/Owner.java', content: owner.getText(), source: 'definition' }]);
+      return [{ uri: item.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: item.getText().length } } }];
+    });
+    const prompt = await service.build({ document: main, text, offset: text.length, filepath: 'Cart.java',
+      settings: readCompletionSettings(), signal: new AbortController().signal, snippets: editor, comments: { line: '//' } });
+    expect(prompt.prefix).toContain('unitPrice');
+    expect(prompt.prefix).toContain('customerId');
+    expect(prompt.prefix.endsWith('return ')).toBe(true);
+  });
+
   it('keeps imported types ahead of unrelated opened files under a small budget', async () => {
     state.config.model = 'mercury-edit-2'; state.config.maxContextCharacters = 1400;
     const text = "import { User } from './types';\nfunction greet(user: User) {\n  return \n}";

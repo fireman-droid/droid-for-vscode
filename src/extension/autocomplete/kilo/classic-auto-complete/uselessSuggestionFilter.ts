@@ -16,9 +16,10 @@ export function suggestionConsideredDuplication(params: AutocompleteSuggestion &
   // Multiline completions can be "partially duplicated": e.g. the first suggested line
   // repeats the last complete line in the prefix, or the last suggested line repeats
   // the first line in the suffix. Those are still considered duplication.
-  const keepsJavaBlockCloser = params.languageId === "java" && /(?:^|\n)[ \t]*}[ \t]*$/.test(params.suggestion.trimEnd())
-    && closesNewJavaBlock(params.suggestion.trimEnd())
-  if (DuplicatesFromEdgeLines(params, keepsJavaBlockCloser)) {
+  const keepsClosingEdge = params.languageId === "java"
+    ? /(?:^|\n)[ \t]*}[ \t]*$/.test(params.suggestion.trimEnd()) && closesNewJavaBlock(params.suggestion.trimEnd())
+    : /^[}\])]+[;,]?$/.test(params.suggestion.trimEnd().split("\n").pop()?.trim() ?? "")
+  if (DuplicatesFromEdgeLines(params, keepsClosingEdge)) {
     return true
   }
 
@@ -30,7 +31,7 @@ export function suggestionConsideredDuplication(params: AutocompleteSuggestion &
   // When the suggestion isn't a full line or set of lines, normalize by including
   // the rest of the line in the prefix/suffix and check with the completed line(s)
   const normalized = normalizeToCompleteLine(params)
-  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized, keepsJavaBlockCloser))
+  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized, keepsClosingEdge))
 }
 
 function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
@@ -41,7 +42,7 @@ function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
   )
 }
 
-function DuplicatesFromEdgeLines(params: AutocompleteSuggestion, keepsJavaBlockCloser: boolean): boolean {
+function DuplicatesFromEdgeLines(params: AutocompleteSuggestion, keepsClosingEdge: boolean): boolean {
   const trimmedSuggestion = params.suggestion.trim()
   if (!trimmedSuggestion.includes("\n")) {
     return false
@@ -59,7 +60,7 @@ function DuplicatesFromEdgeLines(params: AutocompleteSuggestion, keepsJavaBlockC
   }
 
   if (lastSuggestionLine.length > 0 && lastSuggestionLine === suffixFirstLine &&
-    !(keepsJavaBlockCloser && lastSuggestionLine === "}")) {
+    !(keepsClosingEdge && /^[}\])]+[;,]?$/.test(lastSuggestionLine))) {
     return true
   }
 
