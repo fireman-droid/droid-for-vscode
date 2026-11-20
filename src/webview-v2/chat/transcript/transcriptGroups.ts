@@ -1,5 +1,6 @@
+import { splitMarkdownBlocks } from '@droidvisx/chat-ui/markdown/markdownStream';
 import { presentScriptResults } from './scriptResults';
-import type { SessionTranscriptItem } from '../../../shared/protocol/transcript';
+import type { AssistantTranscriptItem, SessionTranscriptItem } from '../../../shared/protocol/transcript';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 
 export interface UserMessageDescriptor {
@@ -27,6 +28,24 @@ interface TranscriptProjection extends TranscriptDescription { readonly runs: Re
 const groupText = new WeakMap<AssistantGroupDescriptor, string>();
 const sameItems = <T>(before: readonly T[], after: readonly T[]) =>
   before.length === after.length && before.every((item, index) => item === after[index]);
+
+// Keep unchanged rows stable as later deltas re-project the transcript.
+const fenceContinuations = new WeakMap<AssistantTranscriptItem, WeakMap<AssistantTranscriptItem, AssistantTranscriptItem> | null>();
+function continueFence(head: AssistantTranscriptItem, next: AssistantTranscriptItem): AssistantTranscriptItem | undefined {
+  let continuations = fenceContinuations.get(head);
+  if (continuations === undefined) {
+    // The boundary may be at the end of the opening fence's info string.
+    continuations = splitMarkdownBlocks(head.text + '\n').hasOpenFence ? new WeakMap() : null;
+    fenceContinuations.set(head, continuations);
+  }
+  if (!continuations) return undefined;
+  const cached = continuations.get(next);
+  if (cached) return cached;
+  const merged = { ...next, id: head.id, text: head.text + next.text };
+  continuations.set(next, merged);
+  return merged;
+}
+
 function isBlankAssistant(item: SessionTranscriptItem): boolean {
   return item.kind === 'assistant' && item.text.trim().length === 0;
 }
@@ -61,6 +80,7 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
   const groups = new Map<string, AssistantGroupDescriptor>();
   const groupIds = new Set<string>();
   let promptId: string | null = null;
+  let lastGroup: AssistantGroupDescriptor | undefined;
   const appendToGroup = (item: Exclude<SessionTranscriptItem, { kind: 'user' }>): void => {
     const key = item.turnId ?? `diagnostic:${item.id}`;
     let group = groups.get(key);
@@ -82,7 +102,12 @@ function projectTranscript(transcript: readonly SessionTranscriptItem[], include
         descriptors.push(group);
       }
     }
-    group.items.push(item);
+    const prior = group === lastGroup ? group.items.at(-1) : undefined;
+    const merged = prior?.kind === 'assistant' && item.kind === 'assistant' && prior.turnId === item.turnId
+      ? continueFence(prior, item) : undefined;
+    if (merged) group.items[group.items.length - 1] = merged;
+    else group.items.push(item);
+    lastGroup = group;
   };
   const owners = userImageOwners(transcript);
   const images = new Map<string, Extract<SessionTranscriptItem, { kind: 'image' }>[]>();

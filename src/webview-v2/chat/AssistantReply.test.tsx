@@ -3,10 +3,33 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ProcessPresentationProvider } from './transcript/processPresentation';
-import type { AssistantGroupDescriptor } from './transcript/transcriptGroups';
+import { describeTranscript, type AssistantGroupDescriptor } from './transcript/transcriptGroups';
 import { AssistantReply } from './AssistantReply';
 
 afterEach(cleanup);
+
+it('keeps a streamed JSON block and its copied reply intact across transcript fragments', async () => {
+  const user = userEvent.setup();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  const first = 'Example:\n\n```json\n{\n  "refs": [],';
+  const second = '  "scene": {"name": "demo"}\n}\n```\n\nDone.';
+  const view = (parts: string[], running: boolean) => {
+    const { descriptors, replyTails } = describeTranscript(parts.map((text, i) =>
+      ({ kind: 'assistant', id: `part-${i}`, turnId: 'turn', text })));
+    const descriptor = descriptors[0] as AssistantGroupDescriptor;
+    return <AssistantReply descriptor={descriptor} status={running ? { type: 'running' } : { type: 'complete', reason: 'stop' }}
+      waiting={null} replyText={replyTails.get(descriptor.id)} completedAt={undefined} regenerate={undefined} fork={undefined} />;
+  };
+  const result = render(view([first], true));
+  result.rerender(view([first, '\n', second.slice(0, 8)], true));
+  expect(screen.getByRole('region', { name: 'json code' }).textContent).toContain('"refs": [],\n  "scene');
+  result.rerender(view([first, '\n', second], false));
+  expect(screen.getAllByRole('region')).toHaveLength(1);
+  expect(screen.getByRole('region', { name: 'json code' }).textContent).toBe('{\n  "refs": [],\n  "scene": {"name": "demo"}\n}\n');
+  expect(screen.getByText('Done.')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Copy reply' }));
+  expect(clipboard).toHaveBeenCalledWith(first + '\n' + second);
+});
 
 it('opens a single tool detail directly and keeps the reader choice across virtual unmounts', async () => {
   const user = userEvent.setup();

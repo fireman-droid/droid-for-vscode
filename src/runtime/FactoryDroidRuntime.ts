@@ -482,6 +482,14 @@ export class FactoryDroidRuntime implements DroidRuntime {
     return rewind(this.replacementContext(), params);
   }
 
+  readPendingRewind() {
+    return this.requireSession().readPendingRewind?.();
+  }
+
+  async clearPendingRewind(): Promise<void> {
+    await this.requireSession().clearPendingRewind?.();
+  }
+
   async getRewindInfo(messageId: string): Promise<RuntimeRewindInfo> {
     const session = this.requireSession();
     if (typeof session.getRewindInfo !== 'function') {

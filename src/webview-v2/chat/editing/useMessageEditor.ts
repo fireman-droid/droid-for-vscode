@@ -77,7 +77,8 @@ export function useMessageEditor({
         scrollTop: 0,
         focused: true,
       };
-      setDraft({ messageId, text, restoreFiles: false, phase: 'editing', notice: null, rejectionSequence: rejection?.sequence ?? -1, resumeOnly: false });
+      setDraft({ messageId, text, restoreFiles: false, phase: 'editing', notice: null, rejectionSequence: rejection?.sequence ?? -1,
+        resumeOnly: rejection?.messageId === messageId && rejection.reason === 'resume-failed' });
       onStageBegin(messageId);
       onRequestRewindInfo(messageId);
     },
@@ -120,6 +121,11 @@ export function useMessageEditor({
 
   useEffect(() => {
     const pending = submitted.current;
+    if (pending === null && rejection?.reason === 'resume-failed') {
+      setDraft(current => current?.messageId === rejection.messageId && current.phase === 'editing' && !current.resumeOnly
+        ? { ...current, resumeOnly: true } : current);
+      return;
+    }
     if (rejection === null || pending === null || rejection.messageId !== pending.messageId || rejection.sequence <= pending.rejectionSequence) return;
     submitted.current = null;
     setDraft((current) =>

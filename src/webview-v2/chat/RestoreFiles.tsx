@@ -28,7 +28,7 @@ export function RestoreFiles({ impact, onResend, disabled = false, resumeOnly = 
   const summary = mixed ? `${total} files` : impact.createdCount > 0 ? `Delete ${total} new ${total === 1 ? 'file' : 'files'}`
     : impact.restorableCount > 0 ? `Restore ${total} ${total === 1 ? 'file' : 'files'}` : `${total} unavailable ${total === 1 ? 'file' : 'files'}`;
   const restoreHint = restored ? 'Already requested; reconnecting will not restore again.'
-    : resumeOnly ? 'The conversation has already been rewound; reconnect to resend.'
+    : resumeOnly ? 'The conversation has already been rewound; reconnect without sending.'
       : 'Undo file changes from this message onward, including later manual edits, then resend.';
   if (total === 0) return null;
   return <DropdownMenu modal={false} onOpenChange={(open) => { if (open) setShowFiles(false); }}>
@@ -37,7 +37,7 @@ export function RestoreFiles({ impact, onResend, disabled = false, resumeOnly = 
     <DropdownMenuContent side="top" align="end" loop className="grid w-60 grid-cols-[1fr_auto] p-1 [--hover-surface:transparent]"
       data-editor-popup-owner={impact.messageId} data-transcript-selection-exclude="" aria-label={showFiles ? t("Files affected by restore") : t("Resend options")}>
       {!showFiles && <DropdownMenuItem className={`${itemClass} col-span-2`} disabled={disabled} onSelect={() => onResend(false)}>
-        {resumeOnly ? t("Reconnect & resend") : t("Resend")}
+        {resumeOnly ? t("Reconnect conversation") : t("Resend")}
       </DropdownMenuItem>}
       {!showFiles && <DropdownMenuItem className={itemClass} disabled={disabled || resumeOnly || count === 0}
         title={restoreHint} aria-label={t("Restore & resend. {p0}", { p0: restoreHint })} onSelect={() => onResend(true)}>

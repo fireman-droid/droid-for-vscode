@@ -3,6 +3,7 @@ import { readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { acquireFileTransactionLock } from '../../runtime/storage/fileTransactionLock';
+import { WorkspaceTurnBusyError } from './WorkspaceTurnBusyError';
 
 interface Scope { readonly sessionId: string; readonly turnId: string }
 interface Owner extends Scope { readonly phase: 'preparing' | 'running' }
@@ -34,7 +35,7 @@ export async function acquireWorkspaceTurnLease(
     // The extension may have exited while the daemon kept running. A dead Host
     // process is not evidence that a different turn can safely start writing.
     if (owner?.phase === 'running' && (owner.sessionId !== scope.sessionId || owner.turnId !== scope.turnId))
-      throw new Error(`This workspace has an unfinished captured turn. Reopen session ${owner.sessionId} to finish recording it before sending another turn.`);
+      throw new WorkspaceTurnBusyError(owner.sessionId);
     // Acquiring the transaction proves any previous preparing owner detached.
     // It had not submitted a request, so its abandoned reservation can be reused.
     let dispatched = owner?.phase === 'running';

@@ -1,4 +1,5 @@
 import type { InlineDiffLine } from './inlineDiffLines';
+import type { DiffRow } from './splitDiffRows';
 
 export interface WordRange { readonly start: number; readonly end: number }
 interface WordToken extends WordRange { readonly text: string }
@@ -54,17 +55,10 @@ function compareWords(before: string, after: string): WordChanges | null {
 
 /** Use the same ordered removal/addition pairs in both layouts. Comparisons are
  * lazy: offscreen chunks and pure additions/deletions do no word-diff work. */
-export function wordDiffRanges(lines: readonly InlineDiffLine[]): ReadonlyMap<InlineDiffLine, ReadWordRanges> {
+export function wordDiffRanges(rows: readonly DiffRow[]): ReadonlyMap<InlineDiffLine, ReadWordRanges> {
   const result = new Map<InlineDiffLine, ReadWordRanges>();
-  for (let index = 0; index < lines.length;) {
-    if (lines[index]!.kind !== 'remove') { index++; continue; }
-    const start = index;
-    while (lines[index]?.kind === 'remove') index++;
-    const middle = index;
-    while (lines[index]?.kind === 'add') index++;
-    const count = Math.min(middle - start, index - middle);
-    for (let pair = 0; pair < count; pair++) {
-      const before = lines[start + pair]!, after = lines[middle + pair]!;
+  for (const { left: before, right: after } of rows) {
+    if (before?.kind === 'remove' && after?.kind === 'add') {
       // The visible Code component memoizes its own ranges. Do not retain every
       // computed pair as a user scrolls through a large, mostly replaced file.
       result.set(before, () => compareWords(before.text, after.text)?.before);

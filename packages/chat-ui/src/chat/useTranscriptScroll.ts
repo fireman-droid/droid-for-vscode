@@ -8,6 +8,7 @@ import {
 import { hasTranscriptSelection, readTranscriptSelection } from './transcriptSelection';
 import { isNestedScrollTarget } from '../navigation/nestedScroll';
 import type { ChatFooterInsetStore } from './ChatLayout';
+import { createTranscriptReadingAnchor } from './transcriptReadingAnchor';
 
 export function useTranscriptScroll(
   viewport: RefObject<HTMLDivElement | null>,
@@ -162,6 +163,7 @@ export function useTranscriptScroll(
     const element = viewport.current;
     const column = content.current;
     if (element === null || column === null) return;
+    const readingAnchor = createTranscriptReadingAnchor(element);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let settledFrames = 0;
     const sample = () => ({
@@ -258,9 +260,12 @@ export function useTranscriptScroll(
           follow.current.following = wasFollowing;
       }
       if (shrank) userScrolling.current = false;
+      if (!follow.current.following && navigation.current === null) readingAnchor.capture();
+      else readingAnchor.clear();
       schedule();
     };
     const onPointerDown = (event: PointerEvent) => {
+      readingAnchor.capture();
       if (event.target instanceof Element &&
         (navigation.current !== null || event.pointerType === 'touch' ||
           event.target.closest('[data-transcript-selectable]') || !event.target.closest('button,input,textarea,select,a,[contenteditable="true"]'))) {
@@ -270,6 +275,7 @@ export function useTranscriptScroll(
     };
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey || event.shiftKey || event.deltaY === 0) return;
+      readingAnchor.capture();
       const boundary = event.target instanceof Node && element.contains(event.target) ? element : selectionRoot;
       if (boundary && isNestedScrollTarget(boundary, event.target, event.deltaY)) { stopFollowing(); return; }
       const wasFollowing = follow.current.following;
@@ -297,6 +303,7 @@ export function useTranscriptScroll(
       if (event.target instanceof Element && !event.target.closest('input,textarea,select,[contenteditable="true"]') &&
         !(event.key === ' ' && event.target.closest('button,a')) &&
         ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Escape'].includes(event.key)) {
+        readingAnchor.capture();
         stopFollowing();
         const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
         userScrolling.current = (['ArrowDown', 'PageDown', 'End'].includes(event.key) ||
@@ -312,7 +319,7 @@ export function useTranscriptScroll(
       else if (event.type === 'pointerdown') onPointerDown(event as PointerEvent);
       else onKeyDown(event as KeyboardEvent);
     };
-    const onSelectionChange = () => { if (selecting()) stopFollowing(); };
+    const onSelectionChange = () => { if (selecting()) { stopFollowing(); readingAnchor.capture(); } };
     let previousHeight = element.clientHeight;
     let resizeCount = 0;
     let minHeight = previousHeight;
@@ -320,6 +327,8 @@ export function useTranscriptScroll(
     let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
       syncRunway?.();
+      if (!follow.current.following && navigation.current === null) readingAnchor.restore(writeTop);
+      else readingAnchor.clear();
       const height = element.clientHeight;
       // New virtual rows and the cleared composer settle together. Correct their
       // geometry before paint, then return to the usual smooth streaming follow.

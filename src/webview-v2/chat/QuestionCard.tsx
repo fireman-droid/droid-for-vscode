@@ -63,13 +63,17 @@ export function QuestionCard({
   const draft = editor.draft?.messageId === messageId ? editor.draft : null;
   const pending = draft?.phase === 'resending';
   const attachmentDisabled = edit.disabled || stage === null || pending;
-  const resendDisabled = !canResend || edit.preparing > 0 || !draft?.text.trim() || pending;
+  const rewindUnknown = edit.rejection !== null && edit.rejection.messageId === messageId && edit.rejection.reason === 'rewind-unknown';
+  const resendDisabled = !canResend || edit.preparing > 0 || !draft?.text.trim() || pending || rewindUnknown;
   const resend = (restoreFiles: boolean) => {
     if (!messageId || !draft || resendDisabled || edit.isPreparing()) return;
     if (restoreFiles && (draft.resumeOnly || !impact || impact.restorableCount + impact.createdCount === 0)) return;
     editor.submit(messageId, draft.resumeOnly ? draft.restoreFiles : restoreFiles);
   };
-  const rejection = draft && edit.rejection !== null && edit.rejection.messageId === messageId && edit.rejection.sequence > draft.rejectionSequence ? EDIT_REJECT_COPY[edit.rejection.reason] : null;
+  const rejection = edit.rejection !== null && edit.rejection.messageId === messageId &&
+    (edit.rejection.reason === 'resume-failed' || edit.rejection.reason === 'rewind-unknown' ||
+      draft && edit.rejection.sequence > draft.rejectionSequence)
+    ? t(EDIT_REJECT_COPY[edit.rejection.reason]) : null;
   const originalAttachments = <>
     {images.length ? <div className="v2-sent-attachments">
       {images.map((image) => image.data.length === 0
@@ -81,11 +85,11 @@ export function QuestionCard({
   </>;
   const displayEditor = draft && edit.preparing > 0 ? { ...editor, draft: { ...draft, notice: 'Preparing attachments…' } } : editor;
   return <QuestionCardView item={item} editor={displayEditor} quote={parseSelectionQuotes(item.text)} placeholder={placeholder} placeholderHeight={placeholderHeight}
-    canResend={canResend && edit.preparing === 0} editAvailable={editAvailable} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
+    canResend={canResend && edit.preparing === 0 && !rewindUnknown} editAvailable={editAvailable} maxLength={MAX_TURN_TEXT_LENGTH} originalAttachments={originalAttachments}
     stagedAttachments={stage === null ? originalAttachments : stage.attachments.length ? <StagedAttachments stage="edit" attachments={stage.attachments} images={edit.images} actions={edit.actions} disabled={attachmentDisabled} /> : null}
     editSettings={edit.settings} editDisabled={attachmentDisabled} onAttach={edit.actions.handleEditAttachFiles} rejection={rejection}
     onPaste={edit.onPaste} onDrop={edit.onDrop} onDragOver={edit.onDragOver}
-    resendLabel={draft?.resumeOnly ? 'Reconnect & resend' : 'Resend'} onResend={() => resend(false)}
+    resendLabel={draft?.resumeOnly ? t('Reconnect conversation') : t('Resend')} onResend={() => resend(false)}
     restoreFiles={draft && impact ? <RestoreFiles key={impact.messageId} impact={impact} onResend={resend} disabled={resendDisabled} resumeOnly={draft.resumeOnly} restored={draft.resumeOnly && draft.restoreFiles} openDisabled={edit.disabled || pending} /> : null}
     plan={plan && onPlanToggle ? <PlanLine key={plan.anchorToolUseId} anchor={plan} running={planRunning} override={planChoice?.id === plan.anchorToolUseId ? planChoice.expanded : null} onToggle={onPlanToggle} /> : null} />;
 }

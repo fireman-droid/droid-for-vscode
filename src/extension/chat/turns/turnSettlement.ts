@@ -113,6 +113,7 @@ export function failTurn(
   turnId: string,
   code: string,
   errorMessage?: string,
+  relatedSessionId?: string,
 ): void {
   ctl.effects.flushPendingThinking(sessionId, turnId);
   if (ctl.turnState.turn?.turnId !== turnId) {
@@ -136,7 +137,7 @@ export function failTurn(
   // projected by a runtime error, including failures before the stream starts.
   if (message !== ctl.turnState.turn.runtimeError) {
     ctl.emit({ type: 'runtime.diagnostic', sessionId, turnId, severity: 'error',
-      code, message });
+      code, message, ...(relatedSessionId ? { relatedSessionId } : {}) });
   }
   ctl.turnState.turn.error = message;
   ctl.emit({

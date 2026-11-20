@@ -18,6 +18,11 @@ export async function replayControllerTo(
     return;
   }
   ctl.emitTo(listener, ctl.effects.buildHostSnapshot());
+  const pendingRewind = ctl.sessionState.runtime?.readPendingRewind?.();
+  if (pendingRewind?.sourceSessionId === ctl.sessionState.sessionId) {
+    ctl.emitTo(listener, { type: 'turn.editResendRejected', sessionId: pendingRewind.sourceSessionId,
+      messageId: pendingRewind.messageId, reason: pendingRewind.newSessionId === null ? 'rewind-unknown' : 'resume-failed' });
+  }
   if (ctl.missionState.missionRuntime) {
     ctl.emitTo(listener, ctl.missionState.missionRuntime.snapshot());
   }

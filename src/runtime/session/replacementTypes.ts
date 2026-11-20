@@ -1,5 +1,7 @@
 export interface FactoryDroidSessionRewindParams {
   readonly messageId: string;
+  /** Request intent, independent of whether the preview contains any files. */
+  readonly filesRequested?: boolean;
   readonly filesToRestore: Array<{
     filePath: string;
     contentHash: string;

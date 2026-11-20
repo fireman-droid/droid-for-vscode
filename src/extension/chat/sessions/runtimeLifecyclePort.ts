@@ -57,7 +57,7 @@ export interface SessionCleanupPort extends Pick<HostOperations, 'btwSideChat'> 
 /** The only activation step that publishes the prepared session and recovered display together. */
 export interface RuntimeActivationPort extends WorkspaceFeedbackPort,
   Pick<HostOperations, 'recoveryStore' | 'interactions' | 'createRuntime' | 'recordHost' |
-    'worktreeSessions' | 'isCurrentSessionOperation'> {
+    'worktreeSessions' | 'isCurrentSessionOperation' | 'emit'> {
   readonly nativeIde?: Pick<NativeIdeBackend, 'read'>;
   readonly sessionState: SessionGuardPort['sessionState'] &
     Readonly<Pick<SessionLifecycleState, 'conversationId' | 'sessionId'>> & Pick<SessionLifecycleState,

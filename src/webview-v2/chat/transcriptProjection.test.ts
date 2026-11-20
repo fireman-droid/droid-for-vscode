@@ -9,6 +9,20 @@ const assistant = (turnId: string, text: string) => ({ kind: 'assistant' as cons
 const tool: ToolTranscriptItem = { kind: 'tool', id: 'trailing-tool', turnId: 'tool-only', toolUseId: 'call', toolName: 'Read',
   action: 'Read', status: 'completed', progressCount: 0, latestUpdateKind: null };
 
+it('continues fenced text past hidden workspace snapshots but not across visible activity or another reply', () => {
+  const head = assistant('turn', '~~~~json');
+  const tail = { ...assistant('turn', '\n{}\n~~~~'), id: 'tail', timestamp: 123 };
+  const end = { ...assistant('turn', 'Next paragraph'), id: 'end' };
+  const snapshot: SessionTranscriptItem = { kind: 'changes', id: 'changes', turnId: 'turn', files: [] };
+  const projected = describeTranscript([head, snapshot, tail, end]);
+  expect([...projected.replyTails.values()]).toEqual([head.text + tail.text + '\n\n' + end.text]);
+  expect([...describeTranscript([head, snapshot, tail]).replyTimestamps.values()]).toEqual([tail.timestamp]);
+  expect([...describeTranscript([head, { ...tool, turnId: 'turn' }, tail]).replyTails.values()])
+    .toEqual([head.text + '\n\n' + tail.text]);
+  expect([...describeTranscript([head, user('steer'), tail]).replyTails.values()]).toEqual([head.text, tail.text]);
+  expect([...describeTranscript([head, { ...tail, turnId: 'another' }]).replyTails.values()]).toEqual([head.text + '\n\n' + tail.text]);
+});
+
 it('keeps repeated steering replies after their own prompts while retaining the runtime turn identity', () => {
   const select = createTranscriptSelector();
   const before = { ...assistant('active-turn', 'Before guidance'), timestamp: 1_790_000_000_000 };

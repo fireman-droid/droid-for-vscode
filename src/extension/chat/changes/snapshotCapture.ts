@@ -1,5 +1,6 @@
 import type { TurnSnapshotScope, TurnSnapshotStore } from '../../changes/turnSnapshots';
 import type { DroidRuntime } from '../../../runtime/DroidRuntime';
+import { WorkspaceTurnBusyError } from '../../changes/WorkspaceTurnBusyError';
 
 const pendingCaptures = new WeakMap<TurnSnapshotStore, Map<string, Promise<string | undefined>>>();
 
@@ -29,7 +30,8 @@ export async function captureSnapshotBeforeSend(
 ): Promise<void> {
   if (!host.turnSnapshots) throw new Error('Change recording is unavailable. The request was not sent.');
   const pending = await host.turnSnapshots.readPendingCapture?.();
-  if (pending && pending.turnId !== turnId && (pending.sessionId === sessionId || runtime?.readOtherSessionWorkingState !== undefined)) {
+  if (pending && (pending.sessionId !== sessionId || pending.turnId !== turnId) &&
+    (pending.sessionId === sessionId || runtime?.readOtherSessionWorkingState !== undefined)) {
     // A rejected retry or an earlier session in this workspace may still hold
     // the durable capture lease after its daemon turn finished.
     signal?.throwIfAborted();
@@ -41,9 +43,8 @@ export async function captureSnapshotBeforeSend(
           : runtime?.readOtherSessionWorkingState?.(pending.sessionId))
       : 'idle';
     if (!settling && !recorded && state !== 'idle') {
-      throw new Error(pending.sessionId === sessionId
-        ? 'The previous reply is still running or its state could not be confirmed. Wait for it to finish, then retry.'
-        : `This workspace has an unfinished captured turn. Reopen session ${pending.sessionId} to finish recording it before sending another turn.`);
+      if (pending.sessionId !== sessionId) throw new WorkspaceTurnBusyError(pending.sessionId);
+      throw new Error('The previous reply is still running or its state could not be confirmed. Wait for it to finish, then retry.');
     }
     signal?.throwIfAborted();
     const after = await (settling ?? finishPendingSnapshot(host.turnSnapshots, pending, signal));

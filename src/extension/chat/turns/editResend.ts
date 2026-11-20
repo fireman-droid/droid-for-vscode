@@ -1,7 +1,7 @@
 import type { EditResendPort } from './editResendPort';
 import type { DroidRuntime, RuntimeRewindResult } from '../../../runtime/DroidRuntime';
 import { rewindFilesIncomplete, rewindResultNotice } from '../../../shared/protocol/rewindResult';
-import { RewindAnchorConflictError, RewindAttachmentError } from '../../../runtime/session/rewindErrors';
+import { RewindAnchorConflictError, RewindAttachmentError, RewindOutcomeUnknownError } from '../../../runtime/session/rewindErrors';
 import { MAX_PENDING_ATTACHMENTS } from '../../../shared/protocol/bounds';
 import { userImageOwners } from '../../../shared/transcript/userImageOwners';
 import { historyWindowTranscript } from '../../../shared/transcript/historyWindowTranscript';
@@ -55,6 +55,18 @@ export function handleRewindInfo(
   const generation = ctl.sessionState.runtimeGeneration;
   const cwd = ctl.sessionState.activeRuntimeCwd;
   if (cwd === null) return;
+  const pending = runtime.readPendingRewind?.();
+  if (pending !== undefined) {
+    if (pending.newSessionId === null) {
+      ctl.emitSessionDiagnostic('rewind-outcome-unknown',
+        'The previous rewind outcome was not confirmed. Do not retry it; inspect the workspace and Droid session history.');
+      emitEditResendRejected(ctl, sessionId, messageId, 'rewind-unknown');
+      return;
+    }
+    emitEditResendRejected(ctl, sessionId, messageId,
+      pending.messageId === messageId ? 'resume-failed' : 'rewind-pending');
+    return;
+  }
   void runtime.getRewindInfo(messageId).then(
     (info) => {
       if (ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
@@ -185,16 +197,18 @@ export function handleEditResend(
       return;
     }
     const forkedSessionId = outcome.sessionId;
-    const filesRequested = restoreFiles || outcome.filesRequested === true;
-    if (filesRequested && rewindFilesIncomplete(outcome.files)) {
+    const filesRequested = outcome.reconnected ? outcome.filesRequested === true : restoreFiles || outcome.filesRequested === true;
+    if (outcome.reconnected || filesRequested && rewindFilesIncomplete(outcome.files)) {
       // The SDK has already created a successor. Keep its real state, but do not
       // start a model turn against a partially restored workspace.
       ctl.attachmentState.pendingAttachments = [...editAttachments];
       ctl.emitSnapshot();
       ctl.effects.emitAttachments();
       ctl.emit({ type: 'rewind.result', sessionId: forkedSessionId, messageId,
-        ...(outcome.files === undefined ? {} : { files: outcome.files }), unsentText: text });
-      ctl.emitSessionDiagnostic('rewind-files-incomplete', `${rewindResultNotice(outcome.files)} The message was not resent. Check the files before sending again.`);
+        ...(outcome.files === undefined ? {} : { files: outcome.files }), filesRequested,
+        ...(outcome.reconnected ? { reconnected: true } : {}), unsentText: text });
+      ctl.emitSessionDiagnostic('rewind-files-incomplete',
+        `${filesRequested ? rewindResultNotice(outcome.files) : 'The conversation was reconnected.'} The message was not resent. Check the files before sending again.`);
       return;
     }
     // Send first, then snapshot: the single snapshot then carries the
@@ -258,14 +272,20 @@ export async function performEditResend(
     if (pending !== undefined && (pending.sessionId !== sessionId || pending.messageId !== messageId)) {
       throw new RewindAnchorConflictError(pending.messageId);
     }
-    outcome = pending?.outcome ?? (await runtime.rewind!({
+    outcome = pending ? { ...pending.outcome, reconnected: true } : (await runtime.rewind!({
       messageId, forkTitle: forkTitleFromText(text), restoreFiles,
     }));
     forkedSessionId = outcome.sessionId;
     if (isSafeBridgeId(forkedSessionId)) pendingRewinds.set(runtime, { sessionId, messageId,
-      outcome: { ...outcome, ...(restoreFiles ? { filesRequested: true } : {}) } });
+      outcome: { ...outcome, ...(!outcome.reconnected && restoreFiles ? { filesRequested: true } : {}) } });
   } catch (error) {
     if (ctl.isCurrentSessionOperation(runtime, generation, sessionId, cwd)) {
+      if (error instanceof RewindOutcomeUnknownError) {
+        ctl.emitSessionDiagnostic('rewind-outcome-unknown',
+          'The previous rewind outcome was not confirmed. Do not retry it; inspect the workspace and Droid session history.');
+        emitEditResendRejected(ctl, sessionId, messageId, 'rewind-unknown');
+        return null;
+      }
       const reason = error instanceof RewindAttachmentError ? 'resume-failed'
         : error instanceof RewindAnchorConflictError ? 'rewind-pending' : 'failed';
       ctl.emitSessionDiagnostic('edit-resend-failed', reason === 'resume-failed' ? EDIT_RESEND_RESUME_FAILED_MESSAGE
@@ -313,8 +333,16 @@ export async function performEditResend(
   });
   ctl.effects.clearPendingAttachments();
   pendingRewinds.delete(runtime);
+  try {
+    await runtime.clearPendingRewind?.();
+  } catch (error) {
+    ctl.diagnostics?.record({ level: 'error', name: 'host.rewind.checkpoint-clear-failed',
+      detail: error instanceof Error ? error.message : String(error) });
+    ctl.emitSessionDiagnostic('rewind-checkpoint-clear-failed',
+      'The conversation was opened, but its rewind recovery marker could not be cleared. Check Droid Logs.');
+  }
   ctl.effects.armReplayedSubagentWatch(forkedSessionId, cwd, truncated);
-  return { ...outcome, ...(restoreFiles ? { filesRequested: true } : {}) };
+  return { ...outcome, ...(!outcome.reconnected && restoreFiles ? { filesRequested: true } : {}) };
 }
 
 /**

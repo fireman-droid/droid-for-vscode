@@ -11,6 +11,7 @@ import { isCurrentRuntimeGeneration, isActivationCandidateCurrent, isTargetWorks
 import { reportWorkspaceChanged } from './workspaceLifecycle';
 import { elapsedMs, type SessionSwitchTimings } from './sessionSwitchTimings';
 import type { RuntimeActivationPort, RuntimeReplacementOptions } from './runtimeLifecyclePort';
+import { rewindResultNotice } from '../../../shared/protocol/rewindResult';
 
 // Prepares runtime/history, then publishes one ready session after its checkpoint is saved.
 
@@ -262,6 +263,19 @@ export async function activateRuntime(
     initializeMs: phases.initializeMs ?? 0, historyMs: phases.historyMs ?? 0,
   } });
   ctl.emitSnapshot();
+  const pendingRewind = runtime.readPendingRewind?.();
+  if (pendingRewind?.sourceSessionId === sessionId) {
+    if (pendingRewind.newSessionId === null) {
+      ctl.emitSessionDiagnostic('rewind-outcome-unknown',
+        'The previous rewind outcome was not confirmed. Do not retry it; inspect the workspace and Droid session history.');
+      ctl.emit({ type: 'turn.editResendRejected', sessionId, messageId: pendingRewind.messageId, reason: 'rewind-unknown' });
+    } else {
+      ctl.emitSessionDiagnostic('rewind-reconnect-pending',
+        `${pendingRewind.filesRequested ? rewindResultNotice(pendingRewind.files) : 'The conversation rewind completed without requesting file restoration.'} ` +
+        'Open the marked original message and reconnect; files will not be processed again and no message will be sent.');
+      ctl.emit({ type: 'turn.editResendRejected', sessionId, messageId: pendingRewind.messageId, reason: 'resume-failed' });
+    }
+  }
   ctl.effects.recoverMissionProjection(runtime, generation, sessionId, target.cwd, target.kind === 'resume');
   if (target.kind === 'new' && target.worktree === true) {
     bindWorktreeSessionMetadata(ctl, runtime, generation, sessionId, target.cwd);

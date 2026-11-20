@@ -16,6 +16,8 @@ export interface RewindResultMessage {
   readonly sessionId: string;
   readonly messageId: string;
   readonly files?: RewindFileResult;
+  readonly filesRequested?: boolean;
+  readonly reconnected?: boolean;
   /** Present when the successor was adopted but automatic resend was stopped. */
   readonly unsentText?: string;
 }
@@ -39,10 +41,12 @@ export function rewindResultNotice(files: RewindFileResult | undefined): string 
 
 export function parseRewindResult(value: unknown): RewindResultMessage | undefined {
   if (!isStrictRecord(value) || value.type !== 'rewind.result' ||
-    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'messageId'], ['files', 'unsentText']) ||
+    !hasExactKeys(value, ['type', 'sequence', 'sessionId', 'messageId'], ['files', 'unsentText', 'filesRequested', 'reconnected']) ||
     typeof value.sequence !== 'number' || !Number.isSafeInteger(value.sequence) || value.sequence < 0 ||
     !isId(value.sessionId) || !isId(value.messageId) ||
     value.files !== undefined && !isRewindFileResult(value.files) ||
+    value.filesRequested !== undefined && typeof value.filesRequested !== 'boolean' ||
+    value.reconnected !== undefined && typeof value.reconnected !== 'boolean' ||
     value.unsentText !== undefined && (typeof value.unsentText !== 'string' || value.unsentText.length > MAX_TURN_TEXT_LENGTH)) return;
   return value as unknown as RewindResultMessage;
 }

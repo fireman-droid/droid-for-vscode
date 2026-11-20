@@ -82,6 +82,75 @@ it('lets an upward wheel cancel a return to bottom even when later content grows
   expect(chat.frames.size).toBe(0);
 });
 
+it('keeps the same visible text in a growing turn without duplicating row movement', () => {
+  const chat = transcript();
+  const row = document.createElement('div'), paragraph = document.createElement('p'), earlier = document.createElement('p');
+  row.setAttribute('data-markdown-row', '');
+  paragraph.textContent = 'A visible reading position';
+  earlier.textContent = 'An earlier reading position';
+  row.append(earlier, paragraph);
+  chat.viewport.firstElementChild!.append(row);
+  const text = paragraph.firstChild as Text, earlierText = earlier.firstChild as Text;
+  let visibleText = text;
+  chat.viewport.style.setProperty('--pinned-mask-stop', '90px');
+  let rowTop = 450, textOffset = 148;
+  const rect = (top: number, height: number, width = 400) =>
+    ({ top, bottom: top + height, left: 0, right: width, width, height, x: 0, y: top, toJSON() {} }) as DOMRect;
+  chat.viewport.getBoundingClientRect = () => rect(0, 400);
+  row.getBoundingClientRect = () => rect(rowTop - chat.viewport.scrollTop, 1000);
+  const createRange = document.createRange.bind(document);
+  const rangeSpy = vi.spyOn(document, 'createRange').mockImplementation(() => {
+    const range = createRange();
+    range.getBoundingClientRect = () => rect(rowTop + textOffset - (range.startContainer === earlierText ? 80 : 0) - chat.viewport.scrollTop, 20, 8);
+    return range;
+  });
+  Object.defineProperty(document, 'caretRangeFromPoint', { configurable: true, value: (_x: number, y: number) => {
+    if (y < 90) return null;
+    const range = createRange(); range.setStart(visibleText, 2); range.collapse(true); return range;
+  } });
+  try {
+    act(() => { chat.viewport.scrollTop = 500; fireEvent.scroll(chat.viewport); });
+    textOffset += 120; // An image or tool above the line expands within this turn.
+    chat.resize(400, 2120);
+    expect(chat.viewport.scrollTop).toBe(620);
+    chat.resize(400, 2200); // Streaming below the line does not move it.
+    expect(chat.viewport.scrollTop).toBe(620);
+
+    rowTop += 80; // The virtualizer has already compensated a preceding row.
+    chat.viewport.scrollTop += 80;
+    textOffset += 70;
+    chat.resize(400, 2350);
+    expect(chat.viewport.scrollTop).toBe(770);
+
+    fireEvent.wheel(chat.viewport, { deltaY: -100 });
+    visibleText = earlierText;
+    act(() => { chat.viewport.scrollTop = 690; fireEvent.scroll(chat.viewport); });
+    // The next anchor must be the user's new reading position, not the old one.
+    textOffset += 40;
+    chat.resize(400, 2390);
+    expect(chat.viewport.scrollTop).toBe(730);
+
+    const selection = window.getSelection()!, selected = createRange();
+    selected.selectNodeContents(earlier);
+    selection.addRange(selected);
+    fireEvent(document, new Event('selectionchange'));
+    textOffset += 30;
+    chat.resize(400, 2420);
+    expect(chat.viewport.scrollTop).toBe(760);
+    expect(selection.toString()).toBe('An earlier reading position');
+
+    act(() => chat.result.current.scrollToBottom('auto'));
+    textOffset += 50;
+    chat.resize(400, 2470);
+    chat.frame();
+    expect(chat.viewport.scrollTop).toBeGreaterThan(2020);
+    expect(chat.viewport.scrollTop).toBeLessThanOrEqual(2070);
+  } finally {
+    rangeSpy.mockRestore();
+    Reflect.deleteProperty(document, 'caretRangeFromPoint');
+  }
+});
+
 it('honors reduced motion when returning to the latest reply', () => {
   const chat = transcript(true);
   act(() => chat.result.current.scrollToBottom());
