@@ -43,12 +43,14 @@ function InlineCode({ children }: ComponentProps<'code'>) {
   const { t } = useI18n();
   const { actions } = useContent();
   const { thinking } = useContext(MarkdownState);
-  const path = actions?.openPath && !thinking ? detectPathLink(nodeText(children)) : null;
-  return <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]">
+  const text = nodeText(children);
+  const path = actions?.openPath && !thinking ? detectPathLink(text) : null;
+  const compact = !path && text.length <= 24 && !/\s/u.test(text);
+  return <code className="v2-inline-code rounded bg-muted px-1 py-0.5 text-[0.92em]" data-nowrap={compact || undefined}>
     {path && actions ? <Button asChild textSelectable variant="plain" size="none" className="hover:underline">
       <a href={`#file:${encodeURIComponent(path.path)}`} draggable={false} className="select-text" title={t("Open {p0}", { p0: path.path })}
         onClick={(event) => { event.preventDefault(); if (!isTextSelectionClick(event)) actions.openPath?.(path); }}>
-        {nodeText(children).split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
+        {text.split(/(?<=[\\/])/u).map((segment, index, segments) => <Fragment key={index}>{segment}{index < segments.length - 1 ? <wbr /> : null}</Fragment>)}
       </a>
     </Button> : children}
   </code>;

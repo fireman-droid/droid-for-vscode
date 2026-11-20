@@ -148,6 +148,7 @@ export const commonMessages: readonly MessageTranslations[] = [
   ["enabled","已启用","已啟用"],
   ["off","关闭","關閉"],
   ["read-only","只读","只讀"],
+  ["tool","个工具","個工具"],
   ["tools","个工具","個工具"],
   ["Changed files","更改的文件","更改的檔案"],
   ["The view could not render","界面无法显示","介面無法顯示"],

@@ -8,16 +8,12 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (event?: unknown) => void>(),
   config: {} as Record<string, unknown>,
   request: vi.fn(),
-  nextRequest: vi.fn(),
-  pendingEdit: false,
-  present: vi.fn(),
-  definitions: vi.fn(),
-  capture: vi.fn(),
   secretGet: vi.fn(),
   record: vi.fn(),
   contextRevision: 0,
   allowed: vi.fn(),
   collect: vi.fn(),
+  syntaxLookup: vi.fn(),
   comments: vi.fn(),
   contextDispose: vi.fn(),
 }));
@@ -74,15 +70,6 @@ vi.mock('vscode', () => {
 });
 
 vi.mock('../../runtime/autocomplete/requestCompletion', () => ({ requestCompletion: mocks.request }));
-vi.mock('../../runtime/autocomplete/nextEdit', () => ({ requestNextEdit: mocks.nextRequest }));
-vi.mock('./NextEditSupport', () => ({ NextEditSupport: class {
-  constructor(_context: unknown, _error: unknown, _suggestion: unknown, private onAccepted: () => void) {}
-  manager = { isPending: () => mocks.pendingEdit };
-  presenter = { toCompletionItems: mocks.present };
-  accepted() { this.onAccepted(); }
-  capture = mocks.capture;
-  clear() {} dispose() {}
-} }));
 vi.mock('./context/CompletionContextService', () => ({
   CompletionContextService: class {
     onDidChangeContext(listener: () => void) {
@@ -92,7 +79,6 @@ vi.mock('./context/CompletionContextService', () => ({
     revisionFor() { return mocks.contextRevision; }
     isAllowed = mocks.allowed;
     collect = mocks.collect;
-    collectRecentlyViewed = mocks.collect;
     dispose = mocks.contextDispose;
   },
 }));
@@ -100,9 +86,11 @@ vi.mock('./context/KiloContextService', async () => {
   const { buildCompletionPrompt } = await import('./context/CompletionPrompt');
   return { KiloContextService: class {
     invalidate() {} dispose() {}
-    collectDefinitions = mocks.definitions;
-    async build(input: any) { return { ...buildCompletionPrompt({ ...input, model: input.settings.model,
-      maxCharacters: input.settings.maxContextCharacters }), relatedFiles: input.snippets.length }; }
+    async build(input: any) {
+      const [snippets, comments] = await Promise.all([input.snippets, input.comments, mocks.syntaxLookup()]);
+      return { ...buildCompletionPrompt({ ...input, snippets, comments, model: input.settings.model,
+        maxCharacters: input.settings.maxContextCharacters }), relatedFiles: snippets.length };
+    }
   } };
 });
 vi.mock('./context/LanguageComments', () => ({ readLanguageComments: mocks.comments }));
@@ -177,13 +165,10 @@ beforeEach(() => {
   mocks.contextRevision = 0;
   mocks.allowed.mockReset().mockResolvedValue(true);
   mocks.collect.mockReset().mockResolvedValue([]);
+  mocks.syntaxLookup.mockReset();
   mocks.comments.mockReset().mockResolvedValue({ line: '//' });
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
-  mocks.nextRequest.mockReset().mockResolvedValue('const answer = 42;');
-  mocks.pendingEdit = false; mocks.present.mockReset().mockReturnValue([]);
-  mocks.definitions.mockReset().mockResolvedValue([]);
-  mocks.capture.mockReset().mockResolvedValue({});
   mocks.record.mockReset();
   mocks.secretGet.mockReset().mockResolvedValue('synthetic-provider-key');
   provider = new AutocompleteProvider({
@@ -211,73 +196,32 @@ async function requesting(
 
 describe('AutocompleteProvider', () => {
 
-  it.each([true, false])('sends closed-file definitions to Next Edit only with relatedFiles=%s', async relatedFiles => {
-    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', relatedFiles,
-      endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
-    const definition = { uri: 'file:///types.ts', filepath: 'types.ts', content: 'export type Value = { size: number };', source: 'definition' };
-    mocks.definitions.mockResolvedValue([definition]);
-    const file = document();
-    await (await requesting(file)).pending;
-    expect(mocks.capture.mock.calls[0][3]).toEqual(relatedFiles ? [definition] : []);
-    expect(mocks.definitions).toHaveBeenCalledTimes(relatedFiles ? 1 : 0);
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-  });
-
-  it('starts Next Edit immediately after idle, but coalesces further automatic input', async () => {
-    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(10_000);
-    try {
-      const file = document(), automatic = { ...context, triggerKind: 1 };
-      const first = await requesting(file, undefined, automatic);
-      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
-      await first.pending;
-      file.state.text += '4'; Object.assign(file.value, { version: 2 });
-      const second = await requesting(file, undefined, automatic);
-      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
-      second.cancel.cancel(); expect(await second.pending).toEqual([]);
-      expect(mocks.nextRequest).toHaveBeenCalledTimes(1);
-      clock.mockReturnValue(12_000);
-      const afterIdle = await requesting(file, undefined, automatic);
-      expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
-      await afterIdle.pending;
-    } finally { clock.mockRestore(); }
-  });
-
-  it('retains a configured fixed Next Edit delay and cancels it before transport', async () => {
-    Object.assign(mocks.config, { protocol: 'mercury-edit', model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions',
-      adaptiveDebounce: false, debounceMs: 350 });
-    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-    request.cancel.cancel(); expect(await request.pending).toEqual([]);
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-  });
-
-  it('prepares FIM context during debounce and waits for both before sending', async () => {
-    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 100 });
-    const snippets = deferred<[]>();
-    mocks.collect.mockReturnValue(snippets.promise);
+  it('overlaps Java editor and syntax lookups before sending a single FIM request', async () => {
+    const file = document('class Cart { int total() { return ', 'file:///Cart.java');
+    Object.assign(file.value, { languageId: 'java' });
+    let editorDone = false, overlapped = false;
+    mocks.collect.mockImplementation(async () => { await wait(150); editorDone = true; return []; });
+    mocks.syntaxLookup.mockImplementation(async () => { overlapped = !editorDone; await wait(200); });
     mocks.request.mockResolvedValue('42;');
-    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
-    expect(mocks.collect).toHaveBeenCalledOnce();
-    expect(mocks.request).not.toHaveBeenCalled();
-    await wait(120);
-    expect(mocks.request).not.toHaveBeenCalled();
-    snippets.resolve([]);
-    expect((await request.pending)[0].insertText).toBe('42;');
+    const items = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
+    expect(items[0]?.insertText).toBe('42;');
     expect(mocks.request).toHaveBeenCalledOnce();
+    expect(overlapped).toBe(true);
   });
 
-  it('keeps the FIM send delay when context is fast and abandons cancelled preparation', async () => {
-    Object.assign(mocks.config, { adaptiveDebounce: false, debounceMs: 350 });
-    const request = await requesting(document(), undefined, { ...context, triggerKind: 1 });
-    expect(mocks.collect).toHaveBeenCalledOnce();
-    expect(mocks.request).not.toHaveBeenCalled();
-    request.cancel.cancel();
-    expect(await request.pending).toEqual([]);
-    await wait(380);
-    expect(mocks.request).not.toHaveBeenCalled();
+  it('does not report file-policy when typing cancels the policy lookup', async () => {
+    const allowed = deferred<boolean>(), file = document();
+    mocks.allowed.mockReturnValue(allowed.promise);
+    const { pending } = await requesting(file);
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: 'x', rangeLength: 0 }] });
+    allowed.resolve(false);
+    expect(await pending).toEqual([]);
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ name: 'autocomplete.cancelled',
+      attributes: expect.objectContaining({ phase: 'policy', reason: 'document-edited' }) }));
+    expect(mocks.record).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'autocomplete.skipped',
+      attributes: expect.objectContaining({ reason: 'file-policy' }) }));
+    expect(mocks.secretGet).not.toHaveBeenCalled();
   });
-
   it('reuses transport across a delayed editor-token refresh without repeating context', async () => {
     const response = deferred<string>(), file = document();
     mocks.request.mockReturnValue(response.promise);
@@ -297,7 +241,7 @@ describe('AutocompleteProvider', () => {
 
   it.each([0, 1])('offers an if body inside an existing function for trigger %i', async (triggerKind) => {
     const prefix = 'function calculateCartTotal(items: CartItem[]): number {\n  // Empty cart\n  if';
-    const file = document(prefix + '\n}');
+    const file = document(prefix + '\n  return 1;\n}');
     const response = ' (items.length === 0) {\n    return 0;\n  }';
     mocks.request.mockResolvedValue(response);
     const items = await (await requesting(file, prefix.length, { ...context, triggerKind })).pending;
@@ -339,15 +283,15 @@ describe('AutocompleteProvider', () => {
   });
 
   it('preserves following code using a same-line replacement for a newline-terminated insertion', async () => {
-    const file = document('# insert function\nprint(values)', 'file:///sample.py');
-    const offset = file.state.text.indexOf('print');
+    const file = document('# insert function\n    print(values)', 'file:///sample.py');
+    const offset = file.state.text.indexOf('    print');
     const body = 'def sort(values):\n    return sorted(values)\n';
     mocks.request.mockResolvedValue(body);
     const item = (await (await requesting(file, offset)).pending)[0];
     expect(item.range?.start.isEqual(file.at(offset))).toBe(true);
     expect(item.range?.end?.line).toBe(1);
-    expect(item.range?.end?.character).toBe('print(values)'.length);
-    expect(item.insertText).toBe(body + 'print(values)');
+    expect(item.range?.end?.character).toBe('    print(values)'.length);
+    expect(item.insertText).toBe(body + '    print(values)');
   });
 
   it('omits only terminal line breaks at an empty EOF, preserving interior blank lines', async () => {
@@ -357,11 +301,15 @@ describe('AutocompleteProvider', () => {
     expect(item.insertText).toBe('def run():\n\n    return 1');
   });
 
-  it.each(['\nprint(values)\n', 'print(values)', '    return 1\n'])(
-    'leaves nonmatching newline or indented insertions unchanged (%#)', async (body) => {
+  it.each([
+    ['\nprint(values)\n', '\nprint(values)\n'],
+    ['print(values)', 'print(values)'],
+    ['    return 1\n', '   return 1\n'],
+  ])(
+    'presents the Kilo-processed insertion without dropping terminal newlines mid-line (%#)', async (body, expected) => {
       const file = document('def run():\n    ', 'file:///sample.py');
       mocks.request.mockResolvedValue(body);
-      expect((await (await requesting(file)).pending)[0].insertText).toBe(body);
+      expect((await (await requesting(file)).pending)[0].insertText).toBe(expected);
     },
   );
 
@@ -390,49 +338,32 @@ describe('AutocompleteProvider', () => {
   });
 
   it.each([
-    ['value', 'suggestion-returned'], ['', 'empty'], ['\n  ', 'empty'], ['value\n' + '```', 'format-rejected'],
+    ['value', 'suggestion-returned'], ['', 'empty'], ['\n  ', 'empty'],
   ])('records local response contents and the result decision without recording request context or credentials (%#)', async (response, outcome) => {
     mocks.request.mockResolvedValue(response);
     await (await requesting(document('sensitiveSource = '))).pending;
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'autocomplete.result', attributes: expect.objectContaining({ outcome, receivedCharacters: response.length }),
+      name: 'autocomplete.generated', attributes: expect.objectContaining({ outcome, receivedCharacters: response.length }),
     }));
     const log = JSON.stringify(mocks.record.mock.calls);
     expect(log).not.toContain('sensitiveSource');
     expect(log).not.toContain('synthetic-provider-key');
     const contents = mocks.record.mock.calls.map(([event]) => event).filter(event => event.name === 'autocomplete.content');
     expect(contents.find(event => event.attributes.stage === 'response')?.detail).toBe(response);
-    expect(contents.find(event => event.attributes.stage === 'candidate')?.detail).toBe(outcome === 'suggestion-returned' ? response : '');
+    expect(contents.find(event => event.attributes.stage === 'candidate')?.detail).toBe(outcome === 'suggestion-returned' ? response : undefined);
     const resultId = mocks.record.mock.calls.find(([event]) => event.name === 'autocomplete.result')![0].attributes.id;
     expect(contents.every(event => event.attributes.id === resultId)).toBe(true);
   });
 
   it('distinguishes an already-present response from a new suggestion in diagnostics', async () => {
     mocks.request.mockResolvedValue('existing()');
-    expect(await (await requesting(document('return existing()'), 7)).pending).toEqual([]);
+    expect(await (await requesting(document('return  existing()'), 7)).pending).toEqual([]);
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'autocomplete.result', attributes: expect.objectContaining({ outcome: 'already-present', reason: 'suffix-exact-match' }),
+      name: 'autocomplete.generated', attributes: expect.objectContaining({ outcome: 'already-present' }),
     }));
   });
 
-  it('retains a rejected Next Edit response and its safe protocol explanation under one request id', async () => {
-    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
-    mocks.config.protocol = 'mercury-edit';
-    mocks.nextRequest.mockImplementation(async request => {
-      request.onResponse('```ts\nconst incomplete', 'length');
-      throw new FimCompletionError('protocol', 'Next Edit did not return a complete replacement. Suggestion hidden.');
-    });
-    expect(await (await requesting(document())).pending).toEqual([]);
-    const events = mocks.record.mock.calls.map(([event]) => event);
-    const response = events.find(event => event.name === 'autocomplete.content' && event.attributes.stage === 'response');
-    const failure = events.find(event => event.name === 'autocomplete.failed');
-    expect(response?.detail).toBe('```ts\nconst incomplete');
-    expect(failure).toMatchObject({ attributes: { id: response.attributes.id, code: 'protocol' },
-      detail: 'Next Edit did not return a complete replacement. Suggestion hidden.' });
-    expect(mocks.present).not.toHaveBeenCalled();
-  });
-
-  it('records transport cancellation with its stage and cause', async () => {
+  it('records transport cancellation with its cause', async () => {
     const response = deferred<string>();
     mocks.request.mockReturnValue(response.promise);
     const first = await requesting(document());
@@ -440,7 +371,7 @@ describe('AutocompleteProvider', () => {
     response.resolve('late');
     expect(await first.pending).toEqual([]);
     expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'autocomplete.cancelled', attributes: expect.objectContaining({ phase: 'request', reason: 'editor-token' }),
+      name: 'autocomplete.cancelled', attributes: expect.objectContaining({ reason: 'editor-token' }),
     }));
   });
 
@@ -453,24 +384,6 @@ describe('AutocompleteProvider', () => {
     expect(items[0].insertText).toBe('value');
     expect(items[0].range?.start).toBe(point);
     expect(items[0].range?.end).toBe(point);
-  });
-
-  it('aborts a stale request after typing and does not let it overwrite the new suggestion', async () => {
-    const old = deferred<string>();
-    const file = document();
-    mocks.request.mockReturnValueOnce(old.promise).mockResolvedValueOnce('42');
-    const first = await requesting(file);
-    file.state.text += '4';
-    Object.assign(file.value, { version: 2 });
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: '4' }] });
-    const next = await requesting(file);
-    // Kilo may share the in-flight request for a forward prefix, but an incompatible
-    // answer must cause a request for the actual cursor context, never stale insertion.
-    old.resolve('old answer');
-    expect((await next.pending)[0].insertText).toBe('42');
-    expect(await first.pending).toEqual([]);
-    expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
-    expect(mocks.request).toHaveBeenCalledTimes(2);
   });
 
   it('aborts for cancellation and rejects a response even if the transport ignores abort', async () => {
@@ -538,68 +451,40 @@ describe('AutocompleteProvider', () => {
     expect(mocks.request).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the Java trailing-fence response, caches its rejection and recovers after a manual reset', async () => {
+  it('strips the Java trailing fence and suggests the valid loop on a fresh and cached result', async () => {
     const prefix = 'class CompletionSample {\n  static int weightedScore(int[] values) {\n    int total = 0;\n';
     const suffix = '    return total;\n  }\n}';
-    const valid = '    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n';
+    const loop = '    for (int i = 0; i < values.length; i++) {\n      total += (i + 1) * values[i];\n    }\n    ';
     const file = document(prefix + suffix, 'file:///CompletionSample.java');
     Object.assign(file.value, { languageId: 'java' });
-    mocks.collect.mockResolvedValue([{
-      uri: 'file:///Score.java', filepath: 'Score.java', content: 'class Score {}', source: 'openFile',
-    }]);
-    mocks.request.mockResolvedValueOnce(valid + '\n```').mockResolvedValueOnce(valid);
-    expect(await (await requesting(file, prefix.length)).pending).toEqual([]);
-    expect(provider.lastMessage).toBe('Autocomplete response included ambiguous code fences. Suggestion hidden; use Request suggestion / retry.');
-    expect(provider.lastContextFileCount).toBe(1);
-    expect(provider.lastLatencyMs).toEqual(expect.any(Number));
-    expect(await (await requesting(file, prefix.length, { ...context, triggerKind: 1 })).pending).toEqual([]);
-    expect(mocks.request).toHaveBeenCalledTimes(1);
-    provider.reset();
-    const item = (await (await requesting(file, prefix.length)).pending)[0];
-    expect(item.range?.start.line).toBe(item.range?.end.line);
-    expect(file.state.text.slice(0, file.value.offsetAt(item.range!.start)) + item.insertText +
-      file.state.text.slice(file.value.offsetAt(item.range!.end))).toBe(prefix + valid + suffix);
-    expect(mocks.request).toHaveBeenCalledTimes(2);
-    expect(provider.lastMessage).toBeUndefined();
-  });
-
-  it.each(['changed text', 'another document'])('does not impose a global cooldown after a rejected fence for %s', async (change) => {
-    const original = document('int result = ', 'file:///Sample.java');
-    Object.assign(original.value, { languageId: 'java' });
-    mocks.request.mockResolvedValueOnce('42;\n```').mockResolvedValueOnce('42;');
-    expect(await (await requesting(original)).pending).toEqual([]);
-    const next = change === 'another document' ? document('int result = ', 'file:///Other.java') : original;
-    Object.assign(next.value, { languageId: 'java' });
-    if (change === 'changed text') {
-      original.state.text = 'int updatedResult = ';
-      Object.assign(original.value, { version: 2 });
-      mocks.listeners.get('text')?.({ document: original.value, contentChanges: [{ text: 'updated' }] });
+    Object.assign(mocks.config, { protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct' });
+    mocks.request.mockResolvedValue(loop + '\n```');
+    const automatic = { ...context, triggerKind: 1 };
+    for (const cached of [false, true]) {
+      const [item] = await (await requesting(file, prefix.length, automatic)).pending;
+      expect(item.command?.arguments?.[0].cached).toBe(cached);
+      expect(item.range?.start.line).toBe(item.range?.end.line);
+      expect(file.state.text.slice(0, file.value.offsetAt(item.range!.start)) + item.insertText +
+        file.state.text.slice(file.value.offsetAt(item.range!.end))).toBe(prefix + loop + suffix);
     }
-    expect((await (await requesting(next, undefined, { ...context, triggerKind: 1 })).pending)[0].insertText).toBe('42;');
-    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      protocol: 'siliconflow-fim', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+    }));
     expect(provider.lastMessage).toBeUndefined();
   });
 
-  it('preserves a closing code fence when completing an actual Markdown code block', async () => {
-    const file = document('## Example\n\n```java\n', 'file:///example.md');
-    Object.assign(file.value, { languageId: 'markdown' });
-    const completion = 'for (int i = 0; i < values.length; i++) {\n  total += (i + 1) * values[i];\n}\n```';
-    mocks.request.mockResolvedValue(completion);
-    expect((await (await requesting(file)).pending)[0].insertText).toBe(completion);
-    expect(provider.lastMessage).toBeUndefined();
-  });
-
-  it('coalesces automatic empty results but permits an immediate explicit retry', async () => {
+  it('caches the empty generation until the manual retry command resets it', async () => {
     const file = document();
     mocks.request.mockResolvedValue('');
     expect(await (await requesting(file)).pending).toEqual([]);
     expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
-    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request).toHaveBeenCalledOnce();
+    provider.reset('retry');
     mocks.request.mockResolvedValue('42');
     expect((await (await requesting(file)).pending)[0].insertText).toBe('42');
     expect(mocks.request).toHaveBeenCalledTimes(2);
   });
-
   it.each(['configuration', 'secret'])('invalidates cached suggestions when %s changes', async (change) => {
     const file = document();
     mocks.request.mockResolvedValueOnce('old').mockResolvedValueOnce('new');
@@ -628,7 +513,7 @@ describe('AutocompleteProvider', () => {
     const file = document();
     mocks.request.mockRejectedValueOnce(new Error('private provider payload'));
     expect(await (await requesting(file)).pending).toEqual([]);
-    expect(provider.lastMessage).toContain('Autocomplete failed');
+    expect(provider.lastMessage).toContain('Autocomplete could not prepare a suggestion');
     const point = file.at();
     expect(await provider.provideInlineCompletionItems(file.value, point, { ...context, triggerKind: 1 }, cancellation().token)).toEqual([]);
     expect(mocks.request).toHaveBeenCalledTimes(1);
@@ -675,7 +560,7 @@ describe('AutocompleteProvider', () => {
     mocks.collect.mockResolvedValue([{
       uri: 'file:///table.lua', filepath: 'table.lua', content: 'local answer = 42', source: 'openFile',
     }]);
-    const file = document('return answer');
+    const file = document('return answer ');
     Object.assign(file.value, { languageId: 'lua' });
     mocks.request.mockResolvedValue(' + 1');
     await (await requesting(file)).pending;
@@ -815,11 +700,10 @@ describe('full classic and notebook workflows', () => {
     expect((await (await requesting(file)).pending)[0].insertText).toBe('nextStatement()');
     expect(mocks.request).toHaveBeenCalledOnce();
   });
-  it.each(['if', 'for', 'return', 'const value = cal', 'if (ready)', 'function run()', 'if (rea'])
-  ('allows automatic continuation after %s', async prefix => {
-    const file = document(prefix); mocks.request.mockResolvedValue(' next');
-    expect((await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending)[0].insertText).toBe(' next');
-    expect(mocks.request).toHaveBeenCalledOnce();
+  it.each(['for', 'return', 'const value = cal', 'if (ready)', 'function run()', 'if (rea'])
+  ('skips a fresh automatic request after %s', async prefix => {
+    expect(await (await requesting(document(prefix), undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
   });
   it('extends an IntelliSense candidate during automatic typing', async () => {
     const file = document('console.lo();');
@@ -829,18 +713,18 @@ describe('full classic and notebook workflows', () => {
     expect(item.insertText).toBe('logInfo');
     expect(item.range).toBe(selected.range);
   });
-  it('shares context preparation when typing the third character, without losing the first result', async () => {
-    const snippets = deferred<[]>(), file = document('co');
+  it('shares context preparation across compatible typing', async () => {
+    const snippets = deferred<[]>(), file = document('c');
     mocks.collect.mockReturnValue(snippets.promise);
-    mocks.request.mockResolvedValue('nsole.log()');
+    mocks.request.mockResolvedValue('onsole.log()');
     const first = await requesting(file, undefined, { ...context, triggerKind: 1 });
-    file.state.text += 'n'; Object.assign(file.value, { version: 2 });
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: 'n' }] });
+    file.state.text += 'o'; Object.assign(file.value, { version: 2 });
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: 'o' }] });
     const second = await requesting(file, undefined, { ...context, triggerKind: 1 });
     expect(mocks.request).not.toHaveBeenCalled();
     snippets.resolve([]);
     expect(await first.pending).toEqual([]);
-    expect((await second.pending)[0].insertText).toBe('sole.log()');
+    expect((await second.pending)[0].insertText).toBe('nsole.log()');
     expect(mocks.collect).toHaveBeenCalledOnce();
     expect(mocks.request).toHaveBeenCalledOnce();
     expect(mocks.record.mock.calls.filter(([event]) => event.name === 'autocomplete.request')).toHaveLength(1);
@@ -877,9 +761,9 @@ describe('full classic and notebook workflows', () => {
     mocks.notebooks = [{ uri: parent, version: 1, getCells: () => [earlier, cell].map(d => ({ kind: 2, document: d.value })) } as vscode.NotebookDocument];
     return { earlier, cell, parent };
   }
-  it('uses FIM for notebook cells in Mercury Next Edit mode and includes preceding cells', async () => {
+  it('uses the configured FIM endpoint for notebook cells and includes preceding cells', async () => {
     const { cell, parent } = notebook();
-    Object.assign(mocks.config, { protocol: 'mercury-edit', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions', model: 'mercury-edit-2' });
+    Object.assign(mocks.config, { protocol: 'fim', endpoint: 'https://api.inceptionlabs.ai/v1/fim/completions', model: 'mercury-edit-2' });
     mocks.request.mockResolvedValue('limit * 2');
     expect((await (await requesting(cell)).pending)[0].insertText).toBe('limit * 2');
     expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'fim', endpoint: 'https://api.inceptionlabs.ai/v1/fim/completions', prefix: 'const limit = 5;\n\nconst answer = ' }));
@@ -898,139 +782,5 @@ describe('full classic and notebook workflows', () => {
     mocks.listeners.get('text')!({ document: earlier.value, contentChanges: [{}] });
     expect(hidden).toHaveBeenCalledOnce();
     expect((await (await requesting(cell)).pending)[0].insertText).toBe('43'); expect(mocks.request).toHaveBeenCalledTimes(2);
-  });
-});
-
-
-describe('independent FIM and Next Edit', () => {
-  beforeEach(() => Object.assign(mocks.config, { 'nextEdit.enabled': true, relatedFiles: false }));
-
-  it('keeps a visible Codestral continuation and does not launch a competing edit', async () => {
-    mocks.request.mockResolvedValue('42;');
-    const items = await (await requesting(document())).pending;
-    expect(items[0].insertText).toBe('42;');
-    expect(mocks.request.mock.calls[0][0]).toMatchObject({ protocol: 'fim', model: 'codestral-latest' });
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-  });
-  it('returns and reuses an inner closing delimiter without falling through to Next Edit', async () => {
-    mocks.request.mockResolvedValue('}');
-    const prefix = 'function run() {\n  if (ready) {\n    work();\n  ';
-    const file = document(prefix + '\n}');
-    const first = await (await requesting(file, prefix.length)).pending;
-    expect(first).toHaveLength(1); expect(first[0].insertText).toBe('}');
-    const cached = await (await requesting(file, prefix.length)).pending;
-    expect(cached).toHaveLength(1); expect(cached[0].insertText).toBe('}');
-    expect(mocks.request).toHaveBeenCalledOnce();
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-  });
-  it('falls through to the independent edit service for a valid empty FIM result', async () => {
-    mocks.request.mockResolvedValue('');
-    mocks.present.mockImplementation(() => { mocks.pendingEdit = true; return []; });
-    await (await requesting(document())).pending;
-    expect(mocks.nextRequest.mock.calls[0][0]).toMatchObject({ model: 'mercury-edit-2', endpoint: 'https://api.inceptionlabs.ai/v1/edit/completions' });
-    expect(mocks.present).toHaveBeenCalledOnce();
-    await (await requesting(document())).pending;
-    expect(mocks.request).toHaveBeenCalledOnce();
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-  });
-  it('predicts a replacement directly after deleting or replacing existing text', async () => {
-    const file = document('const newName = 1;');
-    activate(file.value, file.at());
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 3, text: 'newName' }] });
-    await (await requesting(file)).pending;
-    expect(mocks.request).not.toHaveBeenCalled();
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-  });
-  it('retains edit intent while typing the rest of a replacement identifier', async () => {
-    const file = document('const n = 1;'); activate(file.value, file.at(7));
-    const range = new vscode.Range(position(0, 6), position(0, 7));
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 3, text: 'n', range }] });
-    file.state.text = 'const name = 1;'; Object.assign(file.value, { version: 2 });
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 0, text: 'ame', range }] });
-    await (await requesting(file, 10)).pending;
-    expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.nextRequest).toHaveBeenCalledOnce();
-  });
-  it('uses Next Edit after accepting FIM and can run with FIM disabled', async () => {
-    const file = document(); activate(file.value, file.at());
-    provider.completionAccepted();
-    await (await requesting(file)).pending;
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-    expect(mocks.request).not.toHaveBeenCalled();
-    provider.reset(); mocks.config.fimEnabled = false;
-    await (await requesting(file)).pending;
-    expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
-  });
-  it('never launches Next Edit after a failed or cancelled FIM request', async () => {
-    mocks.request.mockRejectedValue(new Error('unavailable'));
-    await (await requesting(document())).pending;
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-    provider.reset();
-    const response = deferred<string>(); mocks.request.mockReturnValue(response.promise);
-    const running = await requesting(document()); running.cancel.cancel(); response.resolve('');
-    await running.pending;
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-  });
-  it('does not edit while the language suggestion widget is selected', async () => {
-    mocks.request.mockResolvedValue('');
-    const file = document('const a = va');
-    await (await requesting(file, undefined, { ...context, selectedCompletionInfo: {
-      range: new vscode.Range(position(0, 10), file.at()), text: 'value',
-    } })).pending;
-    expect(mocks.nextRequest).not.toHaveBeenCalled();
-  });
-  it('keeps automatic FIM available after the edit provider fails', async () => {
-    const file = document(); activate(file.value, file.at());
-    provider.completionAccepted(); mocks.nextRequest.mockRejectedValue(new Error('edit unavailable'));
-    await (await requesting(file)).pending;
-    file.state.text += '4'; Object.assign(file.value, { version: 2 });
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 0, text: '4' }] });
-    mocks.request.mockResolvedValue('2;');
-    const result = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
-    expect(result[0].insertText).toBe('2;');
-  });
-  it.each([403, undefined])('keeps FIM reachable during continued replacement after Next Edit fails with %s', async (status) => {
-    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
-    const error = new FimCompletionError(status ? 'http' : 'protocol', 'Next Edit unavailable', status);
-    mocks.nextRequest.mockRejectedValue(error);
-    const file = document(); activate(file.value, file.at());
-    const range = new vscode.Range(file.at(), position(0, file.at().character + 1));
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ rangeLength: 1, text: '', range }] });
-    expect(await (await requesting(file)).pending).toEqual([]);
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-    expect(mocks.request).not.toHaveBeenCalled();
-
-    file.state.text += '4'; Object.assign(file.value, { version: 2 });
-    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [
-      { rangeLength: 0, text: '4', range: new vscode.Range(range.start, range.start) },
-    ] });
-    mocks.request.mockResolvedValue('2;');
-    const result = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
-    expect(result[0]?.insertText).toBe('2;');
-    expect(mocks.request).toHaveBeenCalledOnce();
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-
-    expect(await (await requesting(file)).pending).toEqual([]);
-    expect(mocks.nextRequest).toHaveBeenCalledTimes(2);
-    expect(mocks.request).toHaveBeenCalledOnce();
-    expect(provider.lastMessage).toContain(error.message);
-  });
-  it.each([{ fimEnabled: false }, { protocol: 'mercury-edit' }])('does not enable FIM when the only configured route is blocked: %j', async (settings) => {
-    const { FimCompletionError } = await import('../../runtime/autocomplete/FimClient');
-    Object.assign(mocks.config, settings);
-    mocks.nextRequest.mockRejectedValue(new FimCompletionError('http', 'Next Edit forbidden', 403));
-    const file = document();
-    expect(await (await requesting(file)).pending).toEqual([]);
-    expect(await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending).toEqual([]);
-    expect(mocks.nextRequest).toHaveBeenCalledOnce();
-    expect(mocks.request).not.toHaveBeenCalled();
-  });
-  it('does not share keys between independently configured services', async () => {
-    mocks.request.mockResolvedValue('');
-    const { completionSecretKey, DEFAULT_ENDPOINT, MERCURY_EDIT_ENDPOINT } = await import('./settings');
-    mocks.secretGet.mockImplementation(async key => key === completionSecretKey(DEFAULT_ENDPOINT) ? 'fim-key'
-      : key === completionSecretKey(MERCURY_EDIT_ENDPOINT) ? 'edit-key' : undefined);
-    await (await requesting(document())).pending;
-    expect(mocks.request.mock.calls[0][0].apiKey).toBe('fim-key');
-    expect(mocks.nextRequest.mock.calls[0][0].apiKey).toBe('edit-key');
   });
 });

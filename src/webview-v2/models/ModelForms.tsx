@@ -88,7 +88,7 @@ export function ConnectionForm({ connection, defaults, busy, onSave, onCancel }:
           {' '}{t("密钥会在编辑器的安全输入框中填写，同一接口的模型共用。")}</p>
         {connection?.imported ? <p data-ui-notice="" className="models-field-hint mt-2">{t("已有模型验证直接使用 Droid 保存的配置。首次获取列表或新增模型如需补输密钥，后续会自动复用。")}</p> : null}
       </div>
-      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button><Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : setApiKey ? t("保存并输入密钥") : t("保存接口")}</Button></div>
+      <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button><Button variant="outline" type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : setApiKey ? t("保存并输入密钥") : t("保存接口")}</Button></div>
     </fieldset>
   </form>;
 }
@@ -122,7 +122,7 @@ export function AliasForm({ name, label, maxLength, busy, onSave, onCancel }: {
       </div>
       <p data-ui-notice="" className="models-field-hint">{t("只修改显示名称，不修改接口地址、Model ID 或已保存的密钥。")}</p>
       <div className="models-form-actions"><Button variant="ghost" onClick={onCancel}>{t("取消")}</Button>
-        <Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : t("保存别名")}</Button>
+        <Button variant="outline" type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : t("保存别名")}</Button>
       </div>
     </fieldset>
   </form>;
@@ -214,7 +214,7 @@ export function ModelForm({ model, connection, existingModels = [], autoFocus = 
       <div className="models-form-actions">
         <Button variant="ghost" onClick={onCancel}>{t("取消")}</Button>
         <Button variant="outline" type="submit" value="verify" disabled={model?.enabled === false}><SavingIcon busy={busy} />{t("保存并验证…")}</Button>
-        <Button type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : model ? t("保存修改") : t("添加模型")}</Button>
+        <Button variant="outline" type="submit"><SavingIcon busy={busy} />{busy ? t("正在保存…") : model ? t("保存修改") : t("添加模型")}</Button>
       </div>
     </fieldset>
   </form>;

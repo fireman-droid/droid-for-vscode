@@ -5,7 +5,7 @@ import type { TranscriptHandle } from '@droidvisx/chat-ui/chat/TranscriptView';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import { Plus, Settings2 } from 'lucide-react';
+import { ChevronDown, Plus, Settings2 } from 'lucide-react';
 import { createTurnId, type ChatPort } from '../host/chatIntent';
 import type { ThemePreference } from '../../shared/protocol/shell';
 import { useComposerFlow } from './composer/useComposerFlow';
@@ -44,6 +44,8 @@ import { MissionWorkspace } from '../mission/MissionWorkspace';
 import { SelectSessionContext } from './thread/messageContexts';
 import { useAnswerScroll } from './useAnswerScroll';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
+import { ConnectionIssue } from './ConnectionIssue';
+import { getWorkspaceSetup } from './WorkspaceSetup';
 import { AppInfo } from './AppInfo';
 import { useAgentChatNavigation } from './AgentNavigation';
 import { ModelSourceProvider } from '../models/ModelSourceControl';
@@ -73,7 +75,7 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const theme = useWebviewTheme(persistTheme);
   const workspace = useWorkspaceActions({ vscode: port, sessionId: state.sessionId, connectionStatus: state.connection.status, dispatch });
   const subagents = useSubagentPanelFlow(port, state.sessionId);
-  const workingSubagents = useWorkingSubagents(state, subagents);
+  useWorkingSubagents(state, subagents);
   const images = useLocalImageSource(port, state.sessionId, state.connection.status, state.localImages);
   const content = useMemo(() => ({
     workspaceRoot: state.workspaceRoot,
@@ -86,14 +88,14 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     port, sessionId: state.sessionId, connected: state.connection.status === 'connected',
   }), [port, state.sessionId, state.connection.status]);
   const toolActions = useMemo(() => state.sessionId !== null ? {
-    openSubagent: subagents.openSubagent,
+    openSubagent: subagents.inspectSubagent,
     ...(state.connection.status === 'connected' ? {
     openPath: workspace.handleOpenPath,
     openFileDiff: workspace.handleOpenFileDiff,
     openReviewTurn: (turnId: string) => port.postMessage({ type: 'review.panel.open', sessionId: state.sessionId!, scopeKind: 'turn', turnId }),
     openTerminalMirror: workspace.handleOpenTerminalMirror,
     } : {}),
-  } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.openSubagent]);
+  } : {}, [state.sessionId, state.connection.status, workspace.handleOpenPath, workspace.handleOpenFileDiff, workspace.handleOpenReviewTurn, workspace.handleOpenTerminalMirror, subagents.inspectSubagent]);
   const transition = useConversationTransition({
     sequence: state.sequence,
     getSequence,
@@ -173,7 +175,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const statusMessage = getStatusMessage(state, composer.draft);
   const idleStatus = statusMessage && !turnBusy && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
     ? statusMessage : null;
-  const statusNotice = notice || idleStatus || composerNoticeText ? <>
+  const connectionFailed = state.connection.status === 'unavailable' && !getWorkspaceSetup(state.connection) && state.transcript.length > 0;
+  const statusNotice = notice || idleStatus || composerNoticeText || connectionFailed ? <>
+    {connectionFailed ? <ConnectionIssue connection={state.connection} activeTurn={turnBusy} /> : null}
     {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} embedded /> : null}
     {idleStatus ? <p className="m-0">{t(idleStatus)}</p> : null}
     {composerNoticeText && composerNoticeText !== idleStatus ? <p className="m-0">{t(composerNoticeText)}</p> : null}
@@ -191,6 +195,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const renderEditorSettings = useCallback((owner: string) => <ComposerControls editorOwner={owner} state={state} port={port} blocked={operationsBlocked}
     theme={theme.context} onMissionOpen={capabilities.openMission ? openMission : undefined} missionActive={capabilities.openMission && host.missionWorkspaceRoute === 'detail'} />,
   [state, port, operationsBlocked, theme.context, openMission, host.missionWorkspaceRoute, capabilities.openMission]);
+  const activeSession = state.sessions.items.find((item) => item.id === state.sessionId)
+    ?? (state.sessionId === null ? undefined : state.sessions.items.find((item) => item.active));
+  const activeSessionTitle = activeSession?.title.trim() || t("New chat");
   return (
     <ModelSourceProvider postMessage={postModelSource}>
     <ContentProvider value={content}>
@@ -198,29 +205,59 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
     <ChatLayout data-transition-phase={transition.phase} aria-busy={transition.blocking}
       starfield={theme.resolved === 'dark' ? theme.starfield : 'off'}
       header={<>
-        <div className="flex min-w-0 items-center">{!childChat ? <AppInfo /> : null}</div>
-        <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
-            phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
-            blocked={transition.blocking && transition.overlay !== null}
-            ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
-              state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
-        {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
-            {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
-            <SessionMenu state={state} actions={sessions} disabled={sessionActionsDisabled} open={navigation.page === 'sessions'} openSignal={navigation.id} onOpenChange={(open) => setNavigation(open ? 'sessions' : null)} />
-            <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
-        </div> : null}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          {!childChat ? <AppInfo /> : null}
+          {!childChat && capabilities.navigateSessions ? <SessionMenu
+              state={state}
+              actions={sessions}
+              disabled={sessionActionsDisabled}
+              open={navigation.page === 'sessions'}
+              openSignal={navigation.id}
+              onOpenChange={(open) => setNavigation(open ? 'sessions' : null)}
+              align="start"
+              trigger={
+                <Button
+                  variant="plain"
+                  size="none"
+                  title={activeSessionTitle}
+                  aria-label={`${activeSessionTitle} · ${t("Sessions")}`}
+                  className="group inline-flex h-6 min-w-0 max-w-full items-center gap-1 rounded-[var(--control-radius)] px-1.5 text-[13px] transition-colors hover:bg-[var(--control-surface-hover)] hover:text-foreground data-[state=open]:bg-[var(--control-surface-hover)] data-[state=open]:text-foreground motion-reduce:transition-none"
+                >
+                  <span className={`min-w-0 truncate ${activeSession ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+                    {activeSessionTitle}
+                  </span>
+                  <ChevronDown aria-hidden="true" className="size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+                </Button>
+              }
+            /> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <SessionRecovery state={state} port={port} working={running} onReconnect={sessions.handleRetry}
+              phase={transition.phase} handshakeTimedOut={host.showHandshakeNotice}
+              blocked={transition.blocking && transition.overlay !== null}
+              ideBlocked={transition.blocking || state.connection.status !== 'connected' || running ||
+                state.turn?.status === 'stopping' || state.interactions.length > 0 || state.mission !== null} />
+          {capabilities.navigateSessions ? <div className="chat-header-actions flex shrink-0 items-center gap-1">
+              {host.missionWorkspaceRoute !== null ? <Button variant="outline" size="sm" className="v2-mission-chat-toggle" onClick={() => host.setMissionChat(false)}>{t("Mission")}</Button> : null}
+              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("New session")} title={t("New session")} disabled={sessionActionsDisabled} onClick={sessions.handleNewSession}><Plus /></Button>
+              <Button variant="plain" size="icon-sm" className="chat-header-control text-muted-foreground" aria-label={t("打开 Droid 管理")} title={t("管理")} onClick={() => port.postMessage({ type: 'management.open', page: 'general' })}><Settings2 /></Button>
+          </div> : null}
+        </div>
       </>}
       footer={<>
         {footerInteraction ? interaction : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
-        {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} working={workingSubagents} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
-        <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
-        </div>
-        {composer.queueEditingId === null ? null : <div className="v2-composer-queue-edit flex items-center justify-between text-xs text-muted-foreground">
-          <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
+        {subagents.inspection ? (
+          <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} />
+        ) : <>
+          {!childChat && !transition.blocking && state.connection.status !== 'connecting' ? <WorkingSubagents key={state.sessionId ?? 'none'} transcript={state.transcript} flow={subagents} navigation={agentNavigation?.parentSessionId === state.sessionId ? agentNavigation : null} port={port} /> : null}
+          <QueueBar key={state.conversationId ?? 'none'} queue={state.queue} flow={composer} />
+        </>}
+        {composer.queueEditingId === null ? null : <div data-ui-notice="" className="v2-composer-queue-edit flex items-center justify-between text-muted-foreground">
+          <span>{t("Editing queued message")}</span><Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" onClick={composer.handleQueueEditCancel}>{t("Cancel edit")}</Button>
         </div>}
+        </div>
         <Composer key={state.conversationId ?? 'none'} state={state} port={port} flow={composer} blocked={operationsBlocked} quoteNotice={quoteNotice}
           onNoticeChange={reportComposerNotice}
           capabilities={capabilities}
@@ -230,7 +267,6 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         </div>
       </>}
       overlay={<>
-      {subagents.inspection ? <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} /> : null}
       {transition.overlay !== null && state.transcript.length === 0 ? <ConversationWait phase={transition.phase} hasSnapshot={transition.hasSnapshot}
         handshakeTimedOut={host.showHandshakeNotice} connection={state.connection} port={port} /> : null}
       </>}>

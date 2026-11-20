@@ -91,6 +91,22 @@ it('rejects model verification and saved settings with correlated results and no
   h.runtime.dispose();
 });
 
+it('simulates model discovery and local catalog edits in memory without live requests', async () => {
+  const h = setup();
+  h.runtime.postMessage({ type: 'models.request', version: MODEL_MANAGER_VERSION, requestId: 'discover',
+    action: { kind: 'discover', connectionId: 'gateway' } });
+  await flush();
+  const discovered = h.emitted().map(parseModelsHostMessage).find(message => message?.type === 'models.result' && message.requestId === 'discover');
+  expect(discovered).toMatchObject({ ok: true, discovered: expect.arrayContaining([expect.objectContaining({ model: 'auto/gemini-3.1-flash-lite' })]) });
+  h.runtime.postMessage({ type: 'models.request', version: MODEL_MANAGER_VERSION, requestId: 'import',
+    action: { kind: 'importModels', connectionId: 'gateway', models: [{ model: 'auto/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' }] } });
+  await flush();
+  const updated = h.emitted().map(parseModelsHostMessage).filter(message => message?.type === 'models.snapshot').at(-1);
+  expect(updated).toMatchObject({ snapshot: { models: expect.arrayContaining([expect.objectContaining({ model: 'auto/gemini-3.1-flash-lite' })]) } });
+  expect(h.fetch).not.toHaveBeenCalled(); expect(h.acquire).not.toHaveBeenCalled();
+  h.runtime.dispose();
+});
+
 it('opens local settings and review fixtures while denying arbitrary workspace reads', async () => {
   const h = setup();
   h.runtime.postMessage({ type: 'management.open', page: 'completion' });

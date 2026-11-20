@@ -590,44 +590,22 @@ export function projectGa4Event(
     return { name: 'review_activity', params };
   }
 
-  // 13. Autocomplete & Next Edit
+  // 13. Classic autocomplete
   if (
     event.name === 'autocomplete.result' ||
-    event.name === 'autocomplete.next-edit.result' ||
     event.name === 'autocomplete.accepted' ||
-    event.name === 'autocomplete.next-edit.accepted' ||
     event.name === 'autocomplete.failed' ||
     event.name === 'autocomplete.cancelled' ||
     event.name === 'autocomplete.skipped' ||
     event.name === 'autocomplete.discarded' ||
-    event.name === 'autocomplete.next-edit.discarded' ||
-    event.name === 'autocomplete.next-edit.dismissed' ||
-    event.name === 'autocomplete.next-edit.apply-failed' ||
     event.name === 'autocomplete.context.timeout'
   ) {
-    const durationMs = safeMetric(attrs.durationMs ?? attrs.latencyMs);
-    const category = event.name === 'autocomplete.result'
-      ? 'fim_result'
-      : event.name === 'autocomplete.next-edit.result'
-        ? 'next_edit_result'
-        : event.name === 'autocomplete.accepted'
-          ? 'fim_accepted'
-          : event.name === 'autocomplete.next-edit.accepted'
-            ? 'next_edit_accepted'
-            : event.name === 'autocomplete.failed'
-              ? 'failed'
-              : event.name === 'autocomplete.cancelled'
-                ? 'cancelled'
-                : event.name === 'autocomplete.context.timeout' ? 'context_timeout'
-                  : event.name.slice('autocomplete.'.length).replaceAll(/[.-]/g, '_');
-    const fallbackOutcome = event.name === 'autocomplete.next-edit.result'
-      ? attrs.shown === false || attrs.status === 'no-replacement' ? 'no-replacement'
-        : attrs.shown === true || attrs.status === 'ok' ? 'suggestion-returned' : 'unknown'
-      : category.endsWith('apply_failed') ? 'failed'
-        : category.endsWith('discarded') ? 'discarded'
-          : category.endsWith('dismissed') ? 'dismissed' : category === 'skipped' ? 'skipped'
-            : category === 'cancelled' ? 'cancelled' : category === 'context_timeout' ? 'timeout'
-              : category === 'failed' ? 'failed' : 'ok';
+    const durationMs = safeMetric(attrs.durationMs);
+    const category = event.name === 'autocomplete.result' ? 'fim_result'
+      : event.name === 'autocomplete.accepted' ? 'fim_accepted'
+      : event.name.slice('autocomplete.'.length).replaceAll(/[.-]/g, '_');
+    const fallbackOutcome = category === 'context_timeout' ? 'timeout'
+      : ['discarded', 'cancelled', 'failed', 'skipped'].includes(category) ? category : 'ok';
     const params: Record<string, string | number> = {
       ...baseParams,
       category,

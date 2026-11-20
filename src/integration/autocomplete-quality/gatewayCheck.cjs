@@ -31,29 +31,7 @@ async function main() {
     ['rejects nonnumeric sampling', { temperature: 'invalid' }],
   ]) await check(name, 400, '/autocomplete/evaluate', {
     method: 'POST', headers, body: JSON.stringify({ kind: 'raw-fim', body: { ...body, ...changes } }) });
-  const context = { currentFilePath: 'main.ts', currentFileContent: 'const x = 1;', cursorLine: 0,
-    cursorCharacter: 12, editableRegionStartLine: 0, editableRegionEndLine: 0,
-    recentlyViewedSnippets: [], editDiffHistory: [] };
-  for (const [name, input] of [
-    ['Next Edit rejects endpoint substitution', { kind: 'next-edit', context, endpoint: 'https://example.invalid' }],
-    ['Next Edit rejects another model', { kind: 'next-edit', context, model: 'not-the-configured-model' }],
-    ['Next Edit rejects out-of-source positions', { kind: 'next-edit', context: { ...context, cursorLine: 1 } }],
-    ['Next Edit rejects invalid snippets', { kind: 'next-edit', context: { ...context, recentlyViewedSnippets: [{}] } }],
-    ['inspection rejects excess token budget', { kind: 'next-edit-inspect', context, maxTokens: 1025 }],
-    ['inspection rejects invalid token budget', { kind: 'next-edit-inspect', context, maxTokens: '1024' }],
-    ['production evaluation rejects token overrides', { kind: 'next-edit', context, maxTokens: 1024 }],
-  ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers, body: JSON.stringify(input) });
-  await assert.rejects(createHostClient()({ kind: 'next-edit', context: null }), /HTTP 400 \(invalid-request\)/);
-  const nativeEdit = { model: settings.model, messages: [{ role: 'user', content: 'sample' }],
-    max_tokens: Math.max(512, settings.maxTokens), stream: false };
-  for (const [name, changes] of [
-    ['native Next Edit rejects another model', { model: 'not-the-configured-model' }],
-    ['native Next Edit rejects endpoint substitution', { endpoint: 'https://example.invalid' }],
-    ['native Next Edit rejects token overrides', { max_tokens: nativeEdit.max_tokens + 1 }],
-    ['native Next Edit rejects other message roles', { messages: [{ role: 'system', content: 'sample' }] }],
-  ]) await check(name, 400, '/autocomplete/evaluate', { method: 'POST', headers,
-    body: JSON.stringify({ kind: 'raw-next-edit', body: { ...nativeEdit, ...changes } }) });
-  console.log('PASS preserves classified errors without exposing response bodies');
+  await assert.rejects(createHostClient()({ kind: 'raw-next-edit' }), /HTTP 400 \(invalid-request\)/);
   console.log('Model gateway checks passed; no model calls made.');
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

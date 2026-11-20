@@ -61,7 +61,7 @@ export function AgentSection({ count, running, children }: {
           <Button variant="plain" size="none" className="v2-composer-changes-toggle" aria-controls={id}>
             <ChevronRight aria-hidden="true" className={expanded ? 'rotate-90' : undefined} />
             <span>{count} {count === 1 ? t("Agent") : t("Agents")}</span>
-            <span className="ml-auto text-[11px] text-muted-foreground">{running} {t("running")}</span>
+            <span data-ui-notice="" className="ml-auto text-[11px] text-muted-foreground">{running} {t("running")}</span>
           </Button>
         </CollapsibleTrigger>
       </div>
@@ -105,7 +105,7 @@ export function AgentNavigation({ navigation, port, tasks, inspectedToolUseId, o
           onClick={row.onOpen}>
           {row.selected ? <Check aria-hidden="true" /> : <Users aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{row.title}</span>
-          {!row.onStop ? <span className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{t(row.statusLabel)}</span> : null}
+          {!row.onStop ? <span data-ui-notice="" className={`shrink-0 text-[11px] ${row.tone === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>{t(row.statusLabel)}</span> : null}
         </Button>
         {row.onStop ? <Button variant="plain" size="none"
           className="v2-composer-changes-stop min-h-6 shrink-0 whitespace-nowrap"

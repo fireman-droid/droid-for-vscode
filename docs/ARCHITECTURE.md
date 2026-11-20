@@ -506,12 +506,8 @@ V2 `host/useStartupSync.ts` 在首次有效已结算状态到达前按 5–30 �
 - 补全诊断按本次激活与请求编号关联：`autocomplete.content` 的 `response` 保存模型解码后的返回正文，
   `candidate` 保存处理后的候选。正文仅落完整本地日志，分为最多 12,000 字符的连续片段并记录 `part/parts`，
   不因单条 detail 长度限制静默丢尾；沿用 200 MiB 总保留预算，凭据在分片前统一清除，不隐去普通代码。
-  不记录发送给模型的文档上下文或 HTTP 原始报文。Next Edit 在完成原因与代码围栏校验前保存已解码正文，
-  因此拒绝的 token 截断／格式异常也可追查；HTTP 拒绝、JSON 解码失败及未完成的 FIM 流不保存响应正文。
-  过滤规则、共享请求的已输入前缀不匹配、文档／光标失效、内联或装饰提示路径、跳转／丢弃／应用失败与采纳均有独立原因。
-  `suggestion-returned` 只表示交给编辑器的候选，不证明实际显示；Next Edit 的内联采纳命令与装饰编辑成功分别关联候选编号。
+  不记录请求前后文或 HTTP 原始报文。`suggestion-returned` 只表示候选已交给编辑器；原生命令单独记录采纳。
   远程继续使用 `autocomplete_activity`，只投影分类、原因、计数与耗时；不发送内容分片、请求编号、模型名或代码。
-  Next Edit 的 `shown/status/latencyMs` 与统一结果／耗时字段兼容映射，无替换、取消和上下文超时不再默认计为 `ok`。
 - 前端本地统计沿现有 `webview.diagnostic` 进入 Host：`LocalDiagnostics.onHostRecord`
   将 Host 诊断交给 `extension/analytics/projectFrontendEvent.ts`，仅提取已知枚举和数值；
   不转发 SDK 原始日志或诊断 `detail`。当前事件为 `frontend.ready`（启动耗时）、
@@ -694,15 +690,8 @@ Host 每次变更重读配置，拒绝过期摘要；确认运行／启用／删
 
 ## 编辑器补全的独立路径
 
-`src/extension/autocomplete/registerAutocomplete.ts` 装配原生 Inline Completion
-Provider、状态栏和配置向导；`AutocompleteProvider.ts` 持有编辑器快照、防抖、取消、
-文档/光标/关联上下文版本，也负责接续语言服务的候选文本。CompletionHistory 复用 Kilo 的
-匹配策略，保留 20 条/30 秒历史；CompletionRequests 分离调用者取消与网络取消，
-兼容请求在 100ms 交接窗口内可保留，并在新调用收集上下文时持有租约；已被输入的
-结果前缀会剔除，不匹配则按当前上下文重新请求。防抖以近期延迟限幅，错误分类退避。
-`completionText.ts` 在插入边界以语言模式区分文本与代码：代码建议的独立反引号围栏
-返回明确拒绝值，不猜测词法状态或截断文本。Provider 将拒绝缓存为当前上下文的空结果，
-显示状态提示；手动重试清缓存，新文本/新文档不受全局冷却。
+`src/extension/autocomplete/registerAutocomplete.ts` 装配原生补全提供器、状态栏与配置向导。
+Provider 将光标处的补全请求交给经典 FIM 流程，编辑器适配负责取消、生命周期、候选范围与诊断。
 
 普通 FIM 由 `context/KiloContextService.ts` 调用固定版本的 Kilo/Continue：HelperVars、
 ImportDefinitionsService、RootPathContextService、可选 StaticContextService、近期编辑/浏览、
@@ -716,9 +705,7 @@ LSP 查询跟随请求取消，从首次查询起共享 150ms 等待预算；超
 解析器/语法资源来自包内 `dist/extension/autocomplete`；AST/Query 由请求资源作用域释放。
 静态上下文默认关闭，仅 TS 有上游查询，候选枚举最多 2,000 个；剪贴板需要用户级显式启用。
 
-`CompletionContextService` 为 FIM 收集原生定义、近期编辑和打开文件（最多 6 文件/400ms），
-另为 Next Edit 收集实际浏览过的其他文件（最多 5 文件/400ms，按旧→新返回，每个片段围绕
-浏览位置保留最多 20 完整行）。关闭页签保留浏览位置，重新读取磁盘保存内容并检查文件策略。
+`CompletionContextService` 在文件策略允许的范围内收集定义和近期文件。
 `CompletionPrompt` 控制 FIM 最终 UTF-16 字符预算。
 Codestral 在文件中间和末尾均使用多文件模板保留关联定义；Mercury FIM 将关联片段作为语言注释保留在 prefix 中，
 避免上游 Mercury 模板主动丢弃 snippets。`LanguageComments` 从语言扩展 JSONC 读取元数据。
@@ -727,24 +714,11 @@ Notebook 拼接同语言相邻单元，并将当前光标映射至虚拟上下�
 `src/runtime/autocomplete/requestCompletion.ts` 根据显式协议调用原生 FIM、Ollama generate
 或 SiliconFlow 的 prefix/suffix FIM 扩展。Runtime 不引用 VS Code；共享 transport 提供
 取消、12 秒超时、大小限制与固定错误。当前完整响应收齐后再返回灰字。
-Host 从 SecretStorage 即时读取完整 endpoint 的 key；仅官方 Mercury FIM/Edit 两个地址共用，
-配置只接受用户级值。本地无认证服务不附认证头，不进入 Droid 聊天 Session。
+Host 从 SecretStorage 读取配置服务的凭据；本地无认证服务不附认证头。请求不进入聊天会话。
 
-Kilo 源码固定为 `7d977bce994af36f0edf752cb53e3aefc7aeb214`，位于 autocomplete/kilo。
-新接入的 Continue 子树保留 Apache-2.0 声明，Kilo 自身为 MIT；llamaTokenizer 保留原作者
-belladore.ai 的 MIT 头，语法包和 js-tiktoken 许可证随包 notices 分发。CLI 文件系统适配器
-未引入生产包。普通补全的后处理接入上游模型、重复与语言过滤，Droid 额外保留明确的
-围栏拒绝反馈、CRLF 和纯缩进；Markdown 不套用代码围栏剥除。
-
-NextEditSupport 管理经过文件策略过滤的 EditHistoryTracker、光标可编辑区域与接受后继续预测。
-启用补全期间持续记录编辑；FIM/Next Edit 切换只清待接受建议，停用时销毁跟踪器并清空编辑历史。
-Runtime nextEdit.ts 使用上游 editPrompt.ts 组装 Mercury 标记格式；预算优先保留完整编辑区域、
-光标及最新可容纳的完整 diff，再分配较旧历史、浏览片段和邻近完整代码行，不截断 diff，
-请求独立 `/edit/completions`，要求完整 fenced region 和 finish_reason=stop。
-NextEditPresenter 将纯续写交给原生 InlineCompletionItem；其他修改使用 Kilo decoration 和
-SuggestionManager 的单个待接受项。Tab 先跳转再接受，editor.edit 保留 Undo，文档变化使旧建议失效。
-普通文件按配置选择 FIM 或 Next Edit；Notebook 在官方 Mercury 模式切换为其 FIM endpoint。
-自动/手动与 snooze 时间戳同时约束 Provider 和连续预测；定时器只刷新状态，不自动插入代码。
+Kilo classic 的上游参考为 `54de37a85dfef8feb828382d8a71f84139857121`；
+既有 Kilo/Continue 上下文模块保留各自文件头中的固定来源与许可证。
+旧版独立编辑预测位于 `codex/archive-next-edit-0.8.23`。
 补全不经过 Webview/Bridge，也不进入聊天队列。聊天 daemon 仍在聊天视图首次解析时预热。
 
 ### 历史内部会话过滤

@@ -14,16 +14,21 @@
     background: color-mix(in srgb, var(--ink) 18%, var(--overlay-surface));
   }
   .review-progress { user-select: none; }
-  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) { --hover-surface: var(--control-surface-active); }
-  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button[data-state='open'] {
+  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) { --hover-surface: var(--control-surface-hover); }
+  .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button:is([data-state='open'], [data-state='on']) {
     background: var(--control-surface-active); color: var(--strong-ink);
   }
   .review-unreviewed { border-radius: var(--control-radius); transition: background-color var(--motion-fast) var(--motion-ease); }
   .review-unreviewed:focus-within { background: var(--control-surface-hover); color: var(--ink); }
   @media (hover: hover) {
-    .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button:hover:not(:disabled, [data-disabled]) {
+    .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button:hover:not(:disabled, [data-disabled], [data-state='on'], [data-state='open'], [aria-pressed='true']) {
+      background: var(--control-surface-hover); color: var(--strong-ink);
+    }
+    .review-workbench :is(.review-topbar, .review-file-toolbar, .review-files-tools) button:active:not(:disabled, [data-disabled]) {
       background: var(--control-surface-active); color: var(--strong-ink);
     }
+    .review-section-title:hover:not(:disabled) { color: var(--strong-ink); }
+    .review-section-title:hover:not(:disabled) .review-section-chevron { color: var(--ink); }
     .review-workbench .review-file:hover:not(:disabled), .review-workbench .review-directory:hover:not(:disabled) {
       background: color-mix(in srgb, var(--ink) 7%, var(--review-sidebar));
     }

@@ -1,4 +1,4 @@
-/*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (classic-auto-complete/uselessSuggestionFilter.ts). MIT; see third-party/KILO-LICENSE.txt. Droid adds explicit filter outcomes. */
+/*! Vendored from Kilo Code 54de37a85dfef8feb828382d8a71f84139857121 (classic-auto-complete/uselessSuggestionFilter.ts). MIT; see third-party/KILO-LICENSE.txt. */
 import { postprocessCompletion } from "../continuedev/core/autocomplete/postprocessing/index.js"
 import { applyLanguageFilter } from "./language-filters"
 
@@ -8,48 +8,44 @@ export type AutocompleteSuggestion = {
   suffix: string
 }
 
-export type AutocompletePostprocessResult = {
-  text: string
-  outcome: "suggestion-returned" | "empty" | "already-present" | "repetition-filtered"
-}
+export function suggestionConsideredDuplication(params: AutocompleteSuggestion & { languageId?: string }): boolean {
+  if (DuplicatesFromPrefixOrSuffix(params)) {
+    return true
+  }
 
-export function suggestionConsideredDuplication(params: AutocompleteSuggestion): boolean {
-  return duplicationReason(params) !== undefined
-}
-
-function duplicationReason(params: AutocompleteSuggestion): string | undefined {
-  const boundary = DuplicatesFromPrefixOrSuffix(params)
-  if (boundary) return boundary
   // Multiline completions can be "partially duplicated": e.g. the first suggested line
   // repeats the last complete line in the prefix, or the last suggested line repeats
-  // the first line in the suffix. Closing delimiters may belong to different nested blocks.
-  const edge = DuplicatesFromEdgeLines(params)
-  if (edge) return edge
+  // the first line in the suffix. Those are still considered duplication.
+  const keepsClosingEdge = params.languageId === "java"
+    ? /(?:^|\n)[ \t]*}[ \t]*$/.test(params.suggestion.trimEnd()) && closesNewJavaBlock(params.suggestion.trimEnd())
+    : /^[}\])]+[;,]?$/.test(params.suggestion.trimEnd().split("\n").pop()?.trim() ?? "")
+  if (DuplicatesFromEdgeLines(params, keepsClosingEdge)) {
+    return true
+  }
 
   // Check if the suggestion contains repetitive phrases that continue from the prefix
   if (containsRepetitivePhraseFromPrefix(params)) {
-    return "repeating-tail-block"
+    return true
   }
 
   // When the suggestion isn't a full line or set of lines, normalize by including
   // the rest of the line in the prefix/suffix and check with the completed line(s)
   const normalized = normalizeToCompleteLine(params)
-  const reason = normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized))
-  return reason ? "normalized-" + reason : undefined
+  return !!normalized && (DuplicatesFromPrefixOrSuffix(normalized) || DuplicatesFromEdgeLines(normalized, keepsClosingEdge))
 }
 
-function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): string | undefined {
+function DuplicatesFromPrefixOrSuffix(params: AutocompleteSuggestion): boolean {
   const trimmed = params.suggestion.trim()
-  if (trimmed.length === 0) return "empty-after-processing"
-  if (params.prefix.trimEnd().endsWith(trimmed)) return "prefix-match"
-  if (params.suffix.trimStart().startsWith(trimmed)) return "suffix-match"
-  return undefined
+
+  return (
+    trimmed.length === 0 || params.prefix.trimEnd().endsWith(trimmed) || params.suffix.trimStart().startsWith(trimmed)
+  )
 }
 
-function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): string | undefined {
+function DuplicatesFromEdgeLines(params: AutocompleteSuggestion, keepsClosingEdge: boolean): boolean {
   const trimmedSuggestion = params.suggestion.trim()
   if (!trimmedSuggestion.includes("\n")) {
-    return undefined
+    return false
   }
 
   const suggestionLines = trimmedSuggestion.split("\n")
@@ -59,21 +55,33 @@ function DuplicatesFromEdgeLines(params: AutocompleteSuggestion): string | undef
   const prefixLastLine = params.prefix.trimEnd().split("\n").pop()?.trim() ?? ""
   const suffixFirstLine = params.suffix.trimStart().split("\n")[0]?.trim() ?? ""
 
-  if (isRepeatedCodeLine(firstSuggestionLine, prefixLastLine)) {
-    return "prefix-edge-match"
+  if (firstSuggestionLine.length > 0 && prefixLastLine.length > 0 && firstSuggestionLine === prefixLastLine) {
+    return true
   }
 
-  if (isRepeatedCodeLine(lastSuggestionLine, suffixFirstLine)) {
-    return "suffix-edge-match"
+  if (lastSuggestionLine.length > 0 && lastSuggestionLine === suffixFirstLine &&
+    !(keepsClosingEdge && /^[}\])]+[;,]?$/.test(lastSuggestionLine))) {
+    return true
   }
 
-  return undefined
+  return false
 }
 
-function isRepeatedCodeLine(suggestionLine: string, contextLine: string): boolean {
-  // Equal closing punctuation cannot establish duplication: an inner if/loop/call may
-  // close immediately before its containing block. Preserve both and their indentation.
-  return suggestionLine.length > 0 && suggestionLine === contextLine && !/^[}\])]+[;,]?$/.test(suggestionLine)
+/** A new inner block needs its own closing brace even if the existing outer block ends with the same line. */
+function closesNewJavaBlock(text: string): boolean {
+  // Ignore braces in Java comments, strings, character literals and text blocks.
+  // If a quoted literal starts mid-token or raw Unicode escapes make the scan ambiguous, keep the upstream filter.
+  if (/\\u+[0-9a-f]{4}/i.test(text)) return false
+  const tokens = /\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\n]*|"""(?:\\[\s\S]|(?!""")[\s\S])*(?:"""|$)|"(?:\\[^\n]|[^"\\\n])*"|'(?:\\[^\n]|[^'\\\n])*'|[{}"']/g
+  let depth = 0
+  for (const token of text.matchAll(tokens)) {
+    if (token[0] === "{") depth++
+    else if (token[0] === "}") {
+      if (token.index === text.length - 1) return depth > 0
+      depth = Math.max(0, depth - 1)
+    } else if (token[0] === '"' || token[0] === "'") return false
+  }
+  return false
 }
 
 /**
@@ -82,17 +90,35 @@ function isRepeatedCodeLine(suggestionLine: string, contextLine: string): boolea
  * The suggestion gets stuck in a loop repeating the same phrase.
  */
 function containsRepetitivePhraseFromPrefix(params: AutocompleteSuggestion): boolean {
-  // Repeated guards across distinct branches are valid code. A phrase occurring
-  // three times anywhere does not establish a generation loop; require three
-  // adjacent, identical tail blocks, including the code between occurrences.
-  const tail = params.suggestion.trimEnd()
-  for (let length = 30; length <= Math.min(512, Math.floor(tail.length / 3)); length++) {
-    const block = tail.slice(-length)
-    if (tail.slice(-2 * length, -length) === block && tail.slice(-3 * length, -2 * length) === block) {
-      return true
-    }
+  const suggestion = params.suggestion
+  const phraseLength = 30 // Phrase length to check for repetition
+  const minRepetitions = 3 // Minimum number of repetitions to consider it repetitive
+
+  // Only check suggestions that are long enough to contain repetition
+  if (suggestion.length < phraseLength * minRepetitions) {
+    return false
   }
-  return false
+
+  // Strip non-word characters from the right before selecting the tail
+  // This handles cases like "...the beginning..." where trailing punctuation would break detection
+  const strippedSuggestion = suggestion.replace(/\W+$/, "")
+
+  if (strippedSuggestion.length < phraseLength) {
+    return false
+  }
+
+  // Extract a phrase from the end of the stripped suggestion
+  const phrase = strippedSuggestion.slice(-phraseLength)
+
+  // Count how many times this phrase appears in the original suggestion
+  let count = 0
+  let pos = 0
+  while ((pos = suggestion.indexOf(phrase, pos)) !== -1) {
+    count++
+    pos += phrase.length
+  }
+
+  return count >= minRepetitions
 }
 
 /**
@@ -129,7 +155,7 @@ function normalizeToCompleteLine(params: AutocompleteSuggestion): AutocompleteSu
  * @param params.suggestion - The suggested text to insert
  * @param params.prefix - The text before the cursor position
  * @param params.suffix - The text after the cursor position
- * @param params.model - The model string (e.g., "codestral", "mercury", etc.)
+ * @param params.model - The model string (e.g., "codestral")
  * @param params.languageId - Optional language ID for language-specific filtering
  * @returns The processed suggestion text, or undefined if it should be filtered out
  */
@@ -139,29 +165,16 @@ export function postprocessAutocompleteSuggestion(
     languageId?: string
   },
 ): string | undefined {
-  const result = postprocessAutocompleteSuggestionWithOutcome(params)
-  return result.outcome === "suggestion-returned" ? result.text : undefined
-}
-
-export function postprocessAutocompleteSuggestionWithOutcome(
-  params: AutocompleteSuggestion & {
-    model: string
-    languageId?: string
-    onDecision?: (reason: string) => void
-  },
-): AutocompletePostprocessResult {
   // First, run through the continuedev postprocessing pipeline
   const processedSuggestion = postprocessCompletion({
     completion: params.suggestion,
     llm: { model: params.model },
     prefix: params.prefix,
     suffix: params.suffix,
-    preserveFences: ["markdown", "mdx", "plaintext"].includes(params.languageId ?? ""),
-    onDecision: params.onDecision,
   })
 
   if (processedSuggestion === undefined) {
-    return { text: "", outcome: params.suggestion.trim() ? "repetition-filtered" : "empty" }
+    return undefined
   }
 
   // Apply language-specific filtering if languageId is provided
@@ -174,25 +187,16 @@ export function postprocessAutocompleteSuggestionWithOutcome(
       })
     : processedSuggestion
 
-  if (!languageFilteredSuggestion.trim()) {
-    params.onDecision?.(languageFilteredSuggestion !== processedSuggestion ? "language-filter-empty" : "empty-after-processing")
-    return { text: "", outcome: "empty" }
-  }
-  if (languageFilteredSuggestion !== processedSuggestion) params.onDecision?.("language-filter-trimmed")
-  if (params.suffix.trimStart().startsWith(languageFilteredSuggestion.trim())) {
-    params.onDecision?.("suffix-trimmed-match")
-    return { text: "", outcome: "already-present" }
-  }
-
-  const reason = duplicationReason({
+  if (
+    suggestionConsideredDuplication({
       suggestion: languageFilteredSuggestion,
       prefix: params.prefix,
       suffix: params.suffix,
+      languageId: params.languageId,
     })
-  if (reason) {
-    params.onDecision?.(reason)
-    return { text: "", outcome: "repetition-filtered" }
+  ) {
+    return undefined
   }
 
-  return { text: languageFilteredSuggestion, outcome: "suggestion-returned" }
+  return languageFilteredSuggestion
 }

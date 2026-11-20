@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useContext } from 'react';
-import { ExternalLink, FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles, Wrench } from 'lucide-react';
+import { FileSearch, FileText, Folder, Globe2, ListChecks, Sparkles, Wrench } from 'lucide-react';
 import type { ToolTranscriptItem } from '../../shared/protocol/toolProtocol';
 import { CATEGORY_PRESENTATION, resultPreviewPolicy, toolPresentation } from '../../shared/transcript/toolCatalog';
 import { toolResultSummaryLabel } from '../../shared/transcript/toolResultSummary';
@@ -8,10 +8,13 @@ import { resolveToolAction } from '../../shared/transcript/toolActivity';
 import { classifyExploreTool } from './transcript/activityGrouping';
 import { ProcessGroupContext, ProcessLatestContext, useProcessDisclosure } from './transcript/processPresentation';
 import { canPreviewToolDiff, RESULT_UNAVAILABLE_COPY } from './transcript/toolRowPresentation';
-import { formatDuration, formatToolLifecycle } from './thread/readers';
+import { formatToolLifecycle } from './thread/readers';
 import { InlineDiffContext } from '../review/useInlineDiff';
 import { Tool, ToolContent, ToolHeader } from '../ai-elements/tool';
-import { OperationDiff } from '../content/OperationDiff';
+import { ChangeFileIcon } from '@droidvisx/chat-ui/chat/ChangeFileIcon';
+import { FileChangeView } from '@droidvisx/chat-ui/chat/FileChangeView';
+import { OPERATION_UNAVAILABLE, OperationDiff } from '../content/OperationDiff';
+import { operationDiffWithChanges } from '../../shared/protocol/operationDiff';
 import { useToolActions } from '../content/toolActions';
 import { Button } from '../ui/button';
 import { CommandCard } from './CommandCard';
@@ -20,11 +23,13 @@ import { executionLabel } from '../content/operationPresentation';
 import { ActivityItem } from './ActivityItem';
 import { ActivityResult } from './ActivityResult';
 import { parsePlanSteps } from './transcript/planAnchor';
+import { compactExploreTarget, GroupPathDisambiguationContext } from './transcript/compactTarget';
 import { PlanSteps } from './PlanLine';
 import { isFoldableFileOperation } from './operationSummary';
 import { isScriptTool, readReceipt, scriptBackgroundReceipt } from '../../shared/transcript/scriptOutput';
 
-function activityIcon(category: ReturnType<typeof classifyExploreTool>) {
+function activityIcon(category: ReturnType<typeof classifyExploreTool>, filePath?: string) {
+  if ((category === 'file' || category === 'diagnostics') && filePath) return <ChangeFileIcon path={filePath} />;
   if (category === 'file') return <FileText />;
   if (category === 'folder') return <Folder />;
   if (category === 'search') return <FileSearch />;
@@ -63,20 +68,21 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
     : commandOutput;
   const receipt = available && !available.truncated && resultPresentation?.target === 'file' ? readReceipt(available.text) : undefined;
   const background = available && !available.truncated && isScriptTool(item.toolName) ? scriptBackgroundReceipt(available.text) : undefined;
-  const compactResult = receipt ? t('Read lines {start}–{end} ({size})', receipt)
-    : background ? t('Started in background · PID {pid}', background) : undefined;
-  const previewBody = available !== null && compactResult === undefined;
+  const receiptNote = receipt ? t('Read lines {start}–{end} ({size})', receipt) : undefined;
+  const compactResult = background ? t('Started in background · PID {pid}', background) : undefined;
+  const previewBody = available !== null && receipt === undefined && compactResult === undefined;
   const resultNotice = !output && !errorMessage ? unavailable : null;
   const hasDetails = command !== undefined || previewBody || !!output || !!errorMessage || (!exploration && !!item.detail);
   const state = executionLabel(item) ?? (item.status === 'completed' ? '' : item.status === 'stopping' ? 'Stopping' : formatToolLifecycle(item.status));
   const resultSummary = item.status === 'completed' && item.resultPreview?.summary ? toolResultSummaryLabel(item.resultPreview.summary) : '';
-  const status = [t(state), item.durationMs === undefined ? '' : formatDuration(item.durationMs), compactResult,
-    resultNotice ? t(resultNotice.label) : ''].filter(Boolean).join(' · ');
-  const title = `${t(action)}${target ? ` · ${target}` : ''}`;
-  const activityActions = <>
-    {currentFile && actions.openPath ? <Button variant="ghost" size="icon-sm" className="size-6" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")}
-      onClick={() => actions.openPath!({ path: currentFile })}><ExternalLink className="size-3" /></Button> : null}
-  </>;
+  const status = [t(state), compactResult].filter(Boolean).join(' · ');
+  const disambiguation = useContext(GroupPathDisambiguationContext);
+  const compacted = target ? compactExploreTarget(target, category, disambiguation) : undefined;
+  const lineRange = receipt ? (receipt.start === receipt.end ? `#L${receipt.start}` : `#L${receipt.start}–${receipt.end}`) : undefined;
+  const targetDetail = [compacted?.detail, lineRange].filter(Boolean).join(' · ') || undefined;
+  const displayTarget = compacted ? [compacted.label, targetDetail].filter(Boolean).join(' ') : undefined;
+  const title = `${t(action)}${displayTarget ? ` · ${displayTarget}` : ''}`;
+  const hoverDetails = [item.toolName, compacted && compacted.label !== target ? target : undefined, receiptNote, unavailable ? t(unavailable.detail) : undefined].filter(Boolean);
   const fileActions = <>
     {currentFile && actions.openPath ? <Button variant="link" size="sm" className="h-auto select-none px-1 text-[11px]" title={t("Open {p0}", { p0: currentFile })} aria-label={t("Open current file")} onClick={() => actions.openPath!({ path: currentFile })}>{currentFile.split(/[\\/]/).at(-1)}</Button> : null}
   </>;
@@ -110,23 +116,48 @@ export function ToolRow({ item, messageId, grouped = false, hideConfirmedOperati
   if (isFoldableFileOperation(item)) {
     return <OperationDiff item={item} messageId={messageId} onInteract={onInteract} />;
   }
+  const fileEdit = !item.subagent && item.detailKind !== 'command' &&
+    ['applypatch', 'create', 'edit', 'write'].includes(item.toolName.toLowerCase());
+  const diffResult = fileEdit && item.operationDiff ? operationDiffWithChanges(item.operationDiff) : undefined;
+  if (fileEdit && item.status === 'completed' && !errorMessage && (!diffResult || diffResult.status === 'unavailable')) {
+    if (diffResult?.status === 'unavailable' && diffResult.reason === 'unchanged') return null;
+    const reasonDetail = t(OPERATION_UNAVAILABLE[diffResult?.status === 'unavailable' ? diffResult.reason : 'not-recorded']);
+    const editPath = item.filePath ?? item.target ?? currentFile;
+    const editLabel = ['create', 'write'].includes(item.toolName.toLowerCase()) ? t("Written") : t("Edited");
+    const extraFiles = item.additionalFileCount && item.additionalFileCount > 0 ? `+${item.additionalFileCount}` : undefined;
+    return editPath ? (
+      <FileChangeView alwaysExpanded file={{ path: editPath, kind: 'modified', additions: null, deletions: null }}
+        label={editLabel} pillBadge={extraFiles} pillTitle={`${editPath} · ${reasonDetail}`}
+        onOpenPath={actions.openPath ? () => actions.openPath!({ path: editPath }) : undefined}
+        openPathLabel={t("Open current file")} onInteract={onInteract} />
+    ) : (
+      <p data-ui-notice="" className="operation-diff-unavailable" title={reasonDetail}>{editLabel}</p>
+    );
+  }
   if (item.detailKind === 'plan' && item.detail) {
     const steps = parsePlanSteps(item.detail);
     return <ActivityItem id={item.id} messageId={messageId} icon={<ListChecks />} title={t("Task plan")}
-      status={`${steps.filter((step) => step.status === 'completed').length} / ${steps.length}${state ? ` · ${state}` : ''}`}>
+      status={`${steps.filter((step) => step.status === 'completed').length} / ${steps.length}${state ? ` · ${t(state)}` : ''}`}>
       <PlanSteps steps={steps} />
       {errorMessage ? <p role="status" className="v2-tool-error">{errorMessage}</p> : null}
     </ActivityItem>;
   }
-  if ((grouped && exploration) || (inline && command === undefined)) return <div className="space-y-1" title={[item.toolName, unavailable ? t(unavailable.detail) : undefined, background?.log].filter(Boolean).join(' · ')}>
-    <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category)} title={action} target={target}
-      status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined} actions={activityActions}>
-      {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
-    </ActivityItem>
-    {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
-    {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
-  </div>;
-  return <div className="space-y-1" title={[item.toolName, unavailable?.detail].filter(Boolean).join(' · ')}>
+  if ((grouped && exploration) || (inline && command === undefined)) {
+    const startLine = receipt ? Number(receipt.start) : undefined;
+    const openLine = startLine !== undefined && Number.isSafeInteger(startLine) && startLine >= 1 ? startLine : undefined;
+    return <div className="space-y-1" title={[...hoverDetails, background?.log].filter(Boolean).join(' · ')}>
+      <ActivityItem id={item.id} messageId={messageId} icon={activityIcon(category, currentFile ?? (category === 'file' ? target : undefined))}
+        title={t(action)} target={compacted?.label} targetDetail={targetDetail} targetTitle={target}
+        onTargetClick={currentFile && actions.openPath ? () => actions.openPath!({ path: currentFile, ...(openLine === undefined ? {} : { line: openLine }) }) : undefined}
+        targetActionLabel={currentFile ? t("Open {p0}", { p0: currentFile }) : undefined}
+        status={status || undefined} failed={item.status === 'failed'} description={resultSummary || undefined}>
+        {!exploration && item.detail ? <><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{item.detail}</pre>{activityDetail}</> : activityDetail}
+      </ActivityItem>
+      {diff ? <OperationDiff item={item} messageId={messageId} hideConfirmed={hideConfirmedOperations} onInteract={onInteract} /> : null}
+      {item.backgroundHint?.fireAndForget ? <p data-ui-notice="" className="pl-6 text-[10.5px] text-muted-foreground">{t("Background process · Keeps running until you stop it manually")}</p> : null}
+    </div>;
+  }
+  return <div className="space-y-1" title={hoverDetails.join(' · ')}>
     {command !== undefined ? <CommandCard item={item} command={command} output={output} open={disclosure.expanded}
       onOpenChange={disclosure.toggle} fileActions={fileActions} buttonRef={disclosure.buttonRef} contentRef={disclosure.contentRef} /> : <Tool open={disclosure.expanded && hasDetails} onOpenChange={() => disclosure.toggle()}>
       <div data-ui-notice="" className="flex min-w-0 select-none items-center gap-1">

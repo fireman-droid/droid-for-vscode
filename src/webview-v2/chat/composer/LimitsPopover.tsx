@@ -36,7 +36,7 @@ export function LimitsPopover({
   return (
     <div id={id} className="dvx-composer-popover dvx-limits-popover" role="dialog"
       aria-label={t('Usage Limits')} aria-busy={loading}>
-      <div className="dvx-context-head dvx-limits-head">
+      <div className="dvx-context-head">
         <span className="dvx-context-head-title">{t('Usage Limits')}</span>
         <div className="dvx-context-head-actions">
           {readyLimits !== null ? (

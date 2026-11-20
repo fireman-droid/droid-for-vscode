@@ -40,7 +40,7 @@ export default defineConfig({
         { text: '聊天与 BTW 旁问', link: '/CHAT' },
         { text: '模型与服务渠道', link: '/MODELS' },
         { text: '审阅文件改动', link: '/REVIEW' },
-        { text: '代码补全与 Next Edit', link: '/AUTOCOMPLETE' },
+        { text: '代码补全', link: '/AUTOCOMPLETE' },
         { text: '子代理与 Mission', link: '/MISSIONS' },
         { text: '排障与诊断', link: '/TROUBLESHOOTING' },
         { text: '反馈问题', link: `${repository}/issues` },

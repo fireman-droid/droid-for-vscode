@@ -1,9 +1,41 @@
 @layer components {
-  /* Only disclosure controls reserve a column; prose and details share the same left edge. */
-  .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 4px; align-items: center; }
+  /* Uniform leading rail keeps plain and collapsible exploration rows aligned. */
+  .v2-activity-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 6px; align-items: center; }
   .v2-activity-row-plain { grid-template-columns: minmax(0, 1fr) auto; }
+  .v2-activity-leading-icon,
+  .v2-activity-leading-swap { position: relative; display: grid; width: 14px; height: 14px; place-items: center; color: var(--muted-ink); }
+  .v2-activity-leading-icon > svg,
+  .v2-activity-leading-swap > svg:first-child { width: 12px; height: 12px; }
+  .v2-activity-leading-swap > .v2-activity-swap-chev { position: absolute; opacity: 0; }
+  .v2-activity-row:is(:hover, :focus-visible) .v2-activity-leading-swap > svg:first-child,
+  .v2-activity-leading-swap[data-open='true'] > svg:first-child { opacity: 0; }
+  .v2-activity-row:is(:hover, :focus-visible) .v2-activity-leading-swap > .v2-activity-swap-chev,
+  .v2-activity-leading-swap[data-open='true'] > .v2-activity-swap-chev { opacity: 1; }
+  .v2-activity-row-split { display: flex; align-items: center; gap: 6px; }
+  .v2-activity-toggle:is(:hover, :focus-visible) .v2-activity-leading-swap > svg:first-child { opacity: 0; }
+  .v2-activity-toggle:is(:hover, :focus-visible) .v2-activity-leading-swap > .v2-activity-swap-chev { opacity: 1; }
+  .v2-activity-target-link {
+    display: inline-flex; min-width: 0; max-width: 100%; align-items: baseline; gap: 6px;
+    border-radius: 4px; text-align: left; cursor: pointer;
+    transition: color var(--motion-fast) var(--motion-ease);
+  }
+  .v2-activity-target-link:is(:hover, :focus-visible) .v2-activity-target-name {
+    color: var(--strong-ink);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+    text-underline-offset: 2px;
+  }
+  .v2-activity-target-link:focus-visible { outline: 1px solid var(--focus); outline-offset: 1px; }
+  .v2-activity-actions { transition: opacity var(--motion-fast) var(--motion-ease); }
+  @media (hover: hover) {
+    .v2-activity-entry:not(:hover, :focus-within) .v2-activity-actions { opacity: 0; }
+  }
+  .v2-thinking-row .v2-thinking-trigger > svg:first-child { opacity: 0; width: 10px; margin-right: -4px; transition: opacity var(--motion-fast) var(--motion-ease); }
+  .v2-thinking-row:is(:hover, :focus-within) .v2-thinking-trigger > svg:first-child,
+  .v2-thinking-row[data-state='open'] .v2-thinking-trigger > svg:first-child { opacity: .8; width: 12px; margin-right: 0; }
+  .v2-thinking-detail { border-left: 1px solid var(--chat-edge); padding-left: 10px; }
   .v2-activity-detail { padding-inline-start: 0; }
-  .v2-activity-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-top: 2px; padding-left: 8px; }
+  .v2-activity-items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; padding-top: 2px; padding-left: 6px; }
   .v2-activity-items > * { min-width: 0; }
   .v2-activity-items > .v2-activity-detail { padding-inline-start: 0; }
   .v2-explored-summary {
@@ -66,36 +98,93 @@
     font: 11px/16px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere;
   }
   .dvx-agent-task {
-    min-width: 0; margin-block: 2px; border-radius: 6px; background: transparent;
+    min-width: 0; margin-block: 1px; background: transparent;
   }
   .dvx-agent-task-open {
-    display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 8px; padding: 6px 8px;
-    border-radius: inherit; text-align: left; color: var(--ink); cursor: pointer;
+    display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 8px; padding: 5px 2px;
+    border-radius: var(--control-radius); text-align: left; color: var(--ink); cursor: pointer;
   }
-  .dvx-agent-task-open:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .dvx-agent-task-icon { display: grid; width: 14px; height: 20px; flex: none; place-items: center; color: var(--muted-ink); }
+  .dvx-agent-task-open:disabled { cursor: default; }
+  .dvx-agent-task-open:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .dvx-agent-task-icon { display: grid; width: 14px; height: 20px; flex: none; place-items: center; color: var(--muted-ink); transition: color var(--motion-fast) var(--motion-ease); }
   .dvx-agent-task-icon > svg { width: 13px; height: 13px; }
+  .dvx-agent-task[data-tone='completed'] .dvx-agent-task-icon { color: var(--vscode-testing-iconPassed, light-dark(#3b6f32, #70c798)); }
+  .dvx-agent-check path {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+    animation: dvx-agent-check-in 240ms cubic-bezier(.22, 1, .36, 1) backwards;
+  }
+  @keyframes dvx-agent-check-in {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
   .dvx-agent-task-body { display: block; min-width: 0; flex: 1; }
-  .dvx-agent-task-heading { display: flex; min-width: 0; align-items: baseline; gap: 6px; line-height: 20px; }
-  .dvx-agent-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--strong-ink); }
+  .dvx-agent-task-heading { display: flex; min-width: 0; align-items: center; gap: 6px; line-height: 20px; }
+  .dvx-agent-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--strong-ink); transition: color var(--motion-fast) var(--motion-ease); }
   .dvx-agent-task-role { max-width: 30%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-ink); font-size: 12px; }
-  .dvx-agent-task-status { flex: none; margin-left: auto; color: var(--muted-ink); font-size: 11px; white-space: nowrap; }
+  .dvx-agent-task-trailing { display: inline-flex; flex: none; align-items: center; gap: 4px; margin-left: auto; color: var(--muted-ink); font-size: 11px; white-space: nowrap; transition: color var(--motion-fast) var(--motion-ease); }
+  .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
+  .dvx-agent-task-chevron { width: 12px; height: 12px; flex: none; opacity: .55; transition: opacity var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
+  @media (hover: hover) {
+    .dvx-agent-task-open:hover:not(:disabled) .dvx-agent-task-trailing { color: var(--ink); }
+    .dvx-agent-task-open:hover:not(:disabled) .dvx-agent-task-chevron { opacity: .9; transform: translateX(2px); }
+  }
   .dvx-agent-task[data-tone='failed'] :is(.dvx-agent-task-status, .dvx-agent-task-icon) { color: var(--error-ink); }
-  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 8px; margin-top: 2px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
+  .dvx-agent-task-meta { display: flex; min-width: 0; align-items: baseline; gap: 5px; margin-top: 1px; color: var(--muted-ink); font-size: 11px; line-height: 17px; }
   .dvx-agent-task-meta:empty { display: none; }
   .dvx-agent-task-meta > span { flex: none; white-space: nowrap; }
+  .dvx-agent-task-meta .dvx-agent-task-sep { opacity: .65; }
   .dvx-agent-task-meta .dvx-agent-task-activity { flex: 1; }
-  .dvx-agent-task-elapsed { font-variant-numeric: tabular-nums; }
-  .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 30px; }
+  .dvx-agent-task-meta .dvx-agent-task-tools { margin-left: auto; padding-left: 6px; font-variant-numeric: tabular-nums; }
+  .dvx-agent-task-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px 6px 24px; }
   .dvx-agent-task-feedback-message { display: flex; min-width: 0; flex: 1 1 140px; align-items: center; gap: 6px; color: var(--muted-ink); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
   .dvx-agent-task-feedback-message > svg { width: 13px; height: 13px; flex: none; }
   .dvx-agent-task-feedback[data-failed='true'] .dvx-agent-task-feedback-message { color: var(--error-ink); }
   .dvx-agent-task-retry { margin-left: auto; }
   .dvx-agent-task[data-variant='row'] { margin: 0; }
   .dvx-agent-task[data-variant='row'] .dvx-agent-task-open { padding-block: 4px; }
+  .dvx-subagent-sheet {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    animation: v2-fade-in var(--motion-fast) var(--motion-ease);
+  }
+  .dvx-subagent-dialog-head {
+    display: flex;
+    flex: none;
+    min-height: 32px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 3px 6px 3px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+  .dvx-subagent-dialog-heading { display: flex; min-width: 0; flex: 1; align-items: baseline; gap: 8px; }
+  .dvx-subagent-dialog-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; line-height: 18px; color: var(--strong-ink); }
+  .dvx-subagent-dialog-meta { flex: none; font-size: 11.5px; line-height: 16px; color: var(--muted-ink); white-space: nowrap; }
+  .dvx-subagent-dialog-meta[data-failed='true'] { color: var(--error-ink); }
+  .dvx-subagent-dialog-actions { display: inline-flex; flex: none; align-items: center; gap: 2px; }
+  .dvx-subagent-dialog-body { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; min-width: 0; overflow: hidden; }
+  .dvx-subagent-dialog-body > div,
+  .dvx-subagent-dialog-body > div > div[aria-label] { min-height: 0; flex: 0 1 auto; }
+  .dvx-subagent-sheet .v2-chat-rail { width: 100%; max-width: none; padding: 10px 12px 12px; }
   .v2-chat-choice,
   .v2-session-row {
     transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+  }
+  .dvx-session-scroll { min-height: 0; }
+  .dvx-session-viewport { height: auto; max-height: 220px; padding-right: 2px; }
+  .v2-session-row { --session-row-surface: transparent; }
+  .v2-session-row:is(:hover, :focus-within) {
+    --session-row-surface: var(--control-surface-hover);
+    background: var(--session-row-surface);
+  }
+  .v2-session-row-actions { padding-left: 10px; }
+  .v2-session-row:is(:hover, :focus-within, [data-current='true']) .v2-session-row-actions {
+    background: linear-gradient(90deg, transparent, var(--session-row-surface) 10px);
   }
   .v2-chat-disclosure {
     border-radius: var(--control-radius);
@@ -105,8 +194,12 @@
   .v2-chat-disclosure:hover:not(:disabled) { color: var(--ink); }
   .v2-question-option { background: color-mix(in srgb, var(--surface) 50%, transparent); }
   .v2-chat-choice:hover:has(button:enabled) { background: var(--control-surface-hover); }
-  .v2-chat-choice:has([data-state='checked']),
-  .v2-session-row[data-current='true'] { background: var(--control-surface-active); }
+  .v2-chat-choice:has([data-state='checked']) { background: var(--control-surface-active); }
+  .v2-session-row[data-current='true'],
+  .v2-session-row[data-current='true']:is(:hover, :focus-within) {
+    --session-row-surface: var(--control-surface-active);
+    background: var(--session-row-surface);
+  }
   .v2-chat-choice:has(button:enabled) { cursor: pointer; }
   .v2-chat-choice:has(button:disabled) { opacity: .6; }
   .v2-chat-choice:has(button:focus-visible) { outline: 1px solid var(--focus); outline-offset: -1px; }
@@ -205,7 +298,14 @@
     white-space: nowrap;
   }
   .v2-command-state[data-failed='true'] { color: var(--error-ink); }
-  .v2-command-menu-trigger {
+  .v2-command-actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    transition: opacity var(--motion-fast) var(--motion-ease);
+  }
+  .v2-command-action {
     display: inline-flex;
     width: 20px;
     height: 20px;
@@ -219,34 +319,14 @@
     color: var(--muted-ink);
     transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   }
-  .v2-command-menu-trigger svg { width: 14px; height: 14px; }
-  .v2-command-menu-trigger:hover,
-  .v2-command-menu-trigger[aria-expanded='true'] { color: var(--ink); background: var(--control-surface-hover); }
-  .v2-command-menu-trigger:active { background: var(--control-surface-active); }
-  .v2-command-menu {
-    width: max-content;
-    min-width: 130px;
-    padding: 3px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  @media (hover: hover) {
+    .v2-command-card:not(:hover, :focus-within, [data-state='open']) .v2-command-actions {
+      opacity: 0;
+    }
   }
-  .v2-command-menu-item {
-    display: flex;
-    width: 100%;
-    height: 26px;
-    justify-content: flex-start;
-    gap: 6px;
-    padding: 0 7px;
-    border: 0;
-    border-radius: 3px;
-    background: transparent;
-    font-size: 11.5px;
-    font-weight: 400;
-  }
-  .v2-command-menu-item svg { width: 13px; height: 13px; }
-  .v2-command-menu-item:hover { background: var(--control-surface-hover); }
-  .v2-command-menu-item:active { background: var(--control-surface-active); }
-  .v2-command-menu-item:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+  .v2-command-action svg { width: 13px; height: 13px; }
+  .v2-command-action:hover { color: var(--ink); background: var(--control-surface-hover); }
+  .v2-command-action:active { background: var(--control-surface-active); }
   .v2-command-body {
     display: grid;
     grid-template-rows: 0fr;
@@ -446,14 +526,18 @@
   .v2-attachment-remove:active:not(:disabled) { background: var(--control-surface-active); }
   .v2-command-toggle:focus-visible,
   .v2-user-copy:focus-visible,
-  .v2-command-menu-trigger:focus-visible,
+  .v2-command-action:focus-visible,
   .v2-user-edit-attach:focus-visible,
   .v2-attachment-thumb > button:focus-visible,
   .v2-user-edit-send:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
-    .v2-chat-disclosure, .v2-chat-choice, .v2-session-row { transition: none; }
+    .v2-chat-disclosure, .v2-chat-choice, .v2-session-row,
+    .dvx-agent-task-icon, .dvx-agent-task-title, .dvx-agent-task-trailing, .dvx-agent-task-chevron,
+    .v2-activity-target-link { transition: none; }
+    .dvx-subagent-sheet { animation: none; }
+    .dvx-agent-check path { animation: none; }
     .v2-command-card, .v2-command-chevron, .v2-command-body, .v2-user-message, .v2-attachment-remove,
-    .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-menu-trigger,
+    .v2-user-edit-card, .v2-user-edit-send, .v2-command-toggle, .v2-command-actions, .v2-command-action,
     .v2-attachment-file, .v2-attachment-image { transition: none; }
   }
 }

@@ -4,7 +4,7 @@ import { configureParserAssets } from './kilo/continuedev/core/util/treeSitter';
 import type { RuntimeDiagnosticSink } from '../../runtime/runtimeDiagnostics';
 import { AutocompleteProvider } from './AutocompleteProvider';
 import {
-  COMPLETION_SECTION, completionDocumentBlockReason, configureCompletion, removeCompletionKey, nextEditSettings,
+  COMPLETION_SECTION, completionDocumentBlockReason, configureCompletion, removeCompletionKey,
   readCompletionSettings, setCompletionEnabled, setRelatedFilesEnabled, setAutoTriggerEnabled, setCompletionSnooze,
 } from './settings';
 
@@ -30,7 +30,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
   const refresh = () => {
     const document = vscode.window.activeTextEditor?.document;
     const settings = readCompletionSettings(document?.uri);
-    provider.warmNextEdit();
+    provider.warmContext();
     if (snoozeTimer) clearTimeout(snoozeTimer);
     const snoozed = settings.enabled && (settings.snoozeUntil ?? 0) > Date.now();
     if (snoozed) snoozeTimer = setTimeout(refresh, Math.min(2_147_483_647, settings.snoozeUntil! - Date.now() + 1));
@@ -42,12 +42,12 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     status.text = !settings.enabled || snoozed || settings.autoTrigger === false ? '$(debug-pause) Droid Tab' : provider.isLoading ? '$(loading~spin) Droid Tab'
       : provider.lastMessage ? '$(warning) Droid Tab'
         : blocked ? '$(circle-slash) Droid Tab' : '$(sparkle) Droid Tab';
-    status.tooltip = !settings.enabled ? 'Droid autocomplete is off. Click to enable or configure.'
+    status.tooltip = settings.requiresConfiguration ? 'Configure a FIM service before enabling code completion.'
+      : !settings.enabled ? 'Droid autocomplete is off. Click to enable or configure.'
       : snoozed ? 'Automatic suggestions paused until ' + new Date(settings.snoozeUntil!).toLocaleTimeString() + '. Manual requests remain available.'
         : settings.autoTrigger === false ? 'Automatic suggestions are off. Use Droid: Request Code Completion to request one.'
           : provider.lastMessage ?? blocked ??
-      [settings.fimEnabled !== false ? 'FIM · ' + settings.model : '',
-        nextEditSettings(settings) ? 'Next Edit · ' + nextEditSettings(settings)!.model : ''].filter(Boolean).join(' / ') + '\n' +
+      'FIM · ' + settings.model + '\n' +
       (settings.relatedFiles ? provider.lastContextFileCount + ' related files found' : 'Current file only') +
       (provider.lastLatencyMs === undefined ? '' : ' · ' + provider.lastLatencyMs + ' ms') +
       '\nTab accepts a suggestion. Click for options.' + (providerNotice() ? '\n' + providerNotice() : '');
@@ -58,7 +58,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     provider.reset();
     const enabled = await vscode.window.showInformationMessage(
       'Autocomplete is configured. Enable it to send cursor context and relevant workspace snippets to ' +
-        'the configured FIM / Next Edit services?',
+        'the configured completion service?',
       'Enable autocomplete',
     );
     if (enabled) await setCompletionEnabled(true);
@@ -66,6 +66,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
   };
   const toggle = async () => {
     const settings = readCompletionSettings(vscode.window.activeTextEditor?.document.uri);
+    if (settings.requiresConfiguration) return configure();
     if (settings.enabled) {
       await setCompletionEnabled(false);
     } else {
@@ -82,7 +83,8 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     const document = vscode.window.activeTextEditor?.document;
     if (!document) return;
     const settings = readCompletionSettings(document.uri);
-    const blocked = !settings.enabled ? 'Enable Droid autocomplete first.'
+    const blocked = settings.requiresConfiguration ? 'Configure a FIM service before requesting a completion.'
+      : !settings.enabled ? 'Enable Droid autocomplete first.'
       : completionDocumentBlockReason(document, settings);
     if (blocked) {
       await vscode.window.showInformationMessage(blocked);
@@ -106,13 +108,10 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     refresh();
   });
   const removeKey = async () => {
-    const settings = readCompletionSettings(), edit = nextEditSettings(settings);
-    const endpoint = edit && edit.endpoint !== settings.endpoint
-      ? (await vscode.window.showQuickPick([{ label: 'Code completion · ' + settings.model, endpoint: settings.endpoint },
-        { label: 'Next Edit · ' + edit.model, endpoint: edit.endpoint }], { title: 'Remove provider API key' }))?.endpoint : settings.endpoint;
-    if (!endpoint) return;
+    const { endpoint, requiresConfiguration } = readCompletionSettings();
+    if (requiresConfiguration || !endpoint) return;
     const answer = await vscode.window.showWarningMessage(
-      'Remove the saved autocomplete API key? For Inception this clears both Code Completion and Next Edit.', { modal: true }, 'Remove API key',
+      'Remove the saved autocomplete API key for this endpoint?', { modal: true }, 'Remove API key',
     );
     if (answer === 'Remove API key') {
       await removeCompletionKey(context.secrets, endpoint);
@@ -132,7 +131,7 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
       { label: readCompletionSettings(vscode.window.activeTextEditor?.document.uri).relatedFiles
         ? '$(check) Related workspace files: on' : 'Related workspace files: off', id: 'context' },
       { label: '$(settings-gear) Open autocomplete settings', id: 'settings' },
-      { label: '$(key) Remove saved API key', id: 'removeKey' },
+      ...(!settings.requiresConfiguration ? [{ label: '$(key) Remove saved API key', id: 'removeKey' }] : []),
     ], {
       title: 'Droid autocomplete',
       placeHolder: provider.lastMessage ?? providerNotice() ?? 'Tab accepts a suggestion; Esc dismisses it.',
@@ -177,14 +176,6 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
     vscode.commands.registerCommand('droidvisx.autocomplete.toggle', guarded(toggle)),
     vscode.commands.registerCommand('droidvisx.autocomplete.trigger', guarded(trigger)),
     vscode.commands.registerCommand('droidvisx.autocomplete.menu', guarded(menu)),
-    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.acceptOrJump', guarded(() => provider.acceptOrJumpNextEdit())),
-    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.dismiss', () => provider.dismissNextEdit()),
-    vscode.commands.registerCommand('droidvisx.autocomplete.nextEdit.accepted', (value?: unknown) => {
-      diagnostics?.record({ level: 'debug', name: 'autocomplete.next-edit.accepted',
-        attributes: { suggestionId: typeof value === 'number' && Number.isSafeInteger(value) ? value : 0,
-          source: 'inline', outcome: 'accepted' } });
-      provider.nextEditAccepted();
-    }),
     vscode.commands.registerCommand('droidvisx.autocomplete.accepted', (value?: unknown) => {
       const item = value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
       diagnostics?.record({ level: 'debug', name: 'autocomplete.accepted', attributes: {
@@ -192,7 +183,6 @@ export function registerAutocomplete(context: vscode.ExtensionContext, diagnosti
         cached: item?.cached === true,
         characters: typeof item?.characters === 'number' ? item.characters : 0,
       } });
-      provider.completionAccepted();
     }),
   );
   refresh();

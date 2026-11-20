@@ -4,7 +4,8 @@ import { ActivityGroupView } from '@droidvisx/chat-ui/chat/ActivityGroupView';
 import type { SessionTranscriptItem } from '../../shared/protocol/transcript';
 import { toolPresentation } from '../../shared/transcript/toolCatalog';
 import { presentActivity, type ProcessWaiting } from './transcript/activityPresentation';
-import { type GroupCandidatePart } from './transcript/activityGrouping';
+import { classifyExploreTool, type GroupCandidatePart } from './transcript/activityGrouping';
+import { buildGroupDisambiguation, GroupPathDisambiguationContext } from './transcript/compactTarget';
 
 export type ActivityItem = Extract<SessionTranscriptItem, { kind: 'tool' | 'thinking' }>;
 export interface ActivityCluster { readonly id: string; readonly items: readonly SessionTranscriptItem[]; readonly grouped: boolean }
@@ -55,6 +56,17 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
 }) {
   const { t } = useI18n();
   const members = useMemo(() => cluster.items.map(candidate), [cluster.items]);
+  const disambiguation = useMemo(() => {
+    const paths: string[] = [];
+    for (const item of cluster.items) {
+      if (item.kind !== 'tool') continue;
+      const category = classifyExploreTool(item.toolName);
+      if (category !== 'file' && category !== 'diagnostics') continue;
+      const path = item.filePath ?? item.target ?? (item.resultPreview?.source?.path === 'Tool result' ? undefined : item.resultPreview?.source?.path);
+      if (path && !path.includes(' · ')) paths.push(path);
+    }
+    return buildGroupDisambiguation(paths);
+  }, [cluster.items]);
   const presentation = presentActivity({ members, messageRunning: running, tail, incomplete, turnId, waiting, t });
   const latest = tail ? cluster.items.at(-1) : undefined;
   const latestHasTerminal = latest?.kind === 'tool'
@@ -64,6 +76,8 @@ export function ActivityGroup({ messageId, cluster, turnId, running, tail, incom
     ? t(incomplete === 'error' ? 'failed' : 'stopped') : undefined;
   return <ActivityGroupView messageId={messageId} groupId={cluster.id}
     presentation={{ ...presentation, count: cluster.items.length, ...(notice ? { notice } : {}) }}>
-    <HistoryItems items={cluster.items} renderItem={renderItem} />
+    <GroupPathDisambiguationContext.Provider value={disambiguation}>
+      <HistoryItems items={cluster.items} renderItem={renderItem} />
+    </GroupPathDisambiguationContext.Provider>
   </ActivityGroupView>;
 }

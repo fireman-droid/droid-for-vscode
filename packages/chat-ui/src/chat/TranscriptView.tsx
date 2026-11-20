@@ -9,7 +9,7 @@ import { useTranscriptScroll } from './useTranscriptScroll';
 import { ProcessPresentationProvider } from './processPresentation';
 import { findActiveQuestionIndex, isScrollableTranscript, questionPreview } from '../navigation/questionNavigation';
 import { QuestionNavigator } from './QuestionNavigator';
-import { ChatNavigationPortal } from './ChatLayout';
+import { ChatNavigationPortal, useChatFooterInset } from './ChatLayout';
 import { SelectionToolbar } from './SelectionToolbar';
 import { hasQuestionEntered, questionEntryOffset } from '../navigation/questionEntryBoundary';
 import { hasTranscriptSelection, selectedTurnIndexes, useTranscriptSelection } from './transcriptSelection';
@@ -82,7 +82,8 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
   const lastPinTop = useRef(0);
   const syncRunwayRef = useRef<() => number>(() => 0);
   const syncRunway = useCallback(() => syncRunwayRef.current(), []);
-  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow, syncRunway);
+  const footerInset = useChatFooterInset();
+  const scrolling = useTranscriptScroll(viewport, content, conversationId, sendSignal, reportLayout, clearBottomJump, pauseAutoFollow, syncRunway, footerInset);
   const lastQuestionId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index].role === 'user') return messages[index].id;
@@ -347,6 +348,7 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
     const releaseWheel = scrolling.wheelOverlayRef(element);
     return () => { releaseWheel?.(); pinnedOverlay.current = null; };
   }, [scrolling.wheelOverlayRef]);
+  const pinMaskActive = pinned !== null && pinEntered && pinnedHeight > 0;
   useLayoutEffect(() => {
     const element = viewport.current, overlay = pinnedOverlay.current;
     if (!element || !overlay) return;
@@ -362,19 +364,29 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
         : nextTop === undefined ? undefined : nextTop - element.scrollTop;
       const value = nextOffset === undefined ? 0 : Math.min(0, nextOffset - PINNED_QUESTION_GAP - pinnedHeight - 14);
       overlay.style.transform = `translateY(${value}px)`;
+      if (pinMaskActive) {
+        const availableHeight = Math.max(0, element.clientHeight - (footerInset?.getHeight() ?? 0));
+        const visibleHeight = availableHeight > PINNED_QUESTION_GAP
+          ? Math.min(pinnedHeight, availableHeight - PINNED_QUESTION_GAP)
+          : pinnedHeight;
+        element.style.setProperty('--pinned-mask-stop', `${Math.max(0, PINNED_QUESTION_GAP + visibleHeight + value)}px`);
+      } else element.style.removeProperty('--pinned-mask-stop');
     };
     const schedule = () => { frame ??= requestAnimationFrame(update); };
     update();
     element.addEventListener('scroll', schedule, { passive: true });
+    const unsubscribeFooter = footerInset?.subscribe(schedule);
     return () => {
       element.removeEventListener('scroll', schedule);
+      unsubscribeFooter?.();
       if (frame !== null) cancelAnimationFrame(frame);
+      element.style.removeProperty('--pinned-mask-stop');
     };
-  }, [conversationId, pinned?.id, pinnedHeight, nextQuestion, nextTop, virtualizer, selecting]);
+  }, [conversationId, pinned?.id, pinnedHeight, pinMaskActive, nextQuestion, nextTop, virtualizer, selecting, footerInset]);
   return (
     <div ref={selectionRoot} className="relative min-h-0 select-text overflow-hidden" data-text-selecting={selecting || undefined}>
-      <div ref={viewport} data-transcript-scrollbar="" className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
-        <div ref={content} className="v2-chat-rail min-h-full pt-5 pb-4">
+      <div ref={viewport} data-transcript-scrollbar="" data-pinned-mask={pinMaskActive || undefined} className="h-full overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:w-0" aria-label={t("Chat transcript")}>
+        <div ref={content} className="v2-chat-rail min-h-full pt-5 pb-[calc(16px+var(--chat-content-inset,0px))]">
           <div ref={leading} className="flow-root">
             {leadingContent}
             {(historyNotice || paging) ? <div role="status" data-ui-notice="" className="v2-history-divider select-none">
@@ -402,24 +414,23 @@ export function TranscriptView({ messages, conversationId, sessionKey, sendSigna
           </div>
           </ProcessPresentationProvider>
           {trailingContent}
-          {statusContent ? <div className={`bg-background pt-2 ${scrolling.followingBottom ? 'sticky bottom-0 z-[1]' : 'relative'}`}>
+          {statusContent ? <div className={`bg-background pt-2 ${scrolling.followingBottom ? 'sticky z-[1]' : 'relative'}`} style={scrolling.followingBottom ? { bottom: 'var(--chat-content-inset, 0px)' } : undefined}>
             {statusContent}
           </div> : null}
           <div ref={runway} data-pin-runway="" aria-hidden="true" />
         </div>
       </div>
-      {pinned === null ? null : <>
-        <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ top: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
-          <div ref={pin} data-pinned-question={pinned.id} data-selection-turn={candidate?.index} className="pointer-events-auto max-h-full overflow-y-auto bg-background">
+      {pinned === null ? null : (
+        <div ref={setPinnedOverlay} className="v2-chat-rail pointer-events-none absolute inset-x-0 z-10" style={{ top: PINNED_QUESTION_GAP, bottom: 'var(--chat-content-inset, 0px)', visibility: pinEntered ? 'visible' : 'hidden' }} inert={!pinEntered || undefined} aria-hidden={!pinEntered || undefined}>
+          <div ref={pin} data-pinned-question={pinned.id} data-selection-turn={candidate?.index} className="pointer-events-auto max-h-full overflow-y-auto rounded-[12px]">
             <TranscriptMessageContent id={pinned.id} renderMessage={renderMessage} placeholder={false} placeholderHeight={0} />
           </div>
         </div>
-        <div data-pinned-top-mask="" aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-background" style={{ height: PINNED_QUESTION_GAP, visibility: pinEntered ? 'visible' : 'hidden' }} />
-      </>}
+      )}
       {showNavigator ? <ChatNavigationPortal><QuestionNavigator ref={scrolling.wheelOverlayRef} items={questions} activeIndex={activeQuestion} onNavigate={navigateQuestion} /></ChatNavigationPortal> : null}
       {onQuote ? <SelectionToolbar viewport={viewport} selectionRoot={selectionRoot} onQuote={onQuote} onBtwQuote={onBtwQuote} /> : null}
       {scrolling.away || paging?.hasNewer ? (
-        <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")} className="absolute bottom-2 right-4 z-20 rounded-full" onClick={returnToBottom}><ArrowDown /></Button>
+        <Button ref={scrolling.wheelOverlayRef} variant="outline" size="icon-sm" aria-label={t("Scroll to bottom")} className="absolute left-1/2 z-20 -translate-x-1/2 rounded-full shadow-sm" style={{ bottom: 'calc(var(--chat-footer-height, 0px) + 10px)' }} onClick={returnToBottom}><ArrowDown /></Button>
       ) : null}
     </div>
   );

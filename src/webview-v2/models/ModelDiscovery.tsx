@@ -1,11 +1,12 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ListFilter, Pencil, RefreshCw, Search, X } from 'lucide-react';
 import { MAX_MODEL_CATALOG_ITEMS, MAX_MODEL_DISPLAY_NAME_LENGTH } from '../../shared/protocol/bounds';
 import { isSafeText, type DiscoveredCustomModel } from '../../shared/protocol/customModelsProtocol';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/selection';
+import { ScrollArea } from '@droidvisx/chat-ui/ui/scroll-area';
 import type { ModelsPageState } from './AddModels';
 
 /** Discovery and selection stay mounted while the user revisits the connection step. */
@@ -21,6 +22,24 @@ export function ModelDiscovery({ page, onDone, onManual }: {
   const [onlyChosen, setOnlyChosen] = useState(false);
   const [aliases, setAliases] = useState<Readonly<Record<string, string>>>({});
   const [editingAlias, setEditingAlias] = useState<string | null>(null);
+  const aliasBeforeEdit = useRef<{ readonly model: string; readonly value: string | undefined } | null>(null);
+  const startAliasEdit = (model: string) => {
+    aliasBeforeEdit.current = { model, value: aliases[model] };
+    setEditingAlias(model);
+  };
+  const cancelAliasEdit = (model: string) => {
+    const previous = aliasBeforeEdit.current;
+    if (previous && previous.model === model) {
+      setAliases((current) => {
+        if (previous.value === undefined) {
+          const { [model]: _discarded, ...rest } = current;
+          return rest;
+        }
+        return { ...current, [model]: previous.value };
+      });
+    }
+    setEditingAlias((current) => (current === model ? null : current));
+  };
   const { connection, discovered, models, chosen, busy } = page;
   const items = discovered ?? [];
   const existing = new Set(models.map((model) => model.model));
@@ -58,14 +77,14 @@ export function ModelDiscovery({ page, onDone, onManual }: {
   return <div className="models-discovery">
     <p className="models-help">{t("同名模型会自动补充渠道标识，便于在聊天中区分。")}</p>
     <div className="models-search models-discovery-search">
-      <Search aria-hidden /><Input type="search" className="h-9 rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" disabled={busy} aria-label={t("筛选发现的模型")} placeholder={t("搜索模型名称或 Model ID…")}
+      <Search aria-hidden /><Input type="search" className="h-8 rounded-none border-0 bg-transparent px-0 focus-visible:border-transparent focus-visible:ring-0" disabled={busy} aria-label={t("筛选发现的模型")} placeholder={t("搜索模型名称或 Model ID…")}
         value={search} onChange={(event) => setSearch(event.target.value)} />
       {search ? <Button variant="ghost" size="icon-sm" aria-label={t("清除模型筛选")} disabled={busy} onClick={() => setSearch('')}><X /></Button> : null}
     </div>
     <div className="models-discovery-filters">
       <label className="models-check-label"><Checkbox checked={hideAdded} disabled={busy} onCheckedChange={(value) => setHideAdded(value === true)} />{t("隐藏已添加")}</label>
       <Button variant="ghost" size="sm" aria-pressed={onlyChosen} disabled={busy} onClick={() => setOnlyChosen(!onlyChosen)}><ListFilter />{t("只看已选")}</Button>
-      <Button variant="ghost" size="icon" className="ml-auto" aria-label={t("重新获取模型列表")} title={t("重新获取，保留仍可添加的选择")} disabled={busy}
+      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("重新获取模型列表")} title={t("重新获取，保留仍可添加的选择")} disabled={busy}
         onClick={() => { if (connection) void page.discoverModels(connection.id); }}><RefreshCw /></Button>
     </div>
     <div className="models-selection-toolbar">
@@ -73,7 +92,8 @@ export function ModelDiscovery({ page, onDone, onManual }: {
       <Button variant="ghost" size="sm" disabled={busy || !unselected.length || chosen.size >= MAX_MODEL_CATALOG_ITEMS} onClick={chooseFiltered}>{t("选择筛选结果")}</Button>
       <Button variant="ghost" size="sm" disabled={busy || !chosen.size} onClick={() => page.setChosen(new Set())}>{t("清空选择")}</Button>
     </div>
-    <div className="models-discovery-list" aria-label={t("服务返回的模型")}>
+    <ScrollArea className="models-discovery-list" viewportClassName="models-discovery-viewport" aria-label={t("服务返回的模型")}
+      nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
       {filtered.map((item, index) => {
         const exists = existing.has(item.model);
         const selected = chosen.has(item.model);
@@ -89,22 +109,34 @@ export function ModelDiscovery({ page, onDone, onManual }: {
                   if (value === true) next.add(item.model); else next.delete(item.model);
                   page.setChosen(next);
                 }} />
-              <span className="min-w-0 flex-1"><code>{item.model}</code>
+              <span className="min-w-0 flex-1"><span className="models-discovery-id">{item.model}</span>
                 {displayName(item).trim() && !aliasOpen ? <span className="models-model-alias">{displayName(item).trim()}</span> : null}
               </span>
             </label>
             {exists ? <span data-ui-notice="" className="models-added"><Check aria-hidden />{t("已添加")}</span> :
-              <Button variant="ghost" size="icon" aria-label={t("修改 {p0} 的导入别名", { p0: item.model })} aria-expanded={aliasOpen}
-                title={t("设置显示别名")} disabled={busy} onClick={() => setEditingAlias(aliasOpen ? null : item.model)}><Pencil /></Button>}
+              <Button variant="ghost" size="icon-sm" aria-label={t("修改 {p0} 的导入别名", { p0: item.model })} aria-expanded={aliasOpen}
+                title={t("设置显示别名")} disabled={busy}
+                onMouseDown={(event) => { if (aliasOpen) event.preventDefault(); }}
+                onClick={() => { if (aliasOpen) setEditingAlias(null); else startAliasEdit(item.model); }}><Pencil /></Button>}
           </div>
           {aliasOpen ? <div className="models-import-alias">
-            <label htmlFor={inputId}>{t("显示别名")} <span className="models-optional">{t("可选")}</span></label>
-            <Input id={inputId} autoFocus disabled={busy} value={displayName(item)} maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH}
-              placeholder={t("留空时使用 Model ID")} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
+            <Input id={inputId} className="models-import-alias-input h-[26px] max-w-[280px] rounded-[6px] px-2 text-xs" autoFocus disabled={busy} value={displayName(item)}
+              maxLength={MAX_MODEL_DISPLAY_NAME_LENGTH} aria-label={t("显示别名")} placeholder={t("留空时使用 Model ID")}
+              aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
+              onBlur={() => setEditingAlias((current) => (current === item.model ? null : current))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') { event.preventDefault(); setEditingAlias(null); }
+                else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.nativeEvent.stopImmediatePropagation();
+                  cancelAliasEdit(item.model);
+                }
+              }}
               onChange={(event) => setAliases((current) => ({ ...current, [item.model]: event.target.value }))} />
           </div> : null}
           {error ? <p role="alert" className="models-import-error" id={`${inputId}-error`}>{error}
-            {!aliasOpen ? <Button variant="link" size="sm" disabled={busy} onClick={() => setEditingAlias(item.model)}>{t("设置别名")}</Button> : null}
+            {!aliasOpen ? <Button variant="link" size="sm" disabled={busy} onClick={() => startAliasEdit(item.model)}>{t("设置别名")}</Button> : null}
           </p> : null}
         </div>;
       })}
@@ -112,13 +144,13 @@ export function ModelDiscovery({ page, onDone, onManual }: {
         <p className="models-help">{items.length ? t("已选项会保留，可以清除筛选继续查找。") : t("服务可能不支持模型发现，仍可使用已知的 Model ID 添加。")}</p>
         <Button variant="outline" size="sm" disabled={busy} onClick={items.length ? () => { setSearch(''); setHideAdded(false); setOnlyChosen(false); } : onManual}>{items.length ? t("清除筛选条件") : t("手动填写 ID")}</Button>
       </div> : null}
-    </div>
+    </ScrollArea>
     <div className="models-form-actions models-selection-actions">
       <div className="models-selection-summary select-none" role="status" aria-live="polite"><strong>{t("已选")} {selected.length} {t("个")}</strong>
         <span className={conflicts ? 'text-destructive' : 'models-help'}>{conflicts ? t("{p0} 个别名需要调整", { p0: conflicts }) : hiddenChosen ? t("{p0} 个在当前筛选之外", { p0: hiddenChosen }) : t("一次最多添加 {p0} 个", { p0: MAX_MODEL_CATALOG_ITEMS })}</span>
       </div>
       <Button variant="ghost" disabled={busy} onClick={onDone}>{t("取消")}</Button>
-      <Button disabled={busy || !selected.length || !!conflicts} onClick={add}>{busy ? t("正在添加…") : t("添加所选模型（{p0}）", { p0: selected.length })}</Button>
+      <Button variant="outline" disabled={busy || !selected.length || !!conflicts} onClick={add}>{busy ? t("正在添加…") : t("添加所选模型（{p0}）", { p0: selected.length })}</Button>
     </div>
   </div>;
 }

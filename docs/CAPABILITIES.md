@@ -3,7 +3,7 @@
 Droid CLI/SDK 是聊天与任务的权威；编辑器补全使用用户单独配置的模型服务。这里描述产品是否已经消费某项能力，不代表
 SDK 中出现接口就自动成为产品功能。
 
-聊天、模型管理、FIM 补全与 Next Edit 均由 `main` 的 `dist/droidvisx.vsix` 统一交付，
+聊天、模型管理和 FIM 补全由同一 `dist/droidvisx.vsix` 交付，
 安装需用户明确指令，默认目标 Microsoft VS Code 当前用户扩展目录。
 “已接入”只表示存在生产调用链，不代表当前版本已完成行为验收或已经安装。
 最近验证与已知缺口以 [STATUS](STATUS.md) 和 [PLAN](PLAN.md) 为准。
@@ -98,19 +98,13 @@ SDK 中出现接口就自动成为产品功能。
   Kilo 上下文链的 LSP 查询共享 150ms 等待预算，超时后保留其他可用上下文，下次请求可重试。
   主体编辑复用未变的导入定义；导入语句、定义文件或规则变化时刷新。Codestral 文件末尾也保留关联片段。
 - 原生 FIM 支持 Mistral/Codestral、Mercury、DeepSeek 及兼容服务；Ollama generate、
-  SiliconFlow prefix/suffix 扩展独立适配。代码续写与 Next Edit 可独立配置和同时启用，官方 Mercury FIM/Edit 地址共用
-  SecretStorage 凭据，其他地址隔离。模型服务独立于 Factory 聊天。
+  SiliconFlow prefix/suffix 扩展独立适配。凭据保存在 SecretStorage；模型服务独立于 Factory 聊天。
 - 所有关联读取受同工作区根、Git/Droid ignore、配置排除、敏感文件及根外链接门禁约束。
   默认不枚举项目文件或读取剪贴板；静态上下文开关仅为 TypeScript 枚举最多 2,000 个
   候选；用户级剪贴板开关可额外提供最多 4,000 字符。两者默认关闭，不读取聊天历史。
 - 缓存支持继续输入和退格、兼容请求复用；自适应防抖、分类退避、版本/光标校验与
   Kilo 自动触发条件已接通。行中只展示首行、缓存保留完整结果；过滤重叠和重复输出。
-  代码围栏整条拒绝并支持手动重试，合法 Markdown 围栏保留，不声称修复模型语义。
-- Notebook 代码单元接入相邻同语言上下文、位置映射和单元版本/顺序失效；官方 Mercury
-  Next Edit 模式下单元使用 Mercury FIM。普通文件不对 Next Edit 空结果自动追加 FIM 请求。
-- Mercury Next Edit 使用光标区域、允许的相关片段与近期编辑历史；同行灰字、跨行提示、
-  Tab 跳转/接受、Esc 丢弃、Undo、接受后继续预测与过期结果失效已接通。暂停/仅手动时
-  不追加自动预测。普通续写与 Next Edit 都可能没有建议，真实质量与速度见 STATUS。
+- Notebook 代码单元使用相邻同语言上下文，映射回单元位置；单元版本和顺序变化使旧建议失效。
 
 ## 判断规则
 

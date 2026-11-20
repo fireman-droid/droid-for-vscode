@@ -55,16 +55,22 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
     fileReads.watch(entry.path);
     return () => fileReads.unwatch(entry.path);
   }, [fileReads, fileReads.epoch, entry.path, review?.reviewScopeId, flow.context, target, open, near, operation]);
+  const slash = Math.max(entry.path.lastIndexOf('/'), entry.path.lastIndexOf('\\'));
+  const directory = slash >= 0 ? entry.path.slice(0, slash + 1) : '';
+  const basename = slash >= 0 ? entry.path.slice(slash + 1) : entry.path;
   return <Collapsible ref={root} className="review-file-section" data-review-path={entry.path}
     open={open} onOpenChange={onOpenChange}>
     <header className="review-section-heading">
       <CollapsibleTrigger asChild><Button variant="plain" size="none" className="review-section-title" title={entry.path}>
         <ChevronRight className="review-section-chevron" aria-hidden /><ChangeFileIcon path={entry.path} />
-        <span>{entry.path}</span>
+        <span className="review-section-path">
+          {directory ? <span className="review-section-dir">{directory}</span> : null}
+          <span className="review-section-name">{basename}</span>
+        </span>
         <span className="review-file-stats"><i>{entry.additions === null ? '' : `+${entry.additions}`}</i><b>{entry.deletions === null ? '' : `−${entry.deletions}`}</b></span>
       </Button></CollapsibleTrigger>
-      {read.pending && file ? <span className="review-muted" role="status">{t("Updating…")}</span> : null}
-      {!readOnly ? <ReviewIconButton variant="ghost" size="icon-sm" className="review-viewed" data-reviewed={entry.status === 'reviewed'}
+      {read.pending && file ? <span data-ui-notice="" className="review-muted" role="status">{t("Updating…")}</span> : null}
+      {!readOnly ? <ReviewIconButton variant="ghost" size="icon-sm" className="review-viewed data-[reviewed=true]:opacity-100" data-reviewed={entry.status === 'reviewed'}
         aria-label={entry.status === 'reviewed' ? t("{p0} reviewed", { p0: entry.path }) : t("Mark {p0} viewed", { p0: entry.path })} disabled={!canMark}
         onClick={() => actions.onMarkReviewed(false, entry.path)}><CheckCheck /></ReviewIconButton> : null}
       <ReviewIconButton variant="ghost" size="icon-sm" aria-label={t("Open {p0}", { p0: entry.path })} onClick={() => port.postMessage({ type: 'reviewPanel.openPath', path: entry.path })}><ExternalLink /></ReviewIconButton>
@@ -89,7 +95,7 @@ export function ReviewFileSection({ entry, flow, port, split, open, onOpenChange
     <CollapsibleContent>
       {read.error && !operation ? <div data-ui-notice="" className="review-notice review-error" role="status">{read.error}{file && !file.error ? t("Showing the previous diff.") : ''}
         <Button variant="ghost" size="sm" onClick={() => flow.retryFile(entry.path)}>{t("Retry")}</Button></div> : null}
-      {!operation && !file ? <p className="review-file-placeholder" role="status">{read.error ? t("Diff unavailable.") : near ? t("Reading Diff…") : t("Diff loads as you scroll.")}</p>
+      {!operation && !file ? <p data-ui-notice="" className="review-file-placeholder" role="status">{read.error ? t("Diff unavailable.") : near ? t("Reading Diff…") : t("Diff loads as you scroll.")}</p>
         : !operation && file?.error ? read.error ? null : <p data-ui-notice="" className="review-empty">{file.error}</p>
         : recordedEntries ? <RecordedFileReview entries={recordedEntries} content={recordedContent} path={entry.path}
           split={split} loading={read.pending} showDiffControls={false} preserveReadingPosition={false}

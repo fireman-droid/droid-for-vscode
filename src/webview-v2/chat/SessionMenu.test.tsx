@@ -37,6 +37,8 @@ describe('V2 session catalog actions', () => {
     expect(screen.queryByRole('button', { name: 'Archive Current chat' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Fork Previous chat' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rename Previous chat' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Archived sessions' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Archived/ })).toBeNull();
     await user.dblClick(screen.getByRole('button', { name: 'Favorite Previous chat' }));
     expect(props.actions.handleToggleFavorite).toHaveBeenCalledExactlyOnceWith('previous', true);
     expect(screen.getByRole('button', { name: 'Archive Previous chat' }).hasAttribute('disabled')).toBe(true);

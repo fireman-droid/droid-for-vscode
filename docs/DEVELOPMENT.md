@@ -73,7 +73,7 @@ Review 只读固定记录的改动，不读取本机文件或 Git。
 确认后继续本地回放，拒绝／取消则结束。Reset simulation、切页或关闭页面会取消旧调度；
 Reset 重新载入当前示例。`full-workflow` 保留为静态全流程截图场景，
 `empty` 提供无历史的发送入口。所有示例与回复均明确标识为离线模拟。
-底部 Task 的内嵌查看使用同一 `subagent.inspect`／`subagent.snapshot` 协议，
+消息流中 Task 的内嵌查看使用同一 `subagent.inspect`／`subagent.snapshot` 协议，
 预览返回明确标识的固定子对话，随模拟进度更新，不创建或读取真实子会话。
 
 此入口不导入 Browser Dev Client，不读取连接凭据，也不连接 Droid、VS Code 或模型服务。
@@ -389,7 +389,7 @@ cursor --install-extension dist/droidvisx.vsix --force
 
 | 文件名 | 用途 |
 | --- | --- |
-| `dist/droidvisx.vsix` | 本地统一构建产物，包含聊天、模型管理、补全和 Next Edit |
+| `dist/droidvisx.vsix` | 本地统一构建产物，包含聊天、模型管理和代码补全 |
 | `droid-<version>.vsix` | Releases 对外下载名称 |
 | `droidvisx.droidvisx` | 保持设置和更新连续性的内部扩展 ID |
 

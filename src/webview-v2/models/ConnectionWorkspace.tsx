@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { ListToolbar } from '@droidvisx/chat-ui/ui/list-toolbar';
 import { Button } from '../ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { AddModels, type ModelsPageState } from './AddModels';
 import { AliasForm, ConnectionForm, ModelForm } from './ModelForms';
 import { ModelList } from './ModelList';
@@ -34,15 +33,14 @@ export function ConnectionWorkspace({ page, creating, onCreated, onClose }: {
           <Button variant="ghost" size="sm" disabled={busy || editing} onClick={() => {
             manager.setNotice(null); page.setConnectionForm({ connection });
           }}><Pencil />{t("编辑配置")}</Button>
-          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="plain" size="icon-sm" disabled={busy || editing}
-            aria-label={t("{p0} 的更多操作", { p0: connection.name })}><MoreHorizontal /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent className="management-menu" align="end">
-              <DropdownMenuItem onSelect={() => { manager.setNotice(null); setAlias(true); }}><Pencil />{t("服务商别名")}</DropdownMenuItem>
-              <DropdownMenuItem disabled={models.length > 0} onSelect={() => {
-                void run({ kind: 'deleteConnection', connectionId: connection.id }).then(result => { if (result.ok) onClose(); });
-              }}><Trash2 />{t("移除空渠道")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="ghost" size="sm" disabled={busy || editing} onClick={() => {
+            manager.setNotice(null); setAlias(true);
+          }}>{t("服务商别名")}</Button>
+          {models.length === 0 ? <Button variant="ghost" size="icon-sm" disabled={busy || editing}
+            aria-label={t("移除空渠道")} title={t("移除空渠道")} className="text-destructive hover:text-destructive"
+            onClick={() => {
+              void run({ kind: 'deleteConnection', connectionId: connection.id }).then(result => { if (result.ok) onClose(); });
+            }}><Trash2 /></Button> : null}
         </div>
       </header>
       {page.connectionForm ? <ConnectionForm connection={page.connectionForm.connection} busy={busy}

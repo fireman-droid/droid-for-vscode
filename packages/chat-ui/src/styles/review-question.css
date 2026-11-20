@@ -180,8 +180,9 @@
   .review-question-progress svg { width: 12px; height: 12px; animation: review-question-spin 1s linear infinite; }
   .review-question-error { margin: 0; color: var(--error-ink, var(--ink)); font: 11px/1.5 var(--font-sans); overflow-wrap: anywhere; }
   .review-question-banner { padding: 0 2px; }
-  .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 26px; min-width: 48px; padding: 0 10px; border-radius: 5px; background: var(--overlay-surface); color: var(--ink); font: 11px/1 var(--font-sans); }
-  .review-question-start:hover { background: var(--soft-surface); color: var(--ink); }
+  .review-question-start { display: inline-flex; align-items: center; justify-content: center; height: 24px; min-width: 44px; padding: 0 8px; border: 1px solid var(--panel-edge); border-radius: var(--control-radius); background: var(--soft-surface); color: var(--ink); font: 12px/1 var(--font-sans); transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease); }
+  .review-question-start:hover { background: var(--control-surface-hover); border-color: var(--control-border-hover); color: var(--strong-ink); }
+  .review-question-start:active { background: var(--control-surface-active); }
   @keyframes review-question-spin { to { transform: rotate(360deg); } }
   @keyframes review-question-pulse {
     0%, 80%, 100% { opacity: 0.28; transform: scale(0.92); }
@@ -193,6 +194,6 @@
   @media (prefers-reduced-motion: reduce) {
     .review-question-progress svg, .review-question-thinking-dots > span { animation: none; }
     .review-question-thinking-dots > span { opacity: 0.65; }
-    .review-question-chevron, .review-question-compose-row { transition: none; }
+    .review-question-chevron, .review-question-compose-row, .review-question-start { transition: none; }
   }
 }

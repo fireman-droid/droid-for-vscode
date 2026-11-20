@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, renderHook } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { ChatLayout, type ChatFooterInsetStore } from '../../src/chat/ChatLayout';
 import { useTranscriptScroll } from '../../src/chat/useTranscriptScroll';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
@@ -37,6 +38,12 @@ function transcript(reducedMotion = false, runway = 0) {
     }),
     resize: (nextHeight: number, nextScrollHeight = scrollHeight) => act(() => {
       height = nextHeight; scrollHeight = nextScrollHeight;
+      resizeCallbacks.forEach((callback) => callback());
+    }),
+    resizeViewport: (nextHeight: number) => act(() => {
+      height = nextHeight;
+      viewport.scrollTop = Math.min(viewport.scrollTop, Math.max(0, scrollHeight - height));
+      fireEvent.scroll(viewport);
       resizeCallbacks.forEach((callback) => callback());
     }),
   };
@@ -200,4 +207,149 @@ it.each(['wheel', 'keyboard', 'touch'] as const)('keeps the chat under user cont
   chat.resize(400, 2800);
   chat.frame();
   expect(chat.viewport.scrollTop).toBe(2400);
+});
+
+it('keeps pushing content up consistently when footer panels collapse and re-expand at bottom', () => {
+  const chat = transcript(true);
+  act(() => chat.result.current.scrollToBottom('auto'));
+  expect(chat.viewport.scrollTop).toBe(1600);
+  // A downward wheel while already at the bottom must not leave userScrolling latched.
+  fireEvent.wheel(chat.viewport, { deltaY: 120 });
+  // Panel collapse grows the viewport and the browser clamps scrollTop downward before ResizeObserver runs.
+  chat.resizeViewport(480);
+  expect(chat.result.current.follow.current.following).toBe(true);
+  expect(chat.viewport.scrollTop).toBe(1520);
+  // Re-expanding the panel must immediately push the bottom content back up.
+  chat.resize(400);
+  expect(chat.viewport.scrollTop).toBe(1600);
+  // Even after a non-wheel tap at the bottom cleared follow, expanding a panel keeps bottom content visible.
+  act(() => chat.result.current.stopFollowing());
+  chat.resize(340);
+  expect(chat.viewport.scrollTop).toBe(1660);
+  // Editing a previous message must still keep the chat under user control without pushing on shrink.
+  chat.setEditing(true);
+  chat.resize(280);
+  expect(chat.viewport.scrollTop).toBe(1660);
+});
+
+it('pushes content up when overlapping footerInset grows without breaking scrolled-up or editing state', () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let id = 0, inset = 80, scrollHeight = 2000;
+  const height = 400;
+  const insetListeners = new Set<() => void>();
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++id, callback); return id; });
+  vi.stubGlobal('cancelAnimationFrame', (value: number) => frames.delete(value));
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {} disconnect() {} unobserve() {}
+  });
+  const footerInset: ChatFooterInsetStore = {
+    getHeight: () => inset,
+    subscribe: (listener) => {
+      insetListeners.add(listener);
+      return () => { insetListeners.delete(listener); };
+    },
+  };
+  const viewport = document.createElement('div'), column = document.createElement('div');
+  viewport.append(column); document.body.append(viewport);
+  Object.defineProperties(viewport, {
+    clientHeight: { get: () => height }, scrollHeight: { get: () => scrollHeight },
+  });
+  viewport.scrollTo = ({ top }: ScrollToOptions) => { viewport.scrollTop = Number(top); };
+  const viewportRef = { current: viewport }, columnRef = { current: column };
+  const { result, rerender } = renderHook(({ editing }) =>
+    useTranscriptScroll(viewportRef, columnRef, 'history', 0, undefined, undefined, editing, undefined, footerInset),
+  { initialProps: { editing: false } });
+
+  const setInset = (nextInset: number) => act(() => {
+    scrollHeight += nextInset - inset;
+    inset = nextInset;
+    for (const listener of [...insetListeners]) listener();
+  });
+
+  act(() => result.current.scrollToBottom('auto'));
+  expect(viewport.scrollTop).toBe(1600);
+
+  setInset(160);
+  expect(viewport.scrollTop).toBe(1680);
+
+  setInset(80);
+  expect(result.current.follow.current.following).toBe(true);
+  expect(viewport.scrollTop).toBe(1600);
+
+  act(() => result.current.stopFollowing());
+  setInset(140);
+  expect(viewport.scrollTop).toBe(1660);
+
+  act(() => { result.current.stopFollowing(); viewport.scrollTop = 500; fireEvent.scroll(viewport); });
+  setInset(200);
+  expect(viewport.scrollTop).toBe(500);
+
+  act(() => result.current.scrollToBottom('auto'));
+  expect(viewport.scrollTop).toBe(1720);
+  rerender({ editing: true });
+  setInset(260);
+  expect(viewport.scrollTop).toBe(1720);
+});
+
+it('keeps content inset anchored when a subagent sheet opens inside composer panels', () => {
+  const resizeCallbacks = new Set<() => void>();
+  let footerHeight = 136;
+  let panelsHeight = 80;
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: () => void) { resizeCallbacks.add(callback); }
+    observe() {} disconnect() {} unobserve() {}
+  });
+  const rect = (height: number): DOMRect => ({
+    x: 0, y: 0, top: 0, left: 0, bottom: height, right: 600, width: 600, height, toJSON() {},
+  }) as DOMRect;
+  const protoGetRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+  const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.tagName === 'FOOTER') return rect(footerHeight);
+    if (this.classList.contains('v2-composer-panels')) return rect(panelsHeight);
+    return protoGetRect?.value ? protoGetRect.value.call(this) : rect(0);
+  });
+  try {
+    const ui = (sheetOpen: boolean) => (
+      <ChatLayout
+        header={<div>Header</div>}
+        footer={
+          <div className="v2-composer-dock">
+            <div className="v2-composer-panels">
+              {sheetOpen ? <section className="dvx-subagent-sheet">Subagent popup</section> : <div>Queue items</div>}
+            </div>
+            <div>Composer</div>
+          </div>
+        }
+      >
+        <div data-testid="chat-child">Transcript</div>
+      </ChatLayout>
+    );
+
+    const view = render(ui(false));
+    const body = view.container.querySelector('[data-footer-clip]') as HTMLElement;
+    expect(body).toBeTruthy();
+    expect(body.style.getPropertyValue('--chat-footer-height')).toBe('136px');
+    expect(body.style.getPropertyValue('--chat-content-inset')).toBe('136px');
+
+    footerHeight = 556;
+    panelsHeight = 500;
+    view.rerender(ui(true));
+    act(() => {
+      for (const cb of resizeCallbacks) cb();
+    });
+    expect(body.style.getPropertyValue('--chat-footer-height')).toBe('556px');
+    expect(body.style.getPropertyValue('--chat-content-inset')).toBe('136px');
+
+    footerHeight = 136;
+    panelsHeight = 80;
+    view.rerender(ui(false));
+    act(() => {
+      for (const cb of resizeCallbacks) cb();
+    });
+    expect(body.style.getPropertyValue('--chat-footer-height')).toBe('136px');
+    expect(body.style.getPropertyValue('--chat-content-inset')).toBe('136px');
+  } finally {
+    rectSpy.mockRestore();
+  }
 });

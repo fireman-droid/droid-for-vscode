@@ -14,6 +14,7 @@ export interface FollowState {
   following: boolean;
   lastScrollTop: number;
   lastScrollHeight: number;
+  lastClientHeight?: number;
   /** scrollTop the coordinator itself just wrote; the next matching
    * scroll event is programmatic, not a user gesture. */
   pendingProgrammaticTop: number | null;
@@ -30,6 +31,7 @@ export function createFollowState(
     following: true,
     lastScrollTop: initial.scrollTop,
     lastScrollHeight: initial.scrollHeight,
+    lastClientHeight: initial.clientHeight,
     pendingProgrammaticTop: null,
   };
 }
@@ -38,7 +40,7 @@ export function createFollowState(
  * Applies one scroll event to the follow latch with Cursor semantics:
  * only a genuine upward user scroll releases the latch, and returning
  * to the bottom restores it. Programmatic writes and clamp events from
- * shrinking content never release it.
+ * shrinking content or growing viewports never release it.
  */
 export function applyFollowScroll(state: FollowState, sample: FollowScrollSample): void {
   const distance = sample.scrollHeight - sample.scrollTop - sample.clientHeight;
@@ -49,9 +51,10 @@ export function applyFollowScroll(state: FollowState, sample: FollowScrollSample
     state.pendingProgrammaticTop = null;
   } else {
     const shrank = sample.scrollHeight < state.lastScrollHeight;
+    const grewViewport = state.lastClientHeight !== undefined && sample.clientHeight > state.lastClientHeight;
     const scrolledUp = sample.scrollTop < state.lastScrollTop - 0.5;
     const scrolledDown = sample.scrollTop > state.lastScrollTop + 0.5;
-    if (scrolledUp && !shrank) {
+    if (scrolledUp && !shrank && !(grewViewport && distance <= FOLLOW_REJOIN_PX)) {
       state.following = false;
     }
     // A downward scroll that reaches at least the previous bottom is
@@ -66,6 +69,7 @@ export function applyFollowScroll(state: FollowState, sample: FollowScrollSample
   }
   state.lastScrollTop = sample.scrollTop;
   state.lastScrollHeight = sample.scrollHeight;
+  state.lastClientHeight = sample.clientHeight;
 }
 
 /**

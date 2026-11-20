@@ -172,4 +172,16 @@ describe('Activity state and grouping', () => {
     expect(stopped.running).toBe(false);
     expect(stopped.facts).toContain('stopped');
   });
+
+  it('compacts shimmer file paths while retaining full paths in titles', () => {
+    const view = present([tool('Read', 'running', { filePath: 'src/webview-v2/chat/ChatApp.tsx', target: 'src/webview-v2/chat/ChatApp.tsx' })], {
+      messageRunning: true,
+    });
+    expect(view).toMatchObject({
+      target: 'ChatApp.tsx',
+      targetTitle: 'src/webview-v2/chat/ChatApp.tsx',
+      latestTarget: 'ChatApp.tsx',
+      latestTargetTitle: 'src/webview-v2/chat/ChatApp.tsx',
+    });
+  });
 });

@@ -44,7 +44,7 @@ function SelectionQuestionTrigger({ anchor, content: overrideContent, onDismiss 
   } }), [anchor]);
   return <Popover open onOpenChange={open => { if (!open) onDismiss(); }}>
     <PopoverAnchor virtualRef={reference} />
-    <PopoverContent className="review-question-menu rounded-[5px] p-0" data-diff-question-control=""
+    <PopoverContent className="review-question-menu rounded-[var(--control-radius)] p-1" data-diff-question-control=""
       side="bottom" align="end" sideOffset={4} hideWhenDetached aria-label={t("Selected code actions")}
       onOpenAutoFocus={event => event.preventDefault()}
       onCloseAutoFocus={event => event.preventDefault()}>{content}</PopoverContent>

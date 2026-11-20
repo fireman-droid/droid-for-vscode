@@ -1,6 +1,6 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronRight, Circle, CornerDownLeft, Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, Circle, CornerDownLeft, Pencil, Trash2 } from 'lucide-react';
 import { QuoteChips } from '@droidvisx/chat-ui/chat/QuoteChips';
 import { MAX_QUEUED_MESSAGES, type QueuePausedReason, type SessionQueueState } from '../../shared/protocol/queueProtocol';
 import type { useComposerFlow } from './composer/useComposerFlow';
@@ -9,7 +9,6 @@ import { parseCodeReferences } from '@droidvisx/chat-ui/chat/codeReferences';
 import { ReferencedText } from '@droidvisx/chat-ui/chat/CodeReferenceChips';
 import { Button } from '../ui/button';
 import { Collapsible, CollapsibleTrigger, AnimatedCollapsibleContent } from '../ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 
 const pausedCopy: Record<QueuePausedReason, string> = {
   stopped: 'paused after stop',
@@ -44,12 +43,10 @@ export function QueueBar({ queue, flow }: {
           <span>{label}</span>
           {meta ? <span className="v2-queue-status">{meta}</span> : null}
         </Button></CollapsibleTrigger>
-        <DropdownMenu><DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label={t("Queued message actions")}><Ellipsis aria-hidden="true" /></Button>
-        </DropdownMenuTrigger><DropdownMenuContent align="end">
-          {queue.paused !== null ? <DropdownMenuItem onSelect={flow.handleQueueResume}>{t("Resume sending")}</DropdownMenuItem> : null}
-          <DropdownMenuItem disabled={queue.items.some(item => item.steering)} onSelect={flow.handleQueueClear}><Trash2 aria-hidden="true" className="size-3.5" />{t("Clear queued messages")}</DropdownMenuItem>
-        </DropdownMenuContent></DropdownMenu>
+        <Button variant="ghost" size="icon-sm" className="v2-queue-menu" aria-label={t("Clear queued messages")} title={t("Clear queued messages")}
+          disabled={queue.items.some(item => item.steering)} onClick={flow.handleQueueClear}>
+          <Trash2 aria-hidden="true" className="size-3.5" />
+        </Button>
       </div>
       <AnimatedCollapsibleContent id={id} open={expanded}>
         <div className="v2-queue-list" role="list">

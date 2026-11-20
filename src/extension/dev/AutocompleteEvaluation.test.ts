@@ -37,6 +37,12 @@ describe('autocomplete evaluation through the dev Host', () => {
     expect(mocks.key).not.toHaveBeenCalled();
     expect(mocks.request).not.toHaveBeenCalled();
   });
+  it('never evaluates with the display default for a retired edit-only configuration', async () => {
+    mocks.settings.mockReturnValue({ ...settings, requiresConfiguration: true });
+    await expect(evaluate(input, new AbortController().signal)).rejects.toThrow('Configure a FIM service');
+    expect(mocks.key).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
   it('does not expose raw errors from a provider', async () => {
     mocks.request.mockRejectedValue(new Error('provider repeated synthetic-private-credential'));
     const result = await evaluate(input, new AbortController().signal);

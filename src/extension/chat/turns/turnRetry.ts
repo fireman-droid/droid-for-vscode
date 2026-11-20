@@ -81,7 +81,7 @@ export async function retryAfterWorkspaceBecomesAvailable(
   }
   ctl.catalogState.sessions = catalog;
   if (catalog.status === 'error') {
-    ctl.sessionState.connection = { status: 'unavailable', message: CATALOG_ERROR_MESSAGE };
+    ctl.sessionState.connection = { status: 'unavailable', reason: 'catalog-unavailable', message: CATALOG_ERROR_MESSAGE };
     ctl.emitSnapshot();
     return;
   }

@@ -1,14 +1,14 @@
 import { BRIDGE_PROTOCOL_VERSION } from '../../../shared/bridgeMessages';
 import { MANAGEMENT_VERSION, parseManagementRequest, type ManagementPage } from '../../../shared/protocol/managementPageProtocol';
-import { MODEL_MANAGER_VERSION, parseModelsRequest } from '../../../shared/protocol/modelManagerProtocol';
+import { parseModelsRequest } from '../../../shared/protocol/modelManagerProtocol';
 import { MODEL_SOURCE_VERSION } from '../../../shared/protocol/modelSourceProtocol';
 import { parseClipboardWrite } from '../../../shared/protocol/clipboardProtocol';
 import { isStrictRecord } from '../../../shared/validation/strictValidation';
 import { getStudioScenario } from '../scenarios';
-import { createModelsPreviewSnapshot } from '../modelsPreviewTransport';
 import { createPanelPreview } from '../panelPreview';
 import type { StudioConfig } from '../studioRuntime';
 import { createMissionSetupPreview, previewSettings, reviewEntries, reviewScope } from './fixtures';
+import { createPreviewModelsHandler } from './modelsPreview';
 import { createReplyPlayback } from './replyPlayback';
 import { createReviewPlayback } from './reviewPlayback';
 import { MISSION_BRIDGE_PROTOCOL_VERSION, parseMissionWebviewMessage } from '../../../shared/protocol/missionProtocol';
@@ -36,7 +36,6 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
   const messages = getStudioScenario(config.scenario).build(() => ++sequence);
   const snapshot = messages.find(message => message.type === 'host.snapshot')!;
   const panels = createPanelPreview(config);
-  const models = createModelsPreviewSnapshot();
   const settings = previewSettings(config);
   let missionSetup: MissionControlSetupSnapshotMessage | null = null;
   const emit = (message: unknown, valid: () => boolean = () => true): void => {
@@ -47,17 +46,21 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
       window.dispatchEvent(new MessageEvent('message', { data: message }));
     });
   };
+  const block = () => callbacks.notice(PREVIEW_NOTICE);
+  const modelsPreview = createPreviewModelsHandler({
+    previewNotice: PREVIEW_NOTICE, block, notice: callbacks.notice, emit,
+  });
   const playback = createReplyPlayback(messages, () => ++sequence, emit);
   const reviewModels = settings.reviewQuestion.models.map(({ id, label }) => ({ id, label }));
   const preferredReviewModel = settings.reviewQuestion.modelId ?? settings.reviewQuestion.inheritedModelId;
   const reviewPlayback = createReviewPlayback(reviewModels,
     reviewModels.find(model => model.id === preferredReviewModel)?.id ?? reviewModels[0]?.id ?? null,
     config.scenario === 'failure', emit);
-  const block = () => callbacks.notice(PREVIEW_NOTICE);
   const replay = () => {
     epoch++;
     persistedState = {};
     missionSetup = null;
+    modelsPreview.reset();
     reviewPlayback.reset();
     playback.reset();
   };
@@ -93,11 +96,7 @@ export function createPreviewRuntime(config: StudioConfig, callbacks: {
     }
     const modelRequest = parseModelsRequest(request);
     if (modelRequest) {
-      const read = modelRequest.action.kind === 'refresh';
-      if (read) emit({ type: 'models.snapshot', version: MODEL_MANAGER_VERSION, snapshot: models });
-      else block();
-      emit({ type: 'models.result', version: MODEL_MANAGER_VERSION, requestId: modelRequest.requestId,
-        ok: read, message: read ? 'Fixed example models. No provider was contacted.' : PREVIEW_NOTICE });
+      modelsPreview.handle(modelRequest.requestId, modelRequest.action);
       return;
     }
     const missionRequest = parseMissionWebviewMessage(request);

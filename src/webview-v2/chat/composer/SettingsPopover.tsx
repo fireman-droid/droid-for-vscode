@@ -241,6 +241,7 @@ export function SettingsPopover({
       {showMode ? (
         <SettingsDropdown
           id={`${id}-mode`}
+          icon="mode"
           title={t("Mode")}
           expanded={view === 'mode'}
           current={confirmed.interactionMode}
@@ -258,6 +259,7 @@ export function SettingsPopover({
       {showAutonomy ? (
         <SettingsDropdown
           id={`${id}-autonomy`}
+          icon="autonomy"
           title={t("Autonomy")}
           expanded={view === 'autonomy'}
           current={confirmed.autonomyLevel}
@@ -275,6 +277,7 @@ export function SettingsPopover({
       {showTheme ? (
         <SettingsDropdown
           id={`${id}-theme`}
+          icon="theme"
           title={t("Theme")}
           expanded={view === 'theme'}
           current={theme.preference}
@@ -586,6 +589,7 @@ function AttachIcon({ kind }: { readonly kind: AttachSource }): React.JSX.Elemen
 
 function SettingsDropdown<Value extends string>({
   id,
+  icon,
   title,
   expanded,
   current,
@@ -595,6 +599,7 @@ function SettingsDropdown<Value extends string>({
   onSelect,
 }: {
   readonly id: string;
+  readonly icon: 'mode' | 'autonomy' | 'theme';
   readonly title: string;
   readonly expanded: boolean;
   readonly current: Value;
@@ -616,8 +621,9 @@ function SettingsDropdown<Value extends string>({
     <Collapsible className="dvx-settings-select" data-expanded={expanded} open={expanded}
       onOpenChange={(open) => { if (open !== expanded) onToggle(); }}>
       <CollapsibleTrigger asChild>
-        <Button ref={trigger} variant="plain" size="none" className="dvx-popover-row"
+        <Button ref={trigger} variant="plain" size="none" className="dvx-popover-row dvx-settings-select-row"
           aria-label={t(title)} aria-controls={id} disabled={disabled}>
+          <SettingsSelectIcon kind={icon} />
           <span className="dvx-popover-row-copy"><strong>{t(title)}</strong></span>
           <span className="dvx-popover-row-value">{t(options.find((option) => option.value === current)?.label ?? current)}</span>
           <ChevronDownIcon />
@@ -636,6 +642,48 @@ function SettingsDropdown<Value extends string>({
         </RadioGroup>
       </AnimatedCollapsibleContent>
     </Collapsible>
+  );
+}
+
+function SettingsSelectIcon({
+  kind,
+}: {
+  readonly kind: 'mode' | 'autonomy' | 'theme';
+}): React.JSX.Element {
+  if (kind === 'mode') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M3 5h10M3 11h10M6.5 3.5v3M10.5 9.5v3"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (kind === 'autonomy') {
+    return (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M8 2.4 12.5 4v3.4c0 2.7-1.9 5-4.5 5.8-2.6-.8-4.5-3.1-4.5-5.8V4L8 2.4Z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M8 2.2v1.3M8 12.5v1.3M2.2 8h1.3M12.5 8h1.3M3.9 3.9l.9.9M11.2 11.2l.9.9M12.1 3.9l-.9.9M4.8 11.2l-.9.9"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

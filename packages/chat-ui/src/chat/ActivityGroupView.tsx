@@ -9,8 +9,10 @@ export interface ActivityPresentation {
   readonly action: string;
   readonly summary?: string;
   readonly target?: string | null;
+  readonly targetTitle?: string | null;
   readonly latestAction?: string;
   readonly latestTarget?: string | null;
+  readonly latestTargetTitle?: string | null;
   readonly facts: readonly string[];
   readonly detailFacts?: readonly string[];
   readonly failed: boolean;
@@ -28,34 +30,39 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
   const summaryText = presentation.summary || t('{count} records', { count: presentation.count });
   const resolvedAction = presentation.latestAction ?? presentation.action;
   const resolvedTarget = presentation.latestTarget ?? presentation.target ?? null;
+  const resolvedTargetTitle = presentation.latestTargetTitle ?? presentation.targetTitle ?? resolvedTarget;
   const liveStep = useRef({
     action: resolvedAction,
     target: resolvedTarget,
+    targetTitle: resolvedTargetTitle,
     actionVersion: 0,
     targetVersion: 0,
     shimmerDelay: '0s',
   });
   if (!presentation.running) {
-    liveStep.current = { action: 'Processing', target: null, actionVersion: 0, targetVersion: 0, shimmerDelay: '0s' };
+    liveStep.current = { action: 'Processing', target: null, targetTitle: null, actionVersion: 0, targetVersion: 0, shimmerDelay: '0s' };
   } else {
     const holdPrevious = resolvedAction === 'Processing' && liveStep.current.action !== 'Processing';
     const incomingAction = holdPrevious ? liveStep.current.action : resolvedAction;
     const incomingTarget = holdPrevious ? liveStep.current.target : resolvedTarget;
+    const incomingTargetTitle = holdPrevious ? liveStep.current.targetTitle : resolvedTargetTitle;
     const actionChanged = incomingAction !== liveStep.current.action;
     const targetChanged = incomingTarget !== liveStep.current.target;
-    if (actionChanged || targetChanged) {
+    if (actionChanged || targetChanged || incomingTargetTitle !== liveStep.current.targetTitle) {
       const nowSeconds = (typeof performance !== 'undefined' ? performance.now() : 0) / 1000;
       liveStep.current = {
         action: incomingAction,
         target: incomingTarget,
+        targetTitle: incomingTargetTitle,
         actionVersion: liveStep.current.actionVersion + (actionChanged ? 1 : 0),
         targetVersion: liveStep.current.targetVersion + (targetChanged ? 1 : 0),
-        shimmerDelay: `${-(nowSeconds % 1.8).toFixed(3)}s`,
+        shimmerDelay: actionChanged || targetChanged ? `${-(nowSeconds % 1.8).toFixed(3)}s` : liveStep.current.shimmerDelay,
       };
     }
   }
   const activeAction = liveStep.current.action;
   const activeTarget = liveStep.current.target;
+  const activeTargetTitle = liveStep.current.targetTitle;
   return <div className="v2-activity-group min-w-0">
     {presentation.count > 0 ? <Collapsible open={disclosure.expanded}>
     <CollapsibleTrigger asChild><Button ref={disclosure.buttonRef} variant="plain" size="none" aria-label={t('Process: {action}', { action: t('Execution history') })} aria-controls={id} onClick={disclosure.toggle} className="v2-explored-summary select-none">
@@ -77,13 +84,13 @@ export function ActivityGroupView({ messageId, groupId, presentation, children, 
           <span className="v2-shimmer-text">{t(activeAction)}</span>
         </span>
         {activeTarget ? <span key={`target:${liveStep.current.targetVersion}`} className="v2-running-slot v2-running-slot-target">
-          <span className="v2-shimmer-sub" title={activeTarget}>{activeTarget}</span>
+          <span className="v2-shimmer-sub" title={activeTargetTitle ?? activeTarget}>{activeTarget}</span>
         </span> : null}
       </Button>
     </AnimatedCollapsibleContent> : null}
     </Collapsible> : null}
-    {presentation.waiting ? <p role="status" className="py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
-    {presentation.notice ? <p role="status" className={`py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
+    {presentation.waiting ? <p data-ui-notice="" role="status" className="select-none py-0.5 text-xs text-muted-foreground">{t(presentation.action)}</p> : null}
+    {presentation.notice ? <p data-ui-notice="" role="status" className={`select-none py-0.5 text-xs ${presentation.failed ? 'text-destructive' : 'text-muted-foreground'}`}>{presentation.notice}</p> : null}
     {latest ? <ProcessGroupContext.Provider value={false}>
       <ProcessLatestContext.Provider value={true}>{latest}</ProcessLatestContext.Provider>
     </ProcessGroupContext.Provider> : null}

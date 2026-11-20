@@ -69,12 +69,6 @@ async function build(doc: vscode.TextDocument, offset = doc.getText().length, si
   return service.build({ document: doc, text: doc.getText(), offset, settings: readCompletionSettings(), signal,
     filepath: path.basename(doc.uri.fsPath), snippets: [], comments: { line: '//' } });
 }
-async function nextDefinitions(doc: vscode.TextDocument, signal = new AbortController().signal) {
-  state.editor = { document: doc } as vscode.TextEditor;
-  service ??= new KiloContextService();
-  return service.collectDefinitions({ document: doc, text: doc.getText(), offset: doc.getText().length,
-    settings: readCompletionSettings(), signal });
-}
 beforeAll(async () => {
   assets = await mkdtemp(path.join(tmpdir(), 'droid-parser-assets-'));
   const require = createRequire(import.meta.url);
@@ -247,6 +241,27 @@ describe('Mercury reference context', () => {
 
 
 describe('merged Kilo and editor context', () => {
+  it('resolves Java imports while editor definitions are pending and keeps both in the prompt', async () => {
+    state.config.model = 'Qwen/Qwen3-Coder-30B-A3B-Instruct';
+    const text = 'import shop.Item;\nclass Cart { Item current() { return ';
+    const main = await document('Cart.java', text, 'java');
+    const item = await document('shop/Item.java', 'class Item { int unitPrice; }', 'java', false);
+    const owner = await document('shop/Owner.java', 'class Owner { int customerId; }', 'java', false);
+    state.editor = { document: main } as vscode.TextEditor;
+    service = new KiloContextService();
+    let finishEditor!: (snippets: ContextSnippet[]) => void;
+    const editor = new Promise<ContextSnippet[]>(resolve => { finishEditor = resolve; });
+    state.definitions.mockImplementation(async () => {
+      finishEditor([{ uri: owner.uri.toString(), filepath: 'shop/Owner.java', content: owner.getText(), source: 'definition' }]);
+      return [{ uri: item.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: item.getText().length } } }];
+    });
+    const prompt = await service.build({ document: main, text, offset: text.length, filepath: 'Cart.java',
+      settings: readCompletionSettings(), signal: new AbortController().signal, snippets: editor, comments: { line: '//' } });
+    expect(prompt.prefix).toContain('unitPrice');
+    expect(prompt.prefix).toContain('customerId');
+    expect(prompt.prefix.endsWith('return ')).toBe(true);
+  });
+
   it('keeps imported types ahead of unrelated opened files under a small budget', async () => {
     state.config.model = 'mercury-edit-2'; state.config.maxContextCharacters = 1400;
     const text = "import { User } from './types';\nfunction greet(user: User) {\n  return \n}";
@@ -352,44 +367,6 @@ describe('context lookup quality regressions', () => {
       range: new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line, 0)), text,
     }] });
   }
-
-  it('gives Next Edit closed imported definitions and refreshes them after dependency edits', async () => {
-    const main = await document('main.ts', "import { User as LocalUser } from './types';\nconst user: LocalUser = ");
-    const types = await document('types.ts', 'export type User = { oldField: string };', 'typescript', false);
-    state.definitions.mockResolvedValue(definition(types));
-    const first = await nextDefinitions(main);
-    expect(first.map(s => s.content).join('\n')).toContain('oldField');
-    expect(first.every(s => s.filepath === 'types.ts')).toBe(true);
-    expect(state.documents).not.toContain(types);
-    await writeFile(types.uri.fsPath, 'export type User = { newField: number };');
-    service!.invalidate(types.uri.toString());
-    const second = await nextDefinitions(main);
-    expect(second.map(s => s.content).join('\n')).toContain('newField');
-    expect(second.map(s => s.content).join('\n')).not.toContain('oldField');
-    expect(state.clipboard).not.toHaveBeenCalled();
-  });
-
-  it.each(['disabled', 'ignored'])('excludes %s related definitions from Next Edit', async mode => {
-    const main = await document('main.ts', "import { User } from './types';\nconst user: User = ");
-    const types = await document('types.ts', 'export type User = { privateField: string };', 'typescript', false);
-    state.definitions.mockResolvedValue(definition(types));
-    if (mode === 'disabled') state.config.relatedFiles = false;
-    else await document('.droidignore', 'types.ts', 'plaintext');
-    expect(await nextDefinitions(main)).toEqual([]);
-    if (mode === 'disabled') expect(state.definitions).not.toHaveBeenCalled();
-  });
-
-  it('bounds a stalled Next Edit definition lookup and retries it on a later request', async () => {
-    const main = await document('main.ts', "import { User } from './types';\nconst user: User = ");
-    const types = await document('types.ts', 'export type User = { recoveredField: string };', 'typescript', false);
-    state.definitions.mockImplementation(() => new Promise(() => {}));
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 800);
-    try { expect(await nextDefinitions(main, controller.signal)).toEqual([]); }
-    finally { clearTimeout(timer); controller.abort(); }
-    state.definitions.mockResolvedValue(definition(types));
-    expect((await nextDefinitions(main)).map(s => s.content).join('\n')).toContain('recoveredField');
-  });
 
   it('retains resolved imports when a later lookup times out, then resumes missing bindings', async () => {
     const main = await document('main.ts', "import { User, Other } from './types';\nconst pair: [User, Other] = ");

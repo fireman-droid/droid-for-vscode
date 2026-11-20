@@ -55,7 +55,8 @@ it('separates unavailable snippets from failure and opens current files without 
   const openPath = vi.fn();
   const read: ToolTranscriptItem = { kind: 'tool', id: 'read-row', turnId: 'turn-1', toolUseId: 'read-1', toolName: 'Read', action: 'Read file', status: 'completed', progressCount: 0, latestUpdateKind: null, target: 'src/app.ts' };
   const view = render(<View item={read} actions={{ openPath }} />);
-  expect(screen.getByText('Not saved')).toBeTruthy();
+  expect(screen.queryByText('Not saved')).toBeNull();
+  expect(screen.getByTitle(/does not contain a result snippet/i)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read-1' }, text: 'const retained = true;', truncated: true } }} actions={{ openPath }} />);
   fireEvent.click(screen.getByRole('button', { name: /^Read/ }));
@@ -71,8 +72,7 @@ it.each([false, true])('omits missing targets and unavailable preview noise with
     resultPreview: { availability: 'unavailable', reason: 'restricted' } };
   const view = render(<View item={read} grouped={grouped} />);
   expect(view.container.textContent).toContain('Read');
-  expect(view.container.textContent).not.toMatch(/Target not recorded|Not saved/);
-  expect(screen.getByText('No preview')).toBeTruthy();
+  expect(view.container.textContent).not.toMatch(/Target not recorded|Not saved|No preview/);
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   expect(screen.getByTitle(/restricted/)).toBeTruthy();
 });
@@ -81,13 +81,16 @@ it('keeps evicted results and simple read receipts compact without empty disclos
   const read: ToolTranscriptItem = { ...base, toolName: 'Read', action: 'Read file', status: 'completed', detailKind: undefined,
     detail: undefined, outputTail: undefined, target: 'src/app.ts', resultPreview: { availability: 'unavailable', reason: 'evicted' } };
   const view = render(<View item={read} grouped />);
-  expect(screen.getByText('Not retained')).toBeTruthy();
+  expect(screen.queryByText('Not retained')).toBeNull();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
   expect(view.container.textContent).not.toContain('conversation limit');
   expect(screen.getByTitle(/conversation limit/)).toBeTruthy();
   view.rerender(<View item={{ ...read, resultPreview: { availability: 'available', source: { tool: 'Read', path: 'src/app.ts', callId: 'read' },
     text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes', truncated: false } }} grouped />);
-  expect(screen.getByText('Read lines 1–37 (1.3 KiB)')).toBeTruthy();
+  expect(screen.getByText('app.ts')).toBeTruthy();
+  expect(screen.getByText('#L1–37')).toBeTruthy();
+  expect(screen.queryByText('Read lines 1–37 (1.3 KiB)')).toBeNull();
+  expect(screen.getByTitle(/Read lines 1–37 \(1\.3 KiB\)/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Read/ })).toBeNull();
 });
 
@@ -166,7 +169,8 @@ it('does not substitute a turn Diff for missing operation evidence without offer
   expect(screen.queryByRole('button', { name: 'Canvas' })).toBeNull();
   expect(preview).not.toHaveBeenCalled();
   expect(postMessage).not.toHaveBeenCalled();
-  expect(screen.getByText('This operation’s Diff was not recorded.')).toBeDefined();
+  expect(screen.queryByText('This operation’s Diff was not recorded.')).toBeNull();
+  expect(screen.getByTitle(/This operation’s Diff was not recorded\./)).toBeDefined();
   expect(screen.queryByRole('button', { name: /Review/ })).toBeNull();
   expect(postMessage).not.toHaveBeenCalled();
 });
@@ -176,13 +180,12 @@ it('offers command copy and the live terminal mirror without inventing a backgro
   const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
   const terminal = vi.fn();
   const view = render(<View item={{ ...base, backgroundHint: { fireAndForget: true } }} actions={{ openTerminalMirror: terminal }} />);
-  await user.click(screen.getByRole('button', { name: 'Command actions' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Copy command' }));
+  await user.click(screen.getByRole('button', { name: 'Copy command' }));
   expect(copy).toHaveBeenCalledExactlyOnceWith(base.detail);
-  await user.click(screen.getByRole('menuitem', { name: 'View in terminal' }));
+  await user.click(screen.getByRole('button', { name: 'View in terminal' }));
   expect(terminal).toHaveBeenCalledOnce();
   view.rerender(<View item={{ ...base, status: 'completed', backgroundHint: { fireAndForget: true } }} actions={{ openTerminalMirror: terminal }} />);
-  expect(screen.queryByRole('menuitem', { name: 'View in terminal' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'View in terminal' })).toBeNull();
   expect(screen.queryByRole('button', { name: /stop/i })).toBeNull();
   expect(screen.getByText(/Keeps running until you stop it manually/)).toBeDefined();
 });
@@ -197,7 +200,8 @@ it('uses the host-owned subagent row identity and live feed, without exposing ch
   act(() => window.dispatchEvent(new MessageEvent('message', { data: {
     type: 'subagent.activity', sequence: 1, sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1', activities: [{ action: 'Read', target: 'src/app.ts' }],
   } })));
-  expect(screen.getByText('Read · src/app.ts')).toBeDefined();
+  expect(screen.getByText('Read · app.ts')).toBeDefined();
+  expect(screen.getByTitle('Read · src/app.ts')).toBeDefined();
   expect(screen.getByText('Running in background')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /Inspect the selected module/ }));
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'subagent.open', sessionId: 'session-1', turnId: 'turn-1', toolUseId: 'tool-1' });
@@ -214,4 +218,63 @@ it('does not display historical workspace snapshots as assistant changes', () =>
   expect(screen.queryByRole('button', { name: /changes/i })).toBeNull();
   expect(openFileDiff).not.toHaveBeenCalled();
   expect(openReviewTurn).not.toHaveBeenCalled();
+});
+
+it('opens grouped file targets directly by clicking the filename without an extra external-link button', async () => {
+  const user = userEvent.setup();
+  const openPath = vi.fn();
+  const receiptRead: ToolTranscriptItem = {
+    kind: 'tool',
+    id: 'grouped-read-receipt',
+    turnId: 'turn-1',
+    toolUseId: 'read-receipt-1',
+    toolName: 'Read',
+    action: 'Read file',
+    status: 'completed',
+    progressCount: 0,
+    latestUpdateKind: null,
+    target: 'src/app.ts',
+    resultPreview: {
+      availability: 'available',
+      source: { tool: 'Read', path: 'src/app.ts', callId: 'read-receipt-1' },
+      text: 'Read C:/workspace/src/app.ts: lines 1-37 (37 lines, 1.3 KiB); the file holds the bytes',
+      truncated: false,
+    },
+  };
+  const view = render(<View item={receiptRead} actions={{ openPath }} grouped />);
+  expect(screen.queryByRole('button', { name: 'Open current file' })).toBeNull();
+  const targetButton = screen.getByRole('button', { name: 'Open src/app.ts' });
+  expect(targetButton.textContent).toContain('app.ts');
+  expect(targetButton.textContent).toContain('#L1–37');
+  await user.click(targetButton);
+  expect(openPath).toHaveBeenCalledExactlyOnceWith({ path: 'src/app.ts', line: 1 });
+
+  openPath.mockClear();
+  const previewRead: ToolTranscriptItem = {
+    kind: 'tool',
+    id: 'grouped-read-preview',
+    turnId: 'turn-1',
+    toolUseId: 'read-preview-1',
+    toolName: 'Read',
+    action: 'Read file',
+    status: 'completed',
+    progressCount: 0,
+    latestUpdateKind: null,
+    target: 'src/app.ts',
+    resultPreview: {
+      availability: 'available',
+      source: { tool: 'Read', path: 'src/app.ts', callId: 'read-preview-1' },
+      text: 'const retained = true;',
+      truncated: true,
+    },
+  };
+  view.rerender(<View item={previewRead} actions={{ openPath }} grouped />);
+  expect(screen.queryByRole('button', { name: 'Open current file' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Open src/app.ts' }));
+  expect(openPath).toHaveBeenCalledExactlyOnceWith({ path: 'src/app.ts' });
+  expect(screen.queryByText('truncated')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: /^Read/ }));
+  expect(screen.getByText('truncated')).toBeDefined();
+  expect(openPath).toHaveBeenCalledTimes(1);
 });

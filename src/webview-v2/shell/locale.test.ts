@@ -41,5 +41,8 @@ describe('interface language', () => {
     expect(translate('zh-TW', '{count} files changed', { count: 3 })).toBe('已修改 3 個檔案');
     expect(translate('en', 'No catalog entry: model output')).toBe('No catalog entry: model output');
     expect(translate('zh-CN', 'Open diff for {path}', { path: 'src/{value}.ts' })).toBe('打开 src/{value}.ts 的差异');
+    expect(translate('zh-CN', 'Created')).toBe('已创建');
+    expect(translate('zh-TW', 'Created')).toBe('已建立');
+    expect(translate('en', '创建时间')).toBe('Created');
   });
 });

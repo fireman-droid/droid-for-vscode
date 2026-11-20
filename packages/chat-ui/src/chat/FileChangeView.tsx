@@ -13,6 +13,10 @@ export interface FileChangeViewProps {
   readonly children?: ReactNode;
   readonly onInteract?: () => void;
   readonly onSelect?: () => void;
+  readonly onOpenPath?: () => void;
+  readonly openPathLabel?: string;
+  readonly pillTitle?: string;
+  readonly pillBadge?: string;
   readonly label?: string;
   readonly compact?: boolean;
   readonly alwaysExpanded?: boolean;
@@ -34,26 +38,51 @@ export function ChangeLineStats({ additions, deletions }: Pick<ChangeFile, 'addi
   );
 }
 
-export function FileChangeView({ file, children, onInteract, onSelect, label, compact = false, alwaysExpanded = false, metadata }: FileChangeViewProps) {
+export function FileChangeView({ file, children, onInteract, onSelect, onOpenPath, openPathLabel, pillTitle, pillBadge, label, compact = false, alwaysExpanded = false, metadata }: FileChangeViewProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const hasDetails = !onSelect && children !== null && children !== undefined && children !== false;
+  const shortName = file.path.split(/[\\/]/u).pop() || file.path;
+  const hasStats = file.additions !== null || file.deletions !== null;
+  const pillBody = <>
+    <span className="dvx-change-pill-name">{shortName}</span>
+    {(hasStats || pillBadge) ? <span className="dvx-change-pill-sep" aria-hidden="true" /> : null}
+    <ChangeLineStats additions={file.additions} deletions={file.deletions} />
+    {pillBadge ? <span className="text-[11px] text-muted-foreground">{pillBadge}</span> : null}
+  </>;
   const contents = <>
     {!alwaysExpanded && (onSelect || compact) && <ChangeFileIcon path={file.path} />}
     {!alwaysExpanded && hasDetails && <ChevronRight className="dvx-change-chevron" aria-hidden="true" />}
     <span className="dvx-change-label">{label ?? file.kind ?? t("Edited")}</span>
-    <span className="dvx-change-path" title={file.path}>{compact ? file.path.split(/[\\/]/u).pop() : file.path}</span>
-    <ChangeLineStats additions={compact ? file.additions || null : file.additions} deletions={compact ? file.deletions || null : file.deletions} />
+    {alwaysExpanded ? (
+      onOpenPath ? (
+        <Button variant="plain" size="none" className="dvx-change-pill" title={pillTitle ?? file.path}
+          aria-label={openPathLabel ?? t("Open current file")}
+          onClick={() => { onInteract?.(); onOpenPath(); }}>
+          {pillBody}
+        </Button>
+      ) : (
+        <span className="dvx-change-pill" title={pillTitle ?? file.path}>
+          {pillBody}
+        </span>
+      )
+    ) : <>
+      <span className="dvx-change-path" title={file.path}>{compact ? shortName : file.path}</span>
+      <ChangeLineStats additions={compact ? file.additions || null : file.additions} deletions={compact ? file.deletions || null : file.deletions} />
+    </>}
     {metadata ? <span className="shrink-0 text-[11px] text-muted-foreground">{metadata}</span> : null}
   </>;
   if (alwaysExpanded) return <div className="dvx-change-file operation-diff">
-    <div className="dvx-change-file-header border-b border-[var(--panel-edge)]">
-      <div className="dvx-change-row dvx-change-row-static">{contents}</div>
+    <div className="dvx-change-file-header">
+      <div className="dvx-change-row dvx-change-row-static">
+        <ChangeFileIcon path={file.path} />
+        {contents}
+      </div>
       {onSelect ? <Button variant="plain" size="none" className="dvx-change-action mr-1"
         aria-label={t("Review changes to {p0}", { p0: file.path })}
         onClick={() => { onInteract?.(); onSelect(); }}>{t("Review")}</Button> : null}
     </div>
-    {children}
+    {children ? <div className="dvx-operation-body">{children}</div> : null}
   </div>;
   return (
     <Collapsible className="dvx-change-file" open={open} onOpenChange={(nextOpen) => {

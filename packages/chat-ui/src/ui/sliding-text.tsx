@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { cn } from './cn';
 
 /** A single-line replacement: the old text leaves upward as the latest enters below. */
-export function SlidingText({ text, className }: { readonly text: string; readonly className?: string }) {
+export function SlidingText({ text, title, className }: { readonly text: string; readonly title?: string; readonly className?: string }) {
   const [frame, setFrame] = useState<{ current: string; previous?: string; revision: number }>({
     current: text, revision: 0,
   });
@@ -10,7 +10,7 @@ export function SlidingText({ text, className }: { readonly text: string; readon
   if (frame.current !== text) {
     setFrame({ current: text, previous: frame.current, revision: frame.revision + 1 });
   }
-  return <span className={cn('dvx-sliding-text', className)} title={text}>
+  return <span className={cn('dvx-sliding-text', className)} title={title ?? text}>
     {frame.previous !== undefined ? <span key={`out-${frame.revision}`} aria-hidden="true"
       className="dvx-sliding-text-line dvx-sliding-text-out">{frame.previous}</span> : null}
     <span key={`in-${frame.revision}`} className="dvx-sliding-text-line"

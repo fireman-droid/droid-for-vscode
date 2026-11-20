@@ -89,8 +89,12 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
         {snapshot.connections.length === 0 && <div data-ui-notice="" className="management-empty"><p>{t("还没有渠道")}</p><Button variant="plain" disabled={disabled} onClick={createChannel}><Plus />{t("创建渠道")}</Button></div>}
       </>}
     </section>
-    <DialogContent className="management-dialog models-workspace-dialog" closeDisabled={busy} closeLabel={t('关闭')}
-      onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onInteractOutside={event => event.preventDefault()}>
+    <DialogContent className="management-dialog models-workspace-dialog" closeDisabled={busy} closeLabel={t('Close')}
+      onEscapeKeyDown={event => {
+        if (busy || (event.target instanceof HTMLElement && event.target.classList.contains('models-import-alias-input'))) {
+          event.preventDefault();
+        }
+      }} onInteractOutside={event => event.preventDefault()}>
       <DialogTitle>{creating ? t("创建渠道") : connection?.name}</DialogTitle>
       <DialogDescription className="management-caption">{t("Save each section separately. Closing does not undo applied changes.")}</DialogDescription>
       <ScrollArea className="models-workspace-scroll" nonce={document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce}>
@@ -98,7 +102,7 @@ export function ModelsPage({ transport }: { readonly transport: ModelsTransport 
           <ConnectionWorkspace page={page} creating={creating} onCreated={() => { setCreating(false); setFilter('all'); }} onClose={close} />
         </div>
       </ScrollArea>
-      {!creating ? <div className="models-workspace-footer"><Button variant="outline" disabled={busy} onClick={close}>{t("关闭")}</Button></div> : null}
+      {!creating ? <div className="models-workspace-footer"><Button variant="outline" disabled={busy} onClick={close}>{t("Close")}</Button></div> : null}
     </DialogContent>
   </Dialog>;
 }

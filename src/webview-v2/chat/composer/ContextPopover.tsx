@@ -7,6 +7,7 @@ import { useI18n } from '@droidvisx/chat-ui/i18n';
 // Remaining/Source stat pair and two-scope table retired; per-turn
 // detail lives on in each legend row's hover title.
 
+import { LoaderCircle } from 'lucide-react';
 import { type SessionContextState } from '../../../shared/protocol/settings';
 import { Button } from '../../ui/button';
 import type {
@@ -109,7 +110,7 @@ export function ContextPopover({
         >
           {compactPending ? (
             <>
-              <span className="dvx-compact-spinner" aria-hidden="true" />{t("Compacting…")}</>
+              <LoaderCircle className="dvx-compact-spinner size-3.5 shrink-0" aria-hidden="true" />{t("Compacting…")}</>
           ) : (
             t("Compact conversation")
           )}

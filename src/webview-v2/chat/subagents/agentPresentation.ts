@@ -5,12 +5,13 @@ import type { SubagentStatus } from '../../../shared/protocol/transcript';
 import type { SubagentRowExtras } from './subagentPanelFlow';
 import { formatElapsed } from './subagentWorking';
 import { formatDuration } from '../thread/readers';
+import { compactGenericTarget } from '../transcript/compactTarget';
 
 type AgentDisplayStatus = AgentChatStatus | SubagentStatus;
 type AgentPresentation = Pick<AgentTaskProps, 'title' | 'role' | 'statusLabel' | 'tone' | 'onOpen'>;
 
 const STATUS_LABELS: Readonly<Record<AgentDisplayStatus, string>> = {
-  pending: 'Pending', running: 'Running', paused: 'Paused', completed: 'Completed',
+  pending: 'Starting up', running: 'Running', paused: 'Paused', completed: 'Completed',
   failed: 'Failed', cancelled: 'Stopped', unknown: 'Status unavailable',
 };
 
@@ -55,7 +56,10 @@ export function presentSubagent(item: ToolTranscriptItem, extras: SubagentRowExt
   const feedback = opening ? 'Opening task…' : extras?.openStatus === 'unavailable'
     ? 'Task transcript is not linked yet.' : extras?.openStatus === 'failed' ? 'Could not open task transcript.' : undefined;
   const latestActivity = extras?.activities[0];
-  const activity = latestActivity ? [latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')
+  const rawActivity = latestActivity ? [latestActivity.action, latestActivity.target].filter(Boolean).join(' · ')
+    : undefined;
+  const activity = latestActivity
+    ? [latestActivity.action, latestActivity.target ? compactGenericTarget(latestActivity.target) : undefined].filter(Boolean).join(' · ')
     : undefined;
   return {
     title: subagent.description || `${subagent.type} subagent`,
@@ -66,6 +70,7 @@ export function presentSubagent(item: ToolTranscriptItem, extras: SubagentRowExt
     elapsed,
     toolCount: subagent.toolUseCount,
     activity,
+    activityTitle: rawActivity,
     feedback: feedback ? { text: feedback, opening, failed: extras?.openStatus === 'failed' } : undefined,
   };
 }

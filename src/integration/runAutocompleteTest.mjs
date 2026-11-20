@@ -40,8 +40,7 @@ exports.activate = context => context.subscriptions.push(vscode.workspace.regist
   serializeNotebook: async () => new Uint8Array(), deserializeNotebook: async () => new vscode.NotebookData([]),
 }));`);
 const isCursor = path.basename(executable).toLowerCase() === 'cursor.exe';
-const nextEditQuality = process.argv.includes('--next-edit-quality');
-const quality = process.argv.includes('--quality') || nextEditQuality;
+const quality = process.argv.includes('--quality');
 if (quality) {
   assert.ok(process.env.DROID_AUTOCOMPLETE_BRIDGE_URL || process.env.DROID_AUTOCOMPLETE_GATEWAY_FILE,
     'Quality mode requires a model gateway');
@@ -58,8 +57,8 @@ const args = [
   `--user-data-dir=${profile}`, `--extensions-dir=${extensions}`,
   `--extensionDevelopmentPath=${path.join(extracted, 'extension')}`,
   `--extensionDevelopmentPath=${notebookFixture}`,
-  `--extensionTestsPath=${path.join(repository, nextEditQuality ? 'src/integration/suite/nextEditQuality.cjs' : quality ? 'src/integration/suite/autocompleteQuality.cjs'
-    : process.argv.includes('--next-edit-only') ? 'src/integration/suite/nextEdit.cjs' : process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
+  `--extensionTestsPath=${path.join(repository, quality ? 'src/integration/suite/autocompleteQuality.cjs'
+    : process.argv.includes('--notebook-only') ? 'src/integration/suite/autocompleteNotebook.cjs' : 'src/integration/suite/autocomplete.cjs')}`,
 ];
 function quote(argument) {
   return '"' + argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"';
