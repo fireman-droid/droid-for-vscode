@@ -1,4 +1,4 @@
-/*! Vendored from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (classic-auto-complete/language-filters/index.ts). MIT; see third-party/KILO-LICENSE.txt. */
+/*! Vendored from Kilo Code 54de37a85dfef8feb828382d8a71f84139857121 (classic-auto-complete/language-filters/index.ts). MIT; see third-party/KILO-LICENSE.txt. */
 import type { AutocompleteSuggestion } from "../uselessSuggestionFilter"
 import { markdownFilter } from "./markdown"
 

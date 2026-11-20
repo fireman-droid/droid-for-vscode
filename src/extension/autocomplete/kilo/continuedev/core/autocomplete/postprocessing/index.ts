@@ -1,5 +1,6 @@
-/*! Derived from Kilo Code 7d977bce994af36f0edf752cb53e3aefc7aeb214 (continuedev/core/autocomplete/postprocessing/index.ts). Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. Droid uses exact repetition checks to preserve similar declarations. */
-import { removePrefixOverlap } from "./removePrefixOverlap.js"
+/*! Adapted from Kilo Code 54de37a85dfef8feb828382d8a71f84139857121 (continuedev/core/autocomplete/postprocessing/index.ts). Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. */
+import { longestCommonSubsequence } from "../../util/lcs.js"
+import { lineIsRepeated } from "../util/textSimilarity.js"
 
 function rewritesLineAbove(completion: string, prefix: string): boolean {
   const lineAbove = prefix
@@ -14,26 +15,31 @@ function rewritesLineAbove(completion: string, prefix: string): boolean {
   if (!firstLineOfCompletion) {
     return false
   }
-  // Similar declarations can differ by a meaningful identifier or literal. Only exact
-  // repeated code is suppressed; short closing tokens can belong to nested blocks.
-  return lineAbove.trim().length > 4 && lineAbove.trim() === firstLineOfCompletion.trim()
+  return lineIsRepeated(lineAbove, firstLineOfCompletion)
 }
 
 const MAX_REPETITION_FREQ_TO_CHECK = 3
+const MAX_LCS_CELLS = 1_000_000
 function isExtremeRepetition(completion: string): boolean {
-  const lines = completion.split("\n").map((line) => line.trim())
+  const lines = completion.split("\n")
   if (lines.length < 6) {
     return false
   }
   for (let freq = 1; freq < MAX_REPETITION_FREQ_TO_CHECK; freq++) {
-    const pattern = lines.slice(0, freq)
-    if (pattern.every((line) => line.length === 0)) continue
-    let matchedLines = 0
-    for (let i = 0; i < lines.length; i += freq) {
-      if (pattern.every((line, offset) => lines[i + offset] === line)) matchedLines += freq
-    }
-    if (matchedLines > 8 || matchedLines / lines.length > 0.8) {
-      return true
+    // Our configurable transports can return long unbroken lines. Avoid an
+    // unbounded quadratic allocation in the extension host for such responses.
+    if ((lines[0].length + 1) * (lines[freq].length + 1) > MAX_LCS_CELLS) continue
+    const lcs = longestCommonSubsequence(lines[0], lines[freq])
+    if (lcs.length > 5 || lcs.length > lines[0].length * 0.5) {
+      let matchCount = 0
+      for (let i = 0; i < lines.length; i += freq) {
+        if (lines[i].includes(lcs)) {
+          matchCount++
+        }
+      }
+      if (matchCount * freq > 8 || (matchCount * freq) / lines.length > 0.8) {
+        return true
+      }
     }
   }
   return false
@@ -89,37 +95,29 @@ export function postprocessCompletion({
   llm,
   prefix,
   suffix,
-  preserveFences = false,
-  onDecision,
 }: {
   completion: string
   llm: { model: string }
   prefix: string
   suffix: string
-  preserveFences?: boolean
-  onDecision?: (reason: string) => void
 }): string | undefined {
   // Don't return empty
   if (isBlank(completion)) {
-    onDecision?.("empty-response")
     return undefined
   }
 
   // Don't return whitespace
   if (isOnlyWhitespace(completion)) {
-    onDecision?.("whitespace-only")
     return undefined
   }
 
   // Dont return if it's just a repeat of the line above
   if (rewritesLineAbove(completion, prefix)) {
-    onDecision?.("repeated-previous-line")
     return undefined
   }
 
   // Filter out repetitions of many lines in a row
   if (isExtremeRepetition(completion)) {
-    onDecision?.("repeating-line-pattern")
     return undefined
   }
 
@@ -128,7 +126,6 @@ export function postprocessCompletion({
     if (completion[0] === " " && completion[1] !== " ") {
       if (prefix.endsWith(" ") && suffix.startsWith("\n")) {
         completion = completion.slice(1)
-        onDecision?.("codestral-leading-space")
       }
     }
 
@@ -137,36 +134,17 @@ export function postprocessCompletion({
     if (suffix.length === 0 && prefix.endsWith("\n\n") && completion.startsWith("\n")) {
       // Remove a single leading \n from the completion
       completion = completion.slice(1)
-      onDecision?.("codestral-leading-newline")
-    }
-  }
-
-  if (llm.model.includes("mercury")) {
-    const withoutOverlap = removePrefixOverlap(completion, prefix)
-    if (withoutOverlap !== completion) onDecision?.("prefix-overlap-removed")
-    completion = withoutOverlap
-
-    // If completion starts with multiple whitespaces, but the cursor is at the
-    // end of the line then it should probably be on a new line
-    if (
-      (completion.startsWith("  ") || completion.startsWith("\t")) &&
-      !prefix.endsWith("\n") &&
-      (suffix.startsWith("\n") || suffix.trim().length === 0)
-    ) {
-      completion = "\n" + completion
-      onDecision?.("mercury-newline-added")
     }
   }
 
   // If prefix ends with space and so does completion, then remove the space from completion
 
-  if (prefix.endsWith(" ") && completion.startsWith(" ") && /\S/.test(prefix.split("\n").at(-1) ?? "")) {
+  if (prefix.endsWith(" ") && completion.startsWith(" ")) {
     completion = completion.slice(1)
-    onDecision?.("leading-space-removed")
   }
 
   // Remove markdown code block delimiters
-  if (!preserveFences) completion = removeBackticks(completion)
+  completion = removeBackticks(completion)
 
   return completion
 }

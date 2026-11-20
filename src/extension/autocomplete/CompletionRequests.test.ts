@@ -1,155 +1,52 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CompletionRequests } from './CompletionRequests';
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(done => { resolve = done; });
-  return { promise, resolve };
-}
-
 afterEach(() => vi.useRealTimers());
 
-describe('completion request handoffs', () => {
-  it('retains a result that completes between cancelled and replacement readers', async () => {
+describe('Kilo classic pending requests', () => {
+  it('joins a pending request for a continuing prefix and unchanged suffix', async () => {
+    const requests = new CompletionRequests();
+    const fetch = vi.fn(async () => {});
+    const leading = requests.run('a', 'const value = ', ';', 300, false, fetch);
+    const covering = requests.run('a', 'const value = 4', ';', 300, false, fetch);
+    expect(covering).toBe(leading);
+    await covering;
+    expect(fetch).toHaveBeenCalledOnce();
+    requests.clear();
+  });
+
+  it('uses a leading edge, coalesces incompatible work on the trailing edge and settles superseded waiters', async () => {
     vi.useFakeTimers();
-    const pool = new CompletionRequests(), output = deferred<string>();
-    const firstReader = new AbortController(), nextReader = new AbortController();
-    const start = vi.fn(() => output.promise);
-    const first = pool.run('file', 'const x = ', ';', firstReader.signal, start).catch(error => error.name);
-    firstReader.abort();
-    expect(await first).toBe('AbortError');
-    await vi.advanceTimersByTimeAsync(50);
-    output.resolve('calculate()');
-    await vi.advanceTimersByTimeAsync(25);
-    const release = pool.reserve('file', 'const x = cal', ';', nextReader.signal);
-    expect(release).toBeDefined();
-    await vi.advanceTimersByTimeAsync(150);
-    expect(await pool.run('file', 'const x = cal', ';', nextReader.signal, start)).toBe('culate()');
-    expect(start).toHaveBeenCalledOnce();
-    release?.(); pool.clear();
+    const requests = new CompletionRequests();
+    const fetch = vi.fn(async () => {});
+    await requests.run('a', 'x', 'first', 300, false, fetch);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const superseded = requests.run('a', 'x', 'second', 300, false, fetch);
+    await vi.advanceTimersByTimeAsync(200);
+    const trailing = requests.run('a', 'x', 'third', 300, false, fetch);
+    await superseded;
+    await vi.advanceTimersByTimeAsync(299);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await trailing;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await requests.run('a', 'x', 'fourth', 300, false, fetch);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    requests.clear();
   });
 
-  it('starts fresh work after a retained suggestion is fully consumed', async () => {
-    const pool = new CompletionRequests(), reader = new AbortController();
-    const start = vi.fn().mockResolvedValueOnce('value').mockResolvedValueOnce(' + 1');
-    expect(await pool.run('file', 'x = ', ';', reader.signal, start)).toBe('value');
-    expect(await pool.run('file', 'x = value', ';', reader.signal, start)).toBe(' + 1');
-    expect(start).toHaveBeenCalledTimes(2); pool.clear();
-  });
-
-  it('keeps a genuinely empty result without repeatedly starting new work', async () => {
-    const pool = new CompletionRequests(), reader = new AbortController();
-    const start = vi.fn(async () => '');
-    expect(await pool.run('file', 'if', '', reader.signal, start)).toBe('');
-    expect(await pool.run('file', 'if', '', reader.signal, start)).toBe('');
-    expect(start).toHaveBeenCalledOnce(); pool.clear();
-  });
-
-  it('starts exactly one fresh request when forward typing diverges from the pending result', async () => {
+  it('aborts an in-flight request and settles a trailing request on reset', async () => {
     vi.useFakeTimers();
-    const pool = new CompletionRequests(), output = deferred<string>();
-    const firstReader = new AbortController(), nextReader = new AbortController();
-    const original = vi.fn(() => output.promise), fresh = vi.fn(async () => '值";\r\n');
-    const prefix = 'const 文本 = "';
-    const first = pool.run('file', prefix, '', firstReader.signal, original).catch(error => error.name);
-    firstReader.abort(); expect(await first).toBe('AbortError');
-    const next = pool.run('file', prefix + '新', '', nextReader.signal, fresh);
-    expect(fresh).not.toHaveBeenCalled();
-    output.resolve('旧值";\r\n');
-    expect(await next).toBe('值";\r\n');
-    expect(original).toHaveBeenCalledOnce(); expect(fresh).toHaveBeenCalledOnce();
-    pool.clear();
-  });
-
-  it('keeps shared transport alive when only one of two readers is cancelled', async () => {
-    vi.useFakeTimers();
-    const pool = new CompletionRequests(), output = deferred<string>();
-    const firstReader = new AbortController(), nextReader = new AbortController();
-    let transport!: AbortSignal;
-    const start = vi.fn((signal: AbortSignal) => { transport = signal; return output.promise; });
-    const first = pool.run('file', 'const 值 = ', ';\r\n', firstReader.signal, start).catch(error => error.name);
-    const next = pool.run('file', 'const 值 = calc', ';\r\n', nextReader.signal, start);
-    firstReader.abort(); expect(await first).toBe('AbortError');
+    const requests = new CompletionRequests();
+    let finish!: () => void;
+    const fetch = vi.fn((_signal: AbortSignal) => new Promise<void>(resolve => { finish = resolve; }));
+    const leading = requests.run('a', 'x', 'first', 300, false, fetch);
+    const trailing = requests.run('a', 'x', 'second', 300, false, fetch);
+    requests.clear();
+    expect(fetch.mock.calls[0][0].aborted).toBe(true);
+    finish();
+    await Promise.all([leading, trailing]);
     await vi.advanceTimersByTimeAsync(300);
-    expect(transport.aborted).toBe(false);
-    output.resolve('calculate("😀")');
-    expect(await next).toBe('ulate("😀")');
-    expect(start).toHaveBeenCalledOnce(); pool.clear();
-  });
-
-  it('expires a completed result within the same 100ms handoff window', async () => {
-    vi.useFakeTimers();
-    const pool = new CompletionRequests(), reader = new AbortController();
-    const start = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
-    expect(await pool.run('file', 'x = ', ';', reader.signal, start)).toBe('old');
-    await vi.advanceTimersByTimeAsync(100);
-    expect(await pool.run('file', 'x = ', ';', reader.signal, start)).toBe('new');
-    expect(start).toHaveBeenCalledTimes(2); pool.clear();
-  });
-
-  it('bounds an editor refresh handoff and restores the normal window after joining', async () => {
-    vi.useFakeTimers();
-    const pool = new CompletionRequests(), output = deferred<string>();
-    const firstReader = new AbortController(), nextReader = new AbortController();
-    let transport!: AbortSignal;
-    const start = vi.fn((signal: AbortSignal) => { transport = signal; return output.promise; });
-    const first = pool.run('file', 'x = ', ';', firstReader.signal, start).catch(error => error.name);
-    pool.retainForEditorRefresh(); firstReader.abort();
-    expect(await first).toBe('AbortError');
-    await vi.advanceTimersByTimeAsync(180);
-    expect(transport.aborted).toBe(false);
-    const next = pool.run('file', 'x = ', ';', nextReader.signal, start).catch(error => error.name);
-    nextReader.abort(); expect(await next).toBe('AbortError');
-    await vi.advanceTimersByTimeAsync(100);
-    expect(transport.aborted).toBe(true);
-    expect(start).toHaveBeenCalledOnce(); pool.clear();
-  });
-
-  it('aborts an abandoned editor refresh after 250ms', async () => {
-    vi.useFakeTimers();
-    const pool = new CompletionRequests(), reader = new AbortController();
-    let transport!: AbortSignal;
-    const pending = pool.run('file', 'x = ', ';', reader.signal, signal => {
-      transport = signal; return new Promise(() => {});
-    }).catch(error => error.name);
-    pool.retainForEditorRefresh(); reader.abort();
-    expect(await pending).toBe('AbortError');
-    await vi.advanceTimersByTimeAsync(249); expect(transport.aborted).toBe(false);
-    await vi.advanceTimersByTimeAsync(1); expect(transport.aborted).toBe(true);
-    pool.clear();
-  });
-
-  it('does not preserve a failed request for a later reader', async () => {
-    const pool = new CompletionRequests(), reader = new AbortController();
-    const start = vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce('retry');
-    await expect(pool.run('file', 'if', '', reader.signal, start)).rejects.toThrow('unavailable');
-    expect(await pool.run('file', 'if', '', reader.signal, start)).toBe('retry');
-    expect(start).toHaveBeenCalledTimes(2); pool.clear();
-  });
-
-  it('does not restore cleared work when its old factory finishes late', async () => {
-    const pool = new CompletionRequests(), output = deferred<string>();
-    const firstReader = new AbortController(), nextReader = new AbortController();
-    let oldSignal!: AbortSignal;
-    const first = pool.run('file', 'if', '', firstReader.signal, signal => {
-      oldSignal = signal; return output.promise;
-    }).catch(error => error.name);
-    firstReader.abort(); pool.clear();
-    expect(await first).toBe('AbortError');
-    expect(oldSignal.aborted).toBe(true);
-    const start = vi.fn(async () => 'fresh');
-    expect(await pool.run('file', 'if', '', nextReader.signal, start)).toBe('fresh');
-    output.resolve('obsolete');
-    await output.promise;
-    expect(await pool.run('file', 'if', '', nextReader.signal, start)).toBe('fresh');
-    expect(start).toHaveBeenCalledOnce(); pool.clear();
-  });
-
-  it.each([['different-file', ';'], ['file', ')']])('does not reuse completed work across scope/suffix changes: %s %s', async (scope, suffix) => {
-    const pool = new CompletionRequests(), reader = new AbortController();
-    const start = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
-    expect(await pool.run('file', 'x = ', ';', reader.signal, start)).toBe('old');
-    expect(await pool.run(scope, 'x = ', suffix, reader.signal, start)).toBe('new');
-    expect(start).toHaveBeenCalledTimes(2); pool.clear();
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

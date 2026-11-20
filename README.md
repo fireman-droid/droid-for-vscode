@@ -49,9 +49,9 @@ Review 支持逐次编辑、整轮任务和 Git 比较，提供分栏／合并�
 
 管理页提供会话默认设置、Skills、MCP 与插件入口。Mission 将目标拆分为 Feature 与 Worker，展示任务进度和验证结果。界面支持简体中文、繁体中文、英语，以及浅色、深色和自动主题。
 
-### 代码补全与 Next Edit
+### 代码补全
 
-灰字补全在光标处提供续写，Next Edit 提供下一处编辑建议。补全默认关闭，使用独立的模型服务，不读取聊天历史。支持的协议、上下文范围和启用步骤见 [补全指南](docs/AUTOCOMPLETE.md)。
+灰字补全在光标处提供续写，默认关闭，使用独立的模型服务，不读取聊天历史。支持的协议、上下文范围和启用步骤见 [补全指南](docs/AUTOCOMPLETE.md)。
 
 ## 使用范围与数据
 
@@ -68,7 +68,7 @@ Review 支持逐次编辑、整轮任务和 Git 比较，提供分栏／合并�
 | 主题 | 入口 |
 | --- | --- |
 | 日常使用 | [聊天与 BTW](docs/CHAT.md) · [模型管理](docs/MODELS.md) · [代码审阅](docs/REVIEW.md) |
-| 任务与补全 | [子代理与 Mission](docs/MISSIONS.md) · [代码补全与 Next Edit](docs/AUTOCOMPLETE.md) |
+| 任务与补全 | [子代理与 Mission](docs/MISSIONS.md) · [代码补全](docs/AUTOCOMPLETE.md) |
 | 开发与接入 | [开发指南](docs/DEVELOPMENT.md) · [架构说明](docs/ARCHITECTURE.md) · [React UI 包](packages/chat-ui/README.md) |
 
 通过 [Issues](https://github.com/fireman-droid/droid-for-vscode/issues) 提交问题与建议，或通过 Pull Request 参与开发。请提供复现步骤、环境信息与验证结果；贡献前阅读 [项目规则](AGENTS.md)。

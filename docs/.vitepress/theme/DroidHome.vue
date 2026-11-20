@@ -89,7 +89,7 @@ const features = [
     name: '代码补全',
     image: completionImage,
     page: 'AUTOCOMPLETE',
-    text: '边写边补全，并通过 Next Edit 获取下一处修改建议。',
+    text: '写代码时在光标处显示灰字，按 Tab 接受。',
     position: 'top right',
   },
   {

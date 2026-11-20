@@ -21,7 +21,7 @@ Droid 是 Factory Droid CLI 的非官方 VS Code / Cursor 扩展。
 | 使用自己的 API Key | [模型与服务渠道](MODELS.md) | 区分渠道与模型，管理别名及启停 |
 | 读回复、查看工具，临时追问 | [聊天与 BTW 旁问](CHAT.md) | 引用上下文、带图提问、跟进执行过程 |
 | 检查 AI 修改了什么 | [审阅文件改动](REVIEW.md) | 选择比较范围，查看 Diff，判断撤销条件 |
-| 手动写代码时获得建议 | [代码补全与 Next Edit](AUTOCOMPLETE.md) | 配置服务，接受续写或跳到下一处编辑 |
+| 手动写代码时获得建议 | [代码补全](AUTOCOMPLETE.md) | 配置 FIM 服务，Tab 接受光标处的续写 |
 | 跟进并行或长任务 | [子代理与 Mission](MISSIONS.md) | 打开子会话，查看 Worker 与任务状态 |
 | 连接失败、正文停住或状态异常 | [排障与诊断](TROUBLESHOOTING.md) | 确认任务状态，定位日志，提供复现信息 |
 

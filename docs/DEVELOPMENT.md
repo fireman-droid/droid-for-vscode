@@ -389,7 +389,7 @@ cursor --install-extension dist/droidvisx.vsix --force
 
 | 文件名 | 用途 |
 | --- | --- |
-| `dist/droidvisx.vsix` | 本地统一构建产物，包含聊天、模型管理、补全和 Next Edit |
+| `dist/droidvisx.vsix` | 本地统一构建产物，包含聊天、模型管理和代码补全 |
 | `droid-<version>.vsix` | Releases 对外下载名称 |
 | `droidvisx.droidvisx` | 保持设置和更新连续性的内部扩展 ID |
 

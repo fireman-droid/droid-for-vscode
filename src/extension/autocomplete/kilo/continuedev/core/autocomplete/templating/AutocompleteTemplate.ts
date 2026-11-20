@@ -1,8 +1,8 @@
-/*! Vendored from Kilo 7d977bce994af36f0edf752cb53e3aefc7aeb214; Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. */
+/*! Vendored from Kilo Code 54de37a85dfef8feb828382d8a71f84139857121 (continuedev/core/autocomplete/templating/AutocompleteTemplate.ts). Continue Apache-2.0; see third-party/CONTINUE-LICENSE.txt. */
 // Fill in the middle prompts
 //
-// We only expose Codestral and Mercury Edit 2 as autocomplete models — every
-// other FIM template in the upstream continuedev list is unreachable.
+// We only expose Codestral as an autocomplete model — every other FIM template
+// in the upstream continuedev list is unreachable.
 
 import { CompletionOptions } from "../../index.js"
 import { getLastNUriRelativePathParts, getShortestUniqueRelativeUriPaths } from "../../util/uri.js"
@@ -31,7 +31,7 @@ export interface AutocompleteTemplate {
   completionOptions?: Partial<CompletionOptions>
 }
 
-const codestralMultifileFimTemplate: AutocompleteTemplate = {
+export const codestralTemplate = {
   compilePrefixSuffix: (prefix, suffix, filepath, _reponame, snippets, workspaceUris): [string, string] => {
     function getFileName(snippet: { uri: string; uniquePath: string }) {
       return snippet.uri.startsWith("file://") ? snippet.uniquePath : snippet.uri
@@ -61,49 +61,10 @@ const codestralMultifileFimTemplate: AutocompleteTemplate = {
   completionOptions: {
     stop: ["[PREFIX]", "[SUFFIX]", "\n+++++ "],
   },
-}
+} satisfies AutocompleteTemplate
 
-const mercuryMultifileFimTemplate: AutocompleteTemplate = {
-  compilePrefixSuffix: (prefix, suffix, filepath, _reponame, snippets, workspaceUris): [string, string] => {
-    function getFileName(snippet: { uri: string; uniquePath: string }) {
-      return snippet.uri.startsWith("file://") ? snippet.uniquePath : snippet.uri
-    }
 
-    // Our current snippet format doesn't work well with mercury. We need to clean this up
-    snippets = []
-
-    if (snippets.length === 0) {
-      if (suffix.trim().length === 0 && prefix.trim().length === 0) {
-        return [
-          `<|file_sep|>${getLastNUriRelativePathParts(workspaceUris, filepath, 2)}\n<|fim_prefix|>${prefix}`,
-          suffix,
-        ]
-      }
-      return [`<|fim_prefix|>${prefix}`, suffix]
-    }
-
-    const relativePaths = getShortestUniqueRelativeUriPaths(
-      [...snippets.map((snippet) => ("filepath" in snippet ? snippet.filepath : "file:///Untitled.txt")), filepath],
-      workspaceUris,
-    )
-
-    const otherFiles = snippets
-      .map((snippet, i) => `<|file_sep|>${getFileName(relativePaths[i])} \n${snippet.content}`)
-      .join("\n\n")
-
-    return [
-      `${otherFiles}${otherFiles ? "\n\n" : ""}<|file_sep|>${getFileName(relativePaths[relativePaths.length - 1])}\n<|fim_prefix|>${prefix}`,
-      suffix,
-    ]
-  },
-  template: (prefix: string, suffix: string): string => {
-    return `${prefix}<|fim_suffix|>${suffix}<|fim_middle|>`
-  },
-}
-
-export function getTemplateForModel(model: string): AutocompleteTemplate {
-  if (model.toLowerCase().includes("mercury")) {
-    return mercuryMultifileFimTemplate
-  }
-  return codestralMultifileFimTemplate
+/** Compatibility export for the offline model evaluator. Classic uses one Codestral template. */
+export function getTemplateForModel(_model: string): typeof codestralTemplate {
+  return codestralTemplate
 }

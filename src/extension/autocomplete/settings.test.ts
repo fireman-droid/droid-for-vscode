@@ -22,11 +22,12 @@ vi.mock('vscode', () => ({
 
 import {
   completionNeedsKey, configureCompletion, DEFAULT_ENDPOINT, readCompletionSettings, validateCompletionEndpoint,
-  readCompletionKey, completionSecretKey, MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, removeCompletionKey, mercuryAlternateEndpoint,
+  readCompletionKey, completionSecretKey, MERCURY_FIM_ENDPOINT, removeCompletionKey,
 } from './settings';
 
 type Preset = { label: string; protocol: string; endpoint: string; model: string };
 const secrets = { get: mocks.getSecret, store: mocks.storeSecret } as unknown as vscode.SecretStorage;
+const LEGACY_MERCURY_KEY_ENDPOINT = 'https://api.inceptionlabs.ai/v1/edit/completions';
 
 function choose(label: string) {
   mocks.pick.mockImplementation(async (presets: Preset[]) => presets.find((preset) => preset.label === label));
@@ -53,18 +54,6 @@ beforeEach(() => {
 });
 
 describe('autocomplete configuration workflow', () => {
-  it('configures Mercury Next Edit with its own endpoint and secret', async () => {
-    choose('Inception / Mercury Next Edit');
-    useDefaults('synthetic-mercury-key');
-    expect(await configureCompletion(secrets)).toBe(true);
-    expect(mocks.global).toMatchObject({'nextEdit.enabled':true,'nextEdit.model':'mercury-edit-2',
-      'nextEdit.endpoint':MERCURY_EDIT_ENDPOINT});
-    expect(mocks.global.protocol).toBeUndefined();
-    expect(readCompletionSettings().fimEnabled).toBe(false);
-    expect(mocks.storeSecret).toHaveBeenCalledWith(expect.any(String),'synthetic-mercury-key');
-    expect(JSON.stringify(mocks.global)).not.toContain('synthetic-mercury-key');
-    expect(validateCompletionEndpoint('https://api.inceptionlabs.ai/v1/chat/completions','mercury-edit')).toBeTruthy();
-  });
   it('saves the Ollama protocol, complete endpoint and model together without requiring a local key', async () => {
     choose('Ollama');
     useDefaults();
@@ -241,48 +230,70 @@ describe('autocomplete provider settings', () => {
     expect(completionNeedsKey('http://localhost:11434/api/generate')).toBe(false);
   });
 
-});
+  it.each([
+    { protocol: 'mercury-edit', endpoint: 'https://edit.example.test/custom' },
+    { protocol: 'mercury-edit', endpoint: 'https://edit.example.test/custom', fimEnabled: true },
+    { protocol: 'fim', endpoint: 'https://edit.example.test/v1/%65dit/completions/' },
+    { fimEnabled: false, 'nextEdit.enabled': true, 'nextEdit.endpoint': LEGACY_MERCURY_KEY_ENDPOINT },
+  ])('keeps a legacy edit-only setup disabled without rewriting settings (%j)', (legacy) => {
+    mocks.global = { enabled: true, model: 'legacy-model', ...legacy };
+    expect(readCompletionSettings()).toMatchObject({ enabled: false, protocol: 'fim', endpoint: DEFAULT_ENDPOINT,
+      requiresConfiguration: true });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.getSecret).not.toHaveBeenCalled();
+  });
 
-describe('Mercury completion modes and credentials', () => {
-  it('configures Next Edit without replacing Codestral or its key', async () => {
-    choose('Mistral / Codestral'); useDefaults('codestral-key');
-    await configureCompletion(secrets);
-    choose('Inception / Mercury Next Edit'); useDefaults('edit-key');
-    await configureCompletion(secrets);
-    expect(readCompletionSettings()).toMatchObject({ protocol: 'fim', endpoint: DEFAULT_ENDPOINT, model: 'codestral-latest',
-      fimEnabled: true, nextEdit: { enabled: true, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
-    expect(await readCompletionKey(secrets, DEFAULT_ENDPOINT)).toBe('codestral-key');
-    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBe('edit-key');
+  it('continues using the independently configured FIM route when old edit settings also exist', () => {
+    mocks.global = { enabled: true, protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      'nextEdit.enabled': true, 'nextEdit.endpoint': LEGACY_MERCURY_KEY_ENDPOINT };
+    expect(readCompletionSettings()).toMatchObject({ enabled: true, requiresConfiguration: false,
+      protocol: 'siliconflow-fim', endpoint: 'https://api.siliconflow.cn/v1/chat/completions' });
   });
-  it('preserves a legacy edit-only service when adding FIM', async () => {
-    mocks.global = { protocol: 'mercury-edit', endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' };
-    expect(readCompletionSettings()).toMatchObject({ fimEnabled: false, nextEdit: { enabled: true } });
-    choose('Mistral / Codestral'); useDefaults('codestral-key');
-    await configureCompletion(secrets);
-    expect(readCompletionSettings()).toMatchObject({ protocol: 'fim', endpoint: DEFAULT_ENDPOINT, fimEnabled: true,
-      nextEdit: { enabled: true, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
+
+  it('replaces a legacy edit-only slot only after a successful explicit FIM selection', async () => {
+    mocks.global = { enabled: true, fimEnabled: false, protocol: 'mercury-edit', endpoint: LEGACY_MERCURY_KEY_ENDPOINT,
+      model: 'legacy-model', 'nextEdit.endpoint': LEGACY_MERCURY_KEY_ENDPOINT };
+    mocks.pick.mockImplementationOnce(async (presets: Preset[]) => {
+      expect(presets.some(preset => preset.endpoint === LEGACY_MERCURY_KEY_ENDPOINT || preset.label === 'Current configuration')).toBe(false);
+      return undefined;
+    });
+    expect(await configureCompletion(secrets)).toBe(false);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.getSecret).not.toHaveBeenCalled();
+    choose('Ollama'); useDefaults();
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(readCompletionSettings()).toMatchObject({
+      enabled: true, requiresConfiguration: false, protocol: 'ollama', endpoint: 'http://localhost:11434/api/generate',
+      model: 'qwen2.5-coder:7b-base',
+    });
+    expect(mocks.update).toHaveBeenCalledWith('fimEnabled', undefined, 1);
+    expect(mocks.global['nextEdit.endpoint']).toBe(LEGACY_MERCURY_KEY_ENDPOINT);
+    expect(mocks.storeSecret).not.toHaveBeenCalled();
+    expect(mocks.getSecret).toHaveBeenCalledExactlyOnceWith(completionSecretKey('http://localhost:11434/api/generate'));
   });
-  it('does not let a repository enable or reroute Next Edit', () => {
-    mocks.workspace = { 'nextEdit.enabled': true, 'nextEdit.endpoint': 'https://untrusted.test/edit/completions',
-      'nextEdit.model': 'untrusted', fimEnabled: false };
-    expect(readCompletionSettings()).toMatchObject({ fimEnabled: true,
-      nextEdit: { enabled: false, endpoint: MERCURY_EDIT_ENDPOINT, model: 'mercury-edit-2' } });
-  });
-  it('reuses an existing Next Edit key for FIM without sharing it with another endpoint', async () => {
-    mocks.values.set(completionSecretKey(MERCURY_EDIT_ENDPOINT), 'existing-provider-key');
+
+  it('reuses the old official provider key for Mercury FIM only, without rewriting it', async () => {
+    const legacyKey = completionSecretKey(LEGACY_MERCURY_KEY_ENDPOINT);
+    mocks.values.set(legacyKey, 'existing-provider-key');
     expect(await readCompletionKey(secrets, MERCURY_FIM_ENDPOINT)).toBe('existing-provider-key');
     expect(await readCompletionKey(secrets, 'https://example.test/v1/fim/completions')).toBeUndefined();
-    expect(mercuryAlternateEndpoint('invalid')).toBeUndefined();
+    choose('Inception / Mercury Code Completion'); useDefaults();
+    expect(await configureCompletion(secrets)).toBe(true);
+    expect(mocks.storeSecret).not.toHaveBeenCalled();
+    expect([...mocks.values]).toEqual([[legacyKey, 'existing-provider-key']]);
+    expect(readCompletionSettings()).toMatchObject({ protocol: 'fim', endpoint: MERCURY_FIM_ENDPOINT, model: 'mercury-edit-2' });
   });
-  it('removes both mode credentials and never changes another provider key', async () => {
-    for (const endpoint of [MERCURY_FIM_ENDPOINT, MERCURY_EDIT_ENDPOINT, DEFAULT_ENDPOINT]) mocks.values.set(completionSecretKey(endpoint), 'example');
+
+  it('explicitly removing the official Mercury key also clears its fallback without affecting other providers', async () => {
+    for (const endpoint of [MERCURY_FIM_ENDPOINT, LEGACY_MERCURY_KEY_ENDPOINT, DEFAULT_ENDPOINT]) mocks.values.set(completionSecretKey(endpoint), 'example');
     await removeCompletionKey({ ...secrets, delete: async key => { mocks.values.delete(key); } }, MERCURY_FIM_ENDPOINT);
     expect(await readCompletionKey(secrets, MERCURY_FIM_ENDPOINT)).toBeUndefined();
-    expect(await readCompletionKey(secrets, MERCURY_EDIT_ENDPOINT)).toBeUndefined();
+    expect(mocks.values.has(completionSecretKey(LEGACY_MERCURY_KEY_ENDPOINT))).toBe(false);
     expect(await readCompletionKey(secrets, DEFAULT_ENDPOINT)).toBe('example');
   });
-  it('does not let workspace settings enable clipboard reads or redirect the service', () => {
-    mocks.workspace = { includeClipboard: true, endpoint: 'https://example.test/v1/fim/completions' };
-    expect(readCompletionSettings()).toMatchObject({ includeClipboard: false, endpoint: DEFAULT_ENDPOINT });
+
+  it('does not let a workspace enable clipboard reads, redirect the service or set migration controls', () => {
+    mocks.workspace = { includeClipboard: true, endpoint: LEGACY_MERCURY_KEY_ENDPOINT, protocol: 'mercury-edit', fimEnabled: false };
+    expect(readCompletionSettings()).toMatchObject({ includeClipboard: false, requiresConfiguration: false, endpoint: DEFAULT_ENDPOINT });
   });
 });

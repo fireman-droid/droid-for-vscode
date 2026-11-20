@@ -1,25 +1,27 @@
-import { findMatchingSuggestion } from './kilo/inline-utils';
+/*! Adapted from Kilo Code 54de37a85dfef8feb828382d8a71f84139857121
+ * (classic-auto-complete/AutocompleteInlineCompletionProvider.ts: updateSuggestions).
+ * MIT; see third-party/KILO-LICENSE.txt.
+ */
+import { applyFirstLineOnly, findMatchingSuggestion } from './kilo/inline-utils';
 import type { FillInAtCursorSuggestion } from './kilo/types';
-type Entry = FillInAtCursorSuggestion & { createdAt: number };
-/** Kilo's 20-entry history matching, with Droid's expiry and memory budget. */
+
+const MAX_SUGGESTIONS_HISTORY = 20;
+
 export class CompletionHistory {
-  private entries: Entry[] = [];
-  find(scope: string, prefix: string, suffix: string, now = Date.now(), bypassNegative = false): string | undefined {
-    this.entries = this.entries.filter(e => now >= e.createdAt && now - e.createdAt < (e.text ? 30_000 : 1_000));
-    const entries = bypassNegative ? this.entries.filter(e => e.text !== '') : this.entries;
-    const match = findMatchingSuggestion(scope, prefix, suffix, entries);
-    // Finishing a positive suggestion is a cache miss, not evidence that no more code is useful.
-    if (match?.text === '' && match.fillInAtCursor.text !== '') return undefined;
-    return match?.text;
+  private entries: FillInAtCursorSuggestion[] = [];
+
+  find(scope: string, prefix: string, suffix: string) {
+    return applyFirstLineOnly(findMatchingSuggestion(scope, prefix, suffix, this.entries), prefix);
   }
-  put(scope: string, prefix: string, suffix: string, text: string, now = Date.now()): void {
-    this.entries = this.entries.filter(e => !(e.scope === scope && e.prefix === prefix && e.suffix === suffix));
-    this.entries.push({ scope, prefix, suffix, text, createdAt: now });
-    let size = this.entries.reduce((n, e) => n + e.prefix.length + e.suffix.length + e.text.length, 0);
-    while (this.entries.length > 20 || size > 2_097_152) {
-      const e = this.entries.shift()!;
-      size -= e.prefix.length + e.suffix.length + e.text.length;
-    }
+
+  put(fillInAtCursor: FillInAtCursorSuggestion): void {
+    const isDuplicate = this.entries.some(existing =>
+      existing.scope === fillInAtCursor.scope && existing.text === fillInAtCursor.text &&
+      existing.prefix === fillInAtCursor.prefix && existing.suffix === fillInAtCursor.suffix);
+    if (isDuplicate) return;
+    this.entries.push(fillInAtCursor);
+    if (this.entries.length > MAX_SUGGESTIONS_HISTORY) this.entries.shift();
   }
+
   clear(): void { this.entries = []; }
 }

@@ -40,6 +40,23 @@ afterEach(() => {
 });
 
 describe('completion protocol adapters', () => {
+  it.each(['fim', 'ollama', 'siliconflow-fim'] as const)('never sends credentials or context to the retired edit route under %s', async protocol => {
+    const fetcher = mockResponse(Response.json({}));
+    await expect(requestCompletion(request({
+      protocol, endpoint: 'https://api.inceptionlabs.ai/v1/%65dit/completions/', apiKey: 'private-api-key',
+    }))).rejects.toMatchObject({ code: 'protocol' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy protocol instead of reinterpreting its custom endpoint as Ollama', async () => {
+    const fetcher = mockResponse(Response.json({}));
+    await expect(requestCompletion(request({
+      protocol: 'mercury-edit' as CompletionRequest['protocol'],
+      endpoint: 'https://legacy.example.test/custom', apiKey: 'private-api-key',
+    }))).rejects.toMatchObject({ code: 'protocol' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('sends native Ollama FIM parameters without an Authorization header for a local server', async () => {
     const fetcher = mockResponse(Response.json({ response: 'return value;', done: true }));
     await expect(requestCompletion(request())).resolves.toBe('return value;');

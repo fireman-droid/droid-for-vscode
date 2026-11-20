@@ -59,7 +59,7 @@ vi.mock('./AutocompleteProvider', () => ({
       mocks.invalidationListener = listener;
       return { dispose: vi.fn() };
     }
-    warmNextEdit() {}
+    warmContext() {}
     reset() {}
     dispose() {}
   },
@@ -98,6 +98,11 @@ beforeEach(() => {
 });
 
 describe('registered autocomplete suggestion invalidation', () => {
+  it('registers classic completion without prediction commands or their Tab/Esc handlers', () => {
+    expect(mocks.commands.has('droidvisx.autocomplete.trigger')).toBe(true);
+    expect([...mocks.commands.keys()].filter(name => name.includes('.nextEdit.'))).toEqual([]);
+  });
+
   it('retracts an editor-owned suggestion when the user pauses autocomplete', async () => {
     await mocks.commands.get('droidvisx.autocomplete.toggle')?.();
     expect(mocks.updateConfiguration).toHaveBeenCalledWith('enabled', false, 1);
