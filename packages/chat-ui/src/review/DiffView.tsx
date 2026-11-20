@@ -10,7 +10,9 @@ import { useDiffCodeCopy } from './useDiffCodeCopy';
 import { useSplitDiffDragScroll } from './splitDiffDragScroll';
 import { useDiffQuestion } from './diffQuestion';
 import { useDiffReference } from './diffReference';
+import { splitDiffRows, type DiffRow } from './splitDiffRows';
 export { findDiffChange } from './diffNavigation';
+export { splitDiffRows, type DiffRow } from './splitDiffRows';
 
 const Code = memo(function Code({ text, highlighted, changes }: { text: string; highlighted?: string; changes?: () => readonly WordRange[] | undefined }) {
   const html = useMemo(() => {
@@ -19,27 +21,6 @@ const Code = memo(function Code({ text, highlighted, changes }: { text: string; 
   }, [text, highlighted, changes]);
   return html === null ? <code>{text || ' '}</code> : <code dangerouslySetInnerHTML={{ __html: html || ' ' }} />;
 });
-export interface DiffRow { left: InlineDiffLine | null; right: InlineDiffLine | null; header?: string }
-export function splitDiffRows(lines: readonly InlineDiffLine[]): DiffRow[] {
-  const rows: DiffRow[] = [];
-  for (let i = 0; i < lines.length;) {
-    const line = lines[i]!;
-    if (line.kind === 'remove' || line.kind === 'add') {
-      const removed: InlineDiffLine[] = [];
-      const added: InlineDiffLine[] = [];
-      while (lines[i]?.kind === 'remove') removed.push(lines[i++]!);
-      while (lines[i]?.kind === 'add') added.push(lines[i++]!);
-      for (let n = 0; n < Math.max(removed.length, added.length); n++)
-        rows.push({ left: removed[n] ?? null, right: added[n] ?? null });
-    } else {
-      rows.push(line.kind === 'hunk' || line.kind === 'note'
-        ? { left: null, right: null, header: line.text }
-        : { left: line, right: line });
-      i++;
-    }
-  }
-  return rows;
-}
 type DiffBlock<T> = { index: number; header: string } | { index: number; rows: readonly T[]; changes: readonly number[] };
 function diffBlocks<T>(rows: readonly T[], header: (row: T) => string | undefined, changed: (row: T) => boolean): DiffBlock<T>[] {
   const blocks: DiffBlock<T>[] = [];
@@ -132,8 +113,9 @@ export const DiffView = memo(function DiffView({ patch, path, split = false, lim
   const root = useRef<HTMLDivElement>(null);
   const all = useMemo(() => inlineDiffLines(patch), [patch]);
   const lines = useMemo(() => limit === undefined ? all : all.slice(0, limit), [all, limit]);
-  const words = useMemo(() => wordDiffRanges(lines), [lines]);
-  const rows = useMemo(() => split ? splitDiffRows(lines) : null, [lines, split]);
+  const pairedRows = useMemo(() => splitDiffRows(lines), [lines]);
+  const words = useMemo(() => wordDiffRanges(pairedRows), [pairedRows]);
+  const rows = split ? pairedRows : null;
   const selection = useSplitDiffSelection(root, rows, path);
   const onCopy = useDiffCodeCopy(path, rows, lines);
   const question = useDiffQuestion(root, path, patch, JSON.stringify([path, questionKey, split]), rows, lines);

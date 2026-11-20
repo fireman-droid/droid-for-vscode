@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DiffView, findDiffChange } from '../../src/review/DiffView';
+import { DiffView, findDiffChange, splitDiffRows } from '../../src/review/DiffView';
+import { inlineDiffLines } from '../../src/review/inlineDiffLines';
 import { CODE_REFERENCE_MIME } from '../../src/chat/codeReferences';
 
 const observers: ViewportObserver[] = [];
@@ -112,6 +113,78 @@ it('preserves both sides and tail content when changing to split view', () => {
   expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'before-149')).toBeDefined();
   expect(screen.getByText((_, element) => element?.tagName === 'CODE' && element.textContent === 'after-149')).toBeDefined();
   expect(document.querySelectorAll('code')).toHaveLength(300);
+});
+
+it('aligns an extracted method after an inserted block without losing source order or line numbers', () => {
+  const before = [
+    'async function processPracticeGeneration(request: Request) {',
+    '  const exercise = await generateExercise(request);',
+    '  return exercise;',
+    '}',
+  ];
+  const added = [
+    'async function preparePractice(request: Request) {',
+    ...Array.from({ length: 80 }, (_, index) => `  const preparation${index} = ${index};`),
+    '  return request;',
+    '}',
+    'async function processPracticeGeneration(request: PracticeRequest) {',
+    '  const exercise = await generateExercise(request);',
+    '  return exercise;',
+    '}',
+  ];
+  const edit = `@@ -10,4 +10,${added.length} @@\n${before.map(line => `-${line}`).join('\n')}\n${added.map(line => `+${line}`).join('\n')}`;
+  const rows = splitDiffRows(inlineDiffLines(edit));
+  const method = rows.find(row => row.left?.text === before[0]);
+  expect(method?.right?.text).toBe(added[83]);
+  expect(rows.filter(row => row.left).map(row => [row.left!.text, row.left!.before])).toEqual(before.map((line, index) => [line, index + 10]));
+  expect(rows.filter(row => row.right).map(row => [row.right!.text, row.right!.after])).toEqual(added.map((line, index) => [line, index + 10]));
+});
+
+it('aligns surviving lines after deletions and retains their source order', () => {
+  const edit = '@@ -20,4 +20,2 @@\n-prepareOne();\n-prepareTwo();\n-const first = oldValue;\n-return first;\n+const first = newValue;\n+return first;';
+  const rows = splitDiffRows(inlineDiffLines(edit)).slice(1);
+  expect(rows.map(row => [row.left?.text ?? null, row.right?.text ?? null])).toEqual([
+    ['prepareOne();', null], ['prepareTwo();', null],
+    ['const first = oldValue;', 'const first = newValue;'], ['return first;', 'return first;'],
+  ]);
+});
+
+it.each([true, false])('highlights words against the aligned replacement rather than an inserted line (split=%s)', split => {
+  const edit = '@@ -1 +1,2 @@\n-const generated = oldValue;\n+preparePractice();\n+const generated = newValue;';
+  render(<DiffView path="src/file.ts" split={split} patch={edit} />);
+  const codes = [...document.querySelectorAll('code')];
+  const before = codes.find(code => code.textContent === 'const generated = oldValue;')!;
+  const after = codes.find(code => code.textContent === 'const generated = newValue;')!;
+  expect(before.querySelector('.diff-word-change')?.textContent).toBe('oldValue');
+  expect(after.querySelector('.diff-word-change')?.textContent).toBe('newValue');
+  expect(codes.find(code => code.textContent === 'preparePractice();')!.querySelector('.diff-word-change')).toBeNull();
+});
+
+it('preserves all lines in very large replacement blocks', () => {
+  const before = Array.from({ length: 501 }, (_, index) => `-old${index}`);
+  const after = Array.from({ length: 501 }, (_, index) => `+new${index}`);
+  const rows = splitDiffRows(inlineDiffLines(`@@ -1,501 +1,501 @@\n${[...before, ...after].join('\n')}`));
+  expect(rows.filter(row => row.left).map(row => row.left!.text)).toEqual(before.map(line => line.slice(1)));
+  expect(rows.filter(row => row.right).map(row => row.right!.text)).toEqual(after.map(line => line.slice(1)));
+});
+
+it.each([
+  ['left', 'before', 11, 'const first = oldValue;\nreturn first;'],
+  ['right', 'after', 13, 'const first = newValue;\ninsertOne();\ninsertTwo();\nreturn first;'],
+] as const)('copies a contiguous %s selection across inserted split rows', (side, referenceSide, endLine, text) => {
+  const edit = '@@ -10,2 +10,4 @@\n-const first = oldValue;\n-return first;\n+const first = newValue;\n+insertOne();\n+insertTwo();\n+return first;';
+  render(<DiffView path="src/file.ts" split patch={edit} />);
+  const code = [...document.querySelectorAll<HTMLElement>(`.review-diff-cell[data-side="${side}"] code`)];
+  const range = document.createRange();
+  range.setStart(code[0]!, 0);
+  range.setEnd(code.at(-1)!, code.at(-1)!.childNodes.length);
+  document.getSelection()!.addRange(range);
+  const data = new Map<string, string>();
+  fireEvent.copy(code[0]!, { clipboardData: { setData: (type: string, text: string) => data.set(type, text) } });
+  expect(data.get('text/plain')).toBe(text);
+  expect(JSON.parse(data.get(CODE_REFERENCE_MIME)!)).toEqual({
+    path: 'src/file.ts', startLine: 10, endLine, text, side: referenceSide,
+  });
 });
 
 it('renders generated long code lines in full without dropping text', () => {
