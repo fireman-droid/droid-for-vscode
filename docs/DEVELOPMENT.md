@@ -125,7 +125,7 @@ pnpm run dev:webview
 Chat、Models、Mission、Viewer、Review 共享公共 UI。
 公共包不能反向引用 Droid Bridge、Host 或 VS Code API；业务能力通过 props、回调和插槽接入。
 
-当前聊天 Bridge 为 v60（以 `BRIDGE_PROTOCOL_VERSION` 为唯一代码来源）。
+当前聊天 Bridge 版本见 `src/shared/bridgeMessages.ts` 的 `BRIDGE_PROTOCOL_VERSION`。
 内嵌子代理查看发送 `subagent.inspect`，用父会话、回合和 Task 调用 ID 定位，`toolUseId: null`
 取消查看；Host 回传 `subagent.snapshot` 的 loading／ready／unavailable 状态及只读正文。
 子会话 ID 保留在 Host，读取复用现有 `SubagentTranscriptService`，不打开外部标签或发起新回合；
