@@ -198,6 +198,10 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const activeSession = state.sessions.items.find((item) => item.id === state.sessionId)
     ?? (state.sessionId === null ? undefined : state.sessions.items.find((item) => item.active));
   const activeSessionTitle = activeSession?.title.trim() || t("New chat");
+  const runningPeer = capabilities.navigateSessions && activeSession && state.connection.status === 'connected' &&
+    (!turnBusy || state.turn?.status === 'submitting')
+    ? state.sessions.items.find(item => item.running && item.id !== state.sessionId && item.worktree?.path === activeSession.worktree?.path)
+    : undefined;
   return (
     <ModelSourceProvider postMessage={postModelSource}>
     <ContentProvider value={content}>
@@ -248,6 +252,12 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
         {footerInteraction ? interaction : null}
         <div className="v2-composer-dock">
         <div className="v2-composer-panels">
+        {runningPeer ? <div role="status" data-ui-notice="" className="flex min-w-0 items-baseline gap-1.5 text-xs text-muted-foreground select-none">
+          {t('Running in this workspace:')}
+          <Button variant="link" size="none" className="min-w-0 truncate" disabled={sessionActionsDisabled} onClick={() => sessions.handleSelectSession(runningPeer.id)}>
+            {runningPeer.title.trim() || runningPeer.id}
+          </Button>
+        </div> : null}
         {subagents.inspection ? (
           <InlineSubagentOverlay inspection={subagents.inspection} transcript={state.transcript} onClose={subagents.closeInspection} onOpenExternal={subagents.openSubagent} />
         ) : <>

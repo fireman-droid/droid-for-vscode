@@ -4,6 +4,7 @@ import type { TurnStatus } from '../../../shared/protocol/turns';
 import { appendAcceptedUserPrompt } from '../../recovery/hostTranscriptState';
 import { sentAttachmentSummaries } from '../attachments/attachments';
 import { captureSnapshotBeforeSend } from '../changes/snapshotCapture';
+import { WorkspaceTurnBusyError } from '../../changes/WorkspaceTurnBusyError';
 import type { PendingAttachment } from '../internals';
 import { evaluateTurnStart } from '../operationEligibility';
 import { recoverTransportTurn } from '../recovery/recoverTransportTurn';
@@ -217,6 +218,8 @@ export async function consumeTurn(
       if (ctl.turnState.turn) delete ctl.turnState.turn.preparing;
       if (ctl.turnState.turn?.status === 'stopping' && error instanceof Error && error.name === 'AbortError')
         completeEvent = { type: 'turn-complete', outcome: 'interrupted' };
+      else if (error instanceof WorkspaceTurnBusyError && error.sessionId !== sessionId)
+        failTurn(ctl, sessionId, turnId, 'workspace-turn-busy', error.message, error.sessionId);
       else failTurn(ctl, sessionId, turnId, 'runtime-stream-failed',
         error instanceof Error ? error.message : typeof error === 'string' ? error : undefined);
     }

@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ['Running in this workspace:','正在此工作区运行：','正在此工作區執行：'],
+  ['Another chat holds this workspace. Your message was not sent.','另一个会话仍占用此工作区，这条消息尚未发送。','另一個對話仍佔用此工作區，這則訊息尚未傳送。'],
+  ['Open that chat','查看该会话','查看該對話'],
   ["Droid status","Droid 状态","Droid 狀態"],
   ['Messages while working','任务进行中发送消息','任務進行中傳送訊息'],
   ['Wait','等待','等待'],

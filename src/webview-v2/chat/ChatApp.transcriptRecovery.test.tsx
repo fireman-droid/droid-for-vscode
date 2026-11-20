@@ -241,6 +241,20 @@ describe('ChatApp transcript delivery recovery', () => {
     expect(screen.getByRole('region', { name: 'Queued messages' })).toBeTruthy();
   });
 
+  it('links to the running workspace peer without sending, ignoring a different worktree', async () => {
+    const port = mountChat();
+    const current = snapshot().sessions.items[0]!;
+    receive(snapshot({ turn: null, sessions: { status: 'ready', items: [current,
+      { ...current, active: false, running: true, id: 'other-tree', title: 'Separate checkout', worktree: { path: '/other', branch: 'other' } },
+      { ...current, active: false, running: true, id: 'peer', title: 'Running peer' },
+    ] } }));
+    const peer = await screen.findByRole('button', { name: 'Running peer' });
+    expect(screen.queryByRole('button', { name: 'Separate checkout' })).toBeNull();
+    fireEvent.click(peer);
+    expect(port.postMessage).toHaveBeenCalledWith({ type: 'session.select', sessionId: 'peer' });
+    expect(port.postMessage.mock.calls.some(([message]) => message.type === 'turn.send')).toBe(false);
+  });
+
   it('opens the session menu from the active session title in the header', async () => {
     const user = userEvent.setup();
     const port = mountChat();

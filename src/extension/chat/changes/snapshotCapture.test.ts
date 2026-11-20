@@ -34,6 +34,14 @@ function fixture() {
 }
 
 describe('sending while the previous completed turn records its changes', () => {
+  it('identifies the owning chat even when two sessions use the same local turn id', async () => {
+    const f = fixture();
+    const runtime = { ...f.runtime, readOtherSessionWorkingState: vi.fn(async () => 'running' as const) };
+    await expect(captureSnapshotBeforeSend(f.host, 'another-session', previous.turnId, undefined, runtime))
+      .rejects.toMatchObject({ sessionId: previous.sessionId });
+    expect(runtime.readOtherSessionWorkingState).toHaveBeenCalledWith(previous.sessionId);
+    expect(f.store.capture).not.toHaveBeenCalled();
+  });
   it('dispatches a message queued during a live reply only after its final capture finishes', async () => {
     const f = fixture();
     const firstDone = deferred<void>();

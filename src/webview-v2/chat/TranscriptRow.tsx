@@ -21,6 +21,13 @@ export const TranscriptRow = memo(function TranscriptRow({ item, streaming, grou
   if (item.kind === 'thinking') return <ThinkingRow item={item} messageId={messageId} grouped={grouped} streaming={streaming} />;
   if (item.kind === 'tool') return <ToolRow item={item} messageId={messageId} grouped={grouped} hideConfirmedOperations={hideConfirmedOperations} onInteract={onInteract} />;
   if (item.kind === 'diagnostic') {
+    if (item.code === 'workspace-turn-busy' && item.relatedSessionId) {
+      const owner = item.relatedSessionId;
+      return <div role="alert" data-ui-notice="" className="flex flex-wrap items-baseline gap-1.5 text-xs text-muted-foreground select-none">
+        {t('Another chat holds this workspace. Your message was not sent.')}
+        {selectSession && !readOnly ? <Button variant="link" size="none" onClick={() => selectSession(owner)}>{t('Open that chat')}</Button> : <span>{owner}</span>}
+      </div>;
+    }
     if (item.code === 'history-note') return <section role="note" className="my-2 rounded-md border border-border p-3 text-xs">
       <p className="mb-2 text-muted-foreground">{t("Saved note · Not sent to the model")}</p>
       <p data-ui-copy-content="" className="whitespace-pre-wrap">{item.message}</p>
