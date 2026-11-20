@@ -89,6 +89,11 @@ export async function handleReady(ctl: RuntimeLifecyclePort): Promise<void> {
       return;
     }
     ctl.emitSnapshot();
+    const pendingRewind = ctl.sessionState.runtime?.readPendingRewind?.();
+    if (pendingRewind?.sourceSessionId === ctl.sessionState.sessionId) {
+      ctl.emit({ type: 'turn.editResendRejected', sessionId: pendingRewind.sourceSessionId,
+        messageId: pendingRewind.messageId, reason: pendingRewind.newSessionId === null ? 'rewind-unknown' : 'resume-failed' });
+    }
     if (ctl.missionState.missionRuntime) ctl.emit(ctl.missionState.missionRuntime.snapshot());
     if (ctl.sessionState.sessionId !== null) {
       await ctl.reviewCoordinator?.replay(ctl.sessionState.sessionId);

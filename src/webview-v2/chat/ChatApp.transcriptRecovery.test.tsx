@@ -21,6 +21,7 @@ const command: ToolTranscriptItem = {
   detailKind: 'command', detail: 'pnpm check', outputTail: 'Running checks…',
 };
 const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo');
+const rangeRectsDescriptor = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
@@ -35,6 +36,7 @@ beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
     configurable: true, value(this: HTMLElement, options: ScrollToOptions) { this.scrollTop = options.top ?? 0; },
   });
+  Object.defineProperty(Range.prototype, 'getClientRects', { configurable: true, value: () => [] });
 });
 
 afterEach(() => {
@@ -43,6 +45,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   if (scrollToDescriptor) Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor);
   else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+  if (rangeRectsDescriptor) Object.defineProperty(Range.prototype, 'getClientRects', rangeRectsDescriptor);
+  else Reflect.deleteProperty(Range.prototype, 'getClientRects');
 });
 
 function snapshot(overrides: Partial<HostSnapshotMessage> = {}): HostSnapshotMessage {
@@ -79,6 +83,22 @@ function mountChat(role: ChatSurfaceRole = 'main') {
 }
 
 describe('ChatApp transcript delivery recovery', () => {
+  it('marks a recovered rewind and requests reconnect without another file restore', async () => {
+    const port = mountChat();
+    receive(snapshot({ turn: { turnId, status: 'completed' } }));
+    await screen.findByText(question.text);
+    receive({ type: 'turn.editResendRejected', sequence: 2, sessionId, messageId: 'message-1', reason: 'resume-failed' });
+    await screen.findByText('The rewind completed. Reconnect this conversation without processing files again or sending a message.');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message and resend from here' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reconnect conversation' }));
+    await waitFor(() => expect(port.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'turn.editResend', sessionId, messageId: 'message-1', text: question.text,
+    })));
+    const request = port.postMessage.mock.calls.map(([message]) => message).find(message => message.type === 'turn.editResend');
+    expect(request).not.toHaveProperty('restoreFiles');
+    expect(port.postMessage.mock.calls.some(([message]) => message.type === 'turn.send')).toBe(false);
+  });
+
   it('places restore receipts and running or failed status in one region without changing the draft', async () => {
     mountChat();
     receive(snapshot({ turn: { turnId, status: 'completed' } }));

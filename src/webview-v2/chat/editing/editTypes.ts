@@ -9,8 +9,9 @@ export const EDIT_REJECT_COPY: Record<EditResendRejectReason, string> = {
   busy: 'Droid is busy — stop or finish the current work, then resend.',
   unsupported: 'This message can no longer anchor a resend.',
   failed: 'Rewinding to this message failed. You can try again.',
-  'resume-failed': 'The rewind completed, but its conversation could not be opened. Retry here to resume it without restoring files again.',
+  'resume-failed': 'The rewind completed. Reconnect this conversation without processing files again or sending a message.',
   'rewind-pending': 'A previous rewind already completed. Return to the message you originally edited and retry its connection before editing another message.',
+  'rewind-unknown': 'The rewind outcome is unknown. Do not retry; inspect the workspace and Droid session history.',
 };
 
 export interface RewindFileInfo extends RewindDetailFields {

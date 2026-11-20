@@ -229,7 +229,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v60 adds read-only inline subagent inspection without opening an external viewer.
 // v61 distinguishes workspace setup gates and adds the native folder-picker action.
 // v62 preserves classified session connection failures for recovery feedback.
-export const BRIDGE_PROTOCOL_VERSION = 62 as const;
+// v63 distinguishes an unknown rewind outcome from reconnecting a completed rewind.
+export const BRIDGE_PROTOCOL_VERSION = 63 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage

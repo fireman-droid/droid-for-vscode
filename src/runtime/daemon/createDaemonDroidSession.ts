@@ -12,10 +12,12 @@ import {
   type FactoryDroidSessionFactory,
 } from '../session/sessionTypes';
 import type { RuntimeSessionTarget } from '../DroidRuntime';
-import { RewindAnchorConflictError, RewindAttachmentError } from '../session/rewindErrors';
+import { RewindAnchorConflictError, RewindAttachmentError, RewindOutcomeUnknownError } from '../session/rewindErrors';
 import { projectCommandRows } from '../commands/FactoryCommandCatalog';
 import { readOperationBody } from '../tools/operationBody';
 import type { RuntimeDiagnosticSink } from '../runtimeDiagnostics';
+import { isRewindFileResult } from '../../shared/protocol/rewindResult';
+import type { RewindCheckpoint, RewindCheckpointStore } from './rewindCheckpoint';
 import {
   createRuntimeInteractionCallbacks,
   type RuntimeInteractionCallbacks,
@@ -39,6 +41,7 @@ export function createDaemonSessionFactory(
   getDroid: () => Promise<DaemonApi>,
   lease?: SessionLeaseHooks,
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
+  rewindStore?: RewindCheckpointStore,
 ): FactoryDroidSessionFactory {
   return (options) =>
     createDaemonDroidSession({
@@ -46,6 +49,7 @@ export function createDaemonSessionFactory(
       getDroid,
       lease,
       diagnostics,
+      rewindStore,
     });
 }
 
@@ -71,6 +75,7 @@ export async function createDaemonDroidSession(options: {
   getDroid: () => Promise<DaemonApi>;
   lease?: SessionLeaseHooks;
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>;
+  rewindStore?: RewindCheckpointStore;
 }): Promise<FactoryDroidSession> {
   const droid = await options.getDroid();
   const callbacks = createRuntimeInteractionCallbacks(options.interactionHandler);
@@ -109,6 +114,8 @@ export async function createDaemonDroidSession(options: {
         lease,
         undefined,
         options.diagnostics,
+        options.rewindStore,
+        options.target.cwd,
       );
       attachment = undefined;
       leaseOwned = false;
@@ -159,6 +166,8 @@ export async function createDaemonDroidSession(options: {
       lease,
       undefined,
       options.diagnostics,
+      options.rewindStore,
+      options.target.cwd,
     );
     attachmentOwned = false;
     leaseOwned = false;
@@ -335,6 +344,9 @@ function adaptDaemonSession(
   lease: SessionLeaseHooks,
   availableModels?: readonly ModelInfo[],
   diagnostics?: Pick<RuntimeDiagnosticSink, 'record'>,
+  rewindStore?: RewindCheckpointStore,
+  rewindCwd?: string,
+  inheritedRewind?: RewindCheckpoint,
 ): FactoryDroidSession {
   // The daemon confirms `updateSettings` before the `settings_updated`
   // notification refreshes the handle's snapshot, so successful updates
@@ -343,9 +355,8 @@ function adaptDaemonSession(
   let attachmentOwned = true;
   let leaseOwned = true;
   let closeInFlight: Promise<void> | undefined;
-  let pendingRewind: { newSessionId: string; messageId: string;
-    restoredCount: number; deletedCount: number; failedRestoreCount: number; failedDeleteCount: number;
-  } | undefined;
+  let pendingRewind = inheritedRewind ??
+    (rewindStore && rewindCwd ? rewindStore.read(rewindCwd, session.id) : undefined);
 
   const closeOwnedResources = async (): Promise<void> => {
     let cleanupFailed = false;
@@ -402,6 +413,7 @@ function adaptDaemonSession(
    */
   const attachReplacement = async (
     newSessionId: string,
+    rewind?: RewindCheckpoint,
   ): Promise<FactoryDroidSession> => {
     const source = session;
     const sourceSessionId = source.id;
@@ -445,6 +457,9 @@ function adaptDaemonSession(
       lease,
       availableModels,
       diagnostics,
+      rewindStore,
+      rewindCwd,
+      rewind,
     );
   };
 
@@ -562,18 +577,40 @@ function adaptDaemonSession(
         throw new RewindAnchorConflictError(pendingRewind.messageId);
       }
       if (pendingRewind === undefined) {
-        const result = await session.rewind(params);
-        pendingRewind = { ...result, messageId: params.messageId };
+        const { filesRequested, ...nativeParams } = params;
+        const intent: RewindCheckpoint = { sourceSessionId: session.id, messageId: params.messageId,
+          newSessionId: null, filesRequested: filesRequested === true };
+        if (rewindStore && rewindCwd) await rewindStore.write(rewindCwd, intent);
+        pendingRewind = intent;
+        let result: Awaited<ReturnType<typeof session.rewind>>;
+        try {
+          result = await session.rewind(nativeParams);
+        } catch (error) {
+          if (!rewindStore) {
+            pendingRewind = undefined;
+            throw error;
+          }
+          throw new RewindOutcomeUnknownError(params.messageId, error);
+        }
+        const { newSessionId, ...counts } = result;
+        pendingRewind = { sourceSessionId: session.id, newSessionId, messageId: params.messageId,
+          filesRequested: filesRequested === true,
+          ...(isRewindFileResult(counts) ? { files: counts } : {}) };
       }
       const completed = pendingRewind;
+      if (completed.newSessionId === null) throw new RewindOutcomeUnknownError(completed.messageId);
       try {
-        const replacement = await attachReplacement(completed.newSessionId);
-        pendingRewind = undefined;
-        return { session: replacement, restoredCount: completed.restoredCount, deletedCount: completed.deletedCount,
-          failedRestoreCount: completed.failedRestoreCount, failedDeleteCount: completed.failedDeleteCount };
+        if (rewindStore && rewindCwd) await rewindStore.write(rewindCwd, completed);
+        const replacement = await attachReplacement(completed.newSessionId, completed);
+        return { session: replacement, ...completed.files };
       } catch (error) {
         throw new RewindAttachmentError(completed.newSessionId, completed.messageId, error);
       }
+    },
+    readPendingRewind: () => pendingRewind,
+    async clearPendingRewind() {
+      if (pendingRewind && rewindStore && rewindCwd) await rewindStore.clear(rewindCwd, pendingRewind);
+      pendingRewind = undefined;
     },
     async getRewindInfo(params) {
       return droid.sessions.getRewindInfo(session.id, params.messageId);

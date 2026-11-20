@@ -370,6 +370,7 @@ describe('FactoryDroidRuntime', () => {
     });
     expect(session.rewind).toHaveBeenCalledWith({
       messageId: 'sdk-msg-1',
+      filesRequested: true,
       filesToRestore: info.availableFiles,
       filesToDelete: info.createdFiles,
       forkTitle: 'Edited prompt',

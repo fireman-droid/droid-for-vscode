@@ -139,8 +139,8 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
               }
             }}
           />
-          {draft.notice ? <p role="status" className="mt-1 text-xs text-muted-foreground">{draft.notice}</p> : null}
-          {rejection ? <p role="status" className="mt-1 text-xs text-destructive">{rejection}</p> : null}
+          {draft.notice ? <p role="status" data-ui-notice="" className="mt-1 text-xs text-muted-foreground">{draft.notice}</p> : null}
+          {rejection ? <p role="status" data-ui-notice="" className="mt-1 text-xs text-destructive">{rejection}</p> : null}
           <div className="v2-user-edit-footer">
             {onAttach ? <Button variant="plain" size="none" className="v2-user-edit-attach" aria-label={t("Attach files to edited message")} title={t("Attach files")}
               disabled={editDisabled} onClick={onAttach}>+</Button> : null}
@@ -162,6 +162,7 @@ export function QuestionCardView({ item, editor, quote, placeholder, placeholder
           {messageCopy}
         </UserMessageBubble>
       )}
+      {!editing && draft?.phase !== 'resending' && rejection ? <p role="status" data-ui-notice="" className="mt-1 text-xs text-muted-foreground">{rejection}</p> : null}
       {draft?.phase === 'resending' ? <p role="status" className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><DroidActivity phase="loading" />{draft.resumeOnly ? t("Reconnecting the restored conversation…") : draft.restoreFiles ? t("Restoring files and preparing the conversation…") : t("Preparing the conversation to resend…")}</p> : null}
       {draft?.phase !== 'resending' ? plan : null}
     </div>

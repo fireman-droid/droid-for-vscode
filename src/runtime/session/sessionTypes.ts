@@ -67,6 +67,8 @@ export interface FactoryDroidSession {
   rewind?(
     params: FactoryDroidSessionRewindParams,
   ): Promise<{ session: FactoryDroidSession } & Partial<RewindFileResult>>;
+  readPendingRewind?(): import('../daemon/rewindCheckpoint').RewindCheckpoint | undefined;
+  clearPendingRewind?(): Promise<void>;
   getRewindInfo?(params: { messageId: string }): Promise<FactoryDroidSessionRewindInfo>;
   getGitDiff?(options?: RuntimeGitDiffOptions): Promise<FactoryDroidSessionGitDiff>;
   readOperationBody?(request: import('../tools/operationBody').OperationBodyRequest): Promise<import('../tools/operationBody').OperationBody | undefined>;

@@ -124,8 +124,10 @@ export function useComposerFlow(
         persistDraft(vscode, recovered);
       } else writeDraft(recovered, true);
     }
-    setCommandNotice(rewindResultNotice(result.files) + (result.unsentText === undefined ? '' :
-      ' Your message was not resent. It is back in the input with its attachments; check the files before sending.'));
+    setCommandNotice((result.reconnected && result.filesRequested === false
+      ? 'The conversation was reconnected without restoring files.' : rewindResultNotice(result.files)) +
+      (result.unsentText === undefined ? '' :
+        ' Your message was not resent. It is back in the input with its attachments; check the files before sending.'));
     dispatch({ type: 'rewind.resultConsumed', sequence: result.sequence });
   }, [state.rewindResult, state.sessionId, writeDraft, vscode, dispatch]);
   useEffect(() => {

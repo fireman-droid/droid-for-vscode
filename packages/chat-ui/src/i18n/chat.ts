@@ -1,6 +1,9 @@
 import type { MessageTranslations } from './translate';
 
 export const chatMessages: readonly MessageTranslations[] = [
+  ['Reconnect conversation','重新连接会话','重新連接對話'],
+  ['The rewind completed. Reconnect this conversation without processing files again or sending a message.','回退已完成。重新连接此会话不会再次处理文件，也不会发送消息。','回退已完成。重新連接此對話不會再次處理檔案，也不會傳送訊息。'],
+  ['The rewind outcome is unknown. Do not retry; inspect the workspace and Droid session history.','回退结果未确认。请勿重试；请检查工作区和 Droid 会话历史。','回退結果未確認。請勿重試；請檢查工作區和 Droid 對話歷史。'],
   ['Running in this workspace:','正在此工作区运行：','正在此工作區執行：'],
   ['Another chat holds this workspace. Your message was not sent.','另一个会话仍占用此工作区，这条消息尚未发送。','另一個對話仍佔用此工作區，這則訊息尚未傳送。'],
   ['Open that chat','查看该会话','查看該對話'],

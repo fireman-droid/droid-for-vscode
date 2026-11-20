@@ -15,6 +15,7 @@ import {
   createDaemonSessionFactory,
   type SessionLeaseHooks,
 } from '../runtime/daemon/createDaemonDroidSession';
+import { createRewindCheckpointStore } from '../runtime/daemon/rewindCheckpoint';
 import {
   acquireSessionLease,
   defaultLeaseFile,
@@ -182,6 +183,7 @@ function activateServices(
     get: <T>(key: string) => context.workspaceState.get<T>(key),
     update: (key: string, value: unknown) => context.workspaceState.update(key, value),
   };
+  const rewindStore = createRewindCheckpointStore(persistence);
   // Read once at activation: switching modes requires a window reload.
   // Daemon is strict by default. Process transport is used only when
   // the user explicitly selects it in settings.
@@ -236,7 +238,7 @@ function activateServices(
     runtimeMode !== 'daemon'
       ? null
       : {
-          factory: createDaemonSessionFactory(getDaemonDroid, sessionLease, diagnostics),
+          factory: createDaemonSessionFactory(getDaemonDroid, sessionLease, diagnostics, rewindStore),
         };
   /** True while this window's sessions actually run over the daemon. */
   const daemonSessionsActive = (): boolean => daemonSessions !== null;

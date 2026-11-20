@@ -282,6 +282,8 @@ export interface RuntimeRewindParams {
 export interface RuntimeRewindResult {
   readonly sessionId: string;
   readonly filesRequested?: true;
+  /** A previously completed rewind was connected; no new rewind ran. */
+  readonly reconnected?: true;
   /** Absent means the backend did not confirm file results; never assume zero failures. */
   readonly files?: RewindFileResult;
 }
@@ -423,6 +425,8 @@ export interface DroidRuntime {
    * runtime cannot rewind.
    */
   rewind?(params: RuntimeRewindParams): Promise<RuntimeRewindResult>;
+  readPendingRewind?(): import('./daemon/rewindCheckpoint').RewindCheckpoint | undefined;
+  clearPendingRewind?(): Promise<void>;
   /**
    * Reports how rewinding to the given user message would affect
    * workspace files. Optional: absent when the runtime cannot rewind.

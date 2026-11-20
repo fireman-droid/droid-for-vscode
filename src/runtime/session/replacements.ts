@@ -41,9 +41,11 @@ export async function rewind(
 
   let nextSession: FactoryDroidSession;
   let files: RewindFileResult | undefined;
-  const filesRequested = params.restoreFiles === true || pendingRewinds.get(session)?.restoreFiles === true;
+  const durablePending = session.readPendingRewind?.();
+  const filesRequested = durablePending?.filesRequested ??
+    (params.restoreFiles === true || pendingRewinds.get(session)?.restoreFiles === true);
   try {
-    const pending = pendingRewinds.get(session);
+    const pending = durablePending ?? pendingRewinds.get(session);
     if (pending !== undefined && pending.messageId !== params.messageId) {
       throw new RewindAnchorConflictError(pending.messageId);
     }
@@ -62,6 +64,7 @@ export async function rewind(
       filesToRestore,
       filesToDelete,
       forkTitle: params.forkTitle,
+      ...(params.restoreFiles === true ? { filesRequested: true } : {}),
     });
     nextSession = outcome.session;
     const { session: _session, ...result } = outcome;
@@ -93,7 +96,8 @@ export async function rewind(
       outcome: 'success',
     },
   });
-  return { sessionId: nextSession.id, ...(filesRequested ? { filesRequested: true } : {}),
+  return { sessionId: nextSession.id, ...(durablePending ? { reconnected: true } : {}),
+    ...(filesRequested ? { filesRequested: true } : {}),
     ...(files === undefined ? {} : { files }) };
 }
 

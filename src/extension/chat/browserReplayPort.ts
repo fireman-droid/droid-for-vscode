@@ -9,7 +9,7 @@ export interface BrowserReplayPort
   > {
   readonly missionState: Readonly<Pick<MissionSessionState, 'missionRuntime'>>;
   readonly sessionState: Readonly<
-    Pick<SessionLifecycleState, 'sessionId' | 'initialization' | 'disposed'>
+    Pick<SessionLifecycleState, 'sessionId' | 'initialization' | 'disposed' | 'runtime'>
   >;
   readonly effects: Pick<
     ChatEffects,

@@ -70,6 +70,12 @@ function copyOptionalSessionMethods(
   if (typeof session.rewind === 'function') {
     view.rewind = (params) => session.rewind!(params);
   }
+  if (typeof session.readPendingRewind === 'function') {
+    view.readPendingRewind = () => session.readPendingRewind!();
+  }
+  if (typeof session.clearPendingRewind === 'function') {
+    view.clearPendingRewind = () => session.clearPendingRewind!();
+  }
   if (typeof session.getRewindInfo === 'function') {
     view.getRewindInfo = (params) => session.getRewindInfo!(params);
   }
