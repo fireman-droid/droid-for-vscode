@@ -17,7 +17,7 @@ export function unavailableMessage(
     case 'daemon-credentials-unreadable':
       return 'Droid could not read the current Droid CLI sign-in.';
     case 'daemon-refresh-failed':
-      return 'The Droid CLI sign-in could not authenticate the local daemon. Sign in again, then Retry.';
+      return 'Droid could not verify your sign-in. Check the network and retry. Sign in again if the Droid CLI reports that your sign-in has expired.';
     case 'daemon-unavailable':
       return 'The local droid daemon could not be reached. Retry the connection.';
     case 'sdk-protocol-incompatible':

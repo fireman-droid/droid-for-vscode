@@ -228,7 +228,8 @@ import type { ToolActivityMessage } from './protocol/toolProtocol';
 // v59 adds automation session destinations, run links, and result dashboards (management v3).
 // v60 adds read-only inline subagent inspection without opening an external viewer.
 // v61 distinguishes workspace setup gates and adds the native folder-picker action.
-export const BRIDGE_PROTOCOL_VERSION = 61 as const;
+// v62 preserves classified session connection failures for recovery feedback.
+export const BRIDGE_PROTOCOL_VERSION = 62 as const;
 
 export type WebviewToHostMessage =
   | import('./protocol/historyPaging').HistoryNavigateMessage

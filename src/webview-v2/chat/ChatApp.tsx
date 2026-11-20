@@ -44,6 +44,8 @@ import { MissionWorkspace } from '../mission/MissionWorkspace';
 import { SelectSessionContext } from './thread/messageContexts';
 import { useAnswerScroll } from './useAnswerScroll';
 import { ConversationWait, SessionRecovery } from './ConnectionFeedback';
+import { ConnectionIssue } from './ConnectionIssue';
+import { getWorkspaceSetup } from './WorkspaceSetup';
 import { AppInfo } from './AppInfo';
 import { useAgentChatNavigation } from './AgentNavigation';
 import { ModelSourceProvider } from '../models/ModelSourceControl';
@@ -173,7 +175,9 @@ export function ChatApp({ port, role = 'main' }: { readonly port: ChatPort; read
   const statusMessage = getStatusMessage(state, composer.draft);
   const idleStatus = statusMessage && !turnBusy && !ideReconnecting && state.connection.status === 'connected' && statusMessage !== state.connection.message
     ? statusMessage : null;
-  const statusNotice = notice || idleStatus || composerNoticeText ? <>
+  const connectionFailed = state.connection.status === 'unavailable' && !getWorkspaceSetup(state.connection) && state.transcript.length > 0;
+  const statusNotice = notice || idleStatus || composerNoticeText || connectionFailed ? <>
+    {connectionFailed ? <ConnectionIssue connection={state.connection} activeTurn={turnBusy} /> : null}
     {notice ? <TransientNotice key={notice.sequence} diagnostic={notice} embedded /> : null}
     {idleStatus ? <p className="m-0">{t(idleStatus)}</p> : null}
     {composerNoticeText && composerNoticeText !== idleStatus ? <p className="m-0">{t(composerNoticeText)}</p> : null}

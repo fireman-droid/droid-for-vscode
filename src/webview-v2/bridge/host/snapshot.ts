@@ -5,7 +5,7 @@ import {
   MAX_OPEN_PATH_LENGTH,
   MAX_TURN_TEXT_LENGTH,
 } from '../../../shared/protocol/bounds';
-import { type ConnectionState } from '../../../shared/protocol/shell';
+import { CONNECTION_REASONS, type ConnectionState } from '../../../shared/protocol/shell';
 import { type TurnStatus } from '../../../shared/protocol/turns';
 import {
   parseSessionQueueState,
@@ -233,7 +233,7 @@ export function parseConnection(value: unknown): ConnectionState | undefined {
     !hasExactKeys(value, ['status'], ['message', 'reason', 'modelRequestFailed']) ||
     !isConnectionStatus(value.status) ||
     (value.reason !== undefined && (value.status !== 'unavailable' ||
-      value.reason !== 'workspace-required' && value.reason !== 'workspace-untrusted')) ||
+      !CONNECTION_REASONS.some(reason => reason === value.reason))) ||
     (value.modelRequestFailed !== undefined && value.modelRequestFailed !== true) ||
     (value.message !== undefined && !isBoundedString(value.message, MAX_STRING_LENGTH))
   ) {
@@ -242,7 +242,7 @@ export function parseConnection(value: unknown): ConnectionState | undefined {
 
   return { status: value.status,
     ...(value.message === undefined ? {} : { message: value.message }),
-    ...(value.reason === undefined ? {} : { reason: value.reason }),
+    ...(value.reason === undefined ? {} : { reason: value.reason as ConnectionState['reason'] }),
     ...(value.modelRequestFailed === true ? { modelRequestFailed: true } : {}),
   };
 }

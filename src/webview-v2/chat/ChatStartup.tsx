@@ -1,9 +1,10 @@
 import { useI18n } from '@droidvisx/chat-ui/i18n';
-import { BookOpen, Folder, GitCompare, LoaderCircle, Unplug } from 'lucide-react';
+import { BookOpen, Folder, GitCompare, LoaderCircle } from 'lucide-react';
 import type { AssistantWebviewState } from '../state/types';
 import { Button } from '../ui/button';
 import type { ChatPort } from '../host/chatIntent';
 import { getWorkspaceSetup, WorkspaceSetup } from './WorkspaceSetup';
+import { ConnectionIssue } from './ConnectionIssue';
 
 const starters = [
   { label: 'Understand this project', icon: BookOpen, prompt: 'Explain this codebase: identify the main entry points and how the key modules fit together. Do not change files.' },
@@ -20,8 +21,8 @@ export function ChatStartup({ state, blocked, port, onDraftSuggestion }: {
   if (blocked) return null;
   const setup = getWorkspaceSetup(state.connection);
   if (setup) return <WorkspaceSetup setup={setup} port={port} />;
-  if (state.connection.status === 'unavailable') return <div role="alert" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 px-6 text-center text-xs text-muted-foreground">
-    <Unplug aria-hidden="true" className="size-3.5 shrink-0" /><span>{t("Unable to connect.")}</span>
+  if (state.connection.status === 'unavailable') return <div className="absolute inset-0 grid place-content-center px-6 text-center">
+    <ConnectionIssue connection={state.connection} />
   </div>;
   if (state.connection.status !== 'connected' || state.sessionId === null) return <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 px-6 text-center text-xs text-muted-foreground">
     <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" /><span>{state.connection.status === 'connected' ? t("Restoring session…") : t("Connecting to Droid…")}</span>

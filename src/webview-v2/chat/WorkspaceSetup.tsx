@@ -13,7 +13,9 @@ const requirements = {
 } as const;
 
 export function getWorkspaceSetup(connection: ConnectionState) {
-  return connection.status === 'unavailable' && connection.reason ? requirements[connection.reason] : undefined;
+  return connection.status === 'unavailable' &&
+    (connection.reason === 'workspace-required' || connection.reason === 'workspace-untrusted')
+    ? requirements[connection.reason] : undefined;
 }
 
 export function WorkspaceSetup({ setup, port }: {
