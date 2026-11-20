@@ -310,12 +310,13 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
       pending.phase = 'policy';
       const policyUri = notebookUri(document.uri) ?? document.uri;
       const policyDocument = policyUri === document.uri ? document : { uri: policyUri, languageId: document.languageId } as vscode.TextDocument;
-      if (policyUri.scheme === 'file' && vscode.workspace.getWorkspaceFolder(policyUri) &&
-          !await this.context.isAllowed(policyDocument, settings.excludePatterns, signal)) {
-        if (this.isCurrent(pending, token)) this.report('This file is excluded by workspace ignore rules or file policy.');
+      const excluded = policyUri.scheme === 'file' && vscode.workspace.getWorkspaceFolder(policyUri) &&
+        !await this.context.isAllowed(policyDocument, settings.excludePatterns, signal);
+      if (!this.isCurrent(pending, token)) return [];
+      if (excluded) {
+        this.report('This file is excluded by workspace ignore rules or file policy.');
         return skip('file-policy');
       }
-      if (!this.isCurrent(pending, token)) return [];
       pending.phase = 'credentials';
       const apiKey = await readCompletionKey(this.secrets, settings.endpoint);
       if (!this.isCurrent(pending, token)) return [];
@@ -391,16 +392,14 @@ export class AutocompleteProvider implements vscode.InlineCompletionItemProvider
           assertContextCurrent();
           phase('context');
           const contextStarted = Date.now();
-          const [snippets, comments] = settings.relatedFiles ? await Promise.all([
-            this.context.collect(document, position, { maxCharacters: Math.floor(settings.maxContextCharacters * 0.4),
-              excludePatterns: settings.excludePatterns, signal: requestSignal }),
-            readLanguageComments(document.languageId, requestSignal),
-          ]) : [[], undefined] as const;
-          assertContextCurrent();
           const prepared = await (this.kiloContext ??= new KiloContextService(uri => this.context.trackContextFile(uri),
             () => this.trace('context.timeout', { source: 'language-service' }))).build({
             document, text: inputText, offset, settings, signal: requestSignal,
-            filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled', snippets, comments,
+            filepath: document.uri.scheme === 'file' ? vscode.workspace.asRelativePath(document.uri, false) : 'untitled',
+            snippets: settings.relatedFiles ? this.context.collect(document, position, {
+              maxCharacters: Math.floor(settings.maxContextCharacters * 0.4), excludePatterns: settings.excludePatterns, signal: requestSignal,
+            }) : [],
+            comments: settings.relatedFiles ? readLanguageComments(document.languageId, requestSignal) : undefined,
           });
           assertContextCurrent();
           generation.contextMs = Date.now() - contextStarted;

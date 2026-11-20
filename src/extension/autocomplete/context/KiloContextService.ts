@@ -18,6 +18,10 @@ import type { CompletionSettings } from '../settings';
 import type { ContextSnippet } from './CompletionContextService';
 import type { LanguageComments } from './LanguageComments';
 
+interface FimInput {
+  document: vscode.TextDocument; text: string; offset: number; settings: CompletionSettings; signal: AbortSignal;
+}
+
 /** Uses Kilo's full retrieval, pruning and model templates behind the host file boundary. */
 export class KiloContextService implements vscode.Disposable {
   private readonly ide: KiloContextIde;
@@ -79,9 +83,8 @@ export class KiloContextService implements vscode.Disposable {
       return snippets;
     }));
   }
-  async build(input: { document: vscode.TextDocument; text: string; offset: number; filepath: string;
-    settings: CompletionSettings; signal: AbortSignal; snippets: readonly ContextSnippet[]; comments?: LanguageComments }) {
-    return this.ide.run(input.signal, () => withParserResources(async () => {
+  private retrieveFimContext(input: FimInput) {
+    return withParserResources(async () => {
       const { settings, signal, document } = input;
       if (signal.aborted) throw signal.reason;
       const filepath = document.uri.toString();
@@ -100,14 +103,25 @@ export class KiloContextService implements vscode.Disposable {
       // waste reference space and can disagree with the actual cursor context.
       payload.recentlyEditedRangeSnippets = payload.recentlyEditedRangeSnippets.filter(s => s.filepath !== filepath);
       payload.recentlyVisitedRangesSnippets = payload.recentlyVisitedRangesSnippets.filter(s => s.filepath !== filepath);
-      const supplemental = settings.relatedFiles ? input.snippets : [];
+      const { prunedPrefix, prunedSuffix, prunedCaretWindow, workspaceUris } = helper;
+      return { filepath, prunedPrefix, prunedSuffix, prunedCaretWindow, workspaceUris, snippets: getSnippets(helper, payload) };
+    });
+  }
+  async build(input: FimInput & { filepath: string; snippets: readonly ContextSnippet[] | Promise<ContextSnippet[]>;
+    comments?: LanguageComments | Promise<LanguageComments | undefined> }) {
+    return this.ide.run(input.signal, async () => {
+      const { settings, signal } = input;
+      // Both sources use the same request signal; rank and check access only after both are ready.
+      const [kilo, editorSnippets, comments] = await Promise.all([this.retrieveFimContext(input), input.snippets, input.comments]);
+      signal.throwIfAborted();
+      const supplemental = settings.relatedFiles ? editorSnippets : [];
       const asKilo = (snippet: ContextSnippet): AutocompleteSnippet => ({
         filepath: snippet.uri, content: snippet.content, type: AutocompleteSnippetType.Code,
       });
       // Keep direct definitions and recent edits ahead of general opened-file context.
       const candidates = [
         ...supplemental.filter(s => s.source === 'definition').map(asKilo),
-        ...getSnippets(helper, payload),
+        ...kilo.snippets,
         ...supplemental.filter(s => s.source !== 'definition').map(asKilo),
       ];
       const access = await Promise.all(candidates.map(s => 'filepath' in s && s.filepath ? this.ide.allowed(s.filepath) : Promise.resolve(settings.includeClipboard === true)));
@@ -116,7 +130,7 @@ export class KiloContextService implements vscode.Disposable {
         const content = candidate.content.trim();
         if (!access[index] || !content) continue;
         const filepath = 'filepath' in candidate ? candidate.filepath : undefined;
-        if (filepath === helper.filepath && helper.prunedCaretWindow.includes(content)) continue;
+        if (filepath === kilo.filepath && kilo.prunedCaretWindow.includes(content)) continue;
         const duplicate = snippets.some(existing => ('filepath' in existing ? existing.filepath : undefined) === filepath
           && (existing.content.trim().includes(content) || content.includes(existing.content.trim())));
         if (!duplicate) snippets.push(candidate);
@@ -128,9 +142,9 @@ export class KiloContextService implements vscode.Disposable {
         // Reference definitions are also required when completing at EOF.
         const usable = [...snippets];
         const render = (budget: number) => {
-          const main = buildCompletionContext(helper.prunedPrefix + helper.prunedSuffix, helper.prunedPrefix.length, budget);
+          const main = buildCompletionContext(kilo.prunedPrefix + kilo.prunedSuffix, kilo.prunedPrefix.length, budget);
           const [prefix, suffix] = template.compilePrefixSuffix
-            ? template.compilePrefixSuffix(main.prefix, main.suffix, filepath, '', usable, helper.workspaceUris)
+            ? template.compilePrefixSuffix(main.prefix, main.suffix, kilo.filepath, '', usable, kilo.workspaceUris)
             : [main.prefix, main.suffix];
           return { prefix, suffix };
         };
@@ -150,9 +164,9 @@ export class KiloContextService implements vscode.Disposable {
         ? { uri: s.filepath, filepath: this.ide.relative(s.filepath), content: s.content, source: 'definition' }
         : { uri: 'clipboard', filepath: 'Clipboard', content: s.content, source: 'definition' });
       const prompt = buildCompletionPrompt({ text: input.text, offset: input.offset, maxCharacters: settings.maxContextCharacters,
-        filepath: input.filepath, model: settings.model, snippets: contextSnippets, comments: input.comments });
+        filepath: input.filepath, model: settings.model, snippets: contextSnippets, comments });
       return prompt;
-    }));
+    });
   }
   dispose(): void {
     this.ide.dispose(); this.retrieval.dispose(); this.visited.dispose(); this.edited.dispose();

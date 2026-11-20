@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   contextRevision: 0,
   allowed: vi.fn(),
   collect: vi.fn(),
+  syntaxLookup: vi.fn(),
   comments: vi.fn(),
   contextDispose: vi.fn(),
 }));
@@ -101,8 +102,11 @@ vi.mock('./context/KiloContextService', async () => {
   return { KiloContextService: class {
     invalidate() {} dispose() {}
     collectDefinitions = mocks.definitions;
-    async build(input: any) { return { ...buildCompletionPrompt({ ...input, model: input.settings.model,
-      maxCharacters: input.settings.maxContextCharacters }), relatedFiles: input.snippets.length }; }
+    async build(input: any) {
+      const [snippets, comments] = await Promise.all([input.snippets, input.comments, mocks.syntaxLookup()]);
+      return { ...buildCompletionPrompt({ ...input, snippets, comments, model: input.settings.model,
+        maxCharacters: input.settings.maxContextCharacters }), relatedFiles: snippets.length };
+    }
   } };
 });
 vi.mock('./context/LanguageComments', () => ({ readLanguageComments: mocks.comments }));
@@ -177,6 +181,7 @@ beforeEach(() => {
   mocks.contextRevision = 0;
   mocks.allowed.mockReset().mockResolvedValue(true);
   mocks.collect.mockReset().mockResolvedValue([]);
+  mocks.syntaxLookup.mockReset();
   mocks.comments.mockReset().mockResolvedValue({ line: '//' });
   mocks.contextDispose.mockReset();
   mocks.request.mockReset();
@@ -265,6 +270,33 @@ describe('AutocompleteProvider', () => {
     snippets.resolve([]);
     expect((await request.pending)[0].insertText).toBe('42;');
     expect(mocks.request).toHaveBeenCalledOnce();
+  });
+
+  it('overlaps Java editor and syntax lookups before sending a single FIM request', async () => {
+    const file = document('class Cart { int total() { return ', 'file:///Cart.java');
+    Object.assign(file.value, { languageId: 'java' });
+    let editorDone = false, overlapped = false;
+    mocks.collect.mockImplementation(async () => { await wait(150); editorDone = true; return []; });
+    mocks.syntaxLookup.mockImplementation(async () => { overlapped = !editorDone; await wait(200); });
+    mocks.request.mockResolvedValue('42;');
+    const items = await (await requesting(file, undefined, { ...context, triggerKind: 1 })).pending;
+    expect(items[0]?.insertText).toBe('42;');
+    expect(mocks.request).toHaveBeenCalledOnce();
+    expect(overlapped).toBe(true);
+  });
+
+  it('does not report file-policy when typing cancels the policy lookup', async () => {
+    const allowed = deferred<boolean>(), file = document();
+    mocks.allowed.mockReturnValue(allowed.promise);
+    const { pending } = await requesting(file);
+    mocks.listeners.get('text')?.({ document: file.value, contentChanges: [{ text: 'x', rangeLength: 0 }] });
+    allowed.resolve(false);
+    expect(await pending).toEqual([]);
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ name: 'autocomplete.cancelled',
+      attributes: expect.objectContaining({ phase: 'policy', reason: 'document-edited' }) }));
+    expect(mocks.record).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'autocomplete.skipped',
+      attributes: expect.objectContaining({ reason: 'file-policy' }) }));
+    expect(mocks.secretGet).not.toHaveBeenCalled();
   });
 
   it('keeps the FIM send delay when context is fast and abandons cancelled preparation', async () => {
